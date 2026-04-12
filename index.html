@@ -3,29 +3,55 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VKesgin — Creative Portfolio</title>
+  <title>Veli Kesgin — Creative Portfolio</title>
   <link rel="stylesheet" href="assets/css/reset.css">
   <link rel="stylesheet" href="assets/css/variables.css">
-  <style>
-    body {
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      font-family: var(--font-body);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    h1 {
-      font-family: var(--font-display);
-      font-size: clamp(60px, 12vw, 140px);
-      letter-spacing: 0.03em;
-      color: var(--text-primary);
-    }
-    span { color: var(--accent); }
-  </style>
+  <link rel="stylesheet" href="assets/css/global.css">
 </head>
 <body>
-  <h1>V<span>.</span>KESGİN</h1>
+
+  <div id="cursor"></div>
+  <div id="cursor-ring"></div>
+  <canvas id="bgCanvas"></canvas>
+
+  <nav id="nav">
+    <a href="/" class="nav-logo">VK<span>.</span></a>
+    <ul class="nav-links">
+      <li><a href="#work">İşler</a></li>
+      <li><a href="pages/services.html">Hizmetler</a></li>
+      <li><a href="pages/about.html">Hakkımda</a></li>
+      <li><a href="pages/contact.html">İletişim</a></li>
+    </ul>
+    <button class="hamburger" id="hamburger" aria-label="Menü">
+      <span></span><span></span>
+    </button>
+  </nav>
+
+  <section id="hero">
+    <div class="hero-inner">
+      <p class="hero-label">Creative Portfolio <span>—</span> 2025</p>
+      <h1 class="hero-title">
+        <span class="line-wrap"><span class="line">VELİ</span></span>
+        <span class="line-wrap"><span class="line outline-line">KESGİN</span></span>
+      </h1>
+      <div class="hero-role">
+        <span class="role-dash">—</span>
+        <span id="roleText"></span>
+        <span class="type-cursor">_</span>
+      </div>
+      <p class="hero-desc">Görsel tasarım · 3D animasyon · Videografi · Yazılım</p>
+      <div class="hero-cta">
+        <a href="#work" class="btn btn-primary">Çalışmalarımı Gör ↓</a>
+        <a href="pages/contact.html" class="btn btn-outline">İletişime Geç</a>
+      </div>
+    </div>
+    <div class="hero-scroll">
+      <span>SCROLL</span>
+      <div class="scroll-track"><div class="scroll-thumb"></div></div>
+    </div>
+  </section>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="assets/js/main.js"></script>
 </body>
 </html>

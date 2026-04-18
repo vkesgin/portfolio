@@ -454,7 +454,8 @@ img {
   transition: -webkit-text-stroke .3s var(--ease-out), color .3s, text-shadow .3s;
 }
 .outline-text:hover {
-  -webkit-text-stroke: 1px var(--accent);
+  color: var(--accent);
+  -webkit-text-stroke: 1px transparent;
   text-shadow: 0 0 15px var(--accent-glow-lg);
 }
 

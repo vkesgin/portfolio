@@ -210,8 +210,24 @@ function initSkills() {
     });
   });
 }
+// === STATS SCROLL ANIMATION ===
 function initStats() {
-  if (typeof ScrollTrigger === 'undefined') return;
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  gsap.registerPlugin(ScrollTrigger);
+
+  // Kartlar stagger ile gelsin
+  gsap.to('.stat-item', {
+    opacity: 1,
+    y: 0,
+    duration: 0.9,
+    stagger: 0.15,
+    ease: 'power4.out',
+    scrollTrigger: {
+      trigger: '#stats',
+      start: 'top 75%',
+    }
+  });
 
   // CountUp
   document.querySelectorAll('.count').forEach(el => {

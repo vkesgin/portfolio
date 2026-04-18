@@ -5,6 +5,7 @@ let W, H, particles = [];
 const mouse = { x: -9999, y: -9999 };
 
 function resize() {
+  if (!canvas) return;
   W = canvas.width = window.innerWidth;
   H = canvas.height = window.innerHeight;
 }
@@ -70,6 +71,7 @@ function drawConnections() {
 }
 
 function loopCanvas() {
+  if (!ctx) return;
   ctx.clearRect(0, 0, W, H);
   particles.forEach(p => { p.update(); p.draw(); });
   drawConnections();
@@ -140,23 +142,30 @@ function typeNext() {
 
 // === GSAP ENTRANCE ===
 function initGSAP() {
-  gsap.set('#nav', { y: -24 });
-  gsap.set(['.hero-role', '.hero-desc', '.hero-cta'], { y: 22 });
+  const isHome = document.querySelector('#hero') !== null;
 
-  gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .1 })
-    .to('#nav', { opacity: 1, y: 0, duration: .9 })
-    .to('.hero-label', { opacity: 1, duration: .7 }, '-=.5')
-    .to('.line', { y: '0%', duration: 1.1, stagger: .13 }, '-=.5')
-    .to('.hero-role', { opacity: 1, y: 0, duration: .7 }, '-=.5')
-    .to('.hero-desc', { opacity: 1, y: 0, duration: .6 }, '-=.4')
-    .to('.hero-cta', { opacity: 1, y: 0, duration: .6 }, '-=.4')
-    .to('.hero-scroll', { opacity: 1, duration: .6 }, '-=.3');
+  if (isHome) {
+    gsap.set('#nav', { y: -24 });
+    gsap.set(['.hero-role', '.hero-desc', '.hero-cta'], { y: 22 });
+
+    gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .1 })
+      .to('#nav', { opacity: 1, y: 0, duration: .9 })
+      .to('.hero-label', { opacity: 1, duration: .7 }, '-=.5')
+      .to('.line', { y: '0%', duration: 1.1, stagger: .13 }, '-=.5')
+      .to('.hero-role', { opacity: 1, y: 0, duration: .7 }, '-=.5')
+      .to('.hero-desc', { opacity: 1, y: 0, duration: .6 }, '-=.4')
+      .to('.hero-cta', { opacity: 1, y: 0, duration: .6 }, '-=.4')
+      .to('.hero-scroll', { opacity: 1, duration: .6 }, '-=.3');
+  } else {
+    // Other pages: just show nav
+    gsap.to('#nav', { opacity: 1, y: 0, duration: 0.9, delay: 0.1, ease: 'power4.out' });
+  }
 }
 
 // === INIT ===
 window.addEventListener('resize', () => { resize(); initParticles(); });
-resize();
 if (canvas) {
+  resize();
   initParticles();
   loopCanvas();
 }
@@ -490,20 +499,18 @@ window.closeMenu = function () {
 function initFooter() {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
-  // Büyük yazı scroll ile içeri girer
-  gsap.from('.footer-word', {
-    y: 60,
-    opacity: 0,
+  gsap.to('.footer-word', {
+    y: 0,
     duration: 1.2,
     stagger: .12,
     ease: 'power4.out',
     scrollTrigger: {
       trigger: '.footer-big-text',
-      start: 'top 90%',
+      start: 'top 100%',
+      once: true,
     }
   });
 
-  // Nav linkleri stagger
   gsap.from('.footer-nav-col', {
     y: 24,
     opacity: 0,
@@ -512,7 +519,8 @@ function initFooter() {
     ease: 'power3.out',
     scrollTrigger: {
       trigger: '#footer',
-      start: 'top 85%',
+      start: 'top 100%',
+      once: true,
     }
   });
 }

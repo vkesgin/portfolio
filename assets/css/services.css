@@ -1,0 +1,220 @@
+/* === SRV HERO === */
+#srv-hero {
+  min-height: 80vh;
+  display: flex; align-items: center;
+  padding: 160px 60px var(--space-2xl);
+  position: relative; z-index: 2;
+}
+.srv-hero-inner { max-width: 900px; }
+.srv-eyebrow { margin-bottom: var(--space-lg); opacity: 0; }
+.srv-hero-title {
+  display: flex; flex-direction: column;
+  margin-bottom: var(--space-lg);
+}
+.srv-line {
+  font-family: var(--font-display);
+  font-size: clamp(72px, 13vw, 170px);
+  line-height: .9; letter-spacing: -.01em;
+  color: var(--text-primary);
+  opacity: 0; transform: translateY(80px);
+}
+.srv-line--outline {
+  color: transparent;
+  -webkit-text-stroke: 2px var(--text-primary);
+}
+.srv-hero-sub {
+  font-size: 16px; color: var(--text-secondary);
+  line-height: 1.8; max-width: 540px;
+  opacity: 0; transform: translateY(16px);
+}
+.srv-hero-scroll-hint {
+  position: absolute; right: 60px; bottom: 40px;
+  display: flex; flex-direction: column;
+  align-items: center; gap: 10px; opacity: 0;
+}
+.srv-hero-scroll-hint span {
+  font-family: var(--font-mono); font-size: 9px;
+  letter-spacing: .2em; color: var(--text-muted);
+  writing-mode: vertical-rl;
+}
+
+/* === SRV LIST === */
+#srv-list {
+  position: relative; z-index: 2;
+  padding: 0 60px var(--space-2xl);
+}
+.srv-list-inner { max-width: 1200px; margin: 0 auto; }
+
+.srv-item {
+  border-top: 0.5px solid var(--border);
+  padding: var(--space-xl) 0;
+  opacity: 0; transform: translateY(24px);
+  transition: border-color var(--dur-mid);
+}
+.srv-item:hover { border-top-color: var(--accent); }
+.srv-item:last-child { border-bottom: 0.5px solid var(--border); }
+
+.srv-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  cursor: pointer;
+}
+.srv-item-left {
+  display: flex; align-items: flex-start; gap: 20px;
+}
+.srv-num {
+  font-family: var(--font-mono); font-size: 12px;
+  letter-spacing: .1em; color: var(--text-muted);
+  margin-top: 6px; flex-shrink: 0;
+}
+.srv-name {
+  font-size: clamp(28px, 4vw, 48px);
+  font-weight: 700; line-height: 1.1;
+  color: var(--text-primary);
+  transition: color var(--dur-fast);
+}
+.srv-item:hover .srv-name { color: var(--accent); }
+.srv-tagline {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .1em; color: var(--text-muted);
+  margin-top: 6px;
+}
+.srv-icon {
+  color: var(--text-muted);
+  transition: color var(--dur-fast), transform var(--dur-mid) var(--ease-out);
+  flex-shrink: 0;
+}
+.srv-item:hover .srv-icon {
+  color: var(--accent);
+  transform: rotate(15deg) scale(1.1);
+}
+
+.srv-item-body {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-xl);
+  align-items: start;
+}
+.srv-desc {
+  font-size: 15px; color: var(--text-secondary);
+  line-height: 1.8; margin-bottom: var(--space-md);
+  max-width: 600px;
+}
+.srv-includes {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.srv-includes li {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; color: var(--text-secondary);
+}
+.srv-includes li::before {
+  content: '';
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--accent); flex-shrink: 0;
+}
+
+.srv-tags-col {
+  display: flex; flex-direction: column;
+  gap: 8px; align-items: flex-end; min-width: 160px;
+}
+.srv-tag {
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: .08em; color: var(--text-muted);
+  border: 0.5px solid var(--border);
+  padding: 4px 10px; border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+.srv-item:hover .srv-tag {
+  color: var(--accent);
+  border-color: rgba(0,229,255,.25);
+}
+.srv-cta-btn {
+  margin-top: 8px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .1em;
+  color: var(--accent);
+  border: 0.5px solid rgba(0,229,255,.3);
+  background: rgba(0,229,255,.06);
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  transition: all var(--dur-fast);
+}
+.srv-cta-btn:hover {
+  background: rgba(0,229,255,.14);
+  border-color: var(--accent);
+  gap: 10px;
+}
+
+/* === PROCESS === */
+#srv-process {
+  position: relative; z-index: 2;
+  padding: var(--space-2xl) 60px;
+  border-top: 0.5px solid var(--border);
+}
+.srv-process-inner { max-width: 1200px; margin: 0 auto; }
+.srv-process-inner .section-title { margin-bottom: var(--space-xl); }
+
+.process-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  margin-top: var(--space-xl);
+}
+.process-step {
+  background: var(--bg-primary);
+  padding: 28px 24px;
+  opacity: 0; transform: translateY(20px);
+  transition: background var(--dur-mid);
+}
+.process-step:hover { background: var(--bg-surface); }
+.process-num {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .12em; color: var(--accent);
+  display: block; margin-bottom: 14px;
+}
+.process-title {
+  font-size: 18px; font-weight: 700;
+  color: var(--text-primary); margin-bottom: 10px;
+}
+.process-desc {
+  font-size: 13px; color: var(--text-secondary); line-height: 1.7;
+}
+
+/* === SRV CTA === */
+#srv-cta {
+  position: relative; z-index: 2;
+  padding: var(--space-2xl) 60px;
+  text-align: center;
+  border-top: 0.5px solid var(--border);
+}
+.srv-cta-inner { max-width: 800px; margin: 0 auto; }
+.srv-cta-title {
+  font-family: var(--font-display);
+  font-size: clamp(60px, 10vw, 130px);
+  line-height: .9; letter-spacing: -.01em;
+  margin-bottom: var(--space-lg);
+  opacity: 0; transform: translateY(40px);
+}
+.srv-cta-sub {
+  font-size: 16px; color: var(--text-secondary);
+  margin-bottom: var(--space-xl);
+  opacity: 0; transform: translateY(14px);
+}
+
+/* === MOBILE === */
+@media (max-width: 900px) {
+  .process-grid { grid-template-columns: repeat(2,1fr); }
+  .srv-item-body { grid-template-columns: 1fr; }
+  .srv-tags-col { align-items: flex-start; }
+}
+@media (max-width: 600px) {
+  #srv-hero, #srv-list, #srv-process, #srv-cta { padding-left: 24px; padding-right: 24px; }
+  .srv-hero-scroll-hint { display: none; }
+}

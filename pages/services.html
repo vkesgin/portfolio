@@ -7,13 +7,341 @@
   <link rel="stylesheet" href="../assets/css/reset.css">
   <link rel="stylesheet" href="../assets/css/variables.css">
   <link rel="stylesheet" href="../assets/css/global.css">
+  <link rel="stylesheet" href="../assets/css/services.css">
 </head>
 <body>
 
   <div id="header-placeholder"></div>
 
   <main>
-    <!-- Sayfa içeriği buraya -->
+
+    <!-- HERO -->
+    <section id="srv-hero">
+      <div class="srv-hero-inner">
+        <p class="section-eyebrow srv-eyebrow">// hizmetler</p>
+        <h1 class="srv-hero-title">
+          <span class="srv-line">NE</span>
+          <span class="srv-line srv-line--outline">SUNUYORUM</span>
+        </h1>
+        <p class="srv-hero-sub">
+          Tek bir disiplin değil — tam spektrum yaratıcı üretim.<br>
+          Fikir aşamasından teslimata kadar her şeyi burada bulursun.
+        </p>
+      </div>
+      <div class="srv-hero-scroll-hint">
+        <span>6 HİZMET</span>
+        <div class="scroll-track"><div class="scroll-thumb"></div></div>
+      </div>
+    </section>
+
+    <!-- HİZMET LİSTESİ -->
+    <section id="srv-list">
+      <div class="srv-list-inner">
+
+        <div class="srv-item" id="web">
+          <div class="srv-item-head">
+            <div class="srv-item-left">
+              <span class="srv-num">01</span>
+              <div>
+                <h2 class="srv-name">Web Design</h2>
+                <p class="srv-tagline">İnteraktif · Animasyonlu · Özgün</p>
+              </div>
+            </div>
+            <div class="srv-icon">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <rect x="3" y="6" width="30" height="20" rx="2.5" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M11 14l4 4-4 4M19 22h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 30h30" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".3"/>
+              </svg>
+            </div>
+          </div>
+          <div class="srv-item-body">
+            <div class="srv-desc-col">
+              <p class="srv-desc">
+                Ziyaretçinin ilk saniyede etkilendiği, scroll'u bırakmak istemediği web siteleri tasarlıyorum.
+                GSAP, Three.js ve özel animasyon sistemleriyle hayata geçirilen, hem görsel hem teknik açıdan
+                üst düzey arayüzler.
+              </p>
+              <ul class="srv-includes">
+                <li>Özel tasarım — hazır tema yok</li>
+                <li>Scroll & hover animasyonları</li>
+                <li>Three.js / Canvas efektleri</li>
+                <li>Tam responsive, mobil öncelikli</li>
+                <li>SEO temelli HTML yapısı</li>
+                <li>Cloudflare / hosting deploy</li>
+              </ul>
+            </div>
+            <div class="srv-tags-col">
+              <span class="srv-tag">HTML · CSS · JS</span>
+              <span class="srv-tag">GSAP</span>
+              <span class="srv-tag">Three.js</span>
+              <span class="srv-tag">UI/UX</span>
+              <a href="/pages/contact.html" class="srv-cta-btn">Teklif Al ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="srv-item" id="graphic">
+          <div class="srv-item-head">
+            <div class="srv-item-left">
+              <span class="srv-num">02</span>
+              <div>
+                <h2 class="srv-name">Grafik Tasarım</h2>
+                <p class="srv-tagline">Kimlik · Baskı · Dijital</p>
+              </div>
+            </div>
+            <div class="srv-icon">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <circle cx="18" cy="18" r="7" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M18 3v6M18 27v6M3 18h6M27 18h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                <circle cx="18" cy="18" r="14" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2.5 3.5" opacity=".35"/>
+              </svg>
+            </div>
+          </div>
+          <div class="srv-item-body">
+            <div class="srv-desc-col">
+              <p class="srv-desc">
+                Markanın görsel kimliğini sıfırdan inşa ediyorum. Logo, renk sistemi, tipografi rehberi ve
+                tüm temas noktalarında tutarlı, özgün bir dil. Baskı materyallerinden dijital içeriklere
+                kadar her formatta.
+              </p>
+              <ul class="srv-includes">
+                <li>Logo tasarımı & varyasyonlar</li>
+                <li>Kurumsal kimlik rehberi</li>
+                <li>Sosyal medya şablonları</li>
+                <li>Baskı tasarımı (kartvizit, broşür)</li>
+                <li>Paketleme & ambalaj tasarımı</li>
+                <li>Vektör & yüksek çözünürlüklü dosyalar</li>
+              </ul>
+            </div>
+            <div class="srv-tags-col">
+              <span class="srv-tag">Illustrator</span>
+              <span class="srv-tag">Photoshop</span>
+              <span class="srv-tag">Branding</span>
+              <span class="srv-tag">Print</span>
+              <a href="/pages/contact.html" class="srv-cta-btn">Teklif Al ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="srv-item" id="2d">
+          <div class="srv-item-head">
+            <div class="srv-item-left">
+              <span class="srv-num">03</span>
+              <div>
+                <h2 class="srv-name">2D Animasyon</h2>
+                <p class="srv-tagline">Motion · Karakter · Explainer</p>
+              </div>
+            </div>
+            <div class="srv-icon">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <path d="M4 28 Q10 8 18 16 Q26 24 32 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+                <circle cx="10" cy="22" r="3" stroke="currentColor" stroke-width="1.2"/>
+                <circle cx="26" cy="10" r="3" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M4 32h28" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".3"/>
+              </svg>
+            </div>
+          </div>
+          <div class="srv-item-body">
+            <div class="srv-desc-col">
+              <p class="srv-desc">
+                Karmaşık fikirleri hareketli görsellerle basit ve etkileyici hale getiriyorum.
+                Karakter animasyonu, motion graphics ve explainer video — izleyicinin
+                ekrandan gözünü ayıramadığı prodüksiyonlar.
+              </p>
+              <ul class="srv-includes">
+                <li>Karakter tasarımı & rigging</li>
+                <li>Explainer video</li>
+                <li>Motion graphics</li>
+                <li>Logo animasyonu</li>
+                <li>Sosyal medya içerik animasyonu</li>
+                <li>Seslendirme & müzik senkronizasyonu</li>
+              </ul>
+            </div>
+            <div class="srv-tags-col">
+              <span class="srv-tag">After Effects</span>
+              <span class="srv-tag">Animate</span>
+              <span class="srv-tag">Lottie</span>
+              <span class="srv-tag">Motion</span>
+              <a href="/pages/contact.html" class="srv-cta-btn">Teklif Al ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="srv-item" id="3d">
+          <div class="srv-item-head">
+            <div class="srv-item-left">
+              <span class="srv-num">04</span>
+              <div>
+                <h2 class="srv-name">3D Animasyon</h2>
+                <p class="srv-tagline">Modelleme · Render · Sinematik</p>
+              </div>
+            </div>
+            <div class="srv-icon">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <path d="M18 3L33 12v12L18 33 3 24V12z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                <path d="M18 3v30M3 12l15 9 15-9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="srv-item-body">
+            <div class="srv-desc-col">
+              <p class="srv-desc">
+                Ürünleri, mekanları ve fikirleri üç boyutlu dünyada hayata geçiriyorum.
+                Fotogerçekçi render'dan stilize animasyona, ürün görselleştirmesinden
+                sinematik sekansa kadar tam prodüksiyon.
+              </p>
+              <ul class="srv-includes">
+                <li>3D modelleme & texturing</li>
+                <li>Ürün görselleştirme</li>
+                <li>Mimari & mekan render</li>
+                <li>Sinematik animasyon</li>
+                <li>VFX & compositing</li>
+                <li>4K render teslimi</li>
+              </ul>
+            </div>
+            <div class="srv-tags-col">
+              <span class="srv-tag">Blender</span>
+              <span class="srv-tag">Cinema 4D</span>
+              <span class="srv-tag">Render</span>
+              <span class="srv-tag">VFX</span>
+              <a href="/pages/contact.html" class="srv-cta-btn">Teklif Al ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="srv-item" id="video">
+          <div class="srv-item-head">
+            <div class="srv-item-left">
+              <span class="srv-num">05</span>
+              <div>
+                <h2 class="srv-name">Videografi</h2>
+                <p class="srv-tagline">Çekim · Kurgu · Color Grade</p>
+              </div>
+            </div>
+            <div class="srv-icon">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <rect x="3" y="8" width="22" height="18" rx="2.5" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M25 15l8-5v14l-8-5" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+                <circle cx="14" cy="17" r="4" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
+            </div>
+          </div>
+          <div class="srv-item-body">
+            <div class="srv-desc-col">
+              <p class="srv-desc">
+                Sahne planlamasından kurguya, renk düzenlemeye kadar eksiksiz video prodüksiyonu.
+                Kurumsal tanıtım, ürün videosu, sosyal medya içeriği — profesyonel ekipman
+                ve yaratıcı vizyonla.
+              </p>
+              <ul class="srv-includes">
+                <li>Konsept & senaryo geliştirme</li>
+                <li>Profesyonel çekim</li>
+                <li>Kurgu & ses düzenleme</li>
+                <li>Color grading & LUT</li>
+                <li>Motion grafik entegrasyonu</li>
+                <li>Multi-format teslim (4K, HD, web)</li>
+              </ul>
+            </div>
+            <div class="srv-tags-col">
+              <span class="srv-tag">Premiere Pro</span>
+              <span class="srv-tag">DaVinci</span>
+              <span class="srv-tag">After Effects</span>
+              <span class="srv-tag">4K</span>
+              <a href="/pages/contact.html" class="srv-cta-btn">Teklif Al ↗</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="srv-item" id="code">
+          <div class="srv-item-head">
+            <div class="srv-item-left">
+              <span class="srv-num">06</span>
+              <div>
+                <h2 class="srv-name">Yazılım</h2>
+                <p class="srv-tagline">Frontend · Uygulama · Araç</p>
+              </div>
+            </div>
+            <div class="srv-icon">
+              <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
+                <path d="M10 12l-7 6 7 6M26 12l7 6-7 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M21 6l-6 24" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div class="srv-item-body">
+            <div class="srv-desc-col">
+              <p class="srv-desc">
+                Tasarımın ötesine geçen, gerçekten çalışan ürünler geliştiriyorum.
+                İnteraktif web uygulamaları, özel araçlar ve API entegrasyonları —
+                temiz kod, iyi mimari, ölçeklenebilir yapı.
+              </p>
+              <ul class="srv-includes">
+                <li>Frontend geliştirme (HTML/CSS/JS)</li>
+                <li>İnteraktif web uygulamaları</li>
+                <li>API entegrasyonu</li>
+                <li>Performans optimizasyonu</li>
+                <li>Cloudflare deploy & CDN</li>
+                <li>Bakım & güncelleme desteği</li>
+              </ul>
+            </div>
+            <div class="srv-tags-col">
+              <span class="srv-tag">HTML/CSS/JS</span>
+              <span class="srv-tag">React</span>
+              <span class="srv-tag">GSAP</span>
+              <span class="srv-tag">API</span>
+              <a href="/pages/contact.html" class="srv-cta-btn">Teklif Al ↗</a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SÜREÇ -->
+    <section id="srv-process">
+      <div class="srv-process-inner">
+        <p class="section-eyebrow">// çalışma süreci</p>
+        <h2 class="section-title">NASIL<br><span class="outline-text">ÇALIŞIYORUM</span></h2>
+        <div class="process-grid">
+          <div class="process-step">
+            <span class="process-num">01</span>
+            <h3 class="process-title">Keşif</h3>
+            <p class="process-desc">Projeyi, hedef kitleyi ve beklentileri anlamak için detaylı bir brifing toplantısı yapıyoruz.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">02</span>
+            <h3 class="process-title">Strateji</h3>
+            <p class="process-desc">Konsept, zaman planı ve teknik yaklaşımı belirliyor, onaylatıyorum.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">03</span>
+            <h3 class="process-title">Üretim</h3>
+            <p class="process-desc">Tasarım ve geliştirme sürecinde düzenli güncellemeler paylaşıyorum.</p>
+          </div>
+          <div class="process-step">
+            <span class="process-num">04</span>
+            <h3 class="process-title">Teslim</h3>
+            <p class="process-desc">Revizyon turları sonrası nihai teslimat ve gerekirse yayına alma desteği.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section id="srv-cta">
+      <div class="srv-cta-inner">
+        <h2 class="srv-cta-title">
+          PROJENİ<br>
+          <span class="outline-text">BAŞLATALIM</span>
+        </h2>
+        <p class="srv-cta-sub">Fikrin var, sen anlat — gerisini halledelim.</p>
+        <a href="/pages/contact.html" class="btn btn-primary" style="font-size:13px;padding:16px 44px;letter-spacing:.12em">
+          İletişime Geç ↗
+        </a>
+      </div>
+    </section>
+
   </main>
 
   <div id="footer-placeholder"></div>
@@ -28,6 +356,6 @@
       document.body.appendChild(s);
     });
   </script>
-
+  <script src="../assets/js/services.js"></script>
 </body>
 </html>

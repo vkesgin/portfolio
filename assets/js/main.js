@@ -12,12 +12,12 @@ function resize() {
 class Particle {
   constructor() { this.init(); }
   init() {
-    this.x  = Math.random() * W;
-    this.y  = Math.random() * H;
+    this.x = Math.random() * W;
+    this.y = Math.random() * H;
     this.vx = (Math.random() - .5) * .35;
     this.vy = (Math.random() - .5) * .35;
-    this.r  = Math.random() * 1.2 + .4;
-    this.a  = Math.random() * .35 + .1;
+    this.r = Math.random() * 1.2 + .4;
+    this.a = Math.random() * .35 + .1;
   }
   update() {
     this.x += this.vx;
@@ -45,7 +45,7 @@ function drawConnections() {
     for (let j = i + 1; j < particles.length; j++) {
       const dx = particles[i].x - particles[j].x;
       const dy = particles[i].y - particles[j].y;
-      const d  = Math.hypot(dx, dy);
+      const d = Math.hypot(dx, dy);
       if (d < MAX) {
         ctx.beginPath();
         ctx.moveTo(particles[i].x, particles[i].y);
@@ -57,7 +57,7 @@ function drawConnections() {
     }
     const mdx = particles[i].x - mouse.x;
     const mdy = particles[i].y - mouse.y;
-    const md  = Math.hypot(mdx, mdy);
+    const md = Math.hypot(mdx, mdy);
     if (md < MMOUSE) {
       ctx.beginPath();
       ctx.moveTo(particles[i].x, particles[i].y);
@@ -77,22 +77,22 @@ function loopCanvas() {
 }
 
 // === CURSOR ===
-const cursorDot  = document.getElementById('cursor');
+const cursorDot = document.getElementById('cursor');
 const cursorRing = document.getElementById('cursor-ring');
 let cx = 0, cy = 0, rx = 0, ry = 0;
 
 document.addEventListener('mousemove', e => {
   cx = e.clientX; cy = e.clientY;
-  mouse.x = cx;   mouse.y = cy;
+  mouse.x = cx; mouse.y = cy;
 });
 
 function loopCursor() {
   rx += (cx - rx) * .11;
   ry += (cy - ry) * .11;
-  cursorDot.style.left  = cx + 'px';
-  cursorDot.style.top   = cy + 'px';
+  cursorDot.style.left = cx + 'px';
+  cursorDot.style.top = cy + 'px';
   cursorRing.style.left = rx + 'px';
-  cursorRing.style.top  = ry + 'px';
+  cursorRing.style.top = ry + 'px';
   requestAnimationFrame(loopCursor);
 }
 
@@ -142,13 +142,13 @@ function initGSAP() {
   gsap.set(['.hero-role', '.hero-desc', '.hero-cta'], { y: 22 });
 
   gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .1 })
-    .to('#nav',                { opacity: 1, y: 0, duration: .9 })
-    .to('.hero-label',         { opacity: 1, duration: .7 },       '-=.5')
-    .to('.line',               { y: '0%', duration: 1.1, stagger: .13 }, '-=.5')
-    .to('.hero-role',          { opacity: 1, y: 0, duration: .7 }, '-=.5')
-    .to('.hero-desc',          { opacity: 1, y: 0, duration: .6 }, '-=.4')
-    .to('.hero-cta',           { opacity: 1, y: 0, duration: .6 }, '-=.4')
-    .to('.hero-scroll',        { opacity: 1, duration: .6 },       '-=.3');
+    .to('#nav', { opacity: 1, y: 0, duration: .9 })
+    .to('.hero-label', { opacity: 1, duration: .7 }, '-=.5')
+    .to('.line', { y: '0%', duration: 1.1, stagger: .13 }, '-=.5')
+    .to('.hero-role', { opacity: 1, y: 0, duration: .7 }, '-=.5')
+    .to('.hero-desc', { opacity: 1, y: 0, duration: .6 }, '-=.4')
+    .to('.hero-cta', { opacity: 1, y: 0, duration: .6 }, '-=.4')
+    .to('.hero-scroll', { opacity: 1, duration: .6 }, '-=.3');
 }
 
 // === INIT ===
@@ -190,13 +190,13 @@ function initSkills() {
   // 3D tilt
   document.querySelectorAll('.skill-card').forEach(card => {
     card.addEventListener('mousemove', e => {
-      const rect  = card.getBoundingClientRect();
-      const cx    = rect.left + rect.width  / 2;
-      const cy    = rect.top  + rect.height / 2;
-      const dx    = (e.clientX - cx) / (rect.width  / 2);
-      const dy    = (e.clientY - cy) / (rect.height / 2);
-      const rotX  = -dy * 7;
-      const rotY  =  dx * 7;
+      const rect = card.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = (e.clientX - cx) / (rect.width / 2);
+      const dy = (e.clientY - cy) / (rect.height / 2);
+      const rotX = -dy * 7;
+      const rotY = dx * 7;
       gsap.to(card, {
         rotateX: rotX, rotateY: rotY,
         scale: 1.02,
@@ -234,7 +234,7 @@ function initWorks() {
 
   // Filtre
   const filterBtns = document.querySelectorAll('.filter-btn');
-  const cards      = document.querySelectorAll('.work-card');
+  const cards = document.querySelectorAll('.work-card');
   const countLabel = document.querySelector('.works-count-label');
 
   filterBtns.forEach(btn => {
@@ -243,7 +243,7 @@ function initWorks() {
       btn.classList.add('active');
 
       const filter = btn.dataset.filter;
-      let visible  = 0;
+      let visible = 0;
 
       cards.forEach(card => {
         const match = filter === 'all' || card.dataset.cat === filter;
@@ -379,11 +379,11 @@ function initCta() {
     defaults: { ease: 'power4.out' }
   });
 
-  tl.to('.cta-eyebrow',  { opacity: 1, y: 0, duration: .6 })
-    .to('.cta-line',     { opacity: 1, y: 0, duration: 1, stagger: .12 }, '-=.3')
-    .to('.cta-sub',      { opacity: 1, y: 0, duration: .7 }, '-=.5')
-    .to('.cta-btns',     { opacity: 1, y: 0, duration: .6 }, '-=.4')
-    .to('.cta-socials',  { opacity: 1, y: 0, duration: .6 }, '-=.4');
+  tl.to('.cta-eyebrow', { opacity: 1, y: 0, duration: .6 })
+    .to('.cta-line', { opacity: 1, y: 0, duration: 1, stagger: .12 }, '-=.3')
+    .to('.cta-sub', { opacity: 1, y: 0, duration: .7 }, '-=.5')
+    .to('.cta-btns', { opacity: 1, y: 0, duration: .6 }, '-=.4')
+    .to('.cta-socials', { opacity: 1, y: 0, duration: .6 }, '-=.4');
 
   // Glow mouse takibi
   const glow = document.querySelector('.cta-glow');
@@ -404,18 +404,18 @@ function initCta() {
 
 // === STICKY NAV ===
 function initNav() {
-  const nav       = document.getElementById('nav');
+  const nav = document.getElementById('nav');
   const hamburger = document.getElementById('hamburger');
-  const menu      = document.getElementById('mobileMenu');
-  const sections  = document.querySelectorAll('section[id]');
-  const links     = document.querySelectorAll('.nav-links a');
-  let menuOpen    = false;
+  const menu = document.getElementById('mobileMenu');
+  const sections = document.querySelectorAll('section[id]');
+  const links = document.querySelectorAll('.nav-links a');
+  let menuOpen = false;
 
   // Scroll: scrolled class + progress bar + aktif link
   window.addEventListener('scroll', () => {
-    const scrollY   = window.scrollY;
-    const docH      = document.documentElement.scrollHeight - window.innerHeight;
-    const progress  = docH > 0 ? (scrollY / docH * 100).toFixed(1) : 0;
+    const scrollY = window.scrollY;
+    const docH = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = docH > 0 ? (scrollY / docH * 100).toFixed(1) : 0;
 
     nav.classList.toggle('scrolled', scrollY > 60);
     nav.style.setProperty('--scroll-progress', progress + '%');
@@ -440,9 +440,9 @@ function initNav() {
   });
 }
 
-window.closeMenu = function() {
+window.closeMenu = function () {
   const hamburger = document.getElementById('hamburger');
-  const menu      = document.getElementById('mobileMenu');
+  const menu = document.getElementById('mobileMenu');
   hamburger.classList.remove('open');
   menu.classList.remove('open');
   document.body.style.overflow = '';

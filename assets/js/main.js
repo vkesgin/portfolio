@@ -210,9 +210,8 @@ function initSkills() {
     });
   });
 }
-
-
-  
+function initStats() {
+  if (typeof ScrollTrigger === 'undefined') return;
 
   // CountUp
   document.querySelectorAll('.count').forEach(el => {

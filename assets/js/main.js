@@ -167,6 +167,7 @@ if (typeof gsap !== 'undefined') {
   initCta();
 }
 initNav();
+initFooter();
 
 // === STATS SCROLL ANIMATION ===
 // === SKILLS SCROLL + 3D TILT ===
@@ -446,3 +447,34 @@ window.closeMenu = function() {
   menu.classList.remove('open');
   document.body.style.overflow = '';
 };
+
+// === FOOTER ===
+function initFooter() {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  // Büyük yazı scroll ile içeri girer
+  gsap.from('.footer-word', {
+    y: 60,
+    opacity: 0,
+    duration: 1.2,
+    stagger: .12,
+    ease: 'power4.out',
+    scrollTrigger: {
+      trigger: '.footer-big-text',
+      start: 'top 90%',
+    }
+  });
+
+  // Nav linkleri stagger
+  gsap.from('.footer-nav-col', {
+    y: 24,
+    opacity: 0,
+    duration: .7,
+    stagger: .1,
+    ease: 'power3.out',
+    scrollTrigger: {
+      trigger: '#footer',
+      start: 'top 85%',
+    }
+  });
+}

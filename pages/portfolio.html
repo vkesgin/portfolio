@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portfolyo — Veli Kesgin</title>
+  <link rel="stylesheet" href="../assets/css/reset.css">
+  <link rel="stylesheet" href="../assets/css/variables.css">
+  <link rel="stylesheet" href="../assets/css/global.css">
+  <link rel="stylesheet" href="../assets/css/portfolio.css">
+</head>
+<body>
+
+  <div id="header-placeholder"></div>
+
+  <!-- LIGHTBOX -->
+  <div id="lightbox">
+    <button class="lb-close" id="lbClose">✕</button>
+    <button class="lb-prev" id="lbPrev">←</button>
+    <button class="lb-next" id="lbNext">→</button>
+    <div class="lb-inner">
+      <div class="lb-img-wrap">
+        <img id="lbImg" src="" alt="">
+      </div>
+      <div class="lb-info">
+        <span class="lb-cat" id="lbCat"></span>
+        <h2 class="lb-title" id="lbTitle"></h2>
+        <p class="lb-desc" id="lbDesc"></p>
+        <div class="lb-tags" id="lbTags"></div>
+        <span class="lb-year" id="lbYear"></span>
+      </div>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- HERO -->
+    <section id="port-hero">
+      <div class="port-hero-inner">
+        <p class="section-eyebrow port-eyebrow">// portfolyo</p>
+        <h1 class="port-hero-title">
+          <span class="port-line">TÜME</span>
+          <span class="port-line port-line--outline">BAKIŞ</span>
+        </h1>
+        <p class="port-hero-sub">
+          7+ yılda üretilmiş seçilmiş işler.
+          Web, animasyon, video ve grafik.
+        </p>
+      </div>
+    </section>
+
+    <!-- FİLTRE + GALERİ -->
+    <section id="port-gallery">
+      <div class="port-gallery-inner">
+
+        <div class="port-filters">
+          <button class="filter-btn active" data-filter="all">
+            Tümü <span class="filter-count" id="fc-all">15</span>
+          </button>
+          <button class="filter-btn" data-filter="web">
+            Web <span class="filter-count" id="fc-web">3</span>
+          </button>
+          <button class="filter-btn" data-filter="3d">
+            3D <span class="filter-count" id="fc-3d">3</span>
+          </button>
+          <button class="filter-btn" data-filter="2d">
+            2D <span class="filter-count" id="fc-2d">3</span>
+          </button>
+          <button class="filter-btn" data-filter="video">
+            Video <span class="filter-count" id="fc-video">3</span>
+          </button>
+          <button class="filter-btn" data-filter="graphic">
+            Grafik <span class="filter-count" id="fc-graphic">3</span>
+          </button>
+        </div>
+
+        <div class="port-grid" id="portGrid">
+
+          <!-- WEB -->
+          <div class="port-card port-card--wide" data-cat="web"
+               data-title="Kurumsal Web Sitesi"
+               data-desc="Animasyon yoğunluklu, GSAP ScrollTrigger ve Three.js hero bölümlü tam responsive kurumsal web sitesi."
+               data-tags="HTML,CSS,JS,GSAP,Three.js"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/web001/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/web001/800/500" alt="Kurumsal Web Sitesi" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Web Design</span>
+                <h3 class="port-card-title">Kurumsal Web Sitesi</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card" data-cat="web"
+               data-title="E-Ticaret Arayüzü"
+               data-desc="Modern e-ticaret UI, özel animasyonlu ürün kartları ve sepet deneyimi."
+               data-tags="HTML,CSS,JS,UI/UX"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/web002/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/web002/600/450" alt="E-Ticaret" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Web Design</span>
+                <h3 class="port-card-title">E-Ticaret Arayüzü</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card" data-cat="web"
+               data-title="Portfolyo Sitesi"
+               data-desc="Kişisel portfolyo, parçacık sistemi, custom cursor ve scroll animasyonları."
+               data-tags="HTML,CSS,JS,GSAP,Canvas"
+               data-year="2025"
+               data-img="https://picsum.photos/seed/web003/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/web003/600/450" alt="Portfolyo" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Web Design</span>
+                <h3 class="port-card-title">Portfolyo Sitesi</h3>
+                <span class="port-card-year">2025</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <!-- 3D -->
+          <div class="port-card" data-cat="3d"
+               data-title="Ürün Görselleştirme"
+               data-desc="Fotogerçekçi 3D ürün render, studio lighting ve turntable animasyonu."
+               data-tags="Blender,Cycles,3D,Render"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/3d001/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/3d001/600/450" alt="Ürün Render" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">3D Animasyon</span>
+                <h3 class="port-card-title">Ürün Görselleştirme</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card port-card--tall" data-cat="3d"
+               data-title="Mimari Render"
+               data-desc="Modern konut projesi için iç mekan ve dış cephe fotogerçekçi görselleştirme."
+               data-tags="Blender,Architectural,Render"
+               data-year="2023"
+               data-img="https://picsum.photos/seed/3d002/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/3d002/600/700" alt="Mimari" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">3D Animasyon</span>
+                <h3 class="port-card-title">Mimari Render</h3>
+                <span class="port-card-year">2023</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card" data-cat="3d"
+               data-title="Sinematik Sekans"
+               data-desc="Marka tanıtımı için 3D sinematik animasyon sekansı ve VFX entegrasyonu."
+               data-tags="Cinema4D,VFX,Motion"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/3d003/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/3d003/600/450" alt="Sinematik" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">3D Animasyon</span>
+                <h3 class="port-card-title">Sinematik Sekans</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <!-- 2D -->
+          <div class="port-card port-card--wide" data-cat="2d"
+               data-title="Explainer Video"
+               data-desc="SaaS ürünü için karakter animasyonlu 2D explainer video, 90 saniye."
+               data-tags="After Effects,Character,Motion"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/2d001/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/2d001/800/450" alt="Explainer" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">2D Animasyon</span>
+                <h3 class="port-card-title">Explainer Video</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card" data-cat="2d"
+               data-title="Logo Animasyonu"
+               data-desc="Kurumsal marka için Lottie tabanlı logo animasyonu ve sting."
+               data-tags="After Effects,Lottie,Branding"
+               data-year="2023"
+               data-img="https://picsum.photos/seed/2d002/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/2d002/600/450" alt="Logo Anim" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">2D Animasyon</span>
+                <h3 class="port-card-title">Logo Animasyonu</h3>
+                <span class="port-card-year">2023</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card" data-cat="2d"
+               data-title="Motion Graphics Paketi"
+               data-desc="YouTube kanalı için intro, outro, lower third ve geçiş paketi."
+               data-tags="After Effects,Motion,YouTube"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/2d003/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/2d003/600/450" alt="Motion" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">2D Animasyon</span>
+                <h3 class="port-card-title">Motion Graphics</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <!-- VIDEO -->
+          <div class="port-card" data-cat="video"
+               data-title="Kurumsal Tanıtım Filmi"
+               data-desc="Üretim tesisi için 3 dakikalık kurumsal tanıtım filmi, drone çekimi dahil."
+               data-tags="Premiere,DaVinci,Drone,4K"
+               data-year="2023"
+               data-img="https://picsum.photos/seed/vid001/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/vid001/600/450" alt="Tanıtım" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Videografi</span>
+                <h3 class="port-card-title">Kurumsal Tanıtım</h3>
+                <span class="port-card-year">2023</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card port-card--tall" data-cat="video"
+               data-title="Ürün Reklam Filmi"
+               data-desc="Kozmetik markası için 30 saniyelik sosyal medya reklam filmi."
+               data-tags="Premiere,Color Grade,Social"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/vid002/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/vid002/600/700" alt="Reklam" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Videografi</span>
+                <h3 class="port-card-title">Ürün Reklam Filmi</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card" data-cat="video"
+               data-title="Etkinlik Çekimi"
+               data-desc="Kurumsal lansman etkinliği çekimi, highlight video ve full kayıt."
+               data-tags="Premiere,Event,4K"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/vid003/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/vid003/600/450" alt="Etkinlik" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Videografi</span>
+                <h3 class="port-card-title">Etkinlik Çekimi</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <!-- GRAFİK -->
+          <div class="port-card" data-cat="graphic"
+               data-title="Marka Kimliği"
+               data-desc="Teknoloji startup'ı için sıfırdan kurumsal kimlik, logo ve brand book."
+               data-tags="Illustrator,Branding,Logo"
+               data-year="2023"
+               data-img="https://picsum.photos/seed/gr001/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/gr001/600/450" alt="Marka" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Grafik Tasarım</span>
+                <h3 class="port-card-title">Marka Kimliği</h3>
+                <span class="port-card-year">2023</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card port-card--wide" data-cat="graphic"
+               data-title="Ambalaj Tasarımı"
+               data-desc="Organik gıda markası için ürün ambalajı ve etiket tasarımı serisi."
+               data-tags="Illustrator,Photoshop,Print"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/gr002/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/gr002/800/450" alt="Ambalaj" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Grafik Tasarım</span>
+                <h3 class="port-card-title">Ambalaj Tasarımı</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+          <div class="port-card" data-cat="graphic"
+               data-title="Sosyal Medya Kiti"
+               data-desc="Restoran zinciri için sosyal medya şablon kiti, 40+ tasarım."
+               data-tags="Photoshop,Social,Template"
+               data-year="2024"
+               data-img="https://picsum.photos/seed/gr003/1200/600">
+            <div class="port-card-img">
+              <img src="https://picsum.photos/seed/gr003/600/450" alt="Sosyal" loading="lazy">
+            </div>
+            <div class="port-card-overlay">
+              <div class="port-card-info">
+                <span class="port-cat-tag">Grafik Tasarım</span>
+                <h3 class="port-card-title">Sosyal Medya Kiti</h3>
+                <span class="port-card-year">2024</span>
+              </div>
+              <span class="port-expand">↗</span>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="port-empty" id="portEmpty" style="display:none">
+          <span>Bu kategoride henüz iş yok.</span>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+  <script src="../assets/js/inject.js"></script>
+  <script>
+    document.addEventListener('componentsLoaded', () => {
+      const s = document.createElement('script');
+      s.src = '../assets/js/main.js';
+      document.body.appendChild(s);
+    });
+  </script>
+  <script src="../assets/js/portfolio.js"></script>
+</body>
+</html>

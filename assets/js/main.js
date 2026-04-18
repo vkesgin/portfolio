@@ -163,6 +163,7 @@ if (typeof gsap !== 'undefined') {
   initStats();
   initSkills();
   initWorks();
+  initAbout();
 }
 
 // === STATS SCROLL ANIMATION ===
@@ -259,6 +260,67 @@ function initWorks() {
         countLabel.textContent = visible + ' iş gösteriliyor';
       }
     });
+  });
+}
+
+// === ABOUT PREVIEW ===
+function initAbout() {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  // Metin satırları — stagger
+  gsap.to('.about-line', {
+    opacity: 1,
+    y: 0,
+    duration: 0.8,
+    stagger: 0.18,
+    ease: 'power3.out',
+    scrollTrigger: {
+      trigger: '#about-preview',
+      start: 'top 72%',
+      onEnter: () => {
+        document.querySelectorAll('.about-line').forEach(el => {
+          el.classList.add('visible');
+        });
+      }
+    }
+  });
+
+  // CTA butonu
+  gsap.to('.about-cta', {
+    opacity: 1,
+    y: 0,
+    duration: 0.7,
+    ease: 'power3.out',
+    scrollTrigger: {
+      trigger: '.about-cta',
+      start: 'top 85%',
+    }
+  });
+
+  // Timeline itemlar
+  gsap.to('.tl-item', {
+    opacity: 1,
+    x: 0,
+    duration: 0.7,
+    stagger: 0.12,
+    ease: 'power3.out',
+    scrollTrigger: {
+      trigger: '.timeline',
+      start: 'top 75%',
+    }
+  });
+
+  // Timeline çizgisi büyüsün
+  gsap.from('.tl-line', {
+    scaleY: 0,
+    transformOrigin: 'top center',
+    duration: 0.8,
+    stagger: 0.12,
+    ease: 'power3.out',
+    scrollTrigger: {
+      trigger: '.timeline',
+      start: 'top 75%',
+    }
   });
 }
 

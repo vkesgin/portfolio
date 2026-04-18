@@ -164,6 +164,7 @@ if (typeof gsap !== 'undefined') {
   initSkills();
   initWorks();
   initAbout();
+  initCta();
 }
 
 // === STATS SCROLL ANIMATION ===
@@ -362,4 +363,39 @@ function initStats() {
       }
     });
   });
+}
+
+// === CTA ===
+function initCta() {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  const tl = gsap.timeline({
+    scrollTrigger: {
+      trigger: '#cta',
+      start: 'top 72%',
+    },
+    defaults: { ease: 'power4.out' }
+  });
+
+  tl.to('.cta-eyebrow',  { opacity: 1, y: 0, duration: .6 })
+    .to('.cta-line',     { opacity: 1, y: 0, duration: 1, stagger: .12 }, '-=.3')
+    .to('.cta-sub',      { opacity: 1, y: 0, duration: .7 }, '-=.5')
+    .to('.cta-btns',     { opacity: 1, y: 0, duration: .6 }, '-=.4')
+    .to('.cta-socials',  { opacity: 1, y: 0, duration: .6 }, '-=.4');
+
+  // Glow mouse takibi
+  const glow = document.querySelector('.cta-glow');
+  const section = document.getElementById('cta');
+  if (glow && section) {
+    section.addEventListener('mousemove', e => {
+      const rect = section.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      gsap.to(glow, {
+        left: x, top: y,
+        duration: 1.2,
+        ease: 'power3.out'
+      });
+    });
+  }
 }

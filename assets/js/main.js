@@ -166,6 +166,7 @@ if (typeof gsap !== 'undefined') {
   initAbout();
   initCta();
 }
+initNav();
 
 // === STATS SCROLL ANIMATION ===
 // === SKILLS SCROLL + 3D TILT ===
@@ -399,3 +400,49 @@ function initCta() {
     });
   }
 }
+
+// === STICKY NAV ===
+function initNav() {
+  const nav       = document.getElementById('nav');
+  const hamburger = document.getElementById('hamburger');
+  const menu      = document.getElementById('mobileMenu');
+  const sections  = document.querySelectorAll('section[id]');
+  const links     = document.querySelectorAll('.nav-links a');
+  let menuOpen    = false;
+
+  // Scroll: scrolled class + progress bar + aktif link
+  window.addEventListener('scroll', () => {
+    const scrollY   = window.scrollY;
+    const docH      = document.documentElement.scrollHeight - window.innerHeight;
+    const progress  = docH > 0 ? (scrollY / docH * 100).toFixed(1) : 0;
+
+    nav.classList.toggle('scrolled', scrollY > 60);
+    nav.style.setProperty('--scroll-progress', progress + '%');
+
+    // Aktif bölüm tespiti
+    let current = '';
+    sections.forEach(sec => {
+      if (scrollY >= sec.offsetTop - 120) current = sec.getAttribute('id');
+    });
+    links.forEach(link => {
+      const href = link.getAttribute('href').replace('#', '');
+      link.classList.toggle('active', href === current);
+    });
+  }, { passive: true });
+
+  // Hamburger
+  hamburger.addEventListener('click', () => {
+    menuOpen = !menuOpen;
+    hamburger.classList.toggle('open', menuOpen);
+    menu.classList.toggle('open', menuOpen);
+    document.body.style.overflow = menuOpen ? 'hidden' : '';
+  });
+}
+
+window.closeMenu = function() {
+  const hamburger = document.getElementById('hamburger');
+  const menu      = document.getElementById('mobileMenu');
+  hamburger.classList.remove('open');
+  menu.classList.remove('open');
+  document.body.style.overflow = '';
+};

@@ -1,6 +1,6 @@
 // === CANVAS PARTICLES ===
 const canvas = document.getElementById('bgCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 let W, H, particles = [];
 const mouse = { x: -9999, y: -9999 };
 
@@ -82,11 +82,13 @@ const cursorRing = document.getElementById('cursor-ring');
 let cx = 0, cy = 0, rx = 0, ry = 0;
 
 document.addEventListener('mousemove', e => {
-  cx = e.clientX; cy = e.clientY;
-  mouse.x = cx; mouse.y = cy;
+  mouse.x = e.clientX; mouse.y = e.clientY;
 });
 
 function loopCursor() {
+  if (!cursorDot || !cursorRing) return;
+  cx += (mouse.x - cx) * .15;
+  cy += (mouse.y - cy) * .15;
   rx += (cx - rx) * .11;
   ry += (cy - ry) * .11;
   cursorDot.style.left = cx + 'px';
@@ -96,14 +98,14 @@ function loopCursor() {
   requestAnimationFrame(loopCursor);
 }
 
-document.querySelectorAll('a, button').forEach(el => {
+document.querySelectorAll('a, button, .filter-btn, .work-card, .srv-item').forEach(el => {
   el.addEventListener('mouseenter', () => {
-    cursorDot.classList.add('hover');
-    cursorRing.classList.add('hover');
+    if(cursorDot) cursorDot.classList.add('hover');
+    if(cursorRing) cursorRing.classList.add('hover');
   });
   el.addEventListener('mouseleave', () => {
-    cursorDot.classList.remove('hover');
-    cursorRing.classList.remove('hover');
+    if(cursorDot) cursorDot.classList.remove('hover');
+    if(cursorRing) cursorRing.classList.remove('hover');
   });
 });
 
@@ -154,10 +156,16 @@ function initGSAP() {
 // === INIT ===
 window.addEventListener('resize', () => { resize(); initParticles(); });
 resize();
-initParticles();
-loopCanvas();
-loopCursor();
-setTimeout(typeNext, 1600);
+if (canvas) {
+  initParticles();
+  loopCanvas();
+}
+if (cursorDot && cursorRing) {
+  loopCursor();
+}
+if (roleEl) {
+  setTimeout(typeNext, 1600);
+}
 if (typeof gsap !== 'undefined') {
   initGSAP();
   initStats();
@@ -411,25 +419,55 @@ function initNav() {
   const links = document.querySelectorAll('.nav-links a');
   let menuOpen = false;
 
-  // Scroll: scrolled class + progress bar + aktif link
-  window.addEventListener('scroll', () => {
+  function updateActiveLinks() {
     const scrollY = window.scrollY;
-    const docH = document.documentElement.scrollHeight - window.innerHeight;
-    const progress = docH > 0 ? (scrollY / docH * 100).toFixed(1) : 0;
-
-    nav.classList.toggle('scrolled', scrollY > 60);
-    nav.style.setProperty('--scroll-progress', progress + '%');
-
-    // Aktif bölüm tespiti
     let current = '';
+
+    // Scroll progress & sticky
+    if (nav) {
+      const docH = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = docH > 0 ? (scrollY / docH * 100).toFixed(1) : 0;
+      nav.classList.toggle('scrolled', scrollY > 60);
+      nav.style.setProperty('--scroll-progress', progress + '%');
+    }
+
+    // Determine current section by scroll position (for index page)
     sections.forEach(sec => {
       if (scrollY >= sec.offsetTop - 120) current = sec.getAttribute('id');
     });
+
+    const currentPath = window.location.pathname;
+
     links.forEach(link => {
-      const href = link.getAttribute('href').replace('#', '');
-      link.classList.toggle('active', href === current);
+      const href = link.getAttribute('href');
+      if (!href) return;
+
+      // 1- Alt sayfalardaysak (örn: services.html)
+      if (href !== '/' && href !== '/index.html' && !href.includes('#') && currentPath.includes(href)) {
+        link.classList.add('active');
+        return;
+      }
+
+      // 2- Ana sayfadaysak scroll id kontrolü
+      if (currentPath === '/' || currentPath.endsWith('index.html')) {
+        if (href.includes('#')) {
+          const id = href.split('#')[1];
+          link.classList.toggle('active', id === current);
+        } else {
+          link.classList.remove('active');
+        }
+      } else {
+        // İlgili olmayan linklerin active classını temizle
+        if (!currentPath.includes(href)) {
+          link.classList.remove('active');
+        }
+      }
     });
-  }, { passive: true });
+  }
+
+  // İlk yüklemede ve scroll'da update et
+  updateActiveLinks();
+  window.addEventListener('scroll', updateActiveLinks, { passive: true });
 
   // Hamburger
   hamburger.addEventListener('click', () => {

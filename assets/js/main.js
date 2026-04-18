@@ -161,26 +161,58 @@ setTimeout(typeNext, 1600);
 if (typeof gsap !== 'undefined') {
   initGSAP();
   initStats();
+  initSkills();
 }
 
 // === STATS SCROLL ANIMATION ===
-function initStats() {
+// === SKILLS SCROLL + 3D TILT ===
+function initSkills() {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
-  gsap.registerPlugin(ScrollTrigger);
-
-  // Kartlar stagger ile gelsin
-  gsap.to('.stat-item', {
+  // Stagger giriş
+  gsap.to('.skill-card', {
     opacity: 1,
     y: 0,
-    duration: 0.9,
-    stagger: 0.15,
+    duration: 0.8,
+    stagger: 0.08,
     ease: 'power4.out',
     scrollTrigger: {
-      trigger: '#stats',
+      trigger: '#skills',
       start: 'top 75%',
     }
   });
+
+  // 3D tilt
+  document.querySelectorAll('.skill-card').forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const rect  = card.getBoundingClientRect();
+      const cx    = rect.left + rect.width  / 2;
+      const cy    = rect.top  + rect.height / 2;
+      const dx    = (e.clientX - cx) / (rect.width  / 2);
+      const dy    = (e.clientY - cy) / (rect.height / 2);
+      const rotX  = -dy * 7;
+      const rotY  =  dx * 7;
+      gsap.to(card, {
+        rotateX: rotX, rotateY: rotY,
+        scale: 1.02,
+        duration: 0.4,
+        ease: 'power2.out',
+        overwrite: true
+      });
+    });
+    card.addEventListener('mouseleave', () => {
+      gsap.to(card, {
+        rotateX: 0, rotateY: 0, scale: 1,
+        duration: 0.6,
+        ease: 'elastic.out(1, 0.5)',
+        overwrite: true
+      });
+    });
+  });
+}
+
+
+  
 
   // CountUp
   document.querySelectorAll('.count').forEach(el => {

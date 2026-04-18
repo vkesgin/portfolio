@@ -925,12 +925,12 @@ img {
 }
 .cta-line--outline {
   color: transparent;
-  -webkit-text-stroke: 2px var(--text-primary);
+  -webkit-text-stroke: 1px var(--text-primary);
   transition: -webkit-text-stroke .3s, color .3s;
 }
 .cta-line--outline:hover {
   color: var(--accent);
-  -webkit-text-stroke: 2px transparent;
+  -webkit-text-stroke: 1px transparent;
 }
 
 .cta-sub {

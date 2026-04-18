@@ -162,6 +162,7 @@ if (typeof gsap !== 'undefined') {
   initGSAP();
   initStats();
   initSkills();
+  initWorks();
 }
 
 // === STATS SCROLL ANIMATION ===
@@ -210,6 +211,57 @@ function initSkills() {
     });
   });
 }
+
+// === WORKS SCROLL + FILTER ===
+function initWorks() {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  // Giriş animasyonu
+  gsap.to('.work-card', {
+    opacity: 1,
+    duration: 0.7,
+    stagger: { amount: 0.5, from: 'start' },
+    ease: 'power3.out',
+    scrollTrigger: {
+      trigger: '#works',
+      start: 'top 75%',
+    }
+  });
+
+  // Filtre
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  const cards      = document.querySelectorAll('.work-card');
+  const countLabel = document.querySelector('.works-count-label');
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+
+      const filter = btn.dataset.filter;
+      let visible  = 0;
+
+      cards.forEach(card => {
+        const match = filter === 'all' || card.dataset.cat === filter;
+        if (match) {
+          card.classList.remove('hidden');
+          gsap.fromTo(card,
+            { opacity: 0, y: 16 },
+            { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out', delay: visible * 0.06 }
+          );
+          visible++;
+        } else {
+          card.classList.add('hidden');
+        }
+      });
+
+      if (countLabel) {
+        countLabel.textContent = visible + ' iş gösteriliyor';
+      }
+    });
+  });
+}
+
 // === STATS SCROLL ANIMATION ===
 function initStats() {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;

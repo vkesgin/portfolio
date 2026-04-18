@@ -181,6 +181,7 @@ if (typeof gsap !== 'undefined') {
   initSkills();
   initWorks();
   initAbout();
+  initToolsMarquee();
   initCta();
 }
 initNav();
@@ -494,6 +495,28 @@ window.closeMenu = function () {
   menu.classList.remove('open');
   document.body.style.overflow = '';
 };
+
+// === TOOLS MARQUEE ===
+function initToolsMarquee() {
+  const track = document.getElementById('toolsTrack');
+  const marquee = document.getElementById('toolsMarquee');
+  if (!track || !marquee || typeof gsap === 'undefined') return;
+
+  // Çift kopya (Sonsuz kayma için)
+  track.innerHTML += track.innerHTML;
+
+  // Timeline (Sonsuz dikey kaydırma)
+  const tl = gsap.to(track, {
+    yPercent: -50,
+    ease: "none",
+    duration: 18,
+    repeat: -1
+  });
+
+  // Hover efekti: tamamen durması
+  marquee.addEventListener('mouseenter', () => tl.pause());
+  marquee.addEventListener('mouseleave', () => tl.play());
+}
 
 // === FOOTER ===
 function initFooter() {

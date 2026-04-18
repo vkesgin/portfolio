@@ -418,4 +418,24 @@ body {
 }
 .skill-tags span {
   font-family: var(--font-mono);
-  font-size: 10px; letter-spaci
+  font-size: 10px; letter-spacing: .06em;
+  color: var(--text-muted);
+  border: 0.5px solid var(--border);
+  padding: 3px 8px; border-radius: var(--radius-sm);
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+.skill-card:hover .skill-tags span {
+  color: var(--accent);
+  border-color: rgba(0,229,255,.25);
+}
+
+/* 3D tilt — JS ile ekleniyor */
+.skill-card { transform-style: preserve-3d; }
+
+@media (max-width: 900px) {
+  .skills-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  #skills { padding: var(--space-xl) 24px; }
+  .skills-grid { grid-template-columns: 1fr; }
+}

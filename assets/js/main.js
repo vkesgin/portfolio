@@ -158,4 +158,47 @@ initParticles();
 loopCanvas();
 loopCursor();
 setTimeout(typeNext, 1600);
-if (typeof gsap !== 'undefined') initGSAP();
+if (typeof gsap !== 'undefined') {
+  initGSAP();
+  initStats();
+}
+
+// === STATS SCROLL ANIMATION ===
+function initStats() {
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+
+  gsap.registerPlugin(ScrollTrigger);
+
+  // Kartlar stagger ile gelsin
+  gsap.to('.stat-item', {
+    opacity: 1,
+    y: 0,
+    duration: 0.9,
+    stagger: 0.15,
+    ease: 'power4.out',
+    scrollTrigger: {
+      trigger: '#stats',
+      start: 'top 75%',
+    }
+  });
+
+  // CountUp
+  document.querySelectorAll('.count').forEach(el => {
+    const target = parseInt(el.dataset.target);
+    ScrollTrigger.create({
+      trigger: el,
+      start: 'top 80%',
+      once: true,
+      onEnter: () => {
+        const duration = target > 50 ? 2000 : 1400;
+        const step = Math.max(1, Math.floor(target / 60));
+        let current = 0;
+        const interval = setInterval(() => {
+          current = Math.min(current + step, target);
+          el.textContent = current;
+          if (current >= target) clearInterval(interval);
+        }, duration / (target / step));
+      }
+    });
+  });
+}

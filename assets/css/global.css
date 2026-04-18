@@ -203,3 +203,113 @@ body {
   .hero-scroll { right: 24px; }
   .outline-line { -webkit-text-stroke: 1.5px var(--text-primary); }
 }
+
+/* === STATS === */
+#stats {
+  position: relative; z-index: 2;
+  padding: var(--space-2xl) 60px;
+}
+.stats-inner { max-width: 1200px; margin: 0 auto; }
+
+.stats-line {
+  width: 100%; height: 0.5px;
+  background: linear-gradient(90deg, transparent, var(--border-hover), transparent);
+}
+
+.stats-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xl) 0;
+  gap: var(--space-lg);
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 1;
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+.stat-num {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  font-family: var(--font-display);
+  font-size: clamp(64px, 9vw, 120px);
+  line-height: 1;
+  color: var(--text-primary);
+  letter-spacing: -.01em;
+}
+
+.stat-plus {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4vw, 56px);
+  color: var(--accent);
+  margin-top: 8px;
+}
+
+.count { color: var(--text-primary); }
+.stat-item:hover .count { color: var(--accent); transition: color .3s var(--ease-out); }
+
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .12em;
+  color: var(--text-muted);
+  line-height: 1.7;
+}
+
+.stat-divider {
+  width: 0.5px;
+  height: 80px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* === MARQUEE === */
+.stats-marquee {
+  overflow: hidden;
+  padding: 28px 0 0;
+  mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 10%, black 90%, transparent);
+}
+
+.marquee-track {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  white-space: nowrap;
+  animation: marquee 18s linear infinite;
+  width: max-content;
+}
+
+.marquee-track span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .14em;
+  color: var(--text-muted);
+}
+
+.marquee-track .sep {
+  color: var(--accent);
+  letter-spacing: 0;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* === MOBILE STATS === */
+@media (max-width: 768px) {
+  #stats { padding: var(--space-xl) 24px; }
+  .stats-grid {
+    flex-wrap: wrap;
+    gap: var(--space-lg);
+  }
+  .stat-item { flex: 1 1 40%; }
+  .stat-divider { display: none; }
+}

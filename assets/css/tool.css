@@ -1,0 +1,136 @@
+/* === TOOL HERO === */
+#tool-hero {
+  position: relative; z-index: 2;
+  padding: 160px 60px var(--space-lg);
+}
+.tool-hero-inner { max-width: 900px; margin: 0 auto; text-align: center; }
+.tool-title {
+  display: flex; flex-direction: column;
+  margin-bottom: var(--space-md);
+}
+.tool-line {
+  font-family: var(--font-display);
+  font-size: clamp(60px, 12vw, 150px);
+  line-height: .9; letter-spacing: -.01em;
+  color: var(--text-primary);
+}
+.tool-desc {
+  font-size: 16px; color: var(--text-secondary);
+  line-height: 1.8; margin-top: 16px;
+}
+
+/* === TOOL APP CARD === */
+#tool-app {
+  position: relative; z-index: 2;
+  padding: 0 60px var(--space-2xl);
+}
+.tool-app-inner { max-width: 1000px; margin: 0 auto; }
+
+.tool-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+}
+
+.tool-card-left, .tool-card-right {
+  padding: 40px;
+}
+.tool-card-left {
+  background: rgba(255,255,255,0.02);
+  border-right: 1px solid var(--border);
+}
+.tool-card-right {
+  display: flex; flex-direction: column;
+}
+
+/* === EDUCATIONAL STEPS === */
+.tool-step {
+  font-size: 18px; font-weight: 700;
+  color: var(--accent); margin-bottom: 8px;
+}
+.tool-step-desc {
+  font-size: 14px; color: var(--text-secondary);
+  line-height: 1.6; margin-bottom: 24px;
+}
+
+/* === INPUTS === */
+.input-group {
+  display: flex; flex-direction: column; gap: 10px;
+  margin-bottom: 24px;
+}
+.input-group label {
+  font-family: var(--font-mono); font-size: 11px;
+  letter-spacing: .1em; color: var(--text-muted);
+}
+.input-group textarea, .input-group input {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  color: var(--text-primary);
+  font-size: 15px; font-family: inherit;
+  resize: none;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+.input-group textarea:focus, .input-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0,229,255,0.15);
+}
+
+/* === INFO BOX === */
+.tool-info-box {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: rgba(0,229,255,0.08);
+  border: 1px dashed rgba(0,229,255,0.3);
+  padding: 16px; border-radius: var(--radius-md);
+}
+.tool-info-box p {
+  font-size: 13px; color: var(--text-secondary);
+  line-height: 1.6; margin: 0;
+}
+.info-icon { font-size: 18px; }
+
+/* === PREVIEW BOX === */
+.qr-preview-box {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.4);
+  border: 1px dashed var(--border-hover);
+  border-radius: var(--radius-md);
+  min-height: 250px;
+  position: relative;
+  overflow: hidden;
+}
+.qr-preview-box img, .qr-preview-box canvas {
+  width: 200px !important; height: 200px !important;
+  background: white; padding: 10px; border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  animation: qrPop 0.4s cubic-bezier(.17,.89,.32,1.28);
+}
+@keyframes qrPop {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.empty-state {
+  font-family: var(--font-mono); font-size: 12px;
+  letter-spacing: .1em; color: var(--text-muted);
+  text-align: center;
+}
+
+.btn-full { width: 100%; justify-content: center; }
+
+/* === MOBILE === */
+@media (max-width: 900px) {
+  .tool-card { grid-template-columns: 1fr; }
+  .tool-card-left { border-right: none; border-bottom: 1px solid var(--border); }
+  .tool-line { font-size: clamp(48px, 12vw, 80px); }
+}
+@media (max-width: 600px) {
+  #tool-hero, #tool-app { padding-left: 24px; padding-right: 24px; }
+  .tool-card-left, .tool-card-right { padding: 24px; }
+}

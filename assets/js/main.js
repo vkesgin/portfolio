@@ -162,6 +162,7 @@ function initGSAP() {
 
 // === HERO PHOTO PARALLAX ===
 function initHeroParallax() {
+  if (window.matchMedia('(max-width: 900px)').matches) return;
   const section = document.getElementById('hero');
   const inner   = document.getElementById('heroPhotoInner');
   const img     = document.getElementById('heroImg');

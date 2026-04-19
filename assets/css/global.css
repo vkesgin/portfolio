@@ -581,13 +581,40 @@ img {
   color: var(--accent);
 }
 
-/* === TABLET LAYOUT === */
+/* === TABLET / MOBİL HERO === */
 @media (max-width: 900px) {
-  #hero { padding: 0 24px; padding-bottom: 80px; }
-  .hero-inner { grid-template-columns: 1fr; padding-top: 100px; }
-  .hero-photo-side { display: none; }
+  #hero {
+    padding: 0 24px 80px;
+    min-height: 100svh;
+  }
+  .hero-inner {
+    grid-template-columns: 1fr;
+    padding-top: 100px;
+    gap: 32px;
+    text-align: center;
+  }
+  .hero-text-side { order: 2; max-width: 100%; }
+  .hero-photo-side {
+    order: 1;
+    opacity: 0;
+    transform: translateY(-20px);
+    justify-content: center;
+  }
+  .hero-photo-inner { max-width: 200px; aspect-ratio: 3/4; }
+  .hero-label  { text-align: center; }
+  .hero-role   { justify-content: center; }
+  .hero-desc   { text-align: center; }
+  .hero-cta    { justify-content: center; }
   .hero-scroll { display: none; }
+  .hero-photo-label { display: none; }
+  .hero-photo-num   { display: none; }
   .hero-tools-wrapper { display: none; }
+}
+
+@media (max-width: 600px) {
+  #hero { padding: 0 20px 60px; }
+  .hero-photo-inner { max-width: 160px; }
+  .line { font-size: clamp(52px, 16vw, 80px) !important; }
 }
 
 /* === MOBİL — Native app layout === */
@@ -1561,6 +1588,55 @@ img {
   color: var(--text-primary);
 }
 .pt-logo span { color: var(--accent); }
+
+/* === GENEL MOBİL DÜZELTMELERİ === */
+
+/* Dokunmatik ekranlarda custom cursor gizle */
+@media (pointer: coarse) {
+  #cursor, #cursor-ring { display: none; }
+  body { cursor: auto !important; }
+  a, button { cursor: pointer !important; }
+}
+
+@media (max-width: 768px) {
+  /* Taşan section başlıkları */
+  .section-title { font-size: clamp(44px, 13vw, 80px); }
+  .cta-line      { font-size: clamp(48px, 14vw, 90px); }
+
+  /* Stats — 2'li grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  .stat-num { font-size: clamp(44px, 11vw, 72px); }
+  .stat-divider { display: none; }
+
+  /* Skills — 2 kolon */
+  .skills-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Works — tek kolon */
+  .works-grid { columns: 1 !important; }
+  .work-card  { break-inside: unset; margin-bottom: 16px; }
+
+  /* About preview — tek kolon */
+  .about-inner { grid-template-columns: 1fr; }
+
+  /* Footer */
+  .footer-top  { flex-direction: column; }
+  .footer-nav  { gap: 32px; }
+  .footer-big-text { display: none; }
+  .footer-bottom   { flex-direction: column; gap: 8px; }
+
+  /* İç sayfa hero'ları */
+  #srv-hero, #port-hero, #abt-hero, #contact-hero {
+    padding: 120px 20px 40px;
+  }
+
+  /* İletişim formu */
+  .contact-body-inner { grid-template-columns: 1fr; }
+  .ct-form-row        { grid-template-columns: 1fr; }
+}
 
 /* === LOCOMOTIVE SCROLL === */
 html.has-scroll-smooth { overflow: hidden; }

@@ -1559,4 +1559,12 @@ img {
   font-size: 56px; letter-spacing: .05em;
   color: var(--text-primary);
 }
-.pt-logo span { color: var(--accent); }
+.pt-logo span { color: var(--accent); }
+
+/* === LOCOMOTIVE SCROLL === */
+html.has-scroll-smooth { overflow: hidden; }
+html.has-scroll-dragging { user-select: none; }
+.has-scroll-smooth body { overflow: hidden; }
+[data-scroll-container] { min-height: 100vh; }
+html.has-scroll-smooth::-webkit-scrollbar { display: none; }
+html.has-scroll-smooth { scrollbar-width: none; }

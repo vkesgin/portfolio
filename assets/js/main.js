@@ -1,3 +1,7 @@
+function getScroller() {
+  return document.querySelector('[data-scroll-container]') || window;
+}
+
 // === CANVAS PARTICLES ===
 const canvas = document.getElementById('bgCanvas');
 const ctx = canvas ? canvas.getContext('2d') : null;
@@ -244,6 +248,7 @@ function initSkills() {
     scrollTrigger: {
       trigger: '#skills',
       start: 'top 75%',
+      scroller: getScroller(),
     }
   });
 
@@ -289,6 +294,7 @@ function initWorks() {
     scrollTrigger: {
       trigger: '#works',
       start: 'top 75%',
+      scroller: getScroller(),
     }
   });
 
@@ -340,6 +346,7 @@ function initAbout() {
     scrollTrigger: {
       trigger: '#about-preview',
       start: 'top 72%',
+      scroller: getScroller(),
       onEnter: () => {
         document.querySelectorAll('.about-line').forEach(el => {
           el.classList.add('visible');
@@ -357,6 +364,7 @@ function initAbout() {
     scrollTrigger: {
       trigger: '.about-cta',
       start: 'top 85%',
+      scroller: getScroller(),
     }
   });
 
@@ -370,6 +378,7 @@ function initAbout() {
     scrollTrigger: {
       trigger: '.timeline',
       start: 'top 75%',
+      scroller: getScroller(),
     }
   });
 
@@ -383,6 +392,7 @@ function initAbout() {
     scrollTrigger: {
       trigger: '.timeline',
       start: 'top 75%',
+      scroller: getScroller(),
     }
   });
 }
@@ -403,6 +413,7 @@ function initStats() {
     scrollTrigger: {
       trigger: '#stats',
       start: 'top 75%',
+      scroller: getScroller(),
     }
   });
 
@@ -412,6 +423,7 @@ function initStats() {
     ScrollTrigger.create({
       trigger: el,
       start: 'top 80%',
+      scroller: getScroller(),
       once: true,
       onEnter: () => {
         const duration = target > 50 ? 2000 : 1400;
@@ -435,6 +447,7 @@ function initCta() {
     scrollTrigger: {
       trigger: '#cta',
       start: 'top 72%',
+      scroller: getScroller(),
     },
     defaults: { ease: 'power4.out' }
   });
@@ -643,6 +656,7 @@ function initFooter() {
     scrollTrigger: {
       trigger: '.footer-big-text',
       start: 'top 100%',
+      scroller: getScroller(),
       once: true,
     }
   });
@@ -656,6 +670,7 @@ function initFooter() {
     scrollTrigger: {
       trigger: '#footer',
       start: 'top 100%',
+      scroller: getScroller(),
       once: true,
     }
   });

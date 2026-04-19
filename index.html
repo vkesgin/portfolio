@@ -50,6 +50,8 @@
     "knowsAbout": ["Web Design","3D Animation","2D Animation","Videography","Graphic Design","Software Development"]
   }
   </script>
+  <link rel="preload" href="/assets/images/veli.webp" as="image" type="image/webp">
+  <link rel="preload" href="/assets/images/veli.jpg" as="image">
   <link rel="stylesheet" href="/assets/css/reset.css">
   <link rel="stylesheet" href="/assets/css/variables.css">
   <link rel="stylesheet" href="/assets/css/global.css">
@@ -86,7 +88,10 @@
 
       <div class="hero-photo-side" id="heroPhoto">
         <div class="hero-photo-inner" id="heroPhotoInner">
-          <img src="assets/images/veli.jpg" alt="Veli Kesgin" class="hero-img" id="heroImg" loading="lazy">
+          <picture>
+            <source srcset="/assets/images/veli.webp" type="image/webp">
+            <img src="/assets/images/veli.jpg" alt="Veli Kesgin" class="hero-img" id="heroImg" fetchpriority="high">
+          </picture>
           <div class="hero-photo-scanlines"></div>
           <div class="hero-photo-overlay"></div>
           <div class="hero-photo-cyan-line"></div>
@@ -704,8 +709,8 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
-  <script src="/assets/js/portfolio-data.js?v=current"></script>
-  <script src="/assets/js/inject.js?v=current"></script>
+  <script src="/assets/js/portfolio-data.js?v=current" defer></script>
+  <script src="/assets/js/inject.js?v=current" defer></script>
   <script>
     document.addEventListener('componentsLoaded', () => {
       const s = document.createElement('script');
@@ -713,8 +718,7 @@
       document.body.appendChild(s);
     });
   </script>
-  <script src="/assets/js/smooth-scroll.js?v=current"></script>
-  <script src="/assets/js/transitions.js?v=current"></script>
+  <script src="/assets/js/transitions.js?v=current" defer></script>
 </body>
 
 </html>

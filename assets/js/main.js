@@ -1,6 +1,4 @@
-function getScroller() {
-  return document.querySelector('[data-scroll-container]') || window;
-}
+function getScroller() { return window; }
 
 // === CANVAS PARTICLES ===
 const canvas = document.getElementById('bgCanvas');
@@ -659,6 +657,8 @@ function initNav() {
     menuOpen = !menuOpen;
     hamburger.classList.toggle('open', menuOpen);
     menu.classList.toggle('open', menuOpen);
+    hamburger.setAttribute('aria-expanded', menuOpen);
+    hamburger.setAttribute('aria-label', menuOpen ? 'Menüyü kapat' : 'Menüyü aç');
     document.body.style.overflow = menuOpen ? 'hidden' : '';
   });
 }
@@ -668,6 +668,8 @@ window.closeMenu = function () {
   const menu = document.getElementById('mobileMenu');
   hamburger.classList.remove('open');
   menu.classList.remove('open');
+  hamburger.setAttribute('aria-expanded', false);
+  hamburger.setAttribute('aria-label', 'Menüyü aç');
   document.body.style.overflow = '';
 };
 

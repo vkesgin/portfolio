@@ -349,6 +349,16 @@ img {
   gap: 16px;
   padding: 10px 0;
   will-change: transform;
+  animation: toolScrollVert 18s linear infinite;
+}
+
+@keyframes toolScrollVert {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
+.hero-tools-marquee:hover .tools-track {
+  animation-play-state: paused;
 }
 
 .tool-btn {
@@ -386,7 +396,52 @@ img {
 
 /* === MOBILE === */
 @media (max-width: 900px) {
-  .hero-tools-wrapper { display: none; }
+  #hero { padding-bottom: 90px; }
+  
+  .hero-tools-wrapper {
+    position: absolute;
+    top: auto;
+    bottom: 24px;
+    right: 0;
+    left: 0;
+    width: 100vw;
+    height: auto;
+    min-height: auto;
+    max-height: auto;
+    transform: none;
+    flex-direction: row;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    animation: toolFadeIn 1s var(--ease-out) 1s forwards;
+  }
+  .hero-tools-title { display: none; }
+  
+  .hero-tools-marquee {
+    -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+    mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+    width: 100%;
+    margin-bottom: 0;
+  }
+  
+  .tools-track {
+    flex-direction: row;
+    width: max-content;
+    gap: 12px;
+    padding: 0;
+    animation: toolScrollHorz 18s linear infinite;
+  }
+  
+  @keyframes toolScrollHorz {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  
+  .tool-btn {
+    width: max-content;
+    white-space: nowrap;
+    margin-bottom: 0;
+  }
 }
 
 @media (max-width: 768px) {

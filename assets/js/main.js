@@ -369,13 +369,7 @@ function initWorks() {
     });
   }
 
-  // GSAP ScrollTrigger — statik kartlar için (API gelince override edilir)
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
-  gsap.to('.work-card', {
-    opacity: 1, duration: .7, stagger: { amount: .5 },
-    ease: 'power3.out',
-    scrollTrigger: { trigger: '#works', start: 'top 75%' }
-  });
 
   // Filtre
   const filterBtns = document.querySelectorAll('#works .filter-btn');

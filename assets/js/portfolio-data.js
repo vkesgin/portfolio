@@ -42,7 +42,7 @@ function buildPortfolioCard(p) {
       <div class="port-card-img">
         ${imgSrc
           ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.style.display='none'">`
-          : '<div style="width:100%;height:100%;background:#111"></div>'
+          : (isVideo ? `<video src="${videoSrc}#t=0.001" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" preload="metadata" muted playsinline></video>` : '<div style="width:100%;height:100%;background:#111;position:absolute;inset:0;"></div>')
         }
         ${isVideo ? `
           <div class="port-play-icon">
@@ -75,7 +75,7 @@ function buildWorkCard(p) {
       <div class="work-bg">
         ${imgSrc
           ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.style.display='none'">`
-          : ''
+          : (isVideo ? `<video src="${videoSrc}#t=0.001" style="width:100%;height:100%;object-fit:cover;position:absolute;inset:0;" preload="metadata" muted playsinline></video>` : '')
         }
       </div>
       <div class="work-overlay">

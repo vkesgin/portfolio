@@ -60,18 +60,9 @@
       .to('.port-eyebrow',  { opacity: 1, duration: .6 })
       .to('.port-line',     { opacity: 1, y: 0, duration: 1.1, stagger: .12 }, '-=.4')
       .to('.port-hero-sub', { opacity: 1, y: 0, duration: .7 }, '-=.5');
-
-    gsap.to('.port-card', {
-      opacity: 1,
-      duration: .6,
-      stagger: { amount: .8, from: 'start' },
-      ease: 'power3.out',
-      scrollTrigger: { trigger: '#port-gallery', start: 'top 80%' }
-    });
   }
 
   const filterBtns = document.querySelectorAll('.filter-btn');
-  const cards      = document.querySelectorAll('.port-card');
   const empty      = document.getElementById('portEmpty');
 
   filterBtns.forEach(btn => {
@@ -81,6 +72,7 @@
 
       const filter  = btn.dataset.filter;
       let   visible = 0;
+      const cards   = document.querySelectorAll('.port-card');
 
       cards.forEach(card => {
         const match = filter === 'all' || card.dataset.cat === filter;

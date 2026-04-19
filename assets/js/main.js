@@ -650,6 +650,21 @@ function initToolsMarquee() {
 function initFooter() {
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
+  const footerGlow = document.querySelector('.footer-glow');
+  const footerEl = document.getElementById('footer');
+  if (footerGlow && footerEl) {
+    footerEl.addEventListener('mousemove', e => {
+      const rect = footerEl.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      gsap.to(footerGlow, {
+        left: x, top: y,
+        duration: 1.2,
+        ease: 'power3.out'
+      });
+    });
+  }
+
   gsap.to('.footer-word', {
     y: 0,
     duration: 1.2,

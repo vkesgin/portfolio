@@ -53,8 +53,43 @@
     <button class="lb-prev" id="lbPrev">←</button>
     <button class="lb-next" id="lbNext">→</button>
     <div class="lb-inner">
-      <div class="lb-img-wrap">
-        <img id="lbImg" src="" alt="">
+      <div class="lb-media-wrap" id="lbMediaWrap">
+        <div class="lb-img-wrap" id="lbImgWrap">
+          <img id="lbImg" src="" alt="">
+        </div>
+        <div class="lb-video-wrap" id="lbVideoWrap" style="display:none">
+          <video id="lbVideo" playsinline></video>
+          <div class="vp-big-play" id="vpBigPlay">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+          </div>
+          <div class="vp-controls">
+            <div class="vp-progress" id="vpProgress">
+              <div class="vp-progress-fill" id="vpFill"></div>
+            </div>
+            <div class="vp-bottom">
+              <button class="vp-btn" id="vpPlayBtn">
+                <svg id="vpPlayIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+              </button>
+              <span class="vp-time" id="vpTime">0:00 / 0:00</span>
+              <div class="vp-vol-wrap">
+                <button class="vp-btn" id="vpMuteBtn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  </svg>
+                </button>
+                <input type="range" class="vp-vol-slider" id="vpVol" min="0" max="1" step="0.05" value="1">
+              </div>
+              <button class="vp-btn" id="vpFullBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                  <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="lb-info">
         <span class="lb-cat" id="lbCat"></span>
@@ -109,23 +144,29 @@
 
         <div class="port-grid" id="portGrid">
 
-          <!-- WEB -->
-          <div class="port-card port-card--wide" data-cat="web"
-               data-title="Kurumsal Web Sitesi"
-               data-desc="Animasyon yoğunluklu, GSAP ScrollTrigger ve Three.js hero bölümlü tam responsive kurumsal web sitesi."
-               data-tags="HTML,CSS,JS,GSAP,Three.js"
-               data-year="2024"
-               data-img="https://picsum.photos/seed/web001/1200/600">
+          <!-- VIDEO Örneği -->
+          <div class="port-card port-card--video port-card--wide" data-cat="video"
+               data-title="Tanıtım Filmi"
+               data-desc="Kurumsal tanıtım ve marka hikayesi videosu."
+               data-tags="Premiere,DaVinci,Drone,4K"
+               data-year="2023"
+               data-video="../assets/videos/tanitim-filmi.mp4"
+               data-img="../assets/images/works/thumb-video-1.jpg">
             <div class="port-card-img">
-              <img src="https://picsum.photos/seed/web001/800/500" alt="Kurumsal Web Sitesi" loading="lazy">
+              <img src="../assets/images/works/thumb-video-1.jpg" alt="Tanıtım Filmi" loading="lazy">
+              <div class="port-play-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5,3 19,12 5,21"/>
+                </svg>
+              </div>
             </div>
             <div class="port-card-overlay">
               <div class="port-card-info">
-                <span class="port-cat-tag">Web Design</span>
-                <h3 class="port-card-title">Kurumsal Web Sitesi</h3>
-                <span class="port-card-year">2024</span>
+                <span class="port-cat-tag">Videografi</span>
+                <h3 class="port-card-title">Tanıtım Filmi</h3>
+                <span class="port-card-year">2023</span>
               </div>
-              <span class="port-expand">↗</span>
+              <span class="port-expand">▶</span>
             </div>
           </div>
 

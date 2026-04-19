@@ -331,6 +331,64 @@ function initWorks() {
       }
     });
   });
+
+  // Ana sayfada video kartları için mini lightbox
+  document.querySelectorAll('.work-card--video').forEach(card => {
+    card.addEventListener('click', e => {
+      e.preventDefault();
+      const videoSrc = card.dataset.video;
+      const imgSrc   = card.querySelector('img')?.src;
+      const title    = card.querySelector('.work-title')?.textContent;
+      if (!videoSrc) return;
+
+      // Varolan lightbox yoksa oluştur
+      let lb = document.getElementById('works-lightbox');
+      if (!lb) {
+        lb = document.createElement('div');
+        lb.id = 'works-lightbox';
+        lb.style.cssText = `
+          position:fixed;inset:0;z-index:9000;
+          background:rgba(0,0,0,.95);
+          display:flex;align-items:center;justify-content:center;
+          backdrop-filter:blur(20px);
+        `;
+        lb.innerHTML = `
+          <button id="wlbClose" style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;">✕</button>
+          <div style="width:90%;max-width:960px;aspect-ratio:16/9;position:relative;background:#000;border-radius:8px;overflow:hidden;">
+            <video id="wlbVideo" style="width:100%;height:100%;object-fit:contain;" playsinline controls autoplay></video>
+          </div>
+        `;
+        document.body.appendChild(lb);
+        lb.querySelector('#wlbClose').addEventListener('click', () => {
+          lb.querySelector('#wlbVideo').pause();
+          lb.remove();
+          document.body.style.overflow = '';
+        });
+        lb.addEventListener('click', e => {
+          if (e.target === lb) {
+            lb.querySelector('#wlbVideo').pause();
+            lb.remove();
+            document.body.style.overflow = '';
+          }
+        });
+      }
+
+      const vid = lb.querySelector('#wlbVideo');
+      vid.src = videoSrc;
+      vid.play().catch(()=>{});
+      document.body.style.overflow = 'hidden';
+
+      // Klavye
+      const onKey = e => {
+        if (e.key === 'Escape') {
+          vid.pause(); lb.remove();
+          document.body.style.overflow = '';
+          document.removeEventListener('keydown', onKey);
+        }
+      };
+      document.addEventListener('keydown', onKey);
+    });
+  });
 }
 
 // === ABOUT PREVIEW ===

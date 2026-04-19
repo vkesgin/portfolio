@@ -48,19 +48,113 @@
     });
   });
 
-  const lightbox = document.getElementById('lightbox');
-  const lbClose  = document.getElementById('lbClose');
-  const lbPrev   = document.getElementById('lbPrev');
-  const lbNext   = document.getElementById('lbNext');
-  const lbImg    = document.getElementById('lbImg');
-  const lbCat    = document.getElementById('lbCat');
-  const lbTitle  = document.getElementById('lbTitle');
-  const lbDesc   = document.getElementById('lbDesc');
-  const lbTags   = document.getElementById('lbTags');
-  const lbYear   = document.getElementById('lbYear');
+  // === LIGHTBOX + VIDEO PLAYER ===
+  const lightbox   = document.getElementById('lightbox');
+  const lbClose    = document.getElementById('lbClose');
+  const lbPrev     = document.getElementById('lbPrev');
+  const lbNext     = document.getElementById('lbNext');
+  const lbImg      = document.getElementById('lbImg');
+  const lbImgWrap  = document.getElementById('lbImgWrap');
+  const lbVideoWrap= document.getElementById('lbVideoWrap');
+  const lbVideo    = document.getElementById('lbVideo');
+  const lbCat      = document.getElementById('lbCat');
+  const lbTitle    = document.getElementById('lbTitle');
+  const lbDesc     = document.getElementById('lbDesc');
+  const lbTags     = document.getElementById('lbTags');
+  const lbYear     = document.getElementById('lbYear');
+
+  // Video player elemanları
+  const vpPlayBtn  = document.getElementById('vpPlayBtn');
+  const vpPlayIcon = document.getElementById('vpPlayIcon');
+  const vpTime     = document.getElementById('vpTime');
+  const vpFill     = document.getElementById('vpFill');
+  const vpProgress = document.getElementById('vpProgress');
+  const vpMuteBtn  = document.getElementById('vpMuteBtn');
+  const vpVol      = document.getElementById('vpVol');
+  const vpFullBtn  = document.getElementById('vpFullBtn');
+  const vpBigPlay  = document.getElementById('vpBigPlay');
 
   let currentIndex = 0;
   let visibleCards = [];
+
+  // Süre formatla
+  function fmtTime(s) {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2,'0')}`;
+  }
+
+  // Video player init
+  function initVideoPlayer() {
+    if (!lbVideo) return;
+
+    lbVideo.addEventListener('timeupdate', () => {
+      if (!lbVideo.duration) return;
+      const pct = (lbVideo.currentTime / lbVideo.duration) * 100;
+      vpFill.style.width = pct + '%';
+      vpTime.textContent = `${fmtTime(lbVideo.currentTime)} / ${fmtTime(lbVideo.duration)}`;
+    });
+
+    lbVideo.addEventListener('play', () => {
+      vpPlayIcon.outerHTML = '<svg id="vpPlayIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+    });
+    lbVideo.addEventListener('pause', () => {
+      vpPlayIcon.outerHTML = '<svg id="vpPlayIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+      showBigPlay();
+    });
+    lbVideo.addEventListener('ended', () => {
+      vpFill.style.width = '0%';
+    });
+
+    // Progress tıklama
+    vpProgress.addEventListener('click', e => {
+      const rect = vpProgress.getBoundingClientRect();
+      const ratio = (e.clientX - rect.left) / rect.width;
+      lbVideo.currentTime = ratio * lbVideo.duration;
+    });
+
+    // Play/pause
+    vpPlayBtn.addEventListener('click', togglePlay);
+    lbVideo.addEventListener('click', togglePlay);
+
+    // Ses
+    vpVol.addEventListener('input', () => {
+      lbVideo.volume = vpVol.value;
+      lbVideo.muted = vpVol.value == 0;
+    });
+    vpMuteBtn.addEventListener('click', () => {
+      lbVideo.muted = !lbVideo.muted;
+      vpVol.value = lbVideo.muted ? 0 : lbVideo.volume || 1;
+    });
+
+    // Tam ekran
+    vpFullBtn.addEventListener('click', () => {
+      if (lbVideoWrap.requestFullscreen) lbVideoWrap.requestFullscreen();
+    });
+  }
+
+  function togglePlay() {
+    if (lbVideo.paused) {
+      lbVideo.play();
+      hideBigPlay();
+    } else {
+      lbVideo.pause();
+    }
+  }
+
+  function showBigPlay() {
+    vpBigPlay.classList.add('show');
+    setTimeout(() => {
+      vpBigPlay.classList.add('fade');
+      setTimeout(() => {
+        vpBigPlay.classList.remove('show','fade');
+      }, 300);
+    }, 600);
+  }
+
+  function hideBigPlay() {
+    vpBigPlay.classList.remove('show','fade');
+  }
 
   function openLightbox(card) {
     visibleCards = [...document.querySelectorAll('.port-card:not(.hidden)')];
@@ -73,48 +167,76 @@
   function closeLightbox() {
     lightbox.classList.remove('open');
     document.body.style.overflow = '';
+    if (lbVideo) {
+      lbVideo.pause();
+      lbVideo.src = '';
+    }
   }
 
   function fillLightbox(card) {
-    lbImg.src           = card.dataset.img   || card.querySelector('img').src;
+    const isVideo = !!card.dataset.video;
+
     lbCat.textContent   = card.dataset.cat   || '';
     lbTitle.textContent = card.dataset.title || '';
     lbDesc.textContent  = card.dataset.desc  || '';
     lbYear.textContent  = card.dataset.year  || '';
     lbTags.innerHTML = (card.dataset.tags || '')
-      .split(',')
-      .map(t => `<span class="lb-tag">${t.trim()}</span>`)
-      .join('');
+      .split(',').map(t => `<span class="lb-tag">${t.trim()}</span>`).join('');
+
+    if (isVideo) {
+      // Video modu
+      lbImgWrap.style.display  = 'none';
+      lbVideoWrap.style.display = 'flex';
+      if (lbVideo.src !== card.dataset.video) {
+        lbVideo.src = card.dataset.video;
+        lbVideo.load();
+      }
+      lbVideo.play().catch(() => {});
+      vpFill.style.width = '0%';
+      vpTime.textContent = '0:00 / 0:00';
+    } else {
+      // Görsel modu
+      lbVideoWrap.style.display = 'none';
+      lbImgWrap.style.display   = 'flex';
+      if (lbVideo) { lbVideo.pause(); lbVideo.src = ''; }
+      lbImg.src  = card.dataset.img || card.querySelector('img').src;
+      lbImg.alt  = card.dataset.title || '';
+    }
   }
 
-  cards.forEach(card => {
-    card.addEventListener('click', () => openLightbox(card));
-  });
+  if (lightbox) {
+    initVideoPlayer();
 
-  if (lbClose) lbClose.addEventListener('click', closeLightbox);
+    document.querySelectorAll('.port-card').forEach(card => {
+      card.addEventListener('click', () => openLightbox(card));
+    });
 
-  if (lbPrev) lbPrev.addEventListener('click', (e) => {
-    e.stopPropagation();
-    visibleCards = [...document.querySelectorAll('.port-card:not(.hidden)')];
-    currentIndex = (currentIndex - 1 + visibleCards.length) % visibleCards.length;
-    fillLightbox(visibleCards[currentIndex]);
-  });
+    lbClose.addEventListener('click', closeLightbox);
 
-  if (lbNext) lbNext.addEventListener('click', (e) => {
-    e.stopPropagation();
-    visibleCards = [...document.querySelectorAll('.port-card:not(.hidden)')];
-    currentIndex = (currentIndex + 1) % visibleCards.length;
-    fillLightbox(visibleCards[currentIndex]);
-  });
+    lbPrev.addEventListener('click', e => {
+      e.stopPropagation();
+      visibleCards = [...document.querySelectorAll('.port-card:not(.hidden)')];
+      currentIndex = (currentIndex - 1 + visibleCards.length) % visibleCards.length;
+      fillLightbox(visibleCards[currentIndex]);
+    });
 
-  if (lightbox) lightbox.addEventListener('click', (e) => {
-    if (e.target === lightbox) closeLightbox();
-  });
+    lbNext.addEventListener('click', e => {
+      e.stopPropagation();
+      visibleCards = [...document.querySelectorAll('.port-card:not(.hidden)')];
+      currentIndex = (currentIndex + 1) % visibleCards.length;
+      fillLightbox(visibleCards[currentIndex]);
+    });
 
-  document.addEventListener('keydown', (e) => {
-    if (!lightbox || !lightbox.classList.contains('open')) return;
-    if (e.key === 'Escape')     closeLightbox();
-    if (e.key === 'ArrowLeft')  lbPrev && lbPrev.click();
-    if (e.key === 'ArrowRight') lbNext && lbNext.click();
-  });
+    lightbox.addEventListener('click', e => {
+      if (e.target === lightbox) closeLightbox();
+    });
+
+    document.addEventListener('keydown', e => {
+      if (!lightbox.classList.contains('open')) return;
+      if (e.key === 'Escape')      closeLightbox();
+      if (e.key === 'ArrowLeft')   lbPrev.click();
+      if (e.key === 'ArrowRight')  lbNext.click();
+      if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+    });
+  }
 })();

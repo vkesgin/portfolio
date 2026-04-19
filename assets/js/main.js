@@ -504,11 +504,17 @@ function initToolsMarquee() {
 
   // Çift kopya işlemini artık index.html'de statik olarak yaptık (Glitches önleyici)
 
-  // Live ortamda icon/font yüklenmesini beklemek kritik
-  window.addEventListener('load', () => {
+  // === MARQUEE ENGINE ===
+  function startMarquee() {
+    // Küçük bir gecikme: Layout'un ve ikonların oturması için
     setTimeout(() => {
       const totalHeight = track.offsetHeight / 2;
-      if (totalHeight <= 0) return;
+      
+      // Eğer yükseklik hala 0 ise (nadiren olur), 500ms sonra tekrar dene
+      if (totalHeight <= 0) {
+        setTimeout(startMarquee, 500);
+        return;
+      }
 
       const marqueeTween = gsap.to(track, {
         y: -totalHeight,
@@ -520,8 +526,15 @@ function initToolsMarquee() {
 
       marquee.addEventListener('mouseenter', () => marqueeTween.pause());
       marquee.addEventListener('mouseleave', () => marqueeTween.play());
-    }, 150);
-  });
+    }, 200);
+  }
+
+  // Sayfa çoktan yüklendiyse hemen başlat, yoksa load event'ini bekle
+  if (document.readyState === 'complete') {
+    startMarquee();
+  } else {
+    window.addEventListener('load', startMarquee);
+  }
 
   // 3D Kavis efekti — GÜÇLENDİRİLDİ
   function apply3DDepth() {

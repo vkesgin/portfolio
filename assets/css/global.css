@@ -1305,7 +1305,35 @@ img {
   color: var(--text-muted);
 }
 
+@media (max-width: 1024px) {
+  .hero-tools-wrapper {
+    right: 40px; 
+    width: 320px;
+    height: 50vh;
+  }
+  .tool-btn { width: 220px; padding: 12px 14px; font-size: 13px; }
+}
+
 @media (max-width: 768px) {
+  .hero-tools-wrapper {
+    position: relative;
+    right: 0;
+    top: 0;
+    transform: none;
+    width: 100%;
+    height: 400px;
+    margin-top: 40px;
+    opacity: 1; /* Fade-in animation handled via relative placement */
+  }
+  .hero-tools-marquee {
+    perspective: 1000px;
+  }
+  .tool-btn {
+    width: 200px;
+    font-size: 12px;
+    padding: 10px 14px;
+  }
+
   .footer-inner  { padding: var(--space-xl) 24px var(--space-lg); }
   .footer-top    { flex-direction: column; }
   .footer-nav    { gap: var(--space-lg); }

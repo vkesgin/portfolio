@@ -536,11 +536,12 @@ function initToolsMarquee() {
     window.addEventListener('load', startMarquee);
   }
 
-  // 3D Kavis efekti — GÜÇLENDİRİLDİ
+  // 3D Kavis efekti — GÜÇLENDİRİLDİ (Ekran duyarlı)
   function apply3DDepth() {
     const containerRect = marquee.getBoundingClientRect();
     const centerY = containerRect.top + containerRect.height / 2;
     const maxDist = containerRect.height / 2;
+    const isMobile = window.innerWidth < 768;
 
     const buttons = track.querySelectorAll('.tool-btn');
     buttons.forEach(btn => {
@@ -548,20 +549,25 @@ function initToolsMarquee() {
       const btnCenterY = btnRect.top + btnRect.height / 2;
       const dist = Math.abs(btnCenterY - centerY);
       
-      // Daha keskin bir kavis için ratio'yu normalize ediyoruz
       const ratio = Math.min(dist / maxDist, 1); 
 
-      // Ölçeklendirme: Ortada 1.25 (daha büyük), kenarda 0.7 (daha küçük)
-      const scale = 1.25 - (ratio * 0.55);
-      // Opacity: Ortada 1, kenarda 0.2 (daha karanlık)
-      const opacity = Math.max(1 - (ratio * 0.8), 0.2);
-      // Z-translate: Ortada 80px (çok yakın), kenarda -150px (çok uzak)
-      const z = 80 - (ratio * 230);
+      // Mobile vs Desktop Math
+      let scale, opacity, z;
+      
+      if (isMobile) {
+        // Mobil: Uygulama hissi için daha nazik şişirme
+        scale = 1.12 - (ratio * 0.35); // Max 1.12
+        opacity = Math.max(1 - (ratio * 0.7), 0.4);
+        z = 40 - (ratio * 120); // Daha dar Z aralığı
+      } else {
+        // Masaüstü: Dev 3D etkisi devrede
+        scale = 1.25 - (ratio * 0.55);
+        opacity = Math.max(1 - (ratio * 0.8), 0.2);
+        z = 80 - (ratio * 230);
+      }
 
       btn.style.transform = `scale(${scale}) translateZ(${z}px)`;
       btn.style.opacity = opacity;
-      
-      // Z-index ayarı (ortadaki hep en üstte)
       btn.style.zIndex = Math.round((1 - ratio) * 100);
     });
   }

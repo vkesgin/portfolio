@@ -42,7 +42,7 @@ function buildPortfolioCard(p) {
       <div class="port-card-img">
         ${imgSrc
           ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.style.display='none'">`
-          : '<div style="width:100%;height:100%;background:#111;position:absolute;inset:0;"></div>'
+          : '<div style="width:100%;height:100%;background:#1a1a1a;position:absolute;inset:0;"></div>'
         }
         ${isVideo ? `
           <div class="port-play-icon">
@@ -50,7 +50,7 @@ function buildPortfolioCard(p) {
           </div>` : ''
         }
       </div>
-      <div class="port-card-overlay">
+      <div class="port-card-overlay" ${!imgSrc ? 'style="opacity:1"' : ''}>
         <div class="port-card-info">
           <span class="port-cat-tag">${catLabel}</span>
           <h3 class="port-card-title">${p.title || ''}</h3>
@@ -72,13 +72,13 @@ function buildWorkCard(p) {
          data-cat="${p.category}"
          ${isVideo ? `data-video="${videoSrc}"` : ''}
          data-img="${imgSrc}">
-      <div class="work-bg">
+      <div class="work-bg" ${!imgSrc ? 'style="aspect-ratio:16/9;background:#1a1a1a;"' : ''}>
         ${imgSrc
           ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.style.display='none'">`
           : ''
         }
       </div>
-      <div class="work-overlay">
+      <div class="work-overlay" ${!imgSrc ? 'style="opacity:1;background:rgba(0,0,0,.7)"' : ''}>
         <span class="work-cat-tag">${catLabel}</span>
         <h3 class="work-title">${p.title || ''}</h3>
         <p class="work-desc">${p.description || ''}</p>

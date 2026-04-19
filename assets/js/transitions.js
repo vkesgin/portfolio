@@ -42,7 +42,7 @@
 
     const href = a.getAttribute('href');
     if (!href) return;
-    if (href.startsWith('#')) return;
+    if (href.includes('#')) return;
     if (href.startsWith('http') && !href.includes(location.hostname)) return;
     if (href.startsWith('mailto:') || href.startsWith('tel:')) return;
     if (a.target === '_blank') return;

@@ -72,6 +72,19 @@
       loco.destroy();
       window._loco = null;
     });
+
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('a');
+      if (!a) return;
+      const href = a.getAttribute('href');
+      if (!href || !href.includes('#')) return;
+      const hash = href.split('#')[1];
+      if (!hash) return;
+      const target = document.getElementById(hash);
+      if (!target) return;
+      e.preventDefault();
+      loco.scrollTo(target, { offset: -80 });
+    });
   }
 
   if (document.readyState === 'loading') {

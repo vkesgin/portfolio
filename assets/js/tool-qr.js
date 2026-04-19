@@ -26,6 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    if (format === 'png') {
+      qrcodeDiv.classList.add('transparent-preview');
+    } else {
+      qrcodeDiv.classList.remove('transparent-preview');
+    }
+
     // Seçime göre arka plan rengini değiştirmek için mecburen divi temizleyip yeniden basıyoruz
     qrcodeDiv.innerHTML = '';
     emptyState.style.display = 'none';

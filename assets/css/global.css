@@ -890,13 +890,14 @@ img {
 }
 .outline-text {
   color: transparent;
-  -webkit-text-stroke: 1px var(--text-muted);
-  transition: -webkit-text-stroke .3s var(--ease-out), color .3s, text-shadow .3s;
+  -webkit-text-stroke: 1.5px var(--text-muted);
+  transition: all .3s ease-out;
+  cursor: default;
 }
 .outline-text:hover {
   color: var(--accent);
-  -webkit-text-stroke: 1px transparent;
-  text-shadow: 0 0 15px var(--accent-glow-lg);
+  -webkit-text-stroke-color: transparent;
+  text-shadow: 0 0 25px var(--accent-glow-lg);
 }
 
 .skills-grid {

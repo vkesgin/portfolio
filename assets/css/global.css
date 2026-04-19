@@ -1495,7 +1495,7 @@ img {
   .hero-photo-side {
     order: -1;
     transform: translateY(-20px);
-    opacity: 0;
+    opacity: 1; /* Görünür hale getirildi */
   }
   .hero-photo-inner { max-width: 280px; aspect-ratio: 3/4; }
   #hero { padding: 0 24px; min-height: auto; padding-bottom: 80px; }

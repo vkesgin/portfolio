@@ -59,6 +59,10 @@
       });
 
       loco.on('scroll', ScrollTrigger.update);
+      loco.on('scroll', (args) => {
+        window._locoScrollY = args.scroll.y;
+        window.dispatchEvent(new Event('scroll'));
+      });
       ScrollTrigger.addEventListener('refresh', () => loco.update());
       ScrollTrigger.refresh();
     }

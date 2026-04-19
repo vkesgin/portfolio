@@ -485,12 +485,13 @@ function initNav() {
   let menuOpen = false;
 
   function updateActiveLinks() {
-    const scrollY = window.scrollY;
+    const scrollY = window._locoScrollY ?? window.scrollY;
     let current = '';
 
     // Scroll progress & sticky
     if (nav) {
-      const docH = document.documentElement.scrollHeight - window.innerHeight;
+      const scrollEl = document.querySelector('[data-scroll-container]');
+      const docH = (scrollEl || document.documentElement).scrollHeight - window.innerHeight;
       const progress = docH > 0 ? (scrollY / docH * 100).toFixed(1) : 0;
       nav.classList.toggle('scrolled', scrollY > 60);
       nav.style.setProperty('--scroll-progress', progress + '%');

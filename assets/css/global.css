@@ -1748,4 +1748,15 @@ html.has-scroll-smooth { scrollbar-width: none; }
     height: 44px;
   }
 }
+
+/* === HIDE SCROLLBARS GLOBALLY === */
+::-webkit-scrollbar {
+  display: none;
+}
+* {
+  scrollbar-width: none;
+}
+.c-scrollbar {
+  display: none !important;
+}
 

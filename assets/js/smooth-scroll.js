@@ -69,9 +69,16 @@
 
     window._loco = loco;
     window.addEventListener('beforeunload', () => {
+      ro.disconnect();
       loco.destroy();
       window._loco = null;
     });
+
+    const ro = new ResizeObserver(() => {
+      loco.update();
+      if (typeof ScrollTrigger !== 'undefined') ScrollTrigger.refresh();
+    });
+    ro.observe(scrollEl);
 
     document.addEventListener('click', (e) => {
       const a = e.target.closest('a');

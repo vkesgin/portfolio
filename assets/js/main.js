@@ -248,13 +248,28 @@ if (window.location.hash) {
 }
 
 // === SCROLL TO TOP ===
-const stt = document.getElementById('scrollToTopBtn');
-if (stt) {
-  window.addEventListener('scroll', () => {
+function initScrollToTop() {
+  let stt = document.getElementById('scrollToTopBtn');
+  if (!stt) {
+    stt = document.createElement('button');
+    stt.id = 'scrollToTopBtn';
+    stt.className = 'scroll-to-top';
+    stt.setAttribute('aria-label', 'Yukarı Çık');
+    stt.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>`;
+    document.body.appendChild(stt);
+  }
+
+  const updateStt = () => {
     const sY = window._locoScrollY ?? window.scrollY;
     if (sY > 500) stt.classList.add('visible');
     else stt.classList.remove('visible');
-  });
+  };
+
+  window.addEventListener('scroll', updateStt);
+  if (typeof ScrollTrigger !== 'undefined') {
+    ScrollTrigger.addEventListener('scrollStart', updateStt);
+  }
+
   stt.addEventListener('click', () => {
     if (window._loco) {
       window._loco.scrollTo(0, { duration: 1000, easing: [0.25, 0.0, 0.35, 1.0] });
@@ -262,7 +277,20 @@ if (stt) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   });
+
+  // Locomotive scroll binding
+  setTimeout(() => {
+    if (window._loco) {
+      window._loco.on('scroll', (args) => {
+        const sY = args.scroll.y;
+        if (sY > 500) stt.classList.add('visible');
+        else stt.classList.remove('visible');
+      });
+    }
+  }, 1000);
 }
+
+initScrollToTop();
 
 // === STATS SCROLL ANIMATION ===
 // === SKILLS SCROLL + 3D TILT ===

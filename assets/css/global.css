@@ -609,44 +609,8 @@ img {
   .hero-photo-label { display: none; }
   .hero-photo-num   { display: none; }
   .hero-photo-side  { margin-right: 0 !important; }
-  .hero-tools-wrapper { display: none; z-index: 1 !important; }
-}
 
-@media (max-width: 600px) {
-  #hero { padding: 0 20px 60px; }
-  .hero-photo-inner { max-width: 160px; }
-  .line { font-size: clamp(52px, 16vw, 80px) !important; }
-}
-
-/* === MOBİL — Native app layout === */
-@media (max-width: 768px) {
-  /* NAV */
-  #nav { padding: 18px 20px; }
-  #nav.scrolled { padding: 14px 20px; }
-  .nav-links { display: none; }
-  .hamburger { display: flex; }
-  .outline-line { -webkit-text-stroke: 1.5px var(--text-primary); }
-
-  /* HERO */
-  #hero {
-    padding: 78px 20px 110px;
-    min-height: 100svh;
-    align-items: flex-start;
-  }
-  .hero-inner { padding-top: 10px; gap: var(--space-md); }
-  .hero-label  { margin-bottom: 14px; }
-  .hero-title  { margin-bottom: 14px; }
-  .hero-role   { margin-bottom: 10px; font-size: 13px; }
-  .hero-desc   { margin-bottom: 22px; font-size: 12px; letter-spacing: .04em; }
-  .hero-cta    { flex-direction: column; gap: 10px; }
-  .hero-cta .btn {
-    width: 100%;
-    justify-content: center;
-    text-align: center;
-    padding: 14px 20px;
-  }
-
-  /* TOOLS STRIP */
+  /* TABLET'TE ARAÇLAR (Tools Strip) */
   .hero-tools-wrapper {
     display: flex !important;
     position: absolute;
@@ -665,7 +629,7 @@ img {
     -webkit-backdrop-filter: blur(20px);
     opacity: 0;
     animation: toolFadeIn 1s var(--ease-out) 1.2s forwards;
-    z-index: 3;
+    z-index: 10;
   }
   .hero-tools-title {
     display: flex !important;
@@ -712,6 +676,42 @@ img {
   }
   .tool-btn svg { width: 15px; height: 15px; }
   .tool-btn::after { display: none; }
+}
+
+@media (max-width: 600px) {
+  #hero { padding: 0 20px 60px; }
+  .hero-photo-inner { max-width: 160px; }
+  .line { font-size: clamp(52px, 16vw, 80px) !important; }
+}
+
+/* === MOBİL — Native app layout === */
+@media (max-width: 768px) {
+  /* NAV */
+  #nav { padding: 18px 20px; }
+  #nav.scrolled { padding: 14px 20px; }
+  .nav-links { display: none; }
+  .hamburger { display: flex; }
+  .outline-line { -webkit-text-stroke: 1.5px var(--text-primary); }
+
+  /* HERO */
+  #hero {
+    padding: 78px 20px 110px;
+    min-height: 100svh;
+    align-items: flex-start;
+  }
+  .hero-inner { padding-top: 10px; gap: var(--space-md); }
+  .hero-label  { margin-bottom: 14px; }
+  .hero-title  { margin-bottom: 14px; }
+  .hero-role   { margin-bottom: 10px; font-size: 13px; }
+  .hero-desc   { margin-bottom: 22px; font-size: 12px; letter-spacing: .04em; }
+  .hero-cta    { flex-direction: column; gap: 10px; }
+  .hero-cta .btn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    padding: 14px 20px;
+  }
+  /* Araçlar (Tools Strip) ayarları 900px'den kalıtım alıyor. Sadece hero'nun padding'i güncelleniyor. */
 }
 
 /* === STATS === */

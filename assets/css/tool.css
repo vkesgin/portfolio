@@ -283,6 +283,53 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .file-remove:hover { background: rgba(255,77,77,0.1); }
 
+/* === TOOL 05 (PASSWORD GENERATOR) === */
+.password-settings-box {
+  background: rgba(0,0,0,0.2);
+  border: 1px dashed var(--border-hover);
+  border-radius: var(--radius-md);
+  padding: 24px;
+}
+.slider-group { margin-bottom: 24px; }
+.slider-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px; font-size: 14px; font-weight: 600; color: var(--text-primary);
+}
+.slider-val {
+  color: var(--accent); font-family: var(--font-mono);
+  font-size: 18px; font-weight: 700;
+}
+.checkbox-list { display: flex; flex-direction: column; gap: 12px; }
+.custom-checkbox {
+  display: flex; align-items: center; gap: 12px;
+  cursor: pointer; color: var(--text-secondary); font-size: 14px; user-select: none;
+}
+.custom-checkbox input {
+  width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer;
+}
+.password-result-box {
+  background: rgba(0,229,255,0.05);
+  border: 1px solid rgba(0,229,255,0.2);
+  padding: 32px 24px; border-radius: var(--radius-lg); text-align: center;
+  flex: 1; display: flex; flex-direction: column; justify-content: center;
+}
+.password-display {
+  font-size: 32px; font-weight: 700; color: var(--text-primary);
+  word-break: break-all; margin-bottom: 24px;
+  font-family: var(--font-mono); letter-spacing: 2px;
+}
+.password-strength {
+  display: flex; justify-content: space-between; align-items: center;
+  border-top: 1px solid var(--border-hover); padding-top: 16px;
+}
+.strength-label {
+  font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .1em;
+}
+.strength-badge {
+  font-size: 14px; font-weight: 700; letter-spacing: .05em; font-family: var(--font-mono);
+}
+
+
 /* === MOBILE === */
 @media (max-width: 900px) {
   .tool-card { grid-template-columns: 1fr; }

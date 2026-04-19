@@ -1,13 +1,12 @@
-if (typeof gsap === 'undefined') return;
-gsap.registerPlugin(ScrollTrigger);
+(function() {
+  if (typeof gsap === 'undefined') return;
+  gsap.registerPlugin(ScrollTrigger);
 
-  // Hero girişi
   gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .2 })
     .to('.abt-eyebrow',   { opacity: 1, duration: .6 })
     .to('.abt-line',      { opacity: 1, y: 0, duration: 1.1, stagger: .12 }, '-=.4')
     .to('.abt-hero-meta', { opacity: 1, y: 0, duration: .7 }, '-=.5');
 
-  // Biyografi paragrafları
   gsap.to('.abt-bio-p', {
     opacity: 1, y: 0, duration: .8, stagger: .15,
     ease: 'power3.out',
@@ -20,14 +19,12 @@ gsap.registerPlugin(ScrollTrigger);
     scrollTrigger: { trigger: '#abt-bio', start: 'top 78%' }
   });
 
-  // İletişim butonları
   gsap.to('.abt-contact-row', {
     opacity: 1, y: 0, duration: .7,
     ease: 'power3.out',
     scrollTrigger: { trigger: '.abt-contact-row', start: 'top 85%' }
   });
 
-  // Tool grupları + bar animasyonu
   gsap.to('.tool-group', {
     opacity: 1, x: 0, duration: .7, stagger: .1,
     ease: 'power3.out',
@@ -41,7 +38,6 @@ gsap.registerPlugin(ScrollTrigger);
     }
   });
 
-  // Timeline
   gsap.to('.abt-tl-item', {
     opacity: 1, y: 0, duration: .7, stagger: .12,
     ease: 'power3.out',
@@ -54,7 +50,6 @@ gsap.registerPlugin(ScrollTrigger);
     scrollTrigger: { trigger: '#abt-timeline', start: 'top 75%' }
   });
 
-  // Stats CountUp
   gsap.to('.abt-stat', {
     opacity: 1, y: 0, duration: .7, stagger: .12,
     ease: 'power3.out',
@@ -75,7 +70,6 @@ gsap.registerPlugin(ScrollTrigger);
     }
   });
 
-  // CTA
   gsap.timeline({
     scrollTrigger: { trigger: '#abt-cta', start: 'top 80%' },
     defaults: { ease: 'power4.out' }
@@ -83,3 +77,4 @@ gsap.registerPlugin(ScrollTrigger);
     .to('.abt-cta-title', { opacity: 1, y: 0, duration: 1 })
     .to('.abt-cta-sub',   { opacity: 1, y: 0, duration: .7 }, '-=.5')
     .to('#abt-cta .btn',  { opacity: 1, duration: .6 }, '-=.4');
+})();

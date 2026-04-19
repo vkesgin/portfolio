@@ -1,13 +1,12 @@
-if (typeof gsap !== 'undefined') {
+(function() {
+  if (typeof gsap !== 'undefined') {
     gsap.registerPlugin(ScrollTrigger);
 
-    // Hero
     gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .2 })
       .to('.port-eyebrow',  { opacity: 1, duration: .6 })
       .to('.port-line',     { opacity: 1, y: 0, duration: 1.1, stagger: .12 }, '-=.4')
       .to('.port-hero-sub', { opacity: 1, y: 0, duration: .7 }, '-=.5');
 
-    // Kartlar
     gsap.to('.port-card', {
       opacity: 1,
       duration: .6,
@@ -17,7 +16,6 @@ if (typeof gsap !== 'undefined') {
     });
   }
 
-  // === FİLTRE ===
   const filterBtns = document.querySelectorAll('.filter-btn');
   const cards      = document.querySelectorAll('.port-card');
   const empty      = document.getElementById('portEmpty');
@@ -50,7 +48,6 @@ if (typeof gsap !== 'undefined') {
     });
   });
 
-  // === LIGHTBOX ===
   const lightbox = document.getElementById('lightbox');
   const lbClose  = document.getElementById('lbClose');
   const lbPrev   = document.getElementById('lbPrev');
@@ -62,8 +59,8 @@ if (typeof gsap !== 'undefined') {
   const lbTags   = document.getElementById('lbTags');
   const lbYear   = document.getElementById('lbYear');
 
-  let   currentIndex = 0;
-  let   visibleCards = [];
+  let currentIndex = 0;
+  let visibleCards = [];
 
   function openLightbox(card) {
     visibleCards = [...document.querySelectorAll('.port-card:not(.hidden)')];
@@ -79,7 +76,7 @@ if (typeof gsap !== 'undefined') {
   }
 
   function fillLightbox(card) {
-    lbImg.src       = card.dataset.img   || card.querySelector('img').src;
+    lbImg.src           = card.dataset.img   || card.querySelector('img').src;
     lbCat.textContent   = card.dataset.cat   || '';
     lbTitle.textContent = card.dataset.title || '';
     lbDesc.textContent  = card.dataset.desc  || '';
@@ -94,31 +91,30 @@ if (typeof gsap !== 'undefined') {
     card.addEventListener('click', () => openLightbox(card));
   });
 
-  lbClose.addEventListener('click', closeLightbox);
+  if (lbClose) lbClose.addEventListener('click', closeLightbox);
 
-  lbPrev.addEventListener('click', (e) => {
+  if (lbPrev) lbPrev.addEventListener('click', (e) => {
     e.stopPropagation();
     visibleCards = [...document.querySelectorAll('.port-card:not(.hidden)')];
     currentIndex = (currentIndex - 1 + visibleCards.length) % visibleCards.length;
     fillLightbox(visibleCards[currentIndex]);
   });
 
-  lbNext.addEventListener('click', (e) => {
+  if (lbNext) lbNext.addEventListener('click', (e) => {
     e.stopPropagation();
     visibleCards = [...document.querySelectorAll('.port-card:not(.hidden)')];
     currentIndex = (currentIndex + 1) % visibleCards.length;
     fillLightbox(visibleCards[currentIndex]);
   });
 
-  // Dışına tıklayınca kapat
-  lightbox.addEventListener('click', (e) => {
+  if (lightbox) lightbox.addEventListener('click', (e) => {
     if (e.target === lightbox) closeLightbox();
   });
 
-  // Klavye
   document.addEventListener('keydown', (e) => {
-    if (!lightbox.classList.contains('open')) return;
+    if (!lightbox || !lightbox.classList.contains('open')) return;
     if (e.key === 'Escape')     closeLightbox();
-    if (e.key === 'ArrowLeft')  lbPrev.click();
-    if (e.key === 'ArrowRight') lbNext.click();
+    if (e.key === 'ArrowLeft')  lbPrev && lbPrev.click();
+    if (e.key === 'ArrowRight') lbNext && lbNext.click();
   });
+})();

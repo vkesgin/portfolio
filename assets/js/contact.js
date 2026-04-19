@@ -1,19 +1,12 @@
-// ============================================================
-// EmailJS ayarları — kendi değerlerinle değiştir
-// emailjs.com → Account → Public Key
-const EMAILJS_PUBLIC_KEY  = 'ZCzUKlv3tX5NekKgR';
-// emailjs.com → Email Services → Service ID
-const EMAILJS_SERVICE_ID  = 'service_btaba6d';
-// emailjs.com → Email Templates → Template ID
-const EMAILJS_TEMPLATE_ID = 'template_0iyedpa';
-// ============================================================
+(function() {
+  const EMAILJS_PUBLIC_KEY  = 'ZCzUKlv3tX5NekKgR';
+  const EMAILJS_SERVICE_ID  = 'service_btaba6d';
+  const EMAILJS_TEMPLATE_ID = 'template_0iyedpa';
 
-// EmailJS init
-if (typeof emailjs !== 'undefined') {
+  if (typeof emailjs !== 'undefined') {
     emailjs.init(EMAILJS_PUBLIC_KEY);
   }
 
-  // GSAP animasyonlar
   if (typeof gsap !== 'undefined') {
     gsap.registerPlugin(ScrollTrigger);
 
@@ -35,20 +28,17 @@ if (typeof emailjs !== 'undefined') {
     });
   }
 
-  // Karakter sayacı
   const textarea  = document.getElementById('message');
   const charCount = document.getElementById('charCount');
   if (textarea && charCount) {
     textarea.addEventListener('input', () => {
       const len = textarea.value.length;
       charCount.textContent = `${len} / 1000`;
-      if (len > 900) charCount.style.color = 'var(--danger)';
-      else charCount.style.color = 'var(--text-muted)';
+      charCount.style.color = len > 900 ? 'var(--danger)' : 'var(--text-muted)';
       if (len > 1000) textarea.value = textarea.value.slice(0, 1000);
     });
   }
 
-  // Form validasyon
   function validateField(id, check) {
     const field = document.getElementById('field-' + id);
     const el    = document.getElementById(id);
@@ -66,29 +56,22 @@ if (typeof emailjs !== 'undefined') {
     return n && e && s && m;
   }
 
-  // Live validation — Anlık geribildirim
   ['name','email','subject','message'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-
     const validate = () => {
       if (id === 'name')    validateField(id, v => v.trim().length >= 2);
       if (id === 'email')   validateField(id, v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
       if (id === 'subject') validateField(id, v => v !== '');
       if (id === 'message') validateField(id, v => v.trim().length >= 20);
     };
-
     el.addEventListener('blur', validate);
     el.addEventListener('input', () => {
-      // Eğer kullanıcı daha önce hata almışsa, yazarken anlık olarak kontrol et
       const field = document.getElementById('field-' + id);
-      if (field && field.classList.contains('has-error')) {
-        validate();
-      }
+      if (field && field.classList.contains('has-error')) validate();
     });
   });
 
-  // Form submit
   const form      = document.getElementById('contactForm');
   const submitBtn = document.getElementById('submitBtn');
   const success   = document.getElementById('ctSuccess');
@@ -114,7 +97,7 @@ if (typeof emailjs !== 'undefined') {
     try {
       if (typeof emailjs === 'undefined') throw new Error('EmailJS not loaded');
       await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, params);
-      form.style.display    = 'none';
+      form.style.display = 'none';
       success.classList.add('show');
       if (typeof gsap !== 'undefined') {
         gsap.from('.ct-success-icon', { scale: 0, duration: .5, ease: 'back.out(1.7)' });
@@ -130,12 +113,14 @@ if (typeof emailjs !== 'undefined') {
     }
   });
 
-window.resetForm = function() {
-  const form    = document.getElementById('contactForm');
-  const success = document.getElementById('ctSuccess');
-  const errMsg  = document.getElementById('ctErrorMsg');
-  if (form)    { form.reset(); form.style.display = ''; }
-  if (success) success.classList.remove('show');
-  if (errMsg)  errMsg.classList.remove('show');
-  document.getElementById('charCount').textContent = '0 / 1000';
-};
+  window.resetForm = function() {
+    const form    = document.getElementById('contactForm');
+    const success = document.getElementById('ctSuccess');
+    const errMsg  = document.getElementById('ctErrorMsg');
+    const counter = document.getElementById('charCount');
+    if (form)    { form.reset(); form.style.display = ''; }
+    if (success) success.classList.remove('show');
+    if (errMsg)  errMsg.classList.remove('show');
+    if (counter) counter.textContent = '0 / 1000';
+  };
+})();

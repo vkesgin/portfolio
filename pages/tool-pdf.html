@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF İsviçre Çakısı — Araçlar</title>
+  <link rel="stylesheet" href="../assets/css/reset.css">
+  <link rel="stylesheet" href="../assets/css/variables.css">
+  <link rel="stylesheet" href="../assets/css/global.css">
+  <link rel="stylesheet" href="../assets/css/tool.css">
+  <!-- PDF-Lib -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+</head>
+<body>
+
+  <div id="header-placeholder"></div>
+
+  <main>
+    <section id="tool-hero">
+      <div class="tool-hero-inner">
+        <p class="section-eyebrow">// araçlar — no: 04</p>
+        <h1 class="tool-title">
+          <span class="tool-line">PDF DÜZENLEYİCİ</span>
+          <span class="tool-line outline-text">(BİRLEŞTİR & AYIR)</span>
+        </h1>
+        <p class="tool-desc">
+          PDF dosyalarınızı sunucuya yüklemeden tamamen kendi bilgisayarınızda güvende işleyin.<br>
+          İster belgeleri birleştirin, isterseniz istediğiniz sayfaları aradan çekip çıkartın.
+        </p>
+      </div>
+    </section>
+
+    <section id="tool-app">
+      <div class="tool-app-inner">
+        
+        <!-- Sekmeler (Tabs) -->
+        <div class="tool-tabs">
+          <button class="tab-btn active" data-tab="merge">PDF Birleştir</button>
+          <button class="tab-btn" data-tab="split">PDF Sayfa Ayır</button>
+        </div>
+
+        <div class="tool-card">
+          
+          <div class="tool-card-left">
+            <h2 class="tool-step" id="step1Title">Adım 1: PDF Dosyalarını Seç</h2>
+            <p class="tool-step-desc" id="step1Desc">Birleştirmek istediğiniz PDF belgelerini sırasıyla içeri aktarın.</p>
+            
+            <label for="pdfInput" class="upload-zone" id="uploadZone">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span>Belge Eklemek İçin Tıklayın<br><small>veya sürükleyip bırakın</small></span>
+              <input type="file" id="pdfInput" accept="application/pdf" multiple hidden>
+            </label>
+            
+            <!-- Seçilen dosyalar listesi -->
+            <ul id="fileList" class="file-list" style="margin-top: 20px;"></ul>
+            
+            <!-- Sadece Split (Ayır) modunda görünecek ayarlar -->
+            <div id="splitSettings" style="display: none; margin-top: 24px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="input-group">
+                  <label for="startPage">Başlangıç Sayfası</label>
+                  <input type="number" id="startPage" min="1" placeholder="Örn: 1">
+                </div>
+                <div class="input-group">
+                  <label for="endPage">Bitiş Sayfası</label>
+                  <input type="number" id="endPage" min="1" placeholder="Örn: 5">
+                </div>
+              </div>
+              <div class="tool-info-box">
+                <span class="info-icon">💡</span>
+                <p>Mevcut PDF'in toplam sayfa sayısını sağdaki ekranda görüntüleyebilirsiniz.</p>
+              </div>
+            </div>
+            
+          </div>
+          
+          <div class="tool-card-right">
+            <h2 class="tool-step" id="step2Title">Adım 2: Birleştir ve İndir</h2>
+            <p class="tool-step-desc" id="step2Desc">Dosyalar tarayıcınızın içinde şifrelenerek anında işlenir.</p>
+            
+            <div id="emptyState" class="empty-state" style="margin-top: 40px; text-align:center;">
+              İşlem bekletiliyor...
+            </div>
+
+            <!-- İşlem Rapor Banner -->
+            <div id="reportBanner" class="gain-banner" style="display:none; margin-top: 24px;">
+              İşlem Raporu Buraya Gelecek
+            </div>
+            
+            <!-- İşlem Başlat Butonu -->
+            <button class="btn btn-primary btn-full" id="actionBtn" style="margin-top:20px; font-size:14px; display:none;">
+              Birleştirilmiş Belgeyi İndir ↓
+            </button>
+            <div id="loadingStatus" style="display:none; text-align:center; font-family:var(--font-mono); color:var(--accent); font-size: 13px; margin-top:12px;">
+              İşleniyor, lütfen bekleyin...
+            </div>
+            
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="../assets/js/inject.js"></script>
+  <script>
+    document.addEventListener('componentsLoaded', () => {
+      const s = document.createElement('script');
+      s.src = '../assets/js/main.js';
+      document.body.appendChild(s);
+    });
+  </script>
+  <script src="../assets/js/tool-pdf.js"></script>
+</body>
+</html>

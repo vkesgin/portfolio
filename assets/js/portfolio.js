@@ -1,9 +1,13 @@
 (function() {
   loadPortfolioFromAPI().then(projects => {
-    if (!projects || !projects.length) return;
-
     const grid = document.getElementById('portGrid');
     if (!grid) return;
+
+    if (!projects || !projects.length) {
+      grid.innerHTML = '<div class="port-empty">Şu an için gösterilecek bir iş bulunamadı.</div>';
+      document.querySelectorAll('.filter-count').forEach(el => el.textContent = '0');
+      return;
+    }
 
     // Grid'i temizle
     grid.innerHTML = '';

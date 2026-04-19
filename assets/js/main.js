@@ -286,10 +286,15 @@ function initSkills() {
 function initWorks() {
   if (typeof loadFeaturedFromAPI === 'function') {
     loadFeaturedFromAPI().then(projects => {
-      if (!projects || !projects.length) return;
-
       const grid = document.getElementById('worksGrid');
       if (!grid) return;
+
+      if (!projects || !projects.length) {
+        grid.innerHTML = '<div class="port-empty">Ana sayfada gösterilecek seçilmiş bir iş bulunamadı.</div>';
+        const label = document.querySelector('.works-count-label');
+        if (label) label.textContent = '0 iş gösteriliyor';
+        return;
+      }
 
       // Statik kartları kaldır
       grid.innerHTML = '';

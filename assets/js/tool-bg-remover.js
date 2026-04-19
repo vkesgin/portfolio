@@ -1,4 +1,4 @@
-import imglyRemoveBackground from "https://unpkg.com/@imgly/background-removal@1.4.3/dist/imgly-background-removal.esm.js";
+// UMD bundle automatically provides imglyRemoveBackground as a global variable.
 
 document.addEventListener('DOMContentLoaded', () => {
   const uploadZone = document.getElementById('uploadZone');

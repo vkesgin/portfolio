@@ -310,13 +310,13 @@ img {
 /* === HERO TOOLS (ARAÇLAR) === */
 .hero-tools-wrapper {
   position: absolute;
-  right: 60px;
+  right: 180px; /* Sağa olan uzaklık artırıldı (merkeze yaklaştı) */
   top: 50%;
   transform: translateY(-50%);
-  width: 220px;
-  height: 60vh;
-  min-height: 400px;
-  max-height: 600px;
+  width: 300px; /* Genişlik artırıldı */
+  height: 65vh;
+  min-height: 500px;
+  max-height: 700px;
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -339,8 +339,8 @@ img {
   flex: 1;
   width: 100%;
   overflow: hidden;
-  /* 3D kavisli carousel efekti */
-  perspective: 600px;
+  /* 3D kavisli carousel efekti derinleştirildi */
+  perspective: 1200px;
   -webkit-mask-image: linear-gradient(to bottom,
     transparent 0%,
     rgba(0,0,0,0.3) 10%,

@@ -502,31 +502,28 @@ function initToolsMarquee() {
   const marquee = document.querySelector('.hero-tools-marquee');
   if (!track || !marquee) return;
 
-  // Çift kopya (Sonsuz kayma için)
-  track.innerHTML += track.innerHTML;
+  // Çift kopya işlemini artık index.html'de statik olarak yaptık (Glitches önleyici)
 
-  // Live ortamda icon/font yüklenmesini beklemek kritik (yoksa offsetHeight yanlış çıkar)
+  // Live ortamda icon/font yüklenmesini beklemek kritik
   window.addEventListener('load', () => {
-    // Küçük bir gecikme ekleyerek layout'un oturmasını garantiye alıyoruz
     setTimeout(() => {
       const totalHeight = track.offsetHeight / 2;
       if (totalHeight <= 0) return;
 
       const marqueeTween = gsap.to(track, {
         y: -totalHeight,
-        duration: 25, // Biraz daha yavaş, daha kaliteli
+        duration: 25,
         ease: "none",
         repeat: -1,
         overwrite: true
       });
 
-      // Hover durumunda duraklat/devam et
       marquee.addEventListener('mouseenter', () => marqueeTween.pause());
       marquee.addEventListener('mouseleave', () => marqueeTween.play());
-    }, 100);
+    }, 150);
   });
 
-  // 3D Kavis efekti — GSAP ticker ile her karede hesapla
+  // 3D Kavis efekti — GÜÇLENDİRİLDİ
   function apply3DDepth() {
     const containerRect = marquee.getBoundingClientRect();
     const centerY = containerRect.top + containerRect.height / 2;
@@ -537,14 +534,22 @@ function initToolsMarquee() {
       const btnRect = btn.getBoundingClientRect();
       const btnCenterY = btnRect.top + btnRect.height / 2;
       const dist = Math.abs(btnCenterY - centerY);
-      const ratio = Math.min(dist / maxDist, 1); // 0 = center, 1 = edge
+      
+      // Daha keskin bir kavis için ratio'yu normalize ediyoruz
+      const ratio = Math.min(dist / maxDist, 1); 
 
-      const scale = 1.08 - (ratio * 0.23);
-      const opacity = 1 - (ratio * 0.5);
-      const z = 10 - (ratio * 25);
+      // Ölçeklendirme: Ortada 1.25 (daha büyük), kenarda 0.7 (daha küçük)
+      const scale = 1.25 - (ratio * 0.55);
+      // Opacity: Ortada 1, kenarda 0.2 (daha karanlık)
+      const opacity = Math.max(1 - (ratio * 0.8), 0.2);
+      // Z-translate: Ortada 80px (çok yakın), kenarda -150px (çok uzak)
+      const z = 80 - (ratio * 230);
 
       btn.style.transform = `scale(${scale}) translateZ(${z}px)`;
       btn.style.opacity = opacity;
+      
+      // Z-index ayarı (ortadaki hep en üstte)
+      btn.style.zIndex = Math.round((1 - ratio) * 100);
     });
   }
 

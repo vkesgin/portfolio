@@ -502,10 +502,31 @@ function initToolsMarquee() {
   const marquee = document.querySelector('.hero-tools-marquee');
   if (!track || !marquee) return;
 
-  // Çift kopya (Sonsuz kayma için CSS animasyon kullanılacak)
+  // Çift kopya (Sonsuz kayma için)
   track.innerHTML += track.innerHTML;
 
-  // 3D Kavis efekti — ortadaki butonlar büyük/yakın, kenardakiler küçük/uzak
+  // Live ortamda icon/font yüklenmesini beklemek kritik (yoksa offsetHeight yanlış çıkar)
+  window.addEventListener('load', () => {
+    // Küçük bir gecikme ekleyerek layout'un oturmasını garantiye alıyoruz
+    setTimeout(() => {
+      const totalHeight = track.offsetHeight / 2;
+      if (totalHeight <= 0) return;
+
+      const marqueeTween = gsap.to(track, {
+        y: -totalHeight,
+        duration: 25, // Biraz daha yavaş, daha kaliteli
+        ease: "none",
+        repeat: -1,
+        overwrite: true
+      });
+
+      // Hover durumunda duraklat/devam et
+      marquee.addEventListener('mouseenter', () => marqueeTween.pause());
+      marquee.addEventListener('mouseleave', () => marqueeTween.play());
+    }, 100);
+  });
+
+  // 3D Kavis efekti — GSAP ticker ile her karede hesapla
   function apply3DDepth() {
     const containerRect = marquee.getBoundingClientRect();
     const centerY = containerRect.top + containerRect.height / 2;
@@ -518,21 +539,16 @@ function initToolsMarquee() {
       const dist = Math.abs(btnCenterY - centerY);
       const ratio = Math.min(dist / maxDist, 1); // 0 = center, 1 = edge
 
-      // Scale: ortada 1.08, kenarlarda 0.85
       const scale = 1.08 - (ratio * 0.23);
-      // Opacity: ortada 1, kenarlarda 0.5
       const opacity = 1 - (ratio * 0.5);
-      // Z-translate: ortada 10px öne, kenarlarda -15px arkaya
       const z = 10 - (ratio * 25);
 
       btn.style.transform = `scale(${scale}) translateZ(${z}px)`;
       btn.style.opacity = opacity;
     });
-
-    requestAnimationFrame(apply3DDepth);
   }
 
-  requestAnimationFrame(apply3DDepth);
+  gsap.ticker.add(apply3DDepth);
 }
 
 // === FOOTER ===

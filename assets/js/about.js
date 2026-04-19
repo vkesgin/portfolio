@@ -15,6 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     scrollTrigger: { trigger: '#abt-bio', start: 'top 75%' }
   });
 
+  gsap.to('.abt-photo-wrap', {
+    opacity: 1, y: 0, duration: .9,
+    ease: 'power3.out',
+    scrollTrigger: { trigger: '#abt-bio', start: 'top 78%' }
+  });
+
   // İletişim butonları
   gsap.to('.abt-contact-row', {
     opacity: 1, y: 0, duration: .7,

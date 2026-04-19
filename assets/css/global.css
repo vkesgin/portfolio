@@ -581,41 +581,11 @@ img {
   color: var(--accent);
 }
 
-/* === TABLET / MOBİL HERO === */
-@media (max-width: 900px) {
-  #hero {
-    padding: 100px 24px 80px;
-    height: auto;
-    min-height: 100svh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }
-  .hero-inner {
-    grid-template-columns: 1fr;
-    padding-top: 0;
-    gap: 32px;
-    text-align: center;
-  }
-  .hero-text-side { order: 2; max-width: 100%; }
-  .hero-photo-side {
-    order: 1;
-    opacity: 0;
-    transform: translateY(-20px);
-    justify-content: center;
-  }
-  .hero-photo-inner { max-width: 200px; aspect-ratio: 3/4; }
-  .hero-label  { text-align: center; }
-  .hero-role   { justify-content: center; }
-  .hero-desc   { text-align: center; }
-  .hero-cta    { justify-content: center; }
-  .hero-scroll { display: none; }
-  .hero-photo-label { display: none; }
-  .hero-photo-num   { display: none; }
-  .hero-photo-side  { margin-right: 0 !important; }
+/* === CATCH-ALL FOR TABLETS & SMALL DESKTOPS (Tools Strip Overlap Fix) === */
+@media (max-width: 1200px) {
+  #hero { padding-bottom: 80px; }
+  .hero-scroll { display: none !important; }
 
-  /* TABLET'TE ARAÇLAR (Tools Strip) */
   .hero-tools-wrapper {
     display: flex !important;
     position: absolute;
@@ -689,6 +659,43 @@ img {
   }
   .tool-btn svg { width: 15px !important; height: 15px !important; }
   .tool-btn::after { display: none !important; }
+}
+
+/* === TABLET / MOBİL HERO === */
+@media (max-width: 900px) {
+  #hero {
+    padding: 100px 24px 80px;
+    height: auto;
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .hero-inner {
+    grid-template-columns: 1fr;
+    padding-top: 0;
+    gap: 32px;
+    text-align: center;
+  }
+  .hero-text-side { order: 2; max-width: 100%; }
+  .hero-photo-side {
+    order: 1;
+    opacity: 0;
+    transform: translateY(-20px);
+    justify-content: center;
+  }
+  .hero-photo-inner { max-width: 200px; aspect-ratio: 3/4; }
+  .hero-label  { text-align: center; }
+  .hero-role   { justify-content: center; }
+  .hero-desc   { text-align: center; }
+  .hero-cta    { justify-content: center; }
+  .hero-scroll { display: none; }
+  .hero-photo-label { display: none; }
+  .hero-photo-num   { display: none; }
+  .hero-photo-side  { margin-right: 0 !important; }
+
+
 }
 
 @media (max-width: 600px) {

@@ -568,7 +568,7 @@ function initToolsMarquee() {
     gsap.set(track, { x: 0, y: 0 });
 
     setTimeout(() => {
-      const isMobile = window.innerWidth <= 900;
+      const isMobile = window.innerWidth <= 1200;
       
       if (isMobile) {
         // MOBİL/TABLET: Yatay Akış
@@ -620,7 +620,7 @@ function initToolsMarquee() {
 
   // 3D Kavis efekti — Sadece Masaüstünde Aktif
   function apply3DDepth() {
-    if (window.innerWidth <= 900) return;
+    if (window.innerWidth <= 1200) return;
 
     const containerRect = marquee.getBoundingClientRect();
     const centerY = containerRect.top + containerRect.height / 2;

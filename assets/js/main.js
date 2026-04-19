@@ -234,6 +234,19 @@ if (typeof gsap !== 'undefined') {
 initNav();
 initFooter();
 
+// Hash scroll — başka sayfadan gelinince (#works gibi)
+if (window.location.hash) {
+  setTimeout(() => {
+    const target = document.querySelector(window.location.hash);
+    if (!target) return;
+    if (window._loco) {
+      window._loco.scrollTo(target, { duration: 800, easing: [0.25, 0.0, 0.35, 1.0] });
+    } else {
+      target.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, 700);
+}
+
 // === STATS SCROLL ANIMATION ===
 // === SKILLS SCROLL + 3D TILT ===
 function initSkills() {

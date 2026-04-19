@@ -584,7 +584,7 @@ img {
 /* === TABLET / MOBİL HERO === */
 @media (max-width: 900px) {
   #hero {
-    padding: 100px 24px 0;
+    padding: 100px 24px 80px;
     height: auto;
     min-height: auto;
     display: flex;
@@ -618,12 +618,11 @@ img {
   /* TABLET'TE ARAÇLAR (Tools Strip) */
   .hero-tools-wrapper {
     display: flex !important;
-    position: relative;
-    top: auto; bottom: auto; right: auto; left: auto;
+    position: absolute;
+    bottom: 0; right: 0; left: 0; top: auto;
     transform: none !important;
-    width: 100vw;
-    margin-left: calc(-50vw + 50%);
-    margin-top: 40px;
+    width: 100%;
+    margin: 0;
     height: auto;
     min-height: 0; max-height: none;
     flex-direction: row;
@@ -631,7 +630,7 @@ img {
     gap: 0;
     padding: 0;
     border-top: 0.5px solid var(--border);
-    border-bottom: 0.5px solid var(--border);
+    border-bottom: 0;
     background: rgba(10,10,10,0.92);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
@@ -703,7 +702,7 @@ img {
 
   /* HERO */
   #hero {
-    padding: 100px 20px 0;
+    padding: 100px 20px 80px;
     min-height: auto;
     height: auto;
     display: flex;

@@ -620,6 +620,7 @@ img {
     display: flex !important;
     position: relative;
     top: auto; bottom: auto; right: auto; left: auto;
+    transform: none !important;
     width: 100vw;
     margin-left: calc(-50vw + 50%);
     margin-top: 40px;

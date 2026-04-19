@@ -315,6 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
       trimStart.value = parseFloat(trimEnd.value) - 0.1;
     }
     trimStartVal.textContent = parseFloat(trimStart.value).toFixed(1) + 's';
+    stopCurrentPlayback();
     renderWaveform();
   });
 
@@ -323,6 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
       trimEnd.value = parseFloat(trimStart.value) + 0.1;
     }
     trimEndVal.textContent = parseFloat(trimEnd.value).toFixed(1) + 's';
+    stopCurrentPlayback();
     renderWaveform();
   });
 

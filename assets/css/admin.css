@@ -128,7 +128,13 @@ body { cursor: auto !important; }
 }
 
 /* UPLOAD FORM */
-.upload-form { display: grid; grid-template-columns: 400px 1fr; gap: 32px; align-items: start; }
+.upload-form {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 40px;
+  align-items: start;
+  padding-top: 24px;
+}
 .upload-media-row { display: flex; flex-direction: column; gap: 12px; }
 .upload-zone {
   aspect-ratio: 16/9; border: 0.5px dashed var(--border);
@@ -146,6 +152,66 @@ body { cursor: auto !important; }
 
 .upload-fields { display: flex; flex-direction: column; }
 .upload-fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+/* ADMIN FORM FIELDS */
+.admin-field {
+  position: relative;
+  margin-bottom: 24px;
+}
+.admin-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .08em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  transition: color var(--dur-fast);
+}
+.admin-field:focus-within .admin-label { color: var(--accent); }
+
+.admin-input, .admin-textarea, .admin-select {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 0.5px solid var(--border);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 14px;
+  padding: 8px 0 12px;
+  outline: none;
+  transition: border-color var(--dur-fast);
+  appearance: none;
+  -webkit-appearance: none;
+}
+.admin-textarea {
+  resize: none;
+  min-height: 100px;
+  line-height: 1.6;
+}
+.admin-input:focus, .admin-textarea:focus, .admin-select:focus {
+  border-bottom-color: var(--accent);
+}
+.admin-select { cursor: pointer; }
+.admin-select option { background: #0a0a0a; color: var(--text-primary); }
+
+.admin-select-wrap { position: relative; }
+.admin-select-arrow {
+  position: absolute; right: 0; top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px; color: var(--text-muted);
+  pointer-events: none;
+  transition: color var(--dur-fast);
+}
+.admin-field:focus-within .admin-select-arrow { color: var(--accent); }
+
+.admin-field-line {
+  position: absolute; bottom: 0; left: 0;
+  width: 0; height: 1px;
+  background: var(--accent);
+  transition: width var(--dur-mid) var(--ease-out);
+  display: block;
+}
+.admin-field:focus-within .admin-field-line { width: 100%; }
 
 .admin-toggle-row { padding: 20px 0; border-top: 0.5px solid var(--border); margin-top: 12px; }
 .admin-toggle-label {

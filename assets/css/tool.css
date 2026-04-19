@@ -206,6 +206,44 @@ input[type="range"]::-webkit-slider-thumb {
   font-family: var(--font-mono); letter-spacing: .05em;
 }
 
+/* === TOOL 03 (COLOR PALETTE) === */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-top: 24px;
+}
+.color-swatch {
+  height: 120px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 12px;
+  cursor: pointer;
+  transition: transform var(--dur-fast), filter var(--dur-fast), box-shadow var(--dur-fast);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  position: relative;
+  overflow: hidden;
+}
+.color-swatch:hover {
+  transform: translateY(-8px) scale(1.02);
+  filter: brightness(1.1);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+}
+.color-swatch-hex {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  padding: 4px 8px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
 /* === MOBILE === */
 @media (max-width: 900px) {
   .tool-card { grid-template-columns: 1fr; }

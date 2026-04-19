@@ -366,8 +366,6 @@ function initWorks() {
           card.classList.add('work-card--large');
         }
 
-        // Baştan görünür yap (GSAP sonra animate eder)
-        card.style.opacity = '0';
         grid.appendChild(card);
       });
 
@@ -375,21 +373,19 @@ function initWorks() {
       const label = document.querySelector('.works-count-label');
       if (label) label.textContent = projects.length + ' iş gösteriliyor';
 
-      // GSAP ile göster
+      // Baştan görünür yap
+      const cards = grid.querySelectorAll('.work-card');
+      cards.forEach(c => c.style.opacity = '1');
+
       // GSAP ile göster
       if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
-        gsap.to('#worksGrid .work-card', {
-          opacity: 1,
-          y: 0,
+        gsap.from(cards, {
+          opacity: 0,
+          y: 40,
           duration: .8,
           stagger: .1,
           ease: 'power3.out',
           scrollTrigger: { trigger: '#works', start: 'top 75%' }
-        });
-      } else {
-        grid.querySelectorAll('.work-card').forEach(c => {
-          c.style.opacity = '1';
-          c.style.transform = 'none';
         });
       }
 

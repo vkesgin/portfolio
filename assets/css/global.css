@@ -1041,9 +1041,11 @@ img {
 
 /* === GRID === */
 .works-grid {
-  column-count: 3;
-  column-gap: 16px;
-  /* Removed strict background lines to allow classic Masonry layout */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 0.5px solid var(--border);
 }
 
 /* === CARD === */
@@ -1052,34 +1054,33 @@ img {
   overflow: hidden;
   cursor: pointer;
   opacity: 0;
-  border-radius: var(--radius-md);
-  border: 0.5px solid var(--border);
-  background: var(--bg-surface);
-  
-  /* Masonry behavior */
-  break-inside: avoid;
-  margin-bottom: 16px;
-  display: block; /* crucial for column break avoidance */
+  background: var(--bg-primary);
+}
+
+.work-card::before {
+  content: '';
+  display: block;
+  padding-top: 75%;
+}
+.work-card--large::before {
+  padding-top: 56.25%;
 }
 
 .work-bg {
-  width: 100%;
-  display: flex;
-  transition: transform var(--dur-slow) var(--ease-out);
+  position: absolute;
+  inset: 0;
   overflow: hidden;
-  position: relative; 
 }
 .work-bg img {
   width: 100%; 
-  height: auto; 
+  height: 100%; 
+  object-fit: cover;
   display: block;
   filter: grayscale(30%) brightness(0.7);
-  transition:
-    transform var(--dur-slow) var(--ease-out),
-    filter var(--dur-mid) var(--ease-out);
+  transition: transform var(--dur-slow) var(--ease-out), filter var(--dur-mid) var(--ease-out);
 }
 .work-card:hover .work-bg img {
-  transform: scale(1.08);
+  transform: scale(1.06);
   filter: grayscale(0%) brightness(0.5);
 }
 

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — VK Portfolio</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="../assets/css/reset.css">
+  <link rel="stylesheet" href="../assets/css/variables.css">
+  <link rel="stylesheet" href="../assets/css/global.css">
+  <link rel="stylesheet" href="../assets/css/admin.css">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">VK<span>.</span></div>
+    <p class="login-label">// admin panel</p>
+    <div class="ct-field">
+      <label class="ct-label">Şifre</label>
+      <input type="password" id="loginPass" class="ct-input" placeholder="••••••••" autocomplete="current-password">
+      <span class="ct-field-line"></span>
+    </div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;margin-top:8px">
+      Giriş Yap ↗
+    </button>
+    <p class="login-error" id="loginError"></p>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" style="display:none">
+
+  <nav id="adminNav">
+    <a class="admin-logo" href="/">VK<span>.</span></a>
+    <div class="admin-nav-links">
+      <button class="admin-tab active" data-tab="projects">Tüm İşler</button>
+      <button class="admin-tab" data-tab="upload">Yeni İş Ekle</button>
+      <button class="admin-tab" data-tab="featured">Seçilmiş İşler</button>
+    </div>
+    <button class="btn btn-outline" id="logoutBtn" style="font-size:10px;padding:8px 16px">Çıkış</button>
+  </nav>
+
+  <!-- TAB: TÜM İŞLER -->
+  <div class="admin-panel active" id="tab-projects">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">Tüm İşler</h2>
+      <div class="admin-filters">
+        <button class="filter-btn active" data-filter="all">Tümü</button>
+        <button class="filter-btn" data-filter="web">Web</button>
+        <button class="filter-btn" data-filter="3d">3D</button>
+        <button class="filter-btn" data-filter="2d">2D</button>
+        <button class="filter-btn" data-filter="video">Video</button>
+        <button class="filter-btn" data-filter="graphic">Grafik</button>
+      </div>
+    </div>
+    <div class="admin-grid" id="projectsGrid">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
+  <!-- TAB: YENİ İŞ EKLE -->
+  <div class="admin-panel" id="tab-upload">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title" id="uploadPanelTitle">Yeni İş Ekle</h2>
+    </div>
+    <div class="upload-form">
+
+      <div class="upload-media-row">
+        <div class="upload-zone" id="imgZone">
+          <div class="upload-zone-inner" id="imgPreview">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span>Görsel Seç</span>
+            <span class="upload-zone-sub">JPG · PNG · WebP</span>
+          </div>
+          <input type="file" id="imgFile" accept="image/*" style="display:none">
+        </div>
+
+        <div class="upload-zone" id="vidZone">
+          <div class="upload-zone-inner" id="vidPreview">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="2" y="6" width="15" height="12" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg>
+            <span>Video Seç</span>
+            <span class="upload-zone-sub">MP4 · MOV · WebM</span>
+          </div>
+          <input type="file" id="vidFile" accept="video/*" style="display:none">
+        </div>
+      </div>
+
+      <div class="upload-fields">
+        <div class="ct-field">
+          <label class="ct-label">Başlık</label>
+          <input type="text" id="fTitle" class="ct-input" placeholder="Proje başlığı">
+          <span class="ct-field-line"></span>
+        </div>
+
+        <div class="upload-fields-row">
+          <div class="ct-field">
+            <label class="ct-label">Kategori</label>
+            <div class="ct-select-wrap">
+              <select id="fCategory" class="ct-select">
+                <option value="web">Web Design</option>
+                <option value="3d">3D Animasyon</option>
+                <option value="2d">2D Animasyon</option>
+                <option value="video">Videografi</option>
+                <option value="graphic">Grafik Tasarım</option>
+              </select>
+              <span class="ct-select-arrow">↓</span>
+            </div>
+            <span class="ct-field-line"></span>
+          </div>
+          <div class="ct-field">
+            <label class="ct-label">Yıl</label>
+            <input type="text" id="fYear" class="ct-input" placeholder="2024">
+            <span class="ct-field-line"></span>
+          </div>
+        </div>
+
+        <div class="ct-field">
+          <label class="ct-label">Açıklama</label>
+          <textarea id="fDesc" class="ct-textarea" rows="3" placeholder="Proje hakkında kısa açıklama..."></textarea>
+          <span class="ct-field-line"></span>
+        </div>
+
+        <div class="ct-field">
+          <label class="ct-label">Etiketler (virgülle ayır)</label>
+          <input type="text" id="fTags" class="ct-input" placeholder="Blender, Cinema4D, Render">
+          <span class="ct-field-line"></span>
+        </div>
+
+        <div class="admin-toggle-row">
+          <label class="admin-toggle-label">
+            <span>Seçilmiş İşlere ekle</span>
+            <div class="toggle-track">
+              <input type="checkbox" id="fFeatured">
+              <span class="toggle-thumb"></span>
+            </div>
+          </label>
+        </div>
+
+        <div class="upload-actions">
+          <button class="btn btn-primary" id="saveBtn">
+            <span id="saveBtnText">Kaydet ↗</span>
+            <span id="saveBtnLoad" style="display:none">Yükleniyor...</span>
+          </button>
+          <button class="btn btn-outline" id="cancelEditBtn" style="display:none">İptal</button>
+          <div class="upload-progress" id="uploadProgress" style="display:none">
+            <div class="upload-progress-bar" id="uploadProgressBar"></div>
+            <span id="uploadProgressText">Görsel yükleniyor...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: SEÇİLMİŞ İŞLER -->
+  <div class="admin-panel" id="tab-featured">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">Seçilmiş İşler</h2>
+      <p class="admin-panel-sub">Ana sayfada gösterilecek işler. Sürükle-bırak ile sırala.</p>
+    </div>
+    <div class="featured-grid" id="featuredGrid">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ============================================================
+// API ENDPOINT
+const API = 'https://vk-portfolio-api.vkesgin38.workers.dev';
+// ============================================================
+
+let TOKEN = sessionStorage.getItem('vk_admin_token') || '';
+let editingId = null;
+let allProjects = [];
+
+// === AUTH ===
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+async function login() {
+  const pass = document.getElementById('loginPass').value;
+  const err  = document.getElementById('loginError');
+  err.textContent = '';
+  try {
+    const r = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pass })
+    });
+    const d = await r.json();
+    if (!r.ok) { err.textContent = d.error || 'Hata'; return; }
+    TOKEN = d.token;
+    sessionStorage.setItem('vk_admin_token', TOKEN);
+    showDashboard();
+  } catch { err.textContent = 'Bağlantı hatası'; }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  sessionStorage.removeItem('vk_admin_token');
+  TOKEN = '';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+});
+
+function showDashboard() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('dashboard').style.display   = 'block';
+  loadProjects();
+}
+
+if (TOKEN) showDashboard();
+
+// === TABS ===
+document.querySelectorAll('.admin-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'featured') renderFeatured();
+  });
+});
+
+// === PROJECTS ===
+async function loadProjects() {
+  const r = await fetch(`${API}/api/projects`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+  allProjects = await r.json();
+  renderProjects('all');
+}
+
+function renderProjects(filter) {
+  const grid = document.getElementById('projectsGrid');
+  const list = filter === 'all' ? allProjects : allProjects.filter(p => p.category === filter);
+  if (!list.length) { grid.innerHTML = '<div class="admin-empty">Henüz iş yok.</div>'; return; }
+
+  grid.innerHTML = list.map(p => `
+    <div class="admin-card" data-id="${p.id}">
+      <div class="admin-card-media">
+        ${p.video_url
+          ? `<video src="${API}${p.video_url}" muted loop></video>`
+          : p.image_url
+          ? `<img src="${API}${p.image_url}" alt="${p.title}" loading="lazy">`
+          : '<div class="admin-card-placeholder"></div>'
+        }
+        ${p.is_featured ? '<span class="featured-badge">★ Seçilmiş</span>' : ''}
+      </div>
+      <div class="admin-card-info">
+        <div class="admin-card-title">${p.title}</div>
+        <div class="admin-card-meta">
+          <span class="admin-cat-tag">${p.category}</span>
+          <span style="font-size:10px;color:#444">${p.year}</span>
+        </div>
+      </div>
+      <div class="admin-card-actions">
+        <button class="admin-btn-edit" onclick="editProject('${p.id}')">Düzenle</button>
+        <button class="admin-btn-feat ${p.is_featured ? 'active' : ''}" onclick="toggleFeatured('${p.id}', ${p.is_featured})">
+          ${p.is_featured ? '★ Seçilmiş' : '☆ Seç'}
+        </button>
+        <button class="admin-btn-del" onclick="deleteProject('${p.id}')">Sil</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Video hover
+  grid.querySelectorAll('video').forEach(v => {
+    v.closest('.admin-card-media').addEventListener('mouseenter', () => v.play());
+    v.closest('.admin-card-media').addEventListener('mouseleave', () => { v.pause(); v.currentTime = 0; });
+  });
+}
+
+// Filtre
+document.querySelectorAll('.admin-filters .filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.admin-filters .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderProjects(btn.dataset.filter);
+  });
+});
+
+// === EDIT ===
+function editProject(id) {
+  const p = allProjects.find(x => x.id === id);
+  if (!p) return;
+  editingId = id;
+
+  document.getElementById('fTitle').value    = p.title || '';
+  document.getElementById('fCategory').value = p.category || 'web';
+  document.getElementById('fYear').value     = p.year || '';
+  document.getElementById('fDesc').value     = p.description || '';
+  document.getElementById('fTags').value     = p.tags || '';
+  document.getElementById('fFeatured').checked = !!p.is_featured;
+
+  if (p.image_url) {
+    document.getElementById('imgPreview').innerHTML = `<img src="${API}${p.image_url}" style="width:100%;height:100%;object-fit:cover">`;
+  }
+  if (p.video_url) {
+    document.getElementById('vidPreview').innerHTML = `<video src="${API}${p.video_url}" style="width:100%;height:100%;object-fit:cover" muted></video>`;
+  }
+
+  document.getElementById('uploadPanelTitle').textContent = 'İş Düzenle';
+  document.getElementById('cancelEditBtn').style.display  = 'inline-flex';
+
+  // Upload tabına geç
+  document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-tab="upload"]').classList.add('active');
+  document.getElementById('tab-upload').classList.add('active');
+}
+
+document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+
+function resetForm() {
+  editingId = null;
+  document.getElementById('fTitle').value = '';
+  document.getElementById('fCategory').value = 'web';
+  document.getElementById('fYear').value = new Date().getFullYear();
+  document.getElementById('fDesc').value = '';
+  document.getElementById('fTags').value = '';
+  document.getElementById('fFeatured').checked = false;
+  document.getElementById('imgFile').value = '';
+  document.getElementById('vidFile').value = '';
+  resetZone('imgPreview', 'image');
+  resetZone('vidPreview', 'video');
+  document.getElementById('uploadPanelTitle').textContent = 'Yeni İş Ekle';
+  document.getElementById('cancelEditBtn').style.display  = 'none';
+}
+
+function resetZone(id, type) {
+  const icons = { image: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>', video: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="2" y="6" width="15" height="12" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg>' };
+  const labels = { image: 'Görsel Seç', video: 'Video Seç' };
+  const subs   = { image: 'JPG · PNG · WebP', video: 'MP4 · MOV · WebM' };
+  document.getElementById(id).innerHTML = `${icons[type]}<span>${labels[type]}</span><span class="upload-zone-sub">${subs[type]}</span>`;
+}
+
+// === UPLOAD ZONE ===
+['img','vid'].forEach(prefix => {
+  const zone = document.getElementById(prefix + 'Zone');
+  const input = document.getElementById(prefix + 'File');
+  const preview = prefix === 'img' ? 'imgPreview' : 'vidPreview';
+
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) previewFile(file, preview);
+  });
+  input.addEventListener('change', () => {
+    if (input.files[0]) previewFile(input.files[0], preview);
+  });
+});
+
+function previewFile(file, previewId) {
+  const url = URL.createObjectURL(file);
+  const el  = document.getElementById(previewId);
+  if (file.type.startsWith('image/')) {
+    el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
+  } else if (file.type.startsWith('video/')) {
+    el.innerHTML = `<video src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px" muted></video>`;
+  }
+}
+
+// === SAVE ===
+async function uploadFile(file, type) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('type', type);
+  const r = await fetch(`${API}/api/upload`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${TOKEN}` },
+    body: form
+  });
+  const d = await r.json();
+  return d.url;
+}
+
+function showProgress(text, pct) {
+  const prog = document.getElementById('uploadProgress');
+  prog.style.display = 'flex';
+  document.getElementById('uploadProgressText').textContent = text;
+  document.getElementById('uploadProgressBar').style.width = pct + '%';
+}
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const title = document.getElementById('fTitle').value.trim();
+  if (!title) { alert('Başlık gerekli'); return; }
+
+  const btnText = document.getElementById('saveBtnText');
+  const btnLoad = document.getElementById('saveBtnLoad');
+  btnText.style.display = 'none';
+  btnLoad.style.display = 'inline';
+
+  try {
+    let imgUrl = editingId ? allProjects.find(p=>p.id===editingId)?.image_url || '' : '';
+    let vidUrl = editingId ? allProjects.find(p=>p.id===editingId)?.video_url || '' : '';
+
+    const imgFile = document.getElementById('imgFile').files[0];
+    const vidFile = document.getElementById('vidFile').files[0];
+
+    if (imgFile) { showProgress('Görsel yükleniyor...', 30); imgUrl = await uploadFile(imgFile, 'image'); }
+    if (vidFile) { showProgress('Video yükleniyor...', 65); vidUrl = await uploadFile(vidFile, 'video'); }
+
+    showProgress('Kaydediliyor...', 90);
+
+    const payload = {
+      title,
+      category:    document.getElementById('fCategory').value,
+      year:        document.getElementById('fYear').value || String(new Date().getFullYear()),
+      description: document.getElementById('fDesc').value,
+      tags:        document.getElementById('fTags').value,
+      image_url:   imgUrl,
+      video_url:   vidUrl,
+      thumbnail_url: imgUrl,
+      is_featured: document.getElementById('fFeatured').checked,
+    };
+
+    const endpoint = editingId ? `${API}/api/projects/${editingId}` : `${API}/api/projects`;
+    const method   = editingId ? 'PUT' : 'POST';
+    const r = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify(payload)
+    });
+
+    if (!r.ok) throw new Error('Kayıt hatası');
+
+    showProgress('Tamamlandı!', 100);
+    setTimeout(() => { document.getElementById('uploadProgress').style.display = 'none'; }, 1500);
+
+    await loadProjects();
+    resetForm();
+  } catch(e) {
+    alert('Hata: ' + e.message);
+  } finally {
+    btnText.style.display = 'inline';
+    btnLoad.style.display = 'none';
+  }
+});
+
+// === TOGGLE FEATURED ===
+async function toggleFeatured(id, current) {
+  const p = allProjects.find(x => x.id === id);
+  if (!p) return;
+  await fetch(`${API}/api/projects/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify({ ...p, is_featured: current ? 0 : 1 })
+  });
+  await loadProjects();
+  renderProjects(document.querySelector('.admin-filters .filter-btn.active')?.dataset.filter || 'all');
+}
+
+// === DELETE ===
+async function deleteProject(id) {
+  if (!confirm('Bu işi silmek istediğine emin misin?')) return;
+  await fetch(`${API}/api/projects/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${TOKEN}` }
+  });
+  await loadProjects();
+  renderProjects(document.querySelector('.admin-filters .filter-btn.active')?.dataset.filter || 'all');
+}
+
+// === FEATURED SIRA ===
+function renderFeatured() {
+  const list = allProjects.filter(p => p.is_featured).sort((a,b) => a.featured_order - b.featured_order);
+  const grid = document.getElementById('featuredGrid');
+
+  if (!list.length) {
+    grid.innerHTML = '<div class="admin-empty">Seçilmiş iş yok. İşleri düzenlerken "Seçilmiş İşlere ekle" seçeneğini açın.</div>';
+    return;
+  }
+
+  grid.innerHTML = list.map((p,i) => `
+    <div class="featured-item" data-id="${p.id}" draggable="true">
+      <div class="featured-drag">⠿</div>
+      <div class="featured-thumb">
+        ${p.image_url ? `<img src="${API}${p.image_url}" alt="${p.title}">` : '<div class="admin-card-placeholder"></div>'}
+      </div>
+      <div class="featured-info">
+        <div class="featured-title">${p.title}</div>
+        <span class="admin-cat-tag">${p.category}</span>
+      </div>
+      <div class="featured-order">${i+1}</div>
+      <button class="admin-btn-del" onclick="toggleFeatured('${p.id}', 1)">Çıkar</button>
+    </div>
+  `).join('');
+
+  // Drag & drop sıralama
+  let dragSrc = null;
+  grid.querySelectorAll('.featured-item').forEach(item => {
+    item.addEventListener('dragstart', () => { dragSrc = item; item.style.opacity = '.4'; });
+    item.addEventListener('dragend',   () => { item.style.opacity = '1'; saveFeaturedOrder(); });
+    item.addEventListener('dragover',  e => { e.preventDefault(); });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrc !== item) {
+        const items = [...grid.querySelectorAll('.featured-item')];
+        const srcI  = items.indexOf(dragSrc);
+        const dstI  = items.indexOf(item);
+        if (srcI < dstI) item.after(dragSrc); else item.before(dragSrc);
+      }
+    });
+  });
+}
+
+async function saveFeaturedOrder() {
+  const items = [...document.querySelectorAll('.featured-item')];
+  await Promise.all(items.map((item, i) => {
+    const p = allProjects.find(x => x.id === item.dataset.id);
+    if (!p) return;
+    return fetch(`${API}/api/projects/${p.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ ...p, featured_order: i })
+    });
+  }));
+  await loadProjects();
+  renderFeatured();
+}
+</script>
+
+</body>
+</html>

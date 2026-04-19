@@ -1,0 +1,16 @@
+name = "vk-portfolio-api"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vk-portfolio"
+database_id = "d370fb24-6366-46ac-8406-554d22de25be"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "vk-portfolio-files"
+
+[vars]
+ALLOWED_ORIGIN = "https://velikesgin.com"

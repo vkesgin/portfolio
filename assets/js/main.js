@@ -284,6 +284,19 @@ function initSkills() {
 
 // === WORKS SCROLL + FILTER ===
 function initWorks() {
+  // API'den seçilmiş işleri yükle
+  if (typeof loadFeaturedFromAPI === 'function') {
+    loadFeaturedFromAPI().then(projects => {
+      if (!projects || !projects.length) return;
+      const grid = document.getElementById('worksGrid');
+      if (!grid) return;
+      grid.innerHTML = projects.slice(0,6).map((p,i) =>
+        (i===0||i===3) ? buildWorkCard(p).replace('class="work-card','class="work-card work-card--large') : buildWorkCard(p)
+      ).join('');
+      document.querySelector('.works-count-label').textContent = projects.length + ' iş gösteriliyor';
+    });
+  }
+
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
 
   // Giriş animasyonu

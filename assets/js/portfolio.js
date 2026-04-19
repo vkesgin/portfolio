@@ -1,4 +1,24 @@
 (function() {
+  // API'den veri yükle, yoksa statik kart kullan
+  loadPortfolioFromAPI().then(projects => {
+    if (!projects || !projects.length) return;
+    const grid = document.getElementById('portGrid');
+    if (!grid) return;
+    grid.innerHTML = projects.map((p, i) => buildPortfolioCard(p, i === 0 || i === 3)).join('');
+    // Animasyonları yeniden tetikle
+    if (typeof gsap !== 'undefined') {
+      gsap.to('.port-card', { opacity: 1, duration: .6, stagger: .05, ease: 'power3.out' });
+    }
+    // Filter sayılarını güncelle
+    const counts = {};
+    projects.forEach(p => { counts[p.category] = (counts[p.category]||0)+1; });
+    document.getElementById('fc-all').textContent = projects.length;
+    Object.entries(counts).forEach(([cat, n]) => {
+      const el = document.getElementById('fc-' + cat);
+      if (el) el.textContent = n;
+    });
+  });
+
   if (typeof gsap !== 'undefined') {
     gsap.registerPlugin(ScrollTrigger);
 

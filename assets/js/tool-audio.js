@@ -29,14 +29,20 @@ document.addEventListener('DOMContentLoaded', () => {
   let animFrame = null;
   let currentPlaySource = null;
   let playCtx = null;
+  let playStartTime = 0;
+  let playAnimFrame = null;
+  let canvasWidth = 0;
+  let canvasHeight = 0;
+  let canvasDpr = 1;
 
-  // GSAP Animations
+  // Waveform verilerini cache'le
+  let waveformPeaks = [];
+
   if (typeof gsap !== 'undefined') {
     gsap.from('#tool-hero', { y: 30, opacity: 0, duration: 1, ease: 'power3.out' });
     gsap.from('.tool-card', { y: 40, opacity: 0, duration: 1, delay: 0.3, ease: 'power3.out' });
   }
 
-  // --- Zamanlayıcı ---
   function formatTime(seconds) {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = Math.floor(seconds % 60).toString().padStart(2, '0');
@@ -50,10 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
       audioTimer.textContent = formatTime(elapsed);
     }, 200);
   }
-
-  function stopTimer() {
-    clearInterval(timerInterval);
-  }
+  function stopTimer() { clearInterval(timerInterval); }
 
   // --- VU Metre ---
   function startVU(stream) {
@@ -63,106 +66,76 @@ document.addEventListener('DOMContentLoaded', () => {
     analyser.fftSize = 256;
     source.connect(analyser);
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
     function draw() {
       analyser.getByteFrequencyData(dataArray);
       let sum = 0;
       for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
       const avg = sum / dataArray.length;
-      const percent = Math.min((avg / 128) * 100, 100);
-      vuMeter.style.width = percent + '%';
-      if (percent > 80) vuMeter.style.background = '#ff4d4d';
-      else if (percent > 50) vuMeter.style.background = '#ffaa00';
-      else vuMeter.style.background = 'var(--accent)';
+      const pct = Math.min((avg / 128) * 100, 100);
+      vuMeter.style.width = pct + '%';
+      vuMeter.style.background = pct > 80 ? '#ff4d4d' : pct > 50 ? '#ffaa00' : 'var(--accent)';
       animFrame = requestAnimationFrame(draw);
     }
     draw();
   }
+  function stopVU() { cancelAnimationFrame(animFrame); vuMeter.style.width = '0%'; }
 
-  function stopVU() {
-    cancelAnimationFrame(animFrame);
-    vuMeter.style.width = '0%';
-  }
-
-  // --- SES DOSYASI YÜKLEME ---
+  // === SES DOSYASI YÜKLEME ===
   audioFileInput.addEventListener('change', async (e) => {
     if (e.target.files.length === 0) return;
     const file = e.target.files[0];
-    
     audioStatus.textContent = '📂 Dosya yükleniyor...';
-    
     try {
       const arrayBuffer = await file.arrayBuffer();
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
       audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-      
       audioTimer.textContent = formatTime(audioBuffer.duration);
-      audioStatus.textContent = '✅ Dosya Yüklendi: ' + file.name;
-      
+      audioStatus.textContent = '✅ ' + file.name;
       showResult();
     } catch (err) {
-      alert('Bu ses dosyası açılamadı! Lütfen geçerli bir ses dosyası seçin.');
+      alert('Bu ses dosyası açılamadı!');
       console.error(err);
     }
   });
 
-  // --- KAYIT BAŞLAT ---
+  // === KAYIT ===
   recBtn.addEventListener('click', async () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') return;
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunks = [];
-      elapsed = 0;
-
+      audioChunks = []; elapsed = 0;
       mediaRecorder = new MediaRecorder(stream);
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunks.push(e.data);
-      };
-
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach(t => t.stop());
-        stopVU();
-        stopTimer();
+        stopVU(); stopTimer();
         processRecording();
       };
-
       mediaRecorder.start(100);
-      startVU(stream);
-      startTimer();
-
+      startVU(stream); startTimer();
       recBtn.classList.add('recording');
       audioStatus.textContent = '🔴 Kayıt Yapılıyor...';
       pauseStopRow.style.display = 'flex';
       isPaused = false;
       pauseBtn.textContent = '⏸ Duraklat';
-
     } catch (err) {
-      alert('Mikrofon erişimi reddedildi! Lütfen tarayıcı ayarlarından mikrofon iznini açın.');
-      console.error(err);
+      alert('Mikrofon erişimi reddedildi!');
     }
   });
 
-  // --- DURAKLAT ---
   pauseBtn.addEventListener('click', () => {
     if (!mediaRecorder) return;
     if (mediaRecorder.state === 'recording') {
-      mediaRecorder.pause();
-      stopTimer();
-      isPaused = true;
+      mediaRecorder.pause(); stopTimer();
       pauseBtn.textContent = '▶ Devam Et';
       audioStatus.textContent = '⏸ Duraklatıldı';
     } else if (mediaRecorder.state === 'paused') {
-      mediaRecorder.resume();
-      startTimer();
-      isPaused = false;
+      mediaRecorder.resume(); startTimer();
       pauseBtn.textContent = '⏸ Duraklat';
       audioStatus.textContent = '🔴 Kayıt Yapılıyor...';
     }
   });
 
-  // --- DURDUR ---
   stopBtn.addEventListener('click', () => {
     if (mediaRecorder && (mediaRecorder.state === 'recording' || mediaRecorder.state === 'paused')) {
       mediaRecorder.stop();
@@ -172,37 +145,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // --- KAYDI İŞLE ---
   async function processRecording() {
     const blob = new Blob(audioChunks, { type: 'audio/webm' });
-    const arrayBuffer = await blob.arrayBuffer();
+    const ab = await blob.arrayBuffer();
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+    audioBuffer = await ctx.decodeAudioData(ab);
     showResult();
   }
 
-  // --- SONUCU GÖSTER ---
+  // === SONUCU GÖSTER ===
   function showResult() {
     if (!audioBuffer) return;
-
-    const duration = audioBuffer.duration;
-    trimStart.max = duration;
-    trimEnd.max = duration;
-    trimStart.value = 0;
-    trimEnd.value = duration;
-    trimStart.step = 0.1;
-    trimEnd.step = 0.1;
+    const dur = audioBuffer.duration;
+    trimStart.max = dur; trimEnd.max = dur;
+    trimStart.value = 0; trimEnd.value = dur;
+    trimStart.step = 0.1; trimEnd.step = 0.1;
     trimStartVal.textContent = '0.0s';
-    trimEndVal.textContent = duration.toFixed(1) + 's';
+    trimEndVal.textContent = dur.toFixed(1) + 's';
 
-    // Önce göster sonra dalga çiz (canvas boyutu doğru olsun diye)
     audioEmpty.style.display = 'none';
     audioResult.style.display = 'block';
 
-    // Bir frame bekle ki DOM render'ı tamamlansın
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        drawWaveform(audioBuffer);
+        setupCanvas();
+        computePeaks();
+        renderWaveform();
       });
     });
 
@@ -211,114 +179,182 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // --- DALGA FORMU ÇİZİMİ ---
-  function drawWaveform(buffer) {
-    const canvas = waveformCanvas;
-    const ctx = canvas.getContext('2d');
+  // === CANVAS SETUP ===
+  function setupCanvas() {
+    const rect = waveformCanvas.getBoundingClientRect();
+    canvasDpr = window.devicePixelRatio || 1;
+    canvasWidth = rect.width;
+    canvasHeight = rect.height;
+    waveformCanvas.width = canvasWidth * canvasDpr;
+    waveformCanvas.height = canvasHeight * canvasDpr;
+  }
 
-    // Canvas'ın gerçek piksel boyutunu ayarla
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const width = rect.width;
-    const height = rect.height;
+  // === PEAK VERİLERİNİ HESAPLA ===
+  function computePeaks() {
+    if (!audioBuffer) return;
+    const data = audioBuffer.getChannelData(0);
+    const barCount = Math.floor(canvasWidth / 3); // Her bar 3px genişliğinde
+    const step = Math.floor(data.length / barCount);
+    waveformPeaks = [];
 
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    ctx.scale(dpr, dpr);
-
-    // Temizle
-    ctx.clearRect(0, 0, width, height);
-
-    // Arkaplan
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.fillRect(0, 0, width, height);
-
-    const data = buffer.getChannelData(0);
-    const step = Math.ceil(data.length / width);
-    const mid = height / 2;
-
-    // Bar-style dalga çizimi (daha görünür)
-    for (let i = 0; i < width; i++) {
+    // Max peak bul (normalize etmek için)
+    let globalMax = 0;
+    for (let i = 0; i < barCount; i++) {
       let min = 1.0, max = -1.0;
       for (let j = 0; j < step; j++) {
-        const idx = (i * step) + j;
+        const idx = i * step + j;
         if (idx < data.length) {
-          const datum = data[idx];
-          if (datum < min) min = datum;
-          if (datum > max) max = datum;
+          if (data[idx] < min) min = data[idx];
+          if (data[idx] > max) max = data[idx];
         }
       }
+      const amplitude = max - min;
+      if (amplitude > globalMax) globalMax = amplitude;
+      waveformPeaks.push({ min, max, amplitude });
+    }
 
-      const barTop = (1 + max) * mid;
-      const barBottom = (1 + min) * mid;
-      const barHeight = barBottom - barTop;
+    // Normalize et
+    if (globalMax > 0) {
+      waveformPeaks.forEach(p => {
+        p.normalizedMin = p.min / globalMax;
+        p.normalizedMax = p.max / globalMax;
+      });
+    }
+  }
 
-      // Gradient renk — ortası parlak, kenarları koyu
-      const intensity = Math.abs(max - min);
-      const alpha = Math.min(0.3 + intensity * 2, 1);
+  // === DALGA ÇİZİMİ (trim markers + timeline) ===
+  function renderWaveform(playheadRatio) {
+    const canvas = waveformCanvas;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(canvasDpr, 0, 0, canvasDpr, 0, 0);
 
-      ctx.fillStyle = `rgba(0, 229, 255, ${alpha})`;
-      ctx.fillRect(i, barTop, 1, Math.max(barHeight, 1));
+    const w = canvasWidth;
+    const h = canvasHeight;
+    const mid = h / 2;
+    const barW = 2;
+    const gap = 1;
+    const totalBarW = barW + gap;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Arkaplan
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.fillRect(0, 0, w, h);
+
+    if (!audioBuffer || waveformPeaks.length === 0) return;
+
+    const dur = audioBuffer.duration;
+    const trimS = parseFloat(trimStart.value);
+    const trimE = parseFloat(trimEnd.value);
+    const trimStartX = (trimS / dur) * w;
+    const trimEndX = (trimE / dur) * w;
+
+    // Trim dışı karanlık bölge
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, 0, trimStartX, h);
+    ctx.fillRect(trimEndX, 0, w - trimEndX, h);
+
+    // Barlar
+    for (let i = 0; i < waveformPeaks.length; i++) {
+      const x = i * totalBarW;
+      const peak = waveformPeaks[i];
+      const barH = Math.max(peak.amplitude / (waveformPeaks.reduce((a,b) => Math.max(a, b.amplitude), 0) || 1) * (h * 0.85), 2);
+      const y = mid - barH / 2;
+
+      // Trim içi mi dışı mı?
+      const inTrim = x >= trimStartX && x <= trimEndX;
+
+      if (inTrim) {
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.85)';
+      } else {
+        ctx.fillStyle = 'rgba(0, 229, 255, 0.2)';
+      }
+
+      ctx.fillRect(x, y, barW, barH);
     }
 
     // Orta çizgi
-    ctx.strokeStyle = 'rgba(0,229,255,0.15)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(0, mid);
-    ctx.lineTo(width, mid);
+    ctx.lineTo(w, mid);
     ctx.stroke();
+
+    // Trim başlangıç çubuğu (yeşil)
+    ctx.fillStyle = '#00ff88';
+    ctx.fillRect(trimStartX - 1, 0, 3, h);
+    // Üst tutamak
+    ctx.beginPath();
+    ctx.arc(trimStartX, 6, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trim bitiş çubuğu (kırmızı)
+    ctx.fillStyle = '#ff4d4d';
+    ctx.fillRect(trimEndX - 1, 0, 3, h);
+    ctx.beginPath();
+    ctx.arc(trimEndX, 6, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Playhead (oynatma sırasında)
+    if (playheadRatio !== undefined && playheadRatio >= 0 && playheadRatio <= 1) {
+      // Playhead pozisyonu trim aralığında
+      const phX = trimStartX + (trimEndX - trimStartX) * playheadRatio;
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(phX - 1, 0, 2, h);
+      // Üst daire
+      ctx.beginPath();
+      ctx.arc(phX, h - 6, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
-  // --- TRIM SLIDER ---
+  // === TRIM SLIDER → Waveform güncelle ===
   trimStart.addEventListener('input', () => {
-    const val = parseFloat(trimStart.value);
-    if (val >= parseFloat(trimEnd.value)) {
+    if (parseFloat(trimStart.value) >= parseFloat(trimEnd.value)) {
       trimStart.value = parseFloat(trimEnd.value) - 0.1;
     }
     trimStartVal.textContent = parseFloat(trimStart.value).toFixed(1) + 's';
+    renderWaveform();
   });
 
   trimEnd.addEventListener('input', () => {
-    const val = parseFloat(trimEnd.value);
-    if (val <= parseFloat(trimStart.value)) {
+    if (parseFloat(trimEnd.value) <= parseFloat(trimStart.value)) {
       trimEnd.value = parseFloat(trimStart.value) + 0.1;
     }
     trimEndVal.textContent = parseFloat(trimEnd.value).toFixed(1) + 's';
+    renderWaveform();
   });
 
-  // --- KIRPILMIŞI DİNLE ---
+  // === OYNAT (timeline animasyonlu) ===
   playTrimmedBtn.addEventListener('click', () => {
     if (!audioBuffer) return;
 
-    // Çalıyorsa durdur
     if (currentPlaySource) {
       currentPlaySource.stop();
       currentPlaySource = null;
+      cancelAnimationFrame(playAnimFrame);
       playTrimmedBtn.textContent = '▶ Kırpılmışı Dinle';
+      renderWaveform(); // Playhead'i temizle
       return;
     }
 
     playCtx = new (window.AudioContext || window.webkitAudioContext)();
     const startSec = parseFloat(trimStart.value);
     const endSec = parseFloat(trimEnd.value);
-    const sampleRate = audioBuffer.sampleRate;
-    const startSample = Math.floor(startSec * sampleRate);
-    const endSample = Math.floor(endSec * sampleRate);
+    const duration = endSec - startSec;
+    const sr = audioBuffer.sampleRate;
+    const startSample = Math.floor(startSec * sr);
+    const endSample = Math.floor(endSec * sr);
     const length = endSample - startSample;
 
     if (length <= 0) return;
 
-    const trimmedBuffer = playCtx.createBuffer(
-      audioBuffer.numberOfChannels, length, sampleRate
-    );
-
+    const trimmedBuffer = playCtx.createBuffer(audioBuffer.numberOfChannels, length, sr);
     for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
       const src = audioBuffer.getChannelData(ch);
       const dst = trimmedBuffer.getChannelData(ch);
-      for (let i = 0; i < length; i++) {
-        dst[i] = src[startSample + i];
-      }
+      for (let i = 0; i < length; i++) dst[i] = src[startSample + i];
     }
 
     const source = playCtx.createBufferSource();
@@ -327,71 +363,65 @@ document.addEventListener('DOMContentLoaded', () => {
     source.start();
     currentPlaySource = source;
     playTrimmedBtn.textContent = '⏹ Durdur';
+    playStartTime = playCtx.currentTime;
+
+    // Timeline animasyonu
+    function animatePlayhead() {
+      const elapsed = playCtx.currentTime - playStartTime;
+      const ratio = Math.min(elapsed / duration, 1);
+      renderWaveform(ratio);
+      if (ratio < 1 && currentPlaySource) {
+        playAnimFrame = requestAnimationFrame(animatePlayhead);
+      }
+    }
+    animatePlayhead();
 
     source.onended = () => {
       currentPlaySource = null;
+      cancelAnimationFrame(playAnimFrame);
       playTrimmedBtn.textContent = '▶ Kırpılmışı Dinle';
+      renderWaveform();
     };
   });
 
-  // --- WAV OLARAK İNDİR ---
+  // === WAV İNDİR ===
   downloadBtn.addEventListener('click', () => {
     if (!audioBuffer) return;
-
     const startSec = parseFloat(trimStart.value);
     const endSec = parseFloat(trimEnd.value);
-    const sampleRate = audioBuffer.sampleRate;
-    const startSample = Math.floor(startSec * sampleRate);
-    const endSample = Math.floor(endSec * sampleRate);
+    const sr = audioBuffer.sampleRate;
+    const startSample = Math.floor(startSec * sr);
+    const endSample = Math.floor(endSec * sr);
     const length = endSample - startSample;
-    const numChannels = audioBuffer.numberOfChannels;
-
+    const nc = audioBuffer.numberOfChannels;
     if (length <= 0) return;
 
-    // WAV header
-    const bytesPerSample = 2;
-    const blockAlign = numChannels * bytesPerSample;
-    const byteRate = sampleRate * blockAlign;
-    const dataSize = length * blockAlign;
-    const wavBuffer = new ArrayBuffer(44 + dataSize);
-    const view = new DataView(wavBuffer);
+    const bps = 2; const ba = nc * bps;
+    const br = sr * ba; const ds = length * ba;
+    const buf = new ArrayBuffer(44 + ds);
+    const v = new DataView(buf);
+    const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
 
-    function ws(offset, str) {
-      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-    }
+    ws(0,'RIFF'); v.setUint32(4,36+ds,true); ws(8,'WAVE');
+    ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
+    v.setUint16(22,nc,true); v.setUint32(24,sr,true);
+    v.setUint32(28,br,true); v.setUint16(32,ba,true); v.setUint16(34,16,true);
+    ws(36,'data'); v.setUint32(40,ds,true);
 
-    ws(0, 'RIFF');
-    view.setUint32(4, 36 + dataSize, true);
-    ws(8, 'WAVE');
-    ws(12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, byteRate, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, 16, true);
-    ws(36, 'data');
-    view.setUint32(40, dataSize, true);
-
-    let offset = 44;
+    let off = 44;
     for (let i = 0; i < length; i++) {
-      for (let ch = 0; ch < numChannels; ch++) {
-        const sample = audioBuffer.getChannelData(ch)[startSample + i];
-        const clamped = Math.max(-1, Math.min(1, sample));
-        view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7FFF, true);
-        offset += 2;
+      for (let ch = 0; ch < nc; ch++) {
+        const s = Math.max(-1, Math.min(1, audioBuffer.getChannelData(ch)[startSample + i]));
+        v.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        off += 2;
       }
     }
 
-    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+    const blob = new Blob([buf], { type: 'audio/wav' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ses-kaydi.wav';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
+    a.href = url; a.download = 'ses-kaydi.wav';
+    a.style.display = 'none'; document.body.appendChild(a); a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
   });
 });

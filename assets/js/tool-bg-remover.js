@@ -62,7 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
   async function processBackgroundRemoval(file) {
     try {
       // Optimizasyonlar: Çıktı boyutu otomatik algılanır, çok ağır fotoları hızla işler.
-      const blob = await imglyRemoveBackground(file, {
+      const config = {
+        publicPath: "https://unpkg.com/@imgly/background-removal@1.4.3/dist/",
         progress: (key, current, total) => {
           // Gerekirse ilerleme eklenebilir, şimdilik sadece yükleniyor mesajı.
           loadingStatus.innerHTML = `
@@ -71,7 +72,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <small>(İlk seferde Wasm dosyası indirildiği için biraz sürebilir)</small>
           `;
         }
-      });
+      };
+      
+      const blob = await imglyRemoveBackground(file, config);
 
       // Temizleme başarıyla bitti!
       if(currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);

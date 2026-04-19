@@ -586,11 +586,11 @@ img {
   #hero {
     padding: 100px 24px 80px;
     height: auto;
-    min-height: auto;
+    min-height: 100svh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
   }
   .hero-inner {
     grid-template-columns: 1fr;
@@ -619,70 +619,76 @@ img {
   .hero-tools-wrapper {
     display: flex !important;
     position: absolute;
-    bottom: 0; right: 0; left: 0; top: auto;
+    bottom: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    top: auto !important;
     transform: none !important;
-    width: 100%;
-    margin: 0;
-    height: auto;
-    min-height: 0; max-height: none;
-    flex-direction: row;
-    align-items: center;
-    gap: 0;
-    padding: 0;
-    border-top: 0.5px solid var(--border);
-    border-bottom: 0;
-    background: rgba(10,10,10,0.92);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    width: 100vw !important;
+    margin: 0 !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    max-height: 48px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    border-top: 0.5px solid var(--border) !important;
+    border-bottom: 0 !important;
+    background: rgba(10,10,10,0.92) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
     opacity: 0;
     animation: toolFadeIn 1s var(--ease-out) 1.2s forwards;
-    z-index: 10;
+    z-index: 10 !important;
   }
   .hero-tools-title {
     display: flex !important;
-    align-items: center;
-    white-space: nowrap;
-    font-size: 9px;
-    letter-spacing: .18em;
-    color: var(--accent);
-    opacity: 0.85;
-    padding: 0 14px;
-    border-right: 0.5px solid var(--border);
-    margin-bottom: 0;
-    height: 46px;
-    flex-shrink: 0;
+    align-items: center !important;
+    white-space: nowrap !important;
+    font-size: 9px !important;
+    letter-spacing: .18em !important;
+    color: var(--accent) !important;
+    opacity: 0.85 !important;
+    padding: 0 14px !important;
+    border-right: 0.5px solid var(--border) !important;
+    margin-bottom: 0 !important;
+    height: 48px !important;
+    flex-shrink: 0 !important;
   }
   .hero-tools-marquee {
-    flex: 1;
-    width: 0;
-    height: 46px;
-    overflow: hidden;
-    perspective: none;
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
-    mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%);
+    flex: 1 !important;
+    width: 0 !important;
+    height: 48px !important;
+    overflow: hidden !important;
+    perspective: none !important;
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%) !important;
+    mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%) !important;
   }
   .tools-track {
+    display: flex !important;
     flex-direction: row !important;
-    width: max-content;
-    height: 100%;
-    align-items: center;
-    gap: 10px;
-    padding: 0 12px;
+    width: max-content !important;
+    height: 100% !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 0 12px !important;
     transform-style: flat !important;
   }
   .tool-btn {
     width: auto !important;
-    white-space: nowrap;
-    padding: 7px 13px;
-    font-size: 11px;
-    border-radius: 100px;
+    height: auto !important;
+    white-space: nowrap !important;
+    padding: 7px 13px !important;
+    font-size: 11px !important;
+    border-radius: 100px !important;
     transform: none !important;
     opacity: 1 !important;
-    flex-shrink: 0;
-    gap: 8px;
+    flex-shrink: 0 !important;
+    gap: 8px !important;
   }
-  .tool-btn svg { width: 15px; height: 15px; }
-  .tool-btn::after { display: none; }
+  .tool-btn svg { width: 15px !important; height: 15px !important; }
+  .tool-btn::after { display: none !important; }
 }
 
 @media (max-width: 600px) {
@@ -703,12 +709,12 @@ img {
   /* HERO */
   #hero {
     padding: 100px 20px 80px;
-    min-height: auto;
     height: auto;
+    min-height: 100svh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
   }
   .hero-inner { padding-top: 10px; gap: var(--space-md); }
   .hero-label  { margin-bottom: 14px; }

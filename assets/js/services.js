@@ -1,5 +1,11 @@
 (function() {
-  if (typeof gsap === 'undefined') return;
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') {
+    document.querySelectorAll('.srv-eyebrow, .srv-line, .srv-hero-sub, .srv-hero-scroll-hint, .srv-item, .process-step, .srv-cta-title, .srv-cta-sub, #srv-cta .btn').forEach(el => {
+      el.style.opacity = '1';
+      el.style.transform = 'none';
+    });
+    return;
+  }
 
   gsap.registerPlugin(ScrollTrigger);
 

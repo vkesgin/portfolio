@@ -1,5 +1,13 @@
 (function() {
-  if (typeof gsap === 'undefined') return;
+  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') {
+    // GSAP yüklenmediyse opsiyonel öğeleri görünür yap (Fallback)
+    document.querySelectorAll('.abt-eyebrow, .abt-line, .abt-hero-meta, .abt-bio-p, .abt-photo-wrap, .abt-contact-row, .tool-group, .abt-tl-item, .abt-stat').forEach(el => {
+      el.style.opacity = '1';
+      el.style.transform = 'none';
+    });
+    return;
+  }
+  
   gsap.registerPlugin(ScrollTrigger);
 
   gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .2 })

@@ -1517,6 +1517,9 @@ img {
   pointer-events: none;
   display: flex; align-items: center; justify-content: center;
   visibility: hidden;
+  transform: translateZ(0);
+  will-change: transform;
+  isolation: isolate;
 }
 #pt-overlay.is-visible { visibility: visible; pointer-events: all; }
 

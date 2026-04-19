@@ -12,31 +12,27 @@
     </div>`;
   document.body.appendChild(overlay);
 
+  function forceReflow(el) { void el.getBoundingClientRect(); }
+
   function playEnter() {
     overlay.classList.add('is-visible');
     overlay.classList.remove('is-closing');
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        overlay.classList.add('is-open');
-        setTimeout(() => {
-          overlay.classList.add('is-closing');
-          setTimeout(() => {
-            overlay.classList.remove('is-visible', 'is-open', 'is-closing');
-          }, DURATION);
-        }, 400);
-      });
-    });
+    forceReflow(overlay);
+    overlay.classList.add('is-open');
+    setTimeout(() => {
+      overlay.classList.add('is-closing');
+      setTimeout(() => {
+        overlay.classList.remove('is-visible', 'is-open', 'is-closing');
+      }, DURATION);
+    }, 400);
   }
 
   function playLeave(href) {
     return new Promise(resolve => {
       overlay.classList.add('is-visible');
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          overlay.classList.add('is-open');
-          setTimeout(resolve, DURATION);
-        });
-      });
+      forceReflow(overlay);
+      overlay.classList.add('is-open');
+      setTimeout(resolve, DURATION);
     }).then(() => { window.location.href = href; });
   }
 

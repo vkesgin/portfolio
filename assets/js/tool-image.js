@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const qualitySlider = document.getElementById('qualitySlider');
   const qualityVal = document.getElementById('qualityVal');
   const settingsPanel = document.getElementById('settingsPanel');
-  
+
   const emptyState = document.getElementById('emptyState');
   const imagePreview = document.getElementById('imagePreview');
   const statsPanel = document.getElementById('statsPanel');
@@ -40,11 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
     uploadZone.classList.remove('dragover');
     let dt = e.dataTransfer;
     let files = dt.files;
-    if(files.length > 0) handleFile(files[0]);
+    if (files.length > 0) handleFile(files[0]);
   }
 
   imageInput.addEventListener('change', (e) => {
-    if(e.target.files.length > 0) handleFile(e.target.files[0]);
+    if (e.target.files.length > 0) handleFile(e.target.files[0]);
   });
 
   function handleFile(file) {
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
       alert('Lütfen sadece görsel (PNG, JPG, vb.) yükleyin.');
       return;
     }
-    
+
     originalFile = file;
 
     const reader = new FileReader();
@@ -65,11 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsPanel.style.display = 'block';
         statsPanel.style.display = 'block';
         downloadBtn.style.display = 'flex';
-        
+
         // Canvas Setup (Orjinal Boyutunda render alıcaz)
         offscreenCanvas.width = img.width;
         offscreenCanvas.height = img.height;
-        
+
         processImage();
       };
       img.src = e.target.result;
@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   function processImage() {
-    if(!originalImage) return;
+    if (!originalImage) return;
 
     // Fotoğrafı orjinal boyutunda tekrar canvas'a çiz.
     // Ancak arkası şeffaf PNG'ler JPEG yapıldığında siyah kalmasın diye önce bembeyaz boyayalım
@@ -114,10 +114,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let diff = origBytes - newBytes;
     if (diff < 0) diff = 0; // if it got bigger somehow
-    
+
     let percent = Math.round((diff / origBytes) * 100);
-    
-    if(percent > 0) {
+
+    if (percent > 0) {
       gainBanner.style.background = 'rgba(0,229,255,0.1)';
       gainBanner.style.border = '1px solid rgba(0,229,255,0.3)';
       gainBanner.style.color = 'var(--accent)';
@@ -131,16 +131,16 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function formatBytes(bytes, decimals = 2) {
-      if (!+bytes) return '0 Bytes';
-      const k = 1024;
-      const dm = decimals < 0 ? 0 : decimals;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+    if (!+bytes) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
   }
 
   downloadBtn.addEventListener('click', () => {
-    if(!compressedDataUrl) return;
+    if (!compressedDataUrl) return;
     const link = document.createElement('a');
     link.href = compressedDataUrl;
     link.download = `kucultulmus-gorsel.jpg`;

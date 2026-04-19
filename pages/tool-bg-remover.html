@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Ücretsiz, güvenli ve internetsiz olarak fotoğraflarınızın arka planını yapay zeka ile şeffaf hale getirin (PNG). Sınırsız temizleme imkanı.">
+  <meta name="keywords" content="arka plan silici, fotoğraf arka planı temizleme, transparan yapma, ücretsiz arkaplan kesici, ai background remover, fotoğraftan adam alma, ücretsiz png çevirici">
+  <meta property="og:title" content="Yapay Zeka Arka Plan Silici — Ücretsiz Onnx.js">
+  <meta property="og:description" content="Fotoğraflarınızın zeminini bilgisayarınızın gücüyle (sunucuya yüklemeden) milisaniyeler içinde kusursuzca silin.">
+  <title>Yapay Zeka Arka Plan Silici — Araçlar</title>
+  <link rel="stylesheet" href="../assets/css/reset.css">
+  <link rel="stylesheet" href="../assets/css/variables.css">
+  <link rel="stylesheet" href="../assets/css/global.css">
+  <link rel="stylesheet" href="../assets/css/tool.css">
+</head>
+<body>
+
+  <div id="header-placeholder"></div>
+
+  <main>
+    <section id="tool-hero">
+      <div class="tool-hero-inner">
+        <p class="section-eyebrow">// araçlar — no: 05</p>
+        <h1 class="tool-title">
+          <span class="tool-line">YAPAY ZEKA İLE</span>
+          <span class="tool-line outline-text">ARKA PLAN SİLİCİ</span>
+        </h1>
+        <p class="tool-desc">
+          İleri düzey WebAssembly yapay zeka modelimizle fotoğraflarınızın arka planını kusursuzca temizleyin.<br>
+          Görselleriniz hiçbir sunucuya yüklenmeden %100 gizlilikle kendi cihazınızda işlenir.
+        </p>
+      </div>
+    </section>
+
+    <section id="tool-app">
+      <div class="tool-app-inner">
+        <div class="tool-card">
+          
+          <div class="tool-card-left">
+            <h2 class="tool-step">Adım 1: Fotoğraf Yükle</h2>
+            <p class="tool-step-desc">Arkasını şeffaf yapmak istediğiniz herhangi bir görseli (JPG, PNG) ekleyin.</p>
+            
+            <label for="imageInput" class="upload-zone" id="uploadZone">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              <span>Temizletmek İçin Tıklayın<br><small>veya sürükleyip bırakın</small></span>
+              <input type="file" id="imageInput" accept="image/png, image/jpeg, image/webp" hidden>
+            </label>
+            
+            <div id="originalPreview" style="display:none; margin-top: 24px;">
+              <h3 style="font-size: 13px; color: var(--text-muted); margin-bottom: 8px;">Asıl Fotoğraf:</h3>
+              <div class="qr-preview-box" style="padding: 10px;">
+                <img id="sourceImage" src="" alt="Asıl" style="border-radius: 8px; max-width: 100%; height: auto !important; max-height: 180px;">
+              </div>
+            </div>
+            
+          </div>
+          
+          <div class="tool-card-right">
+            <h2 class="tool-step">Adım 2: Zeka ile Temizlendi!</h2>
+            <p class="tool-step-desc">Arka planı sökülen görseli hemen aşağıdan indirebilirsiniz.</p>
+            
+            <div id="emptyState" class="empty-state" style="margin-top: 40px;">
+              İşlem yapay zeka bekliyor...
+            </div>
+            
+            <div id="loadingStatus" class="gain-banner" style="display:none; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: var(--text-muted); margin-top: 24px; line-height:1.6;">
+              <div class="spinner" style="font-size: 16px; margin-bottom:8px;">✨</div>
+              Wasm Zeka Modeli Başlatıldı...<br>
+              <small>(Bu işlem cihazınızın hızına bağlı olarak 5 ~ 20 saniye sürebilir, bekleyin)</small>
+            </div>
+            
+            <div id="resultPreview" style="display:none; margin-top: 24px;">
+              <div class="qr-preview-box transparent-bg" style="min-height: 180px; padding: 10px;">
+                <img id="outputImage" src="" alt="Kesilmiş Resim" style="max-width: 100%; max-height: 250px; height: auto !important;">
+              </div>
+              
+              <button class="btn btn-primary btn-full" id="downloadBtn" style="margin-top: 20px;">
+                Transparan Görseli İndir ↓
+              </button>
+            </div>
+            
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="../assets/js/inject.js"></script>
+  <script>
+    document.addEventListener('componentsLoaded', () => {
+      const s = document.createElement('script');
+      s.src = '../assets/js/main.js';
+      document.body.appendChild(s);
+    });
+  </script>
+  <script type="module" src="../assets/js/tool-bg-remover.js"></script>
+</body>
+</html>

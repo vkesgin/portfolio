@@ -1,3 +1,8 @@
+@import "about.css";
+@import "contact.css";
+@import "portfolio.css";
+@import "services.css";
+
 body {
   background: var(--bg-primary);
   color: var(--text-primary);

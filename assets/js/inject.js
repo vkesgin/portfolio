@@ -1,7 +1,7 @@
 // Kaç klasör derinlikte olduğumuzu otomatik hesapla
 const depth   = location.pathname.split('/').filter(Boolean).length;
 const isPages = location.pathname.includes('/pages/');
-const base    = isPages ? '../' : './';
+const base    = '/';
 
 async function injectComponent(selector, file) {
   try {

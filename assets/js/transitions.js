@@ -59,8 +59,7 @@ function reinitPage(container) {
     window.injectComponents().then(() => {
       // main.js'i yeniden yükle
       const s = document.createElement('script');
-      const isPages = location.pathname.includes('/pages/');
-      s.src = (isPages ? '../' : './') + 'assets/js/main.js?t=' + Date.now();
+      s.src = '/assets/js/main.js?t=' + Date.now();
       document.body.appendChild(s);
 
       // Sayfa özel scriptleri
@@ -73,7 +72,7 @@ function reinitPage(container) {
 
       scripts.forEach(name => {
         const ps = document.createElement('script');
-        ps.src = (isPages ? '../' : './') + 'assets/js/' + name + '?t=' + Date.now();
+        ps.src = '/assets/js/' + name + '?t=' + Date.now();
         document.body.appendChild(ps);
       });
     });

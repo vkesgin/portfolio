@@ -1,0 +1,7 @@
+.git
+node_modules
+scratch
+scratch2
+assets/models
+*.tgz
+*.pack

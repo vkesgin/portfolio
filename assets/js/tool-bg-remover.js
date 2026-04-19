@@ -74,7 +74,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       };
       
-      const blob = await imglyRemoveBackground(file, config);
+      if (typeof window.imglyRemoveBackground === 'undefined') {
+        throw new Error("Yapay Zeka kütüphanesi henüz yüklenmedi, saniyeler içinde tekrar deneyin.");
+      }
+
+      const blob = await window.imglyRemoveBackground(file, config);
 
       // Temizleme başarıyla bitti!
       if(currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);

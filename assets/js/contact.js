@@ -3,9 +3,9 @@
 // emailjs.com → Account → Public Key
 const EMAILJS_PUBLIC_KEY  = 'ZCzUKlv3tX5NekKgR';
 // emailjs.com → Email Services → Service ID
-const EMAILJS_SERVICE_ID  = 'BURAYA_SERVICE_ID';
+const EMAILJS_SERVICE_ID  = 'service_btaba6d';
 // emailjs.com → Email Templates → Template ID
-const EMAILJS_TEMPLATE_ID = 'BURAYA_TEMPLATE_ID';
+const EMAILJS_TEMPLATE_ID = 'template_0iyedpa';
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -11,60 +11,63 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // QR Kodu Tutucu
-  let qrCodeInstance = null;
+  const formatSelect = document.getElementById('formatSelect');
 
   function generateQR() {
     const text = qrInput.value.trim();
+    const format = formatSelect ? formatSelect.value : 'jpg';
+    const bgCol = format === 'png' ? 'transparent' : '#ffffff';
     
     if (text.length === 0) {
       qrcodeDiv.innerHTML = '';
       emptyState.style.display = 'block';
       downloadBtn.style.display = 'none';
-      qrCodeInstance = null;
+      document.getElementById('downloadOptions').style.display = 'none';
       return;
     }
 
-    // İlk defa oluşturuyorsak
-    if (!qrCodeInstance) {
-      emptyState.style.display = 'none';
-      downloadBtn.style.display = 'flex';
-      qrCodeInstance = new QRCode(qrcodeDiv, {
-        text: text,
-        width: 256,
-        height: 256,
-        colorDark : "#000000",
-        colorLight : "#ffffff",
-        correctLevel : QRCode.CorrectLevel.H
-      });
-    } else {
-      // Zaten varsa sadece içeriği güncelle
-      qrCodeInstance.clear();
-      qrCodeInstance.makeCode(text);
-    }
+    // Seçime göre arka plan rengini değiştirmek için mecburen divi temizleyip yeniden basıyoruz
+    qrcodeDiv.innerHTML = '';
+    emptyState.style.display = 'none';
+    downloadBtn.style.display = 'flex';
+    document.getElementById('downloadOptions').style.display = 'flex';
+    
+    new QRCode(qrcodeDiv, {
+      text: text,
+      width: 512, // indirmede yüksek çözünürlük için büyük çizdiriyor, CSS ile küçük gösteriyoruz
+      height: 512,
+      colorDark : "#000000",
+      colorLight : bgCol,
+      correctLevel : QRCode.CorrectLevel.H
+    });
   }
 
-  // Kullanıcı her harf girdiğinde otomatik güncelle
+  // Kullanıcı her harf girdiğinde veya format değiştirdiğinde otomatik güncelle
   qrInput.addEventListener('input', generateQR);
+  if (formatSelect) {
+    formatSelect.addEventListener('change', generateQR);
+  }
 
   // İndirme Butonu İşlevi
   downloadBtn.addEventListener('click', () => {
-    // QRCode.js div içerisine önce canvas sonra da eğer destekliyorsa image atar.
-    // Biz image'ı bularak indirebiliriz (veya canvası).
-    const qrImage = qrcodeDiv.querySelector('img');
     const qrCanvas = qrcodeDiv.querySelector('canvas');
+    if (!qrCanvas) return;
     
+    const format = formatSelect ? formatSelect.value : 'jpg';
     let imageSrc = '';
     
-    if (qrImage && qrImage.src) {
-        imageSrc = qrImage.src;
-    } else if (qrCanvas) {
-        imageSrc = qrCanvas.toDataURL("image/png");
+    if (format === 'png') {
+       // Saydam destekler (transparent arka planla üretildiği için saydam kalır)
+       imageSrc = qrCanvas.toDataURL("image/png");
+    } else {
+       // Beyaz arka planla üretildiği için güvenle JPG çıkarabiliriz
+       imageSrc = qrCanvas.toDataURL("image/jpeg", 1.0);
     }
 
     if (imageSrc) {
       const link = document.createElement('a');
       link.href = imageSrc;
-      link.download = 'karekod-ozel.png';
+      link.download = `karekod.${format}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

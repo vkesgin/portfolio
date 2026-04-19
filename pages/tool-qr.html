@@ -58,7 +58,15 @@
               <p class="empty-state" id="emptyState">Henüz metin girilmedi...</p>
             </div>
             
-            <button class="btn btn-primary btn-full" id="downloadBtn" style="margin-top:20px; font-size:14px; display:none;">
+            <div class="input-group" style="margin-top:20px; margin-bottom:0;" id="downloadOptions">
+              <label for="formatSelect">İndirme Formatı:</label>
+              <select id="formatSelect">
+                <option value="jpg" selected>JPG (Beyaz Arka Planlı)</option>
+                <option value="png">PNG (Şeffaf / Arka Plansız)</option>
+              </select>
+            </div>
+            
+            <button class="btn btn-primary btn-full" id="downloadBtn" style="margin-top:14px; font-size:14px; display:none;">
               Karekodu İndir ↓
             </button>
           </div>

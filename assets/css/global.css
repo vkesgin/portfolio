@@ -310,10 +310,10 @@ img {
 /* === HERO TOOLS (ARAÇLAR) === */
 .hero-tools-wrapper {
   position: absolute;
-  right: 180px; /* Sağa olan uzaklık artırıldı (merkeze yaklaştı) */
+  right: 180px; 
   top: 50%;
   transform: translateY(-50%);
-  width: 300px; /* Genişlik artırıldı */
+  width: 450px; /* Genişletildi: 3D ölçekleme için yer açıldı */
   height: 65vh;
   min-height: 500px;
   max-height: 700px;
@@ -338,18 +338,11 @@ img {
   position: relative;
   flex: 1;
   width: 100%;
-  overflow: hidden;
+  overflow-y: hidden;
+  overflow-x: visible; /* Yanlardan kesilmeyi önler */
   /* 3D kavisli carousel efekti derinleştirildi */
-  perspective: 1200px;
+  perspective: 1500px;
   -webkit-mask-image: linear-gradient(to bottom,
-    transparent 0%,
-    rgba(0,0,0,0.3) 10%,
-    black 35%,
-    black 65%,
-    rgba(0,0,0,0.3) 90%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(to bottom,
     transparent 0%,
     rgba(0,0,0,0.3) 10%,
     black 35%,
@@ -364,8 +357,9 @@ img {
   flex-direction: column;
   gap: 16px;
   padding: 10px 0;
+  align-items: center; /* Butonları ortala */
   will-change: transform;
-  /* GSAP will handle animation for better control during hover pauses */
+  transform-style: preserve-3d;
 }
 
 /* Hover pause handled via GSAP in main.js */
@@ -375,7 +369,7 @@ img {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  width: 250px; /* Sabit genişlik: Ölçeklendiğinde taşmaması için */
   padding: 14px 18px;
   background: rgba(255, 255, 255, 0.02);
   border: 0.5px solid rgba(255, 255, 255, 0.06);

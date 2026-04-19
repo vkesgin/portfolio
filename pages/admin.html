@@ -382,10 +382,14 @@ window.captureVideoFrame = function(e) {
   
   canvas.toBlob(blob => {
     const file = new File([blob], "video-thumb.jpg", { type: "image/jpeg" });
-    const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(file);
-    const imgInput = document.getElementById('imgFile');
-    imgInput.files = dataTransfer.files;
+    window.extractedVideoThumb = file; // SAFEBOUND NATIVE MEMORY
+
+    try {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      document.getElementById('imgFile').files = dataTransfer.files;
+    } catch(err) { console.warn('Input files sync failed, using memory blob'); }
+
     previewFile(file, 'imgPreview');
   }, 'image/jpeg', 0.85);
 };
@@ -424,7 +428,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     let imgUrl = editingId ? allProjects.find(p=>p.id===editingId)?.image_url || '' : '';
     let vidUrl = editingId ? allProjects.find(p=>p.id===editingId)?.video_url || '' : '';
 
-    const imgFile = document.getElementById('imgFile').files[0];
+    const imgFile = document.getElementById('imgFile').files[0] || window.extractedVideoThumb;
     const vidFile = document.getElementById('vidFile').files[0];
 
     if (imgFile) { showProgress('Görsel yükleniyor...', 30); imgUrl = await uploadFile(imgFile, 'image'); }

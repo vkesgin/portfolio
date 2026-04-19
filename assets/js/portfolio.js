@@ -28,13 +28,9 @@
 
     // Animasyon
     if (typeof gsap !== 'undefined') {
-      gsap.to('.port-card', {
-        opacity: 1,
-        duration: .5,
-        stagger: .04,
-        ease: 'power3.out',
-        delay: .1
-      });
+      setTimeout(() => {
+        gsap.to('.port-card', { opacity: 1, duration: .5, stagger: .04, ease: 'power3.out' });
+      }, 50);
     } else {
       document.querySelectorAll('.port-card').forEach(c => c.style.opacity = '1');
     }
@@ -44,6 +40,12 @@
     projects.forEach(p => { counts[p.category] = (counts[p.category]||0)+1; });
     const fcAll = document.getElementById('fc-all');
     if (fcAll) fcAll.textContent = projects.length;
+
+    // Reset others
+    document.querySelectorAll('.filter-count').forEach(el => {
+      if (el.id !== 'fc-all') el.textContent = '0';
+    });
+
     Object.entries(counts).forEach(([cat, n]) => {
       const el = document.getElementById('fc-' + cat);
       if (el) el.textContent = n;

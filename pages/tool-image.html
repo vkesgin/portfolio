@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Görsel Küçültücü — Araçlar</title>
+  <link rel="stylesheet" href="../assets/css/reset.css">
+  <link rel="stylesheet" href="../assets/css/variables.css">
+  <link rel="stylesheet" href="../assets/css/global.css">
+  <link rel="stylesheet" href="../assets/css/tool.css">
+</head>
+<body>
+
+  <div id="header-placeholder"></div>
+
+  <main>
+    <section id="tool-hero">
+      <div class="tool-hero-inner">
+        <p class="section-eyebrow">// araçlar — no: 02</p>
+        <h1 class="tool-title">
+          <span class="tool-line">GÖRSEL</span>
+          <span class="tool-line outline-text">KÜÇÜLTÜCÜ</span>
+        </h1>
+        <p class="tool-desc">
+          Fotoğraflarınızın kalitesini bozmadan dosya boyutunu milisaniyeler içinde düşürün.<br>
+          Sunucuya hiçbir veri gitmez, web siteleri hızlanır.
+        </p>
+      </div>
+    </section>
+
+    <section id="tool-app">
+      <div class="tool-app-inner">
+        <div class="tool-card">
+          
+          <!-- LEFT: INPUT & SETTINGS -->
+          <div class="tool-card-left">
+            <h2 class="tool-step">Adım 1: Görselini Seç</h2>
+            <p class="tool-step-desc">Boyutunu düşürmek istediğiniz (JPG veya PNG) görseli seçin.</p>
+            
+            <!-- Custom File Upload Zone -->
+            <label for="imageInput" class="upload-zone" id="uploadZone">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <span>Görsel Yüklemek İçin Tıklayın<br><small>veya sürükleyip bırakın</small></span>
+              <input type="file" id="imageInput" accept="image/*" hidden>
+            </label>
+            
+            <div id="settingsPanel" style="display: none; margin-top: 30px;">
+              <div class="input-group">
+                <label for="qualitySlider" style="display:flex; justify-content:space-between;">
+                  <span>Sıkıştırma Kalitesi</span>
+                  <span id="qualityVal" style="color:var(--accent);">80%</span>
+                </label>
+                <input type="range" id="qualitySlider" min="0.1" max="1" step="0.05" value="0.8">
+              </div>
+
+              <div class="tool-info-box">
+                <span class="info-icon">💡</span>
+                <p>Çubuğu sola çektikçe dosya boyutu daha çok düşer fakat kalitede azalma olabilir.</p>
+              </div>
+            </div>
+            
+          </div>
+          
+          <!-- RIGHT: PREVIEW & DOWNLOAD -->
+          <div class="tool-card-right">
+            <h2 class="tool-step">Adım 2: Çıktıyı İndir</h2>
+            <p class="tool-step-desc">Yeni sıkıştırılmış görselin kalite önizlemesi ve kazanç tablosu.</p>
+            
+            <!-- PREVIEW AREA -->
+            <div class="qr-preview-box" style="flex-direction:column; padding: 20px;">
+              <p class="empty-state" id="emptyState">Henüz görsel seçilmedi...</p>
+              <img id="imagePreview" src="" alt="Preview" style="display:none; max-width: 100%; height: auto !important; object-fit: contain; max-height: 180px;">
+            </div>
+
+            <!-- STATS PANEL (Hidden default) -->
+            <div id="statsPanel" style="display:none; margin-top:20px;">
+              <div class="stats-comparison">
+                <div class="stat-col">
+                  <span class="stat-lbl">Orijinal Boyut</span>
+                  <span class="stat-val" id="origSizeStr">-</span>
+                </div>
+                <div class="stat-col">
+                  <span class="stat-lbl">Yeni Boyut</span>
+                  <span class="stat-val" id="newSizeStr" style="color:var(--accent);">-</span>
+                </div>
+              </div>
+              <div class="gain-banner" id="gainBanner">
+                Tasarruf: %0
+              </div>
+            </div>
+            
+            <button class="btn btn-primary btn-full" id="downloadBtn" style="margin-top:20px; font-size:14px; display:none;">
+              Sıkıştırılmış Görseli İndir ↓
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Gizli Canvas (Görseli işlemek için) -->
+  <canvas id="offscreenCanvas" style="display:none;"></canvas>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="../assets/js/inject.js"></script>
+  <script>
+    document.addEventListener('componentsLoaded', () => {
+      const s = document.createElement('script');
+      s.src = '../assets/js/main.js';
+      document.body.appendChild(s);
+    });
+  </script>
+  <script src="../assets/js/tool-image.js"></script>
+</body>
+</html>

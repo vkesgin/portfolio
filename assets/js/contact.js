@@ -1,7 +1,7 @@
 // ============================================================
 // EmailJS ayarları — kendi değerlerinle değiştir
 // emailjs.com → Account → Public Key
-const EMAILJS_PUBLIC_KEY  = 'BURAYA_PUBLIC_KEY';
+const EMAILJS_PUBLIC_KEY  = 'ZCzUKlv3tX5NekKgR';
 // emailjs.com → Email Services → Service ID
 const EMAILJS_SERVICE_ID  = 'BURAYA_SERVICE_ID';
 // emailjs.com → Email Templates → Template ID

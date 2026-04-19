@@ -267,6 +267,7 @@ img {
   opacity: 0;
   transform: translateX(40px);
   will-change: transform;
+  margin-right: 80px; /* Araçlar menüsünden uzaklaştırıldı */
 }
 
 .hero-photo-inner {
@@ -283,13 +284,15 @@ img {
   width: 100%; height: 100%;
   object-fit: cover;
   object-position: center top;
-  filter: brightness(.88) contrast(1.08);
-  transition: filter var(--dur-slow) var(--ease-out);
+  filter: grayscale(0.4) brightness(0.8) contrast(1.05);
+  opacity: 0.55; /* Daha az belirgin */
+  transition: filter var(--dur-slow) var(--ease-out), opacity var(--dur-slow) var(--ease-out);
   will-change: transform;
   display: block;
 }
 .hero-photo-inner:hover .hero-img {
-  filter: brightness(.7) contrast(1.15);
+  filter: grayscale(0) brightness(0.7) contrast(1.1);
+  opacity: 0.9;
 }
 
 /* Scanlines */
@@ -402,7 +405,7 @@ img {
 /* === HERO TOOLS (ARAÇLAR) === */
 .hero-tools-wrapper {
   position: absolute;
-  right: 40px; 
+  right: 24px; /* Kenara daha yakın, fotoğraftan daha uzak */
   top: 50%;
   transform: translateY(-50%);
   width: 450px; /* Genişletildi: 3D ölçekleme için yer açıldı */

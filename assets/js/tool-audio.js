@@ -331,11 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!audioBuffer) return;
 
     if (currentPlaySource) {
-      currentPlaySource.stop();
-      currentPlaySource = null;
-      cancelAnimationFrame(playAnimFrame);
-      playTrimmedBtn.textContent = '▶ Kırpılmışı Dinle';
-      renderWaveform(); // Playhead'i temizle
+      stopCurrentPlayback();
       return;
     }
 
@@ -382,6 +378,113 @@ document.addEventListener('DOMContentLoaded', () => {
       playTrimmedBtn.textContent = '▶ Kırpılmışı Dinle';
       renderWaveform();
     };
+  });
+
+  // === DRAGGING MARKERS ===
+  let isDraggingStart = false;
+  let isDraggingEnd = false;
+
+  function getMouseX(e) {
+    const rect = waveformCanvas.getBoundingClientRect();
+    const x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+    return Math.max(0, Math.min(x, canvasWidth));
+  }
+
+  waveformCanvas.addEventListener('mousedown', (e) => {
+    if (!audioBuffer) return;
+    const x = getMouseX(e);
+    const dur = audioBuffer.duration;
+    const trimS = parseFloat(trimStart.value);
+    const trimE = parseFloat(trimEnd.value);
+    const startX = (trimS / dur) * canvasWidth;
+    const endX = (trimE / dur) * canvasWidth;
+
+    // Click tolerance (15px)
+    if (Math.abs(x - startX) < 15) {
+      isDraggingStart = true;
+      stopCurrentPlayback();
+    } else if (Math.abs(x - endX) < 15) {
+      isDraggingEnd = true;
+      stopCurrentPlayback();
+    }
+  });
+
+  function stopCurrentPlayback() {
+    if (currentPlaySource) {
+      currentPlaySource.stop();
+      currentPlaySource = null;
+      cancelAnimationFrame(playAnimFrame);
+      playTrimmedBtn.textContent = '▶ Kırpılmışı Dinle';
+      renderWaveform();
+    }
+  }
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDraggingStart && !isDraggingEnd) return;
+    const x = getMouseX(e);
+    const dur = audioBuffer.duration;
+    const time = (x / canvasWidth) * dur;
+
+    if (isDraggingStart) {
+      if (time < parseFloat(trimEnd.value) - 0.1) {
+        trimStart.value = time;
+        trimStartVal.textContent = time.toFixed(1) + 's';
+      }
+    } else if (isDraggingEnd) {
+      if (time > parseFloat(trimStart.value) + 0.1) {
+        trimEnd.value = time;
+        trimEndVal.textContent = time.toFixed(1) + 's';
+      }
+    }
+    renderWaveform();
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDraggingStart = false;
+    isDraggingEnd = false;
+  });
+
+  // Touch support
+  waveformCanvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const x = getMouseX(e);
+    const dur = audioBuffer.duration;
+    const startX = (parseFloat(trimStart.value) / dur) * canvasWidth;
+    const endX = (parseFloat(trimEnd.value) / dur) * canvasWidth;
+    
+    if (Math.abs(x - startX) < 20) {
+      isDraggingStart = true;
+      stopCurrentPlayback();
+    } else if (Math.abs(x - endX) < 20) {
+      isDraggingEnd = true;
+      stopCurrentPlayback();
+    }
+  }, { passive: false });
+
+  window.addEventListener('touchmove', (e) => {
+    if (isDraggingStart || isDraggingEnd) {
+      e.preventDefault();
+      const x = getMouseX(e);
+      const dur = audioBuffer.duration;
+      const time = (x / canvasWidth) * dur;
+      if (isDraggingStart) {
+        if (time < parseFloat(trimEnd.value) - 0.1) {
+          trimStart.value = time;
+          trimStartVal.textContent = time.toFixed(1) + 's';
+        }
+      } else if (isDraggingEnd) {
+        if (time > parseFloat(trimStart.value) + 0.1) {
+          trimEnd.value = time;
+          trimEndVal.textContent = time.toFixed(1) + 's';
+        }
+      }
+      renderWaveform();
+    }
+  }, { passive: false });
+
+  window.addEventListener('touchend', () => {
+    isDraggingStart = false;
+    isDraggingEnd = false;
   });
 
   // === WAV İNDİR ===

@@ -64,9 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function processBackgroundRemoval(file) {
     try {
-      // Configuration strictly pointing back to unpkg for raw WASM files over HTTPS!
+      // Optimizasyonlar: Çıktı boyutu otomatik algılanır, çok ağır fotoları hızla işler.
       const config = {
-        publicPath: "https://unpkg.com/@imgly/background-removal@1.4.3/dist/",
         progress: (key, current, total) => {
           loadingStatus.innerHTML = `
             <div class="spinner" style="font-size: 16px; margin-bottom:8px;">✨</div>

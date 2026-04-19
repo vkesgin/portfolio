@@ -1,5 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof gsap !== 'undefined') {
+if (typeof gsap !== 'undefined') {
     gsap.registerPlugin(ScrollTrigger);
 
     // Hero
@@ -123,4 +122,3 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'ArrowLeft')  lbPrev.click();
     if (e.key === 'ArrowRight') lbNext.click();
   });
-});

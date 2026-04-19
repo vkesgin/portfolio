@@ -12,7 +12,6 @@ function loadBarba() {
   });
 }
 
-// Overlay elementi oluştur
 function createOverlay() {
   if (document.getElementById('page-overlay')) return;
   const el = document.createElement('div');
@@ -25,7 +24,6 @@ function createOverlay() {
   document.body.appendChild(el);
 }
 
-// Sayfaya giriş — overlay açılır, içerik gelir
 function enterAnim(container) {
   return new Promise(resolve => {
     const tl = gsap.timeline({ onComplete: resolve });
@@ -38,53 +36,65 @@ function enterAnim(container) {
   });
 }
 
-// Sayfadan çıkış — overlay kapanır
 function leaveAnim() {
   return new Promise(resolve => {
     const tl = gsap.timeline({ onComplete: resolve });
     tl.set('#page-overlay', { display: 'flex' })
       .set('.po-block--top',    { yPercent: -100 })
       .set('.po-block--bottom', { yPercent:  100 })
-      .set('.po-logo',          { opacity: 1 })
+      .set('.po-logo',          { opacity: 0 })
       .to('.po-block--top',     { yPercent: 0, duration: .65, ease: 'power4.inOut' })
       .to('.po-block--bottom',  { yPercent: 0, duration: .65, ease: 'power4.inOut' }, '<')
-      .to('.po-logo',           { opacity: 1, duration: .2 }, '<.3');
+      .to('.po-logo',           { opacity: 1, duration: .3, ease: 'power2.in' }, '<.25');
   });
 }
 
-// Yeni sayfanın script'lerini yeniden çalıştır
-function reinitPage(container) {
-  // Inject sistemi tekrar çalışsın
-  if (window.injectComponents) {
-    window.injectComponents().then(() => {
-      // main.js'i yeniden yükle
-      const s = document.createElement('script');
-      s.src = '/assets/js/main.js?t=' + Date.now();
-      document.body.appendChild(s);
+function ensurePageCSS() {
+  const page = location.pathname;
+  const cssMap = {
+    services:  '/assets/css/services.css',
+    portfolio: '/assets/css/portfolio.css',
+    about:     '/assets/css/about.css',
+    contact:   '/assets/css/contact.css',
+  };
+  Object.entries(cssMap).forEach(([key, href]) => {
+    if (page.includes(key) && !document.querySelector(`link[href="${href}"]`)) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      document.head.appendChild(link);
+    }
+  });
+}
 
-      // Sayfa özel scriptleri
-      const page = location.pathname;
-      const scripts = [];
-      if (page.includes('services'))  scripts.push('services.js');
-      if (page.includes('portfolio')) scripts.push('portfolio.js');
-      if (page.includes('about'))     scripts.push('about.js');
-      if (page.includes('contact'))   scripts.push('contact.js');
-
-      scripts.forEach(name => {
-        const ps = document.createElement('script');
-        ps.src = '/assets/js/' + name + '?t=' + Date.now();
-        document.body.appendChild(ps);
-      });
-    });
-  }
-
-  // ScrollTrigger'ı sıfırla
+function reinitPage() {
   if (typeof ScrollTrigger !== 'undefined') {
     ScrollTrigger.getAll().forEach(t => t.kill());
-    ScrollTrigger.refresh();
   }
 
-  // Sayfanın en üstüne dön
+  ensurePageCSS();
+
+  const ts = '?t=' + Date.now();
+  const page = location.pathname;
+
+  const s = document.createElement('script');
+  s.src = '/assets/js/main.js' + ts;
+  document.body.appendChild(s);
+
+  const scriptMap = {
+    services:  '/assets/js/services.js',
+    portfolio: '/assets/js/portfolio.js',
+    about:     '/assets/js/about.js',
+    contact:   '/assets/js/contact.js',
+  };
+  Object.entries(scriptMap).forEach(([key, src]) => {
+    if (page.includes(key)) {
+      const ps = document.createElement('script');
+      ps.src = src + ts;
+      document.body.appendChild(ps);
+    }
+  });
+
   window.scrollTo(0, 0);
 }
 
@@ -100,8 +110,9 @@ async function initBarba() {
         current.container.remove();
       },
       async enter({ next }) {
-        reinitPage(next.container);
+        reinitPage();
         await enterAnim(next.container);
+        if (typeof ScrollTrigger !== 'undefined') ScrollTrigger.refresh();
       }
     }],
     views: [{
@@ -109,20 +120,19 @@ async function initBarba() {
       afterEnter() { window.scrollTo(0, 0); }
     }],
     prevent({ el }) {
-      // Hash linkleri, dış linkler, araç sayfaları geçişi engelle
-      if (el.href && el.href.includes('#')) return true;
-      if (el.href && !el.href.includes(location.hostname)) return true;
-      if (el.href && el.href.includes('tool-')) return true;
+      if (!el.href) return false;
+      if (el.href.includes('#')) return true;
+      if (!el.href.includes(location.hostname)) return true;
+      if (el.href.includes('tool-')) return true;
       return false;
     }
   });
 }
 
-// Barba başlat
 if (typeof gsap !== 'undefined') {
   initBarba();
 } else {
-  document.addEventListener('DOMContentLoaded', () => {
+  window.addEventListener('load', () => {
     if (typeof gsap !== 'undefined') initBarba();
   });
 }

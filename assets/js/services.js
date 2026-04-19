@@ -1,7 +1,6 @@
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof gsap === 'undefined') return;
+if (typeof gsap === 'undefined') return;
 
-  gsap.registerPlugin(ScrollTrigger);
+gsap.registerPlugin(ScrollTrigger);
 
   // Hero animasyonu
   gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .2 })
@@ -34,4 +33,3 @@ document.addEventListener('DOMContentLoaded', () => {
     .to('.srv-cta-title', { opacity: 1, y: 0, duration: 1 })
     .to('.srv-cta-sub',   { opacity: 1, y: 0, duration: .7 }, '-=.5')
     .to('#srv-cta .btn',  { opacity: 1, y: 0, duration: .6 }, '-=.4');
-});

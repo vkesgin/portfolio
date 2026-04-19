@@ -8,10 +8,8 @@ const EMAILJS_SERVICE_ID  = 'service_btaba6d';
 const EMAILJS_TEMPLATE_ID = 'template_0iyedpa';
 // ============================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-
-  // EmailJS init
-  if (typeof emailjs !== 'undefined') {
+// EmailJS init
+if (typeof emailjs !== 'undefined') {
     emailjs.init(EMAILJS_PUBLIC_KEY);
   }
 
@@ -131,7 +129,6 @@ document.addEventListener('DOMContentLoaded', () => {
       submitBtn.disabled = false;
     }
   });
-});
 
 window.resetForm = function() {
   const form    = document.getElementById('contactForm');

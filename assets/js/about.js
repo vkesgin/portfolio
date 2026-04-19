@@ -1,6 +1,5 @@
-document.addEventListener('DOMContentLoaded', () => {
-  if (typeof gsap === 'undefined') return;
-  gsap.registerPlugin(ScrollTrigger);
+if (typeof gsap === 'undefined') return;
+gsap.registerPlugin(ScrollTrigger);
 
   // Hero girişi
   gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .2 })
@@ -84,4 +83,3 @@ document.addEventListener('DOMContentLoaded', () => {
     .to('.abt-cta-title', { opacity: 1, y: 0, duration: 1 })
     .to('.abt-cta-sub',   { opacity: 1, y: 0, duration: .7 }, '-=.5')
     .to('#abt-cta .btn',  { opacity: 1, duration: .6 }, '-=.4');
-});

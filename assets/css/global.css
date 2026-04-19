@@ -582,9 +582,16 @@ img {
 }
 
 /* === CATCH-ALL FOR TABLETS & SMALL DESKTOPS (Tools Strip Overlap Fix) === */
-@media (max-width: 1200px) {
+@media (max-width: 1440px) {
   #hero { padding-bottom: 80px; }
   .hero-scroll { display: none !important; }
+
+  .hero-inner {
+    gap: 40px; 
+  }
+  .line {
+    font-size: clamp(60px, 10vw, 140px);
+  }
 
   .hero-tools-wrapper {
     display: flex !important;

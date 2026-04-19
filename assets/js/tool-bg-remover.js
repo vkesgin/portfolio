@@ -96,26 +96,26 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const config = {
         publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.4.3/dist/",
+        model: "small", // 'medium' ~40MB, 'small' ~10MB — çok daha hızlı yüklenir
         progress: (key, current, total) => {
-          // key examples: "fetch:models/medium", "compute:inference", etc.
           if (key.startsWith('fetch:')) {
-            // Stage 1: Model yükleniyor
-            const pct = total > 0 ? Math.round((current / total) * 40) + 5 : 15;
-            setProgressStage(1, '📦 Model İndiriliyor...', `${key.replace('fetch:','')} — ${current}/${total} parça`, Math.min(pct, 45));
+            const fileName = key.replace('fetch:','').split('/').pop();
+            if (total > 0) {
+              const mb = (current / (1024*1024)).toFixed(1);
+              const totalMb = (total / (1024*1024)).toFixed(1);
+              const pct = Math.round((current / total) * 50) + 5;
+              setProgressStage(1, '📦 Model İndiriliyor...', `${fileName} — ${mb}MB / ${totalMb}MB`, Math.min(pct, 55));
+            } else {
+              setProgressStage(1, '📦 Model İndiriliyor...', `${fileName} yükleniyor...`, 15);
+            }
           } else if (key === 'compute:inference') {
-            // Stage 3: Analiz yapılıyor
-            const pct = total > 0 ? Math.round((current / total) * 30) + 55 : 70;
-            setProgressStage(3, '🔬 Yapay Zeka Analiz Ediyor...', 'Nöral ağ pikselleri sınıflandırıyor...', Math.min(pct, 85));
+            const pct = total > 0 ? Math.round((current / total) * 30) + 60 : 70;
+            setProgressStage(3, '🔬 Yapay Zeka Analiz Ediyor...', 'Nöral ağ pikselleri sınıflandırıyor...', Math.min(pct, 90));
           } else {
-            // Generic progress
-            const pct = total > 0 ? Math.round((current / total) * 20) + 45 : 50;
-            setProgressStage(2, '🖼️ Piksel Taraması...', `${key} işleniyor...`, Math.min(pct, 55));
+            setProgressStage(2, '🖼️ Piksel Taraması...', `${key} işleniyor...`, 55);
           }
         }
       };
-
-      // Stage 2 after fetch completes
-      setProgressStage(2, '🖼️ Piksel Taraması...', 'Görsel piksellere dönüştürülüyor...', 48);
       
       const blob = await window.imglyRemoveBackground(file, config);
 

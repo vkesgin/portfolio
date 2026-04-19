@@ -258,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
     for (let i = 0; i < waveformPeaks.length; i++) {
       const x = i * totalBarW;
       const peak = waveformPeaks[i];
-      const barH = Math.max(peak.amplitude / (waveformPeaks.reduce((a,b) => Math.max(a, b.amplitude), 0) || 1) * (h * 0.85), 2);
+      const barH = Math.max(peak.amplitude / (waveformPeaks.reduce((a, b) => Math.max(a, b.amplitude), 0) || 1) * (h * 0.85), 2);
       const y = mid - barH / 2;
 
       // Trim içi mi dışı mı?
@@ -453,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dur = audioBuffer.duration;
     const startX = (parseFloat(trimStart.value) / dur) * canvasWidth;
     const endX = (parseFloat(trimEnd.value) / dur) * canvasWidth;
-    
+
     if (Math.abs(x - startX) < 20) {
       isDraggingStart = true;
       stopCurrentPlayback();
@@ -507,11 +507,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const v = new DataView(buf);
     const ws = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
 
-    ws(0,'RIFF'); v.setUint32(4,36+ds,true); ws(8,'WAVE');
-    ws(12,'fmt '); v.setUint32(16,16,true); v.setUint16(20,1,true);
-    v.setUint16(22,nc,true); v.setUint32(24,sr,true);
-    v.setUint32(28,br,true); v.setUint16(32,ba,true); v.setUint16(34,16,true);
-    ws(36,'data'); v.setUint32(40,ds,true);
+    ws(0, 'RIFF'); v.setUint32(4, 36 + ds, true); ws(8, 'WAVE');
+    ws(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+    v.setUint16(22, nc, true); v.setUint32(24, sr, true);
+    v.setUint32(28, br, true); v.setUint16(32, ba, true); v.setUint16(34, 16, true);
+    ws(36, 'data'); v.setUint32(40, ds, true);
 
     let off = 44;
     for (let i = 0; i < length; i++) {

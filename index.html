@@ -38,7 +38,10 @@
 
 
 
-  <section id="hero">
+  <main data-barba="wrapper">
+    <div data-barba="container" data-barba-namespace="home">
+
+      <section id="hero">
     <div class="hero-inner">
       <div class="hero-text-side">
         <p class="hero-label">Creative Portfolio <span>—</span> 2025</p>
@@ -670,6 +673,9 @@
       </div>
     </div>
   </section>
+    </div>
+  </main>
+
   <div id="footer-placeholder"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -682,6 +688,7 @@
       document.body.appendChild(s);
     });
   </script>
+  <script src="assets/js/transitions.js"></script>
 </body>
 
 </html>

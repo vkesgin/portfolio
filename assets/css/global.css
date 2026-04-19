@@ -1503,4 +1503,35 @@ img {
 }
 @media (max-width: 600px) {
   .hero-photo-inner { max-width: 220px; }
+}
+
+/* === PAGE TRANSITIONS === */
+#page-overlay {
+  position: fixed; inset: 0;
+  z-index: 9998;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.po-block {
+  position: absolute; left: 0; right: 0;
+  height: 51%;
+  background: #0a0a0a;
+}
+.po-block--top    { top: 0;    transform: translateY(-100%); }
+.po-block--bottom { bottom: 0; transform: translateY(100%); }
+
+.po-logo {
+  position: absolute; z-index: 2;
+  font-family: var(--font-display);
+  font-size: 48px; letter-spacing: .05em;
+  color: var(--text-primary);
+  opacity: 0;
+}
+.po-logo span { color: var(--accent); }
+
+/* Barba container */
+[data-barba="container"] {
+  min-height: 100vh;
 }

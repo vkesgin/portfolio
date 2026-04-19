@@ -27,3 +27,6 @@ async function initInject() {
 }
 
 initInject();
+
+// Barba için dışarıdan erişilebilir
+window.injectComponents = initInject;

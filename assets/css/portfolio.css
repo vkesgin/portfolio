@@ -59,16 +59,18 @@
   color: var(--accent);
 }
 
-/* === GRID === */
+/* === GRID — değişken sayıda kart için === */
 .port-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   background: var(--border);
   border: 0.5px solid var(--border);
+  auto-rows: minmax(280px, auto);
 }
+
+/* Dinamik wide class — JS ile eklenir */
 .port-card--wide { grid-column: span 2; }
-.port-card--tall { grid-row: span 2; }
 
 /* === CARD === */
 .port-card {
@@ -77,14 +79,24 @@
   cursor: pointer;
   background: var(--bg-primary);
   opacity: 0;
+  min-height: 280px;
 }
+
+/* Tek kart tam genişlik */
+.port-grid:has(.port-card:only-child) .port-card { grid-column: span 3; min-height: 400px; }
+
+/* 2 kart */
+.port-grid:has(.port-card:nth-child(2):last-child) .port-card { grid-column: span 1; }
+
 .port-card-img {
-  width: 100%; height: 100%;
+  width: 100%;
+  height: 100%;
   min-height: 280px;
   overflow: hidden;
+  position: absolute;
+  inset: 0;
 }
 .port-card--wide .port-card-img { min-height: 320px; }
-.port-card--tall .port-card-img { min-height: 562px; }
 
 .port-card-img img {
   width: 100%; height: 100%;
@@ -94,11 +106,20 @@
     transform var(--dur-slow) var(--ease-out),
     filter    var(--dur-mid)  var(--ease-out);
   display: block;
+  position: absolute; inset: 0;
 }
 .port-card:hover .port-card-img img {
   transform: scale(1.06);
   filter: grayscale(0%) brightness(.5);
 }
+
+/* Kart yüksekliği için aspect ratio */
+.port-card::before {
+  content: '';
+  display: block;
+  padding-top: 75%;
+}
+.port-card--wide::before { padding-top: 56.25%; }
 
 /* === OVERLAY === */
 .port-card-overlay {

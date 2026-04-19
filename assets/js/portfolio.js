@@ -1,22 +1,52 @@
 (function() {
-  // API'den veri yükle, yoksa statik kart kullan
   loadPortfolioFromAPI().then(projects => {
     if (!projects || !projects.length) return;
+
     const grid = document.getElementById('portGrid');
     if (!grid) return;
-    grid.innerHTML = projects.map((p, i) => buildPortfolioCard(p, i === 0 || i === 3)).join('');
-    // Animasyonları yeniden tetikle
+
+    // Grid'i temizle
+    grid.innerHTML = '';
+
+    // Dinamik layout — her 3'te bir wide kart
+    projects.forEach((p, i) => {
+      const div = document.createElement('div');
+      div.innerHTML = buildPortfolioCard(p);
+      const card = div.firstElementChild;
+
+      // Her 4. kart wide (0, 3, 6, 9...)
+      if (i % 4 === 0 && projects.length > 1) {
+        card.classList.add('port-card--wide');
+      }
+
+      grid.appendChild(card);
+    });
+
+    // Animasyon
     if (typeof gsap !== 'undefined') {
-      gsap.to('.port-card', { opacity: 1, duration: .6, stagger: .05, ease: 'power3.out' });
+      gsap.to('.port-card', {
+        opacity: 1,
+        duration: .5,
+        stagger: .04,
+        ease: 'power3.out',
+        delay: .1
+      });
+    } else {
+      document.querySelectorAll('.port-card').forEach(c => c.style.opacity = '1');
     }
-    // Filter sayılarını güncelle
+
+    // Filtre sayıları
     const counts = {};
     projects.forEach(p => { counts[p.category] = (counts[p.category]||0)+1; });
-    document.getElementById('fc-all').textContent = projects.length;
+    const fcAll = document.getElementById('fc-all');
+    if (fcAll) fcAll.textContent = projects.length;
     Object.entries(counts).forEach(([cat, n]) => {
       const el = document.getElementById('fc-' + cat);
       if (el) el.textContent = n;
     });
+
+    // Lightbox için kartları yeniden bağla
+    if (typeof initPortfolioCards === 'function') initPortfolioCards();
   });
 
   if (typeof gsap !== 'undefined') {
@@ -227,9 +257,17 @@
   if (lightbox) {
     initVideoPlayer();
 
-    document.querySelectorAll('.port-card').forEach(card => {
-      card.addEventListener('click', () => openLightbox(card));
-    });
+    function initPortfolioCards() {
+      const cards = document.querySelectorAll('.port-card');
+      cards.forEach(card => {
+        // önce eski listener'ı temizle
+        card.replaceWith(card.cloneNode(true));
+      });
+      document.querySelectorAll('.port-card').forEach(card => {
+        card.addEventListener('click', () => openLightbox(card));
+      });
+    }
+    initPortfolioCards();
 
     lbClose.addEventListener('click', closeLightbox);
 

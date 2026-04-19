@@ -18,26 +18,43 @@ async function loadFeaturedFromAPI() {
   } catch { return null; }
 }
 
-function buildPortfolioCard(p, large = false) {
-  const isVideo = !!p.video_url;
+function getMediaUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http')) return url;
+  return API + url;
+}
+
+function buildPortfolioCard(p) {
+  const isVideo    = !!p.video_url;
+  const imgSrc     = getMediaUrl(p.image_url);
+  const videoSrc   = getMediaUrl(p.video_url);
+  const catLabel   = { web:'Web Design', '3d':'3D Animasyon', '2d':'2D Animasyon', video:'Videografi', graphic:'Grafik Tasarım' }[p.category] || p.category;
+
   return `
-    <div class="port-card ${large ? 'port-card--wide' : ''} ${isVideo ? 'port-card--video' : ''}"
+    <div class="port-card ${isVideo ? 'port-card--video' : ''}"
          data-cat="${p.category}"
-         data-title="${p.title}"
-         data-desc="${p.description || ''}"
+         data-title="${p.title || ''}"
+         data-desc="${(p.description || '').replace(/"/g,'&quot;')}"
          data-tags="${p.tags || ''}"
          data-year="${p.year || ''}"
-         data-img="${p.image_url ? API + p.image_url : ''}"
-         ${isVideo ? `data-video="${API + p.video_url}"` : ''}>
+         data-img="${imgSrc}"
+         ${isVideo ? `data-video="${videoSrc}"` : ''}>
       <div class="port-card-img">
-        <img src="${p.image_url ? API + p.image_url : ''}" alt="${p.title}" loading="lazy">
-        ${isVideo ? `<div class="port-play-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg></div>` : ''}
+        ${imgSrc
+          ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.style.display='none'">`
+          : '<div style="width:100%;height:100%;background:#111"></div>'
+        }
+        ${isVideo ? `
+          <div class="port-play-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+          </div>` : ''
+        }
       </div>
       <div class="port-card-overlay">
         <div class="port-card-info">
-          <span class="port-cat-tag">${p.category}</span>
-          <h3 class="port-card-title">${p.title}</h3>
-          <span class="port-card-year">${p.year}</span>
+          <span class="port-cat-tag">${catLabel}</span>
+          <h3 class="port-card-title">${p.title || ''}</h3>
+          <span class="port-card-year">${p.year || ''}</span>
         </div>
         <span class="port-expand">${isVideo ? '▶' : '↗'}</span>
       </div>
@@ -45,24 +62,31 @@ function buildPortfolioCard(p, large = false) {
 }
 
 function buildWorkCard(p) {
-  const isVideo = !!p.video_url;
+  const isVideo  = !!p.video_url;
+  const imgSrc   = getMediaUrl(p.image_url);
+  const videoSrc = getMediaUrl(p.video_url);
+  const catLabel = { web:'Web Design', '3d':'3D Animasyon', '2d':'2D Animasyon', video:'Videografi', graphic:'Grafik Tasarım' }[p.category] || p.category;
+
   return `
     <div class="work-card ${isVideo ? 'work-card--video' : ''}"
          data-cat="${p.category}"
-         ${isVideo ? `data-video="${API + p.video_url}"` : ''}
-         data-img="${p.image_url ? API + p.image_url : ''}">
+         ${isVideo ? `data-video="${videoSrc}"` : ''}
+         data-img="${imgSrc}">
       <div class="work-bg">
-        <img src="${p.image_url ? API + p.image_url : ''}" alt="${p.title}" loading="lazy">
+        ${imgSrc
+          ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.style.display='none'">`
+          : ''
+        }
       </div>
       <div class="work-overlay">
-        <span class="work-cat-tag">${p.category}</span>
-        <h3 class="work-title">${p.title}</h3>
+        <span class="work-cat-tag">${catLabel}</span>
+        <h3 class="work-title">${p.title || ''}</h3>
         <p class="work-desc">${p.description || ''}</p>
         <span class="work-link">${isVideo ? 'İzle ▶' : 'İncele ↗'}</span>
       </div>
       <div class="work-info-bar">
-        <span class="work-cat-label">${p.category}</span>
-        <span class="work-year">${p.year}</span>
+        <span class="work-cat-label">${catLabel}</span>
+        <span class="work-year">${p.year || ''}</span>
       </div>
     </div>`;
 }

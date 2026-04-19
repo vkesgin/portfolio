@@ -284,122 +284,112 @@ function initSkills() {
 
 // === WORKS SCROLL + FILTER ===
 function initWorks() {
-  // API'den seçilmiş işleri yükle
   if (typeof loadFeaturedFromAPI === 'function') {
     loadFeaturedFromAPI().then(projects => {
       if (!projects || !projects.length) return;
+
       const grid = document.getElementById('worksGrid');
       if (!grid) return;
-      grid.innerHTML = projects.slice(0,6).map((p,i) =>
-        (i===0||i===3) ? buildWorkCard(p).replace('class="work-card','class="work-card work-card--large') : buildWorkCard(p)
-      ).join('');
-      document.querySelector('.works-count-label').textContent = projects.length + ' iş gösteriliyor';
+
+      // Statik kartları kaldır
+      grid.innerHTML = '';
+
+      const maxShow = Math.min(projects.length, 6);
+      projects.slice(0, maxShow).forEach((p, i) => {
+        const div = document.createElement('div');
+        div.innerHTML = buildWorkCard(p);
+        const card = div.firstElementChild;
+
+        // İlk ve 4. kart large
+        if ((i === 0 || i === 3) && maxShow > 2) {
+          card.classList.add('work-card--large');
+        }
+
+        // Baştan görünür yap (GSAP sonra animate eder)
+        card.style.opacity = '0';
+        grid.appendChild(card);
+      });
+
+      // Count label
+      const label = document.querySelector('.works-count-label');
+      if (label) label.textContent = projects.length + ' iş gösteriliyor';
+
+      // GSAP ile göster
+      if (typeof gsap !== 'undefined') {
+        gsap.to('#worksGrid .work-card', {
+          opacity: 1,
+          y: 0,
+          duration: .6,
+          stagger: .08,
+          ease: 'power3.out',
+          delay: .2
+        });
+      } else {
+        grid.querySelectorAll('.work-card').forEach(c => c.style.opacity = '1');
+      }
+
+      // Video kartları için tıklama
+      grid.querySelectorAll('.work-card--video').forEach(card => {
+        card.addEventListener('click', e => {
+          const videoSrc = card.dataset.video;
+          if (!videoSrc) return;
+          e.preventDefault();
+
+          let lb = document.getElementById('works-lightbox');
+          if (lb) lb.remove();
+
+          lb = document.createElement('div');
+          lb.id = 'works-lightbox';
+          lb.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px)';
+          lb.innerHTML = `
+            <button id="wlbClose" style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2">✕</button>
+            <div style="width:90%;max-width:960px;aspect-ratio:16/9;position:relative;background:#000;border-radius:8px;overflow:hidden;">
+              <video id="wlbVideo" style="width:100%;height:100%;object-fit:contain;" playsinline controls autoplay></video>
+            </div>`;
+          document.body.appendChild(lb);
+
+          const vid = lb.querySelector('#wlbVideo');
+          vid.src = videoSrc;
+          vid.play().catch(()=>{});
+          document.body.style.overflow = 'hidden';
+
+          const close = () => { vid.pause(); lb.remove(); document.body.style.overflow = ''; };
+          lb.querySelector('#wlbClose').addEventListener('click', close);
+          lb.addEventListener('click', e => { if (e.target === lb) close(); });
+          document.addEventListener('keydown', function esc(event) {
+            if (event.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+          });
+        });
+      });
     });
   }
 
+  // GSAP ScrollTrigger — statik kartlar için (API gelince override edilir)
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
-
-  // Giriş animasyonu
   gsap.to('.work-card', {
-    opacity: 1,
-    duration: 0.7,
-    stagger: { amount: 0.5, from: 'start' },
+    opacity: 1, duration: .7, stagger: { amount: .5 },
     ease: 'power3.out',
-    scrollTrigger: {
-      trigger: '#works',
-      start: 'top 75%',
-      scroller: getScroller(),
-    }
+    scrollTrigger: { trigger: '#works', start: 'top 75%' }
   });
 
   // Filtre
-  const filterBtns = document.querySelectorAll('.filter-btn');
-  const cards = document.querySelectorAll('.work-card');
-  const countLabel = document.querySelector('.works-count-label');
-
+  const filterBtns = document.querySelectorAll('#works .filter-btn');
+  const countLabel  = document.querySelector('.works-count-label');
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       filterBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-
       const filter = btn.dataset.filter;
-      let visible = 0;
-
-      cards.forEach(card => {
+      let visible  = 0;
+      document.querySelectorAll('.work-card').forEach(card => {
         const match = filter === 'all' || card.dataset.cat === filter;
+        card.classList.toggle('hidden', !match);
         if (match) {
-          card.classList.remove('hidden');
-          gsap.fromTo(card,
-            { opacity: 0, y: 16 },
-            { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out', delay: visible * 0.06 }
-          );
+          gsap.fromTo(card, { opacity:0, y:12 }, { opacity:1, y:0, duration:.4, delay: visible*.05 });
           visible++;
-        } else {
-          card.classList.add('hidden');
         }
       });
-
-      if (countLabel) {
-        countLabel.textContent = visible + ' iş gösteriliyor';
-      }
-    });
-  });
-
-  // Ana sayfada video kartları için mini lightbox
-  document.querySelectorAll('.work-card--video').forEach(card => {
-    card.addEventListener('click', e => {
-      e.preventDefault();
-      const videoSrc = card.dataset.video;
-      const imgSrc   = card.querySelector('img')?.src;
-      const title    = card.querySelector('.work-title')?.textContent;
-      if (!videoSrc) return;
-
-      // Varolan lightbox yoksa oluştur
-      let lb = document.getElementById('works-lightbox');
-      if (!lb) {
-        lb = document.createElement('div');
-        lb.id = 'works-lightbox';
-        lb.style.cssText = `
-          position:fixed;inset:0;z-index:9000;
-          background:rgba(0,0,0,.95);
-          display:flex;align-items:center;justify-content:center;
-          backdrop-filter:blur(20px);
-        `;
-        lb.innerHTML = `
-          <button id="wlbClose" style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;">✕</button>
-          <div style="width:90%;max-width:960px;aspect-ratio:16/9;position:relative;background:#000;border-radius:8px;overflow:hidden;">
-            <video id="wlbVideo" style="width:100%;height:100%;object-fit:contain;" playsinline controls autoplay></video>
-          </div>
-        `;
-        document.body.appendChild(lb);
-        lb.querySelector('#wlbClose').addEventListener('click', () => {
-          lb.querySelector('#wlbVideo').pause();
-          lb.remove();
-          document.body.style.overflow = '';
-        });
-        lb.addEventListener('click', e => {
-          if (e.target === lb) {
-            lb.querySelector('#wlbVideo').pause();
-            lb.remove();
-            document.body.style.overflow = '';
-          }
-        });
-      }
-
-      const vid = lb.querySelector('#wlbVideo');
-      vid.src = videoSrc;
-      vid.play().catch(()=>{});
-      document.body.style.overflow = 'hidden';
-
-      // Klavye
-      const onKey = e => {
-        if (e.key === 'Escape') {
-          vid.pause(); lb.remove();
-          document.body.style.overflow = '';
-          document.removeEventListener('keydown', onKey);
-        }
-      };
-      document.addEventListener('keydown', onKey);
+      if (countLabel) countLabel.textContent = visible + ' iş gösteriliyor';
     });
   });
 }

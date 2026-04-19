@@ -247,6 +247,23 @@ if (window.location.hash) {
   }, 700);
 }
 
+// === SCROLL TO TOP ===
+const stt = document.getElementById('scrollToTopBtn');
+if (stt) {
+  window.addEventListener('scroll', () => {
+    const sY = window._locoScrollY ?? window.scrollY;
+    if (sY > 500) stt.classList.add('visible');
+    else stt.classList.remove('visible');
+  });
+  stt.addEventListener('click', () => {
+    if (window._loco) {
+      window._loco.scrollTo(0, { duration: 1000, easing: [0.25, 0.0, 0.35, 1.0] });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+}
+
 // === STATS SCROLL ANIMATION ===
 // === SKILLS SCROLL + 3D TILT ===
 function initSkills() {

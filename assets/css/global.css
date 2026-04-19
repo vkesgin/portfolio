@@ -1705,4 +1705,47 @@ html.has-scroll-smooth { scrollbar-width: none; }
   background: rgba(0,229,255,.2);
   box-shadow: 0 0 24px rgba(0,229,255,.3);
   transform: translate(-50%,-50%) scale(1.1);
-}
+}
+
+/* === SCROLL TO TOP === */
+.scroll-to-top {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(0, 229, 255, 0.08);
+  border: 1.5px solid rgba(0, 229, 255, 0.3);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 99;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(20px);
+  transition: all var(--dur-mid) var(--ease-out);
+  backdrop-filter: blur(8px);
+}
+.scroll-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+.scroll-to-top:hover {
+  background: rgba(0, 229, 255, 0.2);
+  border-color: var(--accent);
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 4px 16px rgba(0,229,255,0.25);
+}
+@media (max-width: 768px) {
+  .scroll-to-top {
+    bottom: 24px;
+    right: 24px;
+    width: 44px;
+    height: 44px;
+  }
+}
+

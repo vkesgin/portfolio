@@ -608,7 +608,8 @@ img {
   .hero-scroll { display: none; }
   .hero-photo-label { display: none; }
   .hero-photo-num   { display: none; }
-  .hero-tools-wrapper { display: none; }
+  .hero-photo-side  { margin-right: 0 !important; }
+  .hero-tools-wrapper { display: none; z-index: 1 !important; }
 }
 
 @media (max-width: 600px) {
@@ -628,7 +629,7 @@ img {
 
   /* HERO */
   #hero {
-    padding: 78px 20px 80px;
+    padding: 78px 20px 110px;
     min-height: 100svh;
     align-items: flex-start;
   }
@@ -664,7 +665,7 @@ img {
     -webkit-backdrop-filter: blur(20px);
     opacity: 0;
     animation: toolFadeIn 1s var(--ease-out) 1.2s forwards;
-    z-index: 10;
+    z-index: 3;
   }
   .hero-tools-title {
     display: flex !important;

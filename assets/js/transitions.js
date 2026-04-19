@@ -11,20 +11,25 @@
       <span class="pt-logo">VK<span>.</span></span>
     </div>`;
   document.body.appendChild(overlay);
+  overlay.style.visibility = 'hidden';
 
   function forceReflow(el) { void el.getBoundingClientRect(); }
 
   function playEnter() {
-    overlay.classList.add('is-visible');
-    overlay.classList.remove('is-closing');
-    forceReflow(overlay);
-    overlay.classList.add('is-open');
+    overlay.style.visibility = '';
+    overlay.classList.remove('is-closing', 'is-open');
+    overlay.classList.add('is-visible', 'is-open');
+
     setTimeout(() => {
       overlay.classList.add('is-closing');
+      overlay.classList.remove('is-open');
+
       setTimeout(() => {
-        overlay.classList.remove('is-visible', 'is-open', 'is-closing');
-      }, DURATION);
-    }, 400);
+        overlay.classList.remove('is-visible', 'is-closing');
+        overlay.style.visibility = 'hidden';
+        requestAnimationFrame(() => { overlay.style.visibility = ''; });
+      }, 650);
+    }, 450);
   }
 
   function playLeave(href) {

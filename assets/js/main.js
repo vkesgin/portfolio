@@ -499,10 +499,40 @@ window.closeMenu = function () {
 // === TOOLS MARQUEE ===
 function initToolsMarquee() {
   const track = document.getElementById('toolsTrack');
-  if (!track) return;
+  const marquee = document.querySelector('.hero-tools-marquee');
+  if (!track || !marquee) return;
 
   // Çift kopya (Sonsuz kayma için CSS animasyon kullanılacak)
   track.innerHTML += track.innerHTML;
+
+  // 3D Kavis efekti — ortadaki butonlar büyük/yakın, kenardakiler küçük/uzak
+  function apply3DDepth() {
+    const containerRect = marquee.getBoundingClientRect();
+    const centerY = containerRect.top + containerRect.height / 2;
+    const maxDist = containerRect.height / 2;
+
+    const buttons = track.querySelectorAll('.tool-btn');
+    buttons.forEach(btn => {
+      const btnRect = btn.getBoundingClientRect();
+      const btnCenterY = btnRect.top + btnRect.height / 2;
+      const dist = Math.abs(btnCenterY - centerY);
+      const ratio = Math.min(dist / maxDist, 1); // 0 = center, 1 = edge
+
+      // Scale: ortada 1.08, kenarlarda 0.85
+      const scale = 1.08 - (ratio * 0.23);
+      // Opacity: ortada 1, kenarlarda 0.5
+      const opacity = 1 - (ratio * 0.5);
+      // Z-translate: ortada 10px öne, kenarlarda -15px arkaya
+      const z = 10 - (ratio * 25);
+
+      btn.style.transform = `scale(${scale}) translateZ(${z}px)`;
+      btn.style.opacity = opacity;
+    });
+
+    requestAnimationFrame(apply3DDepth);
+  }
+
+  requestAnimationFrame(apply3DDepth);
 }
 
 // === FOOTER ===

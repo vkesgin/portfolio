@@ -339,8 +339,24 @@ img {
   flex: 1;
   width: 100%;
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
-  mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+  /* 3D kavisli carousel efekti */
+  perspective: 600px;
+  -webkit-mask-image: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(0,0,0,0.3) 10%,
+    black 35%,
+    black 65%,
+    rgba(0,0,0,0.3) 90%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(0,0,0,0.3) 10%,
+    black 35%,
+    black 65%,
+    rgba(0,0,0,0.3) 90%,
+    transparent 100%
+  );
 }
 
 .tools-track {
@@ -375,9 +391,10 @@ img {
   font-weight: 500;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  transition: all var(--dur-fast);
+  transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
   position: relative;
   overflow: hidden;
+  transform-style: preserve-3d;
 }
 
 /* Parlama (Shimmer) efekti */
@@ -419,10 +436,10 @@ img {
 }
 
 .tool-btn:hover {
-  background: rgba(0, 229, 255, 0.06);
-  border-color: rgba(0, 229, 255, 0.3);
+  background: rgba(0, 229, 255, 0.08);
+  border-color: rgba(0, 229, 255, 0.4);
   color: var(--text-primary);
-  transform: translateX(-4px);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
 }
 .tool-btn:hover::after {
   animation: none;

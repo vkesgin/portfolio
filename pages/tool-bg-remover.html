@@ -64,10 +64,29 @@
               İşlem yapay zeka bekliyor...
             </div>
             
-            <div id="loadingStatus" class="gain-banner" style="display:none; background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); color: var(--text-muted); margin-top: 24px; line-height:1.6;">
-              <div class="spinner" style="font-size: 16px; margin-bottom:8px;">✨</div>
-              Yapay Zeka Wasm Motoru Başlatıldı...<br>
-              <small>(Eğer ilk defa kullanıyorsanız modeli bilgisayarınıza indirmesi 10-20 saniye sürebilir, bekleyin)</small>
+            <div id="loadingStatus" style="display:none; margin-top: 24px;">
+              <div class="progress-container">
+                <div class="progress-stage" id="progressStage">🧠 Yapay Zeka Hazırlanıyor...</div>
+                <div class="progress-bar-track">
+                  <div class="progress-bar-fill" id="progressBarFill"></div>
+                </div>
+                <div class="progress-detail" id="progressDetail">Model dosyaları indiriliyor...</div>
+                <div class="progress-steps">
+                  <span class="step-dot active" id="dot1"></span>
+                  <span class="step-line" id="line1"></span>
+                  <span class="step-dot" id="dot2"></span>
+                  <span class="step-line" id="line2"></span>
+                  <span class="step-dot" id="dot3"></span>
+                  <span class="step-line" id="line3"></span>
+                  <span class="step-dot" id="dot4"></span>
+                </div>
+                <div class="progress-step-labels">
+                  <span>Model</span>
+                  <span>Piksel</span>
+                  <span>Analiz</span>
+                  <span>Sonuç</span>
+                </div>
+              </div>
             </div>
             
             <div id="resultPreview" style="display:none; margin-top: 24px;">

@@ -502,69 +502,83 @@ function initToolsMarquee() {
   const marquee = document.querySelector('.hero-tools-marquee');
   if (!track || !marquee) return;
 
-  // Çift kopya işlemini artık index.html'de statik olarak yaptık (Glitches önleyici)
+  let marqueeTween = null;
 
   // === MARQUEE ENGINE ===
   function startMarquee() {
-    // Küçük bir gecikme: Layout'un ve ikonların oturması için
-    setTimeout(() => {
-      const totalHeight = track.offsetHeight / 2;
-      
-      // Eğer yükseklik hala 0 ise (nadiren olur), 500ms sonra tekrar dene
-      if (totalHeight <= 0) {
-        setTimeout(startMarquee, 500);
-        return;
-      }
+    // Önceki tween varsa temizle (Resize durumunda)
+    if (marqueeTween) marqueeTween.kill();
+    gsap.set(track, { x: 0, y: 0 });
 
-      const marqueeTween = gsap.to(track, {
-        y: -totalHeight,
-        duration: 25,
-        ease: "none",
-        repeat: -1,
-        overwrite: true
-      });
+    setTimeout(() => {
+      const isMobile = window.innerWidth < 768;
+      
+      if (isMobile) {
+        // MOBİL: Yatay Akış
+        const totalWidth = track.scrollWidth / 2;
+        if (totalWidth <= 0) return;
+
+        marqueeTween = gsap.to(track, {
+          x: -totalWidth,
+          duration: 20,
+          ease: "none",
+          repeat: -1,
+          overwrite: true
+        });
+      } else {
+        // MASAÜSTÜ: Dikey Akış
+        const totalHeight = track.offsetHeight / 2;
+        if (totalHeight <= 0) {
+          setTimeout(startMarquee, 500);
+          return;
+        }
+
+        marqueeTween = gsap.to(track, {
+          y: -totalHeight,
+          duration: 25,
+          ease: "none",
+          repeat: -1,
+          overwrite: true
+        });
+      }
 
       marquee.addEventListener('mouseenter', () => marqueeTween.pause());
       marquee.addEventListener('mouseleave', () => marqueeTween.play());
     }, 200);
   }
 
-  // Sayfa çoktan yüklendiyse hemen başlat, yoksa load event'ini bekle
+  // Sayfa yüklendiğinde başlat
   if (document.readyState === 'complete') {
     startMarquee();
   } else {
     window.addEventListener('load', startMarquee);
   }
 
-  // 3D Kavis efekti — GÜÇLENDİRİLDİ (Ekran duyarlı)
+  // Resize durumunda yönü güncelle (Debounced)
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(startMarquee, 250);
+  });
+
+  // 3D Kavis efekti — Sadece Masaüstünde Aktif
   function apply3DDepth() {
+    if (window.innerWidth < 768) return;
+
     const containerRect = marquee.getBoundingClientRect();
     const centerY = containerRect.top + containerRect.height / 2;
     const maxDist = containerRect.height / 2;
-    const isMobile = window.innerWidth < 768;
 
     const buttons = track.querySelectorAll('.tool-btn');
     buttons.forEach(btn => {
       const btnRect = btn.getBoundingClientRect();
       const btnCenterY = btnRect.top + btnRect.height / 2;
       const dist = Math.abs(btnCenterY - centerY);
-      
       const ratio = Math.min(dist / maxDist, 1); 
 
-      // Mobile vs Desktop Math
-      let scale, opacity, z;
-      
-      if (isMobile) {
-        // Mobil: Uygulama hissi için daha nazik şişirme
-        scale = 1.12 - (ratio * 0.35); // Max 1.12
-        opacity = Math.max(1 - (ratio * 0.7), 0.4);
-        z = 40 - (ratio * 120); // Daha dar Z aralığı
-      } else {
-        // Masaüstü: Dev 3D etkisi devrede
-        scale = 1.25 - (ratio * 0.55);
-        opacity = Math.max(1 - (ratio * 0.8), 0.2);
-        z = 80 - (ratio * 230);
-      }
+      const scale = 1.25 - (ratio * 0.55);
+      const opacity = Math.max(1 - (ratio * 0.8), 0.2);
+      const z = 80 - (ratio * 230);
 
       btn.style.transform = `scale(${scale}) translateZ(${z}px)`;
       btn.style.opacity = opacity;

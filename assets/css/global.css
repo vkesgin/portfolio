@@ -584,12 +584,13 @@ img {
 /* === TABLET / MOBİL HERO === */
 @media (max-width: 900px) {
   #hero {
-    padding: 0 24px 80px;
-    min-height: 100svh;
+    padding: 100px 24px 100px;
+    height: auto;
+    min-height: auto;
   }
   .hero-inner {
     grid-template-columns: 1fr;
-    padding-top: 100px;
+    padding-top: 0;
     gap: 32px;
     text-align: center;
   }
@@ -695,8 +696,9 @@ img {
 
   /* HERO */
   #hero {
-    padding: 78px 20px 110px;
-    min-height: 100svh;
+    padding: 100px 20px 110px;
+    min-height: auto;
+    height: auto;
     align-items: flex-start;
   }
   .hero-inner { padding-top: 10px; gap: var(--space-md); }

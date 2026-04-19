@@ -1511,35 +1511,52 @@ img {
 }
 
 /* === PAGE TRANSITIONS === */
-#page-overlay {
+#pt-overlay {
   position: fixed; inset: 0;
-  z-index: 10000;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  pointer-events: all;
+  z-index: 99999;
+  pointer-events: none;
+  display: flex; align-items: center; justify-content: center;
+  visibility: hidden;
 }
-.po-block {
-  position: absolute; left: 0; right: 0;
-  height: 51%;
-  background: #111111;
-}
-.po-block--top    { top: 0; }
-.po-block--bottom { bottom: 0; }
+#pt-overlay.is-visible { visibility: visible; pointer-events: all; }
 
-.po-logo {
-  position: absolute; z-index: 2;
-  font-family: var(--font-display);
-  font-size: 64px; letter-spacing: .08em;
-  color: var(--text-primary);
+.pt-panel {
+  position: absolute; top: 0; bottom: 0;
+  width: 50%;
+  background: #0a0a0a;
+  transition: transform calc(var(--dur, 600ms)) cubic-bezier(0.76, 0, 0.24, 1);
+}
+.pt-panel--left  { left: 0;  transform: translateX(-102%); }
+.pt-panel--right { right: 0; transform: translateX(102%); }
+
+#pt-overlay.is-open .pt-panel--left  { transform: translateX(0); }
+#pt-overlay.is-open .pt-panel--right { transform: translateX(0); }
+
+#pt-overlay.is-closing .pt-panel--left  { transform: translateX(-102%); }
+#pt-overlay.is-closing .pt-panel--right { transform: translateX(102%); }
+
+.pt-center {
+  position: relative; z-index: 2;
   opacity: 0;
+  transform: scale(.85);
+  transition:
+    opacity 200ms ease,
+    transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.po-logo span {
-  color: var(--accent);
-  text-shadow: 0 0 40px var(--accent);
+#pt-overlay.is-open .pt-center {
+  opacity: 1;
+  transform: scale(1);
+  transition-delay: 200ms;
+}
+#pt-overlay.is-closing .pt-center {
+  opacity: 0;
+  transform: scale(.85);
+  transition-delay: 0ms;
 }
 
-/* Barba container */
-[data-barba="container"] {
-  min-height: 100vh;
-}
+.pt-logo {
+  font-family: var(--font-display);
+  font-size: 56px; letter-spacing: .05em;
+  color: var(--text-primary);
+}
+.pt-logo span { color: var(--accent); }

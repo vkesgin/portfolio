@@ -39,13 +39,14 @@ function enterAnim(container) {
 function leaveAnim() {
   return new Promise(resolve => {
     const tl = gsap.timeline({ onComplete: resolve });
-    tl.set('#page-overlay', { display: 'flex' })
-      .set('.po-block--top',    { yPercent: -100 })
+    // Önce konumla, sonra göster — 1-frame flash önlenir
+    tl.set('.po-block--top',    { yPercent: -100 })
       .set('.po-block--bottom', { yPercent:  100 })
       .set('.po-logo',          { opacity: 0 })
-      .to('.po-block--top',     { yPercent: 0, duration: .65, ease: 'power4.inOut' })
-      .to('.po-block--bottom',  { yPercent: 0, duration: .65, ease: 'power4.inOut' }, '<')
-      .to('.po-logo',           { opacity: 1, duration: .3, ease: 'power2.in' }, '<.25');
+      .set('#page-overlay',     { display: 'flex' })
+      .to('.po-block--top',     { yPercent: 0, duration: .7, ease: 'power4.inOut' })
+      .to('.po-block--bottom',  { yPercent: 0, duration: .7, ease: 'power4.inOut' }, '<')
+      .to('.po-logo',           { opacity: 1, duration: .35, ease: 'power2.in' }, '<.2');
   });
 }
 

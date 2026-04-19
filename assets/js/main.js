@@ -142,24 +142,65 @@ function typeNext() {
 
 // === GSAP ENTRANCE ===
 function initGSAP() {
-  const isHome = document.querySelector('#hero') !== null;
+  gsap.set('#nav', { y: -24 });
+  gsap.set(['.hero-role', '.hero-desc', '.hero-cta'], { y: 22 });
 
-  if (isHome) {
-    gsap.set('#nav', { y: -24 });
-    gsap.set(['.hero-role', '.hero-desc', '.hero-cta'], { y: 22 });
+  gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .1 })
+    .to('#nav',               { opacity: 1, y: 0, duration: .9 })
+    .to('.hero-label',        { opacity: 1, duration: .7 },       '-=.5')
+    .to('.line',              { y: '0%', duration: 1.1, stagger: .13 }, '-=.5')
+    .to('.hero-role',         { opacity: 1, y: 0, duration: .7 }, '-=.5')
+    .to('.hero-desc',         { opacity: 1, y: 0, duration: .6 }, '-=.4')
+    .to('.hero-cta',          { opacity: 1, y: 0, duration: .6 }, '-=.4')
+    .to('.hero-photo-side',   { opacity: 1, x: 0, duration: 1, ease: 'power3.out' }, '-=.8')
+    .to('.hero-scroll',       { opacity: 1, duration: .6 },       '-=.3');
+}
 
-    gsap.timeline({ defaults: { ease: 'power4.out' }, delay: .1 })
-      .to('#nav', { opacity: 1, y: 0, duration: .9 })
-      .to('.hero-label', { opacity: 1, duration: .7 }, '-=.5')
-      .to('.line', { y: '0%', duration: 1.1, stagger: .13 }, '-=.5')
-      .to('.hero-role', { opacity: 1, y: 0, duration: .7 }, '-=.5')
-      .to('.hero-desc', { opacity: 1, y: 0, duration: .6 }, '-=.4')
-      .to('.hero-cta', { opacity: 1, y: 0, duration: .6 }, '-=.4')
-      .to('.hero-scroll', { opacity: 1, duration: .6 }, '-=.3');
-  } else {
-    // Other pages: just show nav
-    gsap.to('#nav', { opacity: 1, y: 0, duration: 0.9, delay: 0.1, ease: 'power4.out' });
+// === HERO PHOTO PARALLAX ===
+function initHeroParallax() {
+  const section = document.getElementById('hero');
+  const inner   = document.getElementById('heroPhotoInner');
+  const img     = document.getElementById('heroImg');
+  if (!section || !inner || !img) return;
+
+  let targetX = 0, targetY = 0;
+  let currentX = 0, currentY = 0;
+
+  section.addEventListener('mousemove', e => {
+    const rect = section.getBoundingClientRect();
+    const cx   = rect.left + rect.width  / 2;
+    const cy   = rect.top  + rect.height / 2;
+    targetX = (e.clientX - cx) / rect.width  * 18;
+    targetY = (e.clientY - cy) / rect.height * 12;
+  });
+
+  section.addEventListener('mouseleave', () => {
+    targetX = 0;
+    targetY = 0;
+  });
+
+  function loopParallax() {
+    currentX += (targetX - currentX) * .06;
+    currentY += (targetY - currentY) * .06;
+
+    // Dış kutu hafif ters yönde — derinlik hissi
+    gsap.set(inner, {
+      rotateX: -currentY * .4,
+      rotateY:  currentX * .4,
+      transformPerspective: 800,
+    });
+
+    // Görsel biraz daha agresif kayar
+    gsap.set(img, {
+      x: currentX * 1.4,
+      y: currentY * 1.0,
+      scale: 1.06,
+    });
+
+    requestAnimationFrame(loopParallax);
   }
+
+  loopParallax();
 }
 
 // === INIT ===
@@ -183,6 +224,7 @@ if (typeof gsap !== 'undefined') {
   initAbout();
   initToolsMarquee();
   initCta();
+  initHeroParallax();
 }
 initNav();
 initFooter();

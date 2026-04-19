@@ -376,7 +376,42 @@ img {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   transition: all var(--dur-fast);
+  position: relative;
+  overflow: hidden;
 }
+
+/* Parlama (Shimmer) efekti */
+.tool-btn::after {
+  content: '';
+  position: absolute;
+  top: -50%; left: -75%;
+  width: 50%; height: 200%;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(0, 229, 255, 0.12) 45%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(0, 229, 255, 0.12) 55%,
+    transparent 60%
+  );
+  animation: toolShimmer 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes toolShimmer {
+  0%, 100% { left: -75%; }
+  50% { left: 150%; }
+}
+
+/* Her butonun parlaması sırayla olsun (kaskad efekti) */
+.tool-btn:nth-child(2)::after  { animation-delay: 0.5s; }
+.tool-btn:nth-child(3)::after  { animation-delay: 1.0s; }
+.tool-btn:nth-child(4)::after  { animation-delay: 1.5s; }
+.tool-btn:nth-child(5)::after  { animation-delay: 2.0s; }
+.tool-btn:nth-child(6)::after  { animation-delay: 2.5s; }
+.tool-btn:nth-child(7)::after  { animation-delay: 3.0s; }
+.tool-btn:nth-child(8)::after  { animation-delay: 3.5s; }
+.tool-btn:nth-child(9)::after  { animation-delay: 4.0s; }
 
 .tool-btn svg {
   color: var(--text-muted);
@@ -388,6 +423,10 @@ img {
   border-color: rgba(0, 229, 255, 0.3);
   color: var(--text-primary);
   transform: translateX(-4px);
+}
+.tool-btn:hover::after {
+  animation: none;
+  opacity: 0;
 }
 
 .tool-btn:hover svg {

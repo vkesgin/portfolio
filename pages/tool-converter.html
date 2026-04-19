@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Görsellerinizi ücretsiz olarak WebP, PNG ve JPG formatlarına dönüştürün. Sıfır sunucu, %100 güvenli tarayıcı içi format dönüştürücü.">
+  <meta name="keywords" content="görsel format dönüştürücü, png to webp, jpg to webp, webp dönüştürme, resim formatı değiştirme, ücretsiz online converter, görsel çevirici">
+  <meta property="og:title" content="Görsel Format Dönüştürücü — PNG / JPG / WebP">
+  <meta property="og:description" content="Görsellerinizi modern web formatlarına (WebP, PNG, JPG) anında dönüştürün. Sunucuya yükleme yok.">
+  <title>Görsel Format Dönüştürücü — Araçlar</title>
+  <link rel="stylesheet" href="../assets/css/reset.css">
+  <link rel="stylesheet" href="../assets/css/variables.css">
+  <link rel="stylesheet" href="../assets/css/global.css">
+  <link rel="stylesheet" href="../assets/css/tool.css">
+</head>
+<body>
+
+  <div id="header-placeholder"></div>
+
+  <main>
+    <section id="tool-hero">
+      <div class="tool-hero-inner">
+        <p class="section-eyebrow">// araçlar — no: 06</p>
+        <h1 class="tool-title">
+          <span class="tool-line outline-text">Format</span>
+          <span class="tool-line">DÖNÜŞTÜR</span>
+        </h1>
+        <p class="tool-desc">
+          Görsellerinizi modern web formatlarına (WebP, PNG, JPG) anında dönüştürün.<br>
+          Hiçbir sunucuya yüklenmeden %100 gizlilikle kendi cihazınızda işlenir.
+        </p>
+      </div>
+    </section>
+
+    <section id="tool-app">
+      <div class="tool-app-inner">
+        <div class="tool-card">
+          
+          <div class="tool-card-left">
+            <h2 class="tool-step">Adım 1: Yükle & Ayarla</h2>
+            <p class="tool-step-desc">Dönüştürmek istediğiniz görseli yükleyin ve hedef formatı seçin.</p>
+            
+            <label for="converterInput" class="upload-zone" id="converterUploadZone">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+              <span>Görseli Seçin veya Sürükleyin<br><small>PNG, JPG, WebP, GIF, BMP, SVG</small></span>
+              <input type="file" id="converterInput" accept="image/*" hidden>
+            </label>
+
+            <!-- Dosya Bilgisi -->
+            <div id="fileInfo" class="converter-file-info" style="display:none;">
+              <div class="file-info-row">
+                <span class="file-info-label">Dosya:</span>
+                <span class="file-info-value" id="fileName">—</span>
+              </div>
+              <div class="file-info-row">
+                <span class="file-info-label">Boyut:</span>
+                <span class="file-info-value" id="fileSize">—</span>
+              </div>
+              <div class="file-info-row">
+                <span class="file-info-label">Format:</span>
+                <span class="file-info-value" id="fileFormat">—</span>
+              </div>
+            </div>
+
+            <!-- Format Seçimi -->
+            <div class="input-group" style="margin-top: 20px;">
+              <label>HEDEF FORMAT</label>
+              <select id="targetFormat">
+                <option value="image/webp">WebP (Modern & Küçük)</option>
+                <option value="image/png">PNG (Şeffaf & Kayıpsız)</option>
+                <option value="image/jpeg">JPG (Fotoğraf Optimum)</option>
+              </select>
+            </div>
+
+            <!-- Kalite Slider -->
+            <div id="qualityGroup" class="slider-group" style="margin-top: 16px;">
+              <div class="slider-header">
+                <label for="qualitySlider">Kalite</label>
+                <span id="qualityValue" class="slider-val">85%</span>
+              </div>
+              <input type="range" id="qualitySlider" min="10" max="100" value="85" step="5">
+              <small style="font-size: 11px; color: var(--text-muted);">PNG formatında kalite ayarı uygulanmaz (kayıpsız).</small>
+            </div>
+
+            <div class="tool-info-box" style="margin-top: 16px;">
+              <span class="info-icon">🔒</span>
+              <p>Görselleriniz hiçbir sunucuya gönderilmez. İşlem tamamen tarayıcınızda gerçekleşir.</p>
+            </div>
+          </div>
+          
+          <div class="tool-card-right">
+            <h2 class="tool-step">Adım 2: Karşılaştır & İndir</h2>
+            <p class="tool-step-desc">Dönüştürülmüş görselin boyut farkını görün ve indirin.</p>
+            
+            <div id="converterEmpty" class="empty-state" style="margin-top: 40px;">
+              Bir görsel yükleyin ve formatı seçin...
+            </div>
+
+            <!-- Karşılaştırma -->
+            <div id="converterResult" style="display:none;">
+              <div class="stats-comparison">
+                <div class="stat-col">
+                  <span class="stat-lbl">ÖNCE</span>
+                  <span class="stat-val" id="sizeBefore">—</span>
+                </div>
+                <div class="stat-col" style="text-align: right;">
+                  <span class="stat-lbl">SONRA</span>
+                  <span class="stat-val" id="sizeAfter" style="color: var(--accent);">—</span>
+                </div>
+              </div>
+              <div class="gain-banner" id="savingsBanner" style="background: rgba(0,229,255,0.1); border: 1px solid rgba(0,229,255,0.3); color: var(--accent);">
+                —
+              </div>
+              
+              <div class="bg-original-preview" style="margin-top: 20px;">
+                <img id="convertedPreview" src="" alt="Dönüştürülmüş Görsel">
+              </div>
+              
+              <button class="btn btn-primary btn-full" id="downloadConverted" style="margin-top: 20px;">
+                Dönüştürülmüş Görseli İndir ↓
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="../assets/js/inject.js"></script>
+  <script>
+    document.addEventListener('componentsLoaded', () => {
+      const s = document.createElement('script');
+      s.src = '../assets/js/main.js';
+      document.body.appendChild(s);
+    });
+  </script>
+  <script src="../assets/js/tool-converter.js"></script>
+</body>
+</html>

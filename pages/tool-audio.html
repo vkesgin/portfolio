@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="../assets/images/favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Ücretsiz online ses kaydedici. Tarayıcınızdan mikrofon ile ses kaydı alın, dalga formunu görün, kırpın ve WAV/MP3 olarak indirin. Sıfır sunucu, %100 güvenli.">
+  <meta name="keywords" content="online ses kaydedici, ücretsiz ses kayıt, mikrofon kaydı, ses kırpma, mp3 kayıt, wav kayıt, tarayıcı ses kaydedici, audio recorder">
+  <meta property="og:title" content="Online Ses Kaydedici & Kesici — Ücretsiz Araç">
+  <meta property="og:description" content="Tarayıcınızdan mikrofon ile kayıt alın, dalga formunu görün, kırpın ve MP3/WAV olarak indirin.">
+  <title>Online Ses Kaydedici & Kesici — Araçlar</title>
+  <link rel="stylesheet" href="../assets/css/reset.css">
+  <link rel="stylesheet" href="../assets/css/variables.css">
+  <link rel="stylesheet" href="../assets/css/global.css">
+  <link rel="stylesheet" href="../assets/css/tool.css">
+</head>
+<body>
+
+  <div id="header-placeholder"></div>
+
+  <main>
+    <section id="tool-hero">
+      <div class="tool-hero-inner">
+        <p class="section-eyebrow">// araçlar — no: 07</p>
+        <h1 class="tool-title">
+          <span class="tool-line outline-text">Ses</span>
+          <span class="tool-line">KAYDEDİCİ</span>
+        </h1>
+        <p class="tool-desc">
+          Mikrofonunuzdan profesyonel ses kaydı alın, dalga formunu görsel olarak izleyin,<br>
+          istenmeyen kısımları kırpın ve WAV olarak anında indirin. Sıfır sunucu.
+        </p>
+      </div>
+    </section>
+
+    <section id="tool-app">
+      <div class="tool-app-inner">
+        <div class="tool-card">
+          
+          <div class="tool-card-left">
+            <h2 class="tool-step">Adım 1: Kaydet</h2>
+            <p class="tool-step-desc">Mikrofonunuzdan ses kaydı başlatın.</p>
+
+            <!-- Kayıt Kontrolleri -->
+            <div class="audio-controls">
+              <button class="audio-rec-btn" id="recBtn">
+                <span class="rec-icon" id="recIcon"></span>
+              </button>
+              <div class="audio-timer" id="audioTimer">00:00</div>
+              <div class="audio-status" id="audioStatus">Kayda Hazır</div>
+            </div>
+
+            <!-- VU Metre -->
+            <div class="vu-meter-container">
+              <div class="vu-meter-label">Ses Seviyesi</div>
+              <div class="vu-meter-track">
+                <div class="vu-meter-fill" id="vuMeter"></div>
+              </div>
+            </div>
+
+            <!-- Alt Butonlar -->
+            <div class="audio-action-row" id="pauseStopRow" style="display:none;">
+              <button class="btn btn-outline" id="pauseBtn" style="flex:1;">⏸ Duraklat</button>
+              <button class="btn btn-primary" id="stopBtn" style="flex:1;">⏹ Durdur</button>
+            </div>
+            
+            <div class="tool-info-box" style="margin-top: 16px;">
+              <span class="info-icon">🎙️</span>
+              <p>Kayıtlarınız hiçbir sunucuya gönderilmez. Tüm işlem tarayıcınız içinde gerçekleşir.</p>
+            </div>
+          </div>
+          
+          <div class="tool-card-right">
+            <h2 class="tool-step">Adım 2: Kırp & İndir</h2>
+            <p class="tool-step-desc">Dalga formunu gözden geçirin, istenmeyen kısımları kesin.</p>
+
+            <div id="audioEmpty" class="empty-state" style="margin-top: 40px;">
+              Önce bir kayıt yapın...
+            </div>
+            
+            <div id="audioResult" style="display:none;">
+              <!-- Dalga Formu -->
+              <div class="waveform-container">
+                <canvas id="waveformCanvas" width="400" height="100"></canvas>
+              </div>
+
+              <!-- Kırpma Kontrolleri -->
+              <div class="trim-controls">
+                <div class="slider-header">
+                  <label>Başlangıç</label>
+                  <span class="slider-val" id="trimStartVal">0.0s</span>
+                </div>
+                <input type="range" id="trimStart" min="0" max="100" value="0" step="0.1">
+                
+                <div class="slider-header" style="margin-top: 12px;">
+                  <label>Bitiş</label>
+                  <span class="slider-val" id="trimEndVal">—</span>
+                </div>
+                <input type="range" id="trimEnd" min="0" max="100" value="100" step="0.1">
+              </div>
+
+              <!-- Dinle -->
+              <div class="audio-action-row" style="margin-top: 16px;">
+                <button class="btn btn-outline" id="playTrimmed" style="flex:1;">▶ Kırpılmışı Dinle</button>
+              </div>
+
+              <!-- İndir -->
+              <button class="btn btn-primary btn-full" id="downloadAudio" style="margin-top: 16px;">
+                WAV Olarak İndir ↓
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="../assets/js/inject.js"></script>
+  <script>
+    document.addEventListener('componentsLoaded', () => {
+      const s = document.createElement('script');
+      s.src = '../assets/js/main.js';
+      document.body.appendChild(s);
+    });
+  </script>
+  <script src="../assets/js/tool-audio.js"></script>
+</body>
+</html>

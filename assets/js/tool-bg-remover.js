@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   async function processBackgroundRemoval(file) {
     try {
       const config = {
-        publicPath: window.location.origin + "/assets/models/dist/",
+        publicPath: "https://staticimgly.com/@imgly/background-removal-data/1.4.3/dist/",
         progress: (key, current, total) => {
           // key examples: "fetch:models/medium", "compute:inference", etc.
           if (key.startsWith('fetch:')) {

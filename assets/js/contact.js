@@ -68,15 +68,25 @@ document.addEventListener('DOMContentLoaded', () => {
     return n && e && s && m;
   }
 
-  // Live validation
+  // Live validation — Anlık geribildirim
   ['name','email','subject','message'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('blur', () => {
+
+    const validate = () => {
       if (id === 'name')    validateField(id, v => v.trim().length >= 2);
       if (id === 'email')   validateField(id, v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
       if (id === 'subject') validateField(id, v => v !== '');
       if (id === 'message') validateField(id, v => v.trim().length >= 20);
+    };
+
+    el.addEventListener('blur', validate);
+    el.addEventListener('input', () => {
+      // Eğer kullanıcı daha önce hata almışsa, yazarken anlık olarak kontrol et
+      const field = document.getElementById('field-' + id);
+      if (field && field.classList.contains('has-error')) {
+        validate();
+      }
     });
   });
 

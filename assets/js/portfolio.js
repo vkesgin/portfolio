@@ -12,15 +12,19 @@
     // Grid'i temizle
     grid.innerHTML = '';
 
-    // Dinamik layout — her 3'te bir wide kart
+    // Dinamik layout
     projects.forEach((p, i) => {
       const div = document.createElement('div');
       div.innerHTML = buildPortfolioCard(p);
       const card = div.firstElementChild;
 
-      // Her 4. kart wide (0, 3, 6, 9...)
-      if (i % 4 === 0 && projects.length > 1) {
-        card.classList.add('port-card--wide');
+      if (projects.length === 1) {
+        card.classList.add('port-card--full');
+      } else {
+        // Geniş kart algoritması: Her 4'te 1 geniş kart (0, 4, 8...), ancak video kartıysa her zaman küçük (span 1) kalsın
+        if (!p.video_url && i % 4 === 0) {
+          card.classList.add('port-card--wide');
+        }
       }
 
       grid.appendChild(card);

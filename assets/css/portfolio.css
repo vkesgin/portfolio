@@ -66,11 +66,7 @@
   gap: 1px;
   background: var(--border);
   border: 0.5px solid var(--border);
-  auto-rows: minmax(280px, auto);
 }
-
-/* Dinamik wide class — JS ile eklenir */
-.port-card--wide { grid-column: span 2; }
 
 /* === CARD === */
 .port-card {
@@ -79,27 +75,30 @@
   cursor: pointer;
   background: var(--bg-primary);
   opacity: 0;
-  aspect-ratio: 16/11; /* Sabit en oranlı daha şık görünüm */
 }
 
-/* Tek kartın tüm genişliği kaplamasını önle - Sola hizalanıp normal ebatında görünür */
+.port-card::before {
+  content: "";
+  display: block;
+  padding-top: 75%;
+}
+
+.port-card--wide { grid-column: span 2; }
+.port-card--full { grid-column: span 3; }
+
 .port-card-img {
-  width: 100%;
-  height: 100%;
-  min-height: 280px;
-  overflow: hidden;
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
-.port-card--wide .port-card-img { min-height: 320px; }
 
 .port-card-img img {
   width: 100%; height: 100%;
   object-fit: cover;
   filter: grayscale(20%) brightness(.75);
-  transition:
-    transform var(--dur-slow) var(--ease-out),
-    filter    var(--dur-mid)  var(--ease-out);
+  transition: transform var(--dur-slow) var(--ease-out), filter var(--dur-mid) var(--ease-out);
   display: block;
   position: absolute; inset: 0;
 }
@@ -107,8 +106,6 @@
   transform: scale(1.06);
   filter: grayscale(0%) brightness(.5);
 }
-
-/* Artık aspect-ratio ile boyutu ayarlıyoruz. Pseudo-element padding'e gerek yok. */
 
 /* === OVERLAY === */
 .port-card-overlay {

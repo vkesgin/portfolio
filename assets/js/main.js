@@ -376,17 +376,21 @@ function initWorks() {
       if (label) label.textContent = projects.length + ' iş gösteriliyor';
 
       // GSAP ile göster
-      if (typeof gsap !== 'undefined') {
+      // GSAP ile göster
+      if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
         gsap.to('#worksGrid .work-card', {
           opacity: 1,
           y: 0,
-          duration: .6,
-          stagger: .08,
+          duration: .8,
+          stagger: .1,
           ease: 'power3.out',
-          delay: .2
+          scrollTrigger: { trigger: '#works', start: 'top 75%' }
         });
       } else {
-        grid.querySelectorAll('.work-card').forEach(c => c.style.opacity = '1');
+        grid.querySelectorAll('.work-card').forEach(c => {
+          c.style.opacity = '1';
+          c.style.transform = 'none';
+        });
       }
 
       // Video kartları için tıklama

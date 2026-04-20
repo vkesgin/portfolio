@@ -12,3 +12,8 @@ CREATE TABLE IF NOT EXISTS projects (
   featured_order INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS fitness_store (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);

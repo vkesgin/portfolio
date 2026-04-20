@@ -109,6 +109,25 @@ export default {
     const user = await authMiddleware(request, env);
     if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
 
+    // === FITNESS API ===
+    if (path === '/api/fitness' && method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT * FROM fitness_store').all();
+      return json(results, 200, origin);
+    }
+
+    if (path === '/api/fitness' && method === 'POST') {
+      const body = await request.json();
+      const { key, value } = body;
+      if (!key || !value) return json({ error: 'Eksik veri' }, 400, origin);
+      
+      await env.DB.prepare(`
+        INSERT INTO fitness_store (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+      `).bind(key, value).run();
+      
+      return json({ ok: true }, 200, origin);
+    }
+
     // Proje ekle
     if (path === '/api/projects' && method === 'POST') {
       const data = await request.json();

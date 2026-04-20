@@ -422,6 +422,96 @@ function initWorks() {
           });
         });
       });
+      // Görsel kartları için lightbox
+      grid.querySelectorAll('.work-card:not(.work-card--video)').forEach(card => {
+        card.addEventListener('click', () => {
+          const imgSrc   = card.dataset.img || card.querySelector('img')?.src;
+          const title    = card.querySelector('.work-title')?.textContent || '';
+          const desc     = card.querySelector('.work-desc')?.textContent  || '';
+          const cat      = card.querySelector('.work-cat-label')?.textContent || '';
+          const year     = card.querySelector('.work-year')?.textContent  || '';
+          if (!imgSrc) return;
+
+          let lb = document.getElementById('works-lightbox');
+          if (lb) lb.remove();
+
+          lb = document.createElement('div');
+          lb.id = 'works-lightbox';
+          lb.style.cssText = `
+            position:fixed;inset:0;z-index:9000;
+            background:rgba(0,0,0,.96);
+            display:flex;align-items:center;justify-content:center;
+            backdrop-filter:blur(20px);
+            padding:24px;
+          `;
+          lb.innerHTML = `
+            <button id="wlbClose" style="
+              position:absolute;top:24px;right:24px;
+              background:rgba(255,255,255,.05);
+              border:0.5px solid #2a2a2a;
+              color:#888;padding:8px 14px;
+              border-radius:6px;cursor:pointer;
+              font-family:var(--font-mono);font-size:13px;
+              z-index:2;transition:color .2s,border-color .2s;
+            ">✕</button>
+            <div style="
+              display:flex;gap:32px;align-items:center;
+              max-width:1100px;width:100%;
+            ">
+              <div style="flex:1;overflow:hidden;border-radius:8px;max-height:80vh;">
+                <img src="${imgSrc}" alt="${title}"
+                  style="width:100%;height:100%;object-fit:contain;display:block;max-height:80vh;">
+              </div>
+              <div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;">
+                <span style="
+                  font-family:var(--font-mono);font-size:10px;
+                  letter-spacing:.12em;color:#00e5ff;
+                  background:rgba(0,229,255,.08);
+                  border:0.5px solid rgba(0,229,255,.2);
+                  padding:3px 10px;border-radius:3px;
+                  display:inline-block;width:fit-content;
+                ">${cat}</span>
+                <h3 style="
+                  font-family:var(--font-display);
+                  font-size:32px;line-height:.95;
+                  color:#f0f0f0;letter-spacing:.02em;
+                ">${title}</h3>
+                <p style="
+                  font-size:13px;color:#888;
+                  line-height:1.7;
+                ">${desc}</p>
+                <span style="
+                  font-family:var(--font-mono);
+                  font-size:11px;color:#444;
+                  letter-spacing:.08em;
+                ">${year}</span>
+                <a href="/pages/portfolio.html" style="
+                  margin-top:8px;
+                  font-family:var(--font-mono);font-size:11px;
+                  letter-spacing:.1em;color:#00e5ff;
+                  border:0.5px solid rgba(0,229,255,.3);
+                  padding:10px 20px;border-radius:4px;
+                  text-align:center;
+                  transition:background .2s;
+                  display:block;
+                ">Tüm İşleri Gör ↗</a>
+              </div>
+            </div>`;
+          document.body.appendChild(lb);
+          document.body.style.overflow = 'hidden';
+
+          const close = () => {
+            lb.remove();
+            document.body.style.overflow = '';
+          };
+          lb.querySelector('#wlbClose').addEventListener('click', close);
+          lb.addEventListener('click', e => { if (e.target === lb) close(); });
+          document.addEventListener('keydown', function esc(e) {
+            if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+          });
+        });
+      });
+
     });
   }
 

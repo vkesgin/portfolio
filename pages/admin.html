@@ -355,15 +355,29 @@ function resetZone(id, type) {
 });
 
 function previewFile(file, previewId) {
+  // Format kontrolü
+  if (file.type === 'video/quicktime' || file.name.toLowerCase().endsWith('.mov')) {
+    const warn = document.createElement('div');
+    warn.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;border:1px solid rgba(255,170,0,.4);color:#ffaa00;padding:14px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.6)';
+    warn.innerHTML = '⚠️ .MOV formatı mobil tarayıcılarda çalışmayabilir.<br>Lütfen videoı <strong>MP4</strong> formatına çevirip tekrar yükleyin.';
+    document.body.appendChild(warn);
+    setTimeout(() => warn.remove(), 5000);
+  }
+
   const url = URL.createObjectURL(file);
   const el  = document.getElementById(previewId);
   if (file.type.startsWith('image/')) {
     el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
   } else if (file.type.startsWith('video/')) {
+    const sizeMB = (file.size / 1024 / 1024).toFixed(0);
+    const sizeWarning = file.size > 80 * 1024 * 1024
+      ? `<div style="background:rgba(255,100,0,.15);border-top:1px solid rgba(255,100,0,.3);color:#ff8844;padding:6px 10px;font-family:var(--font-mono);font-size:10px;flex-shrink:0;">⚠ ${sizeMB} MB — Yükleme uzun sürebilir</div>`
+      : '';
     el.innerHTML = `
       <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;">
-        <video id="vidPlayerPreview" src="${url}" style="width:100%;height:calc(100% - 32px);object-fit:cover;border-radius:6px 6px 0 0;" controls></video>
-        <button onclick="captureVideoFrame(event)" style="width:100%;height:32px;background:#00e5ff;color:#000;border:none;border-radius:0 0 6px 6px;cursor:pointer;font-family:var(--font-mono);font-weight:700;font-size:10px;text-transform:uppercase;">Şu Anki Kareyi Kapak Yap</button>
+        <video id="vidPlayerPreview" src="${url}" style="width:100%;flex:1;min-height:0;object-fit:cover;border-radius:6px 6px 0 0;" controls></video>
+        <button onclick="captureVideoFrame(event)" style="width:100%;height:32px;background:#00e5ff;color:#000;border:none;cursor:pointer;font-family:var(--font-mono);font-weight:700;font-size:10px;text-transform:uppercase;flex-shrink:0;">Kapak Yap</button>
+        ${sizeWarning}
       </div>`;
   }
 }
@@ -395,17 +409,28 @@ window.captureVideoFrame = function(e) {
 };
 
 // === SAVE ===
-async function uploadFile(file, type) {
-  const form = new FormData();
-  form.append('file', file);
-  form.append('type', type);
-  const r = await fetch(`${API}/api/upload`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${TOKEN}` },
-    body: form
+async function uploadFile(file, type, onProgress) {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('type', type);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/api/upload`);
+    xhr.setRequestHeader('Authorization', `Bearer ${TOKEN}`);
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText).url); }
+        catch { reject(new Error('Sunucu yanıtı okunamadı')); }
+      } else {
+        reject(new Error(`Yükleme hatası: ${xhr.status}`));
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('Ağ bağlantı hatası')));
+    xhr.send(form);
   });
-  const d = await r.json();
-  return d.url;
 }
 
 function showProgress(text, pct) {
@@ -431,8 +456,15 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     const imgFile = document.getElementById('imgFile').files[0] || window.extractedVideoThumb;
     const vidFile = document.getElementById('vidFile').files[0];
 
-    if (imgFile) { showProgress('Görsel yükleniyor...', 30); imgUrl = await uploadFile(imgFile, 'image'); }
-    if (vidFile) { showProgress('Video yükleniyor...', 65); vidUrl = await uploadFile(vidFile, 'video'); }
+    if (imgFile) {
+      showProgress('Görsel yükleniyor... 0%', 0);
+      imgUrl = await uploadFile(imgFile, 'image', pct => showProgress(`Görsel yükleniyor... ${pct}%`, pct));
+    }
+    if (vidFile) {
+      const sizeMB = (vidFile.size / 1024 / 1024).toFixed(0);
+      showProgress(`Video yükleniyor... 0% (${sizeMB} MB)`, 0);
+      vidUrl = await uploadFile(vidFile, 'video', pct => showProgress(`Video yükleniyor... ${pct}%`, pct));
+    }
 
     showProgress('Kaydediliyor...', 90);
 

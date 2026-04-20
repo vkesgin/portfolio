@@ -355,40 +355,61 @@ function initWorks() {
       // Statik kartları kaldır
       grid.innerHTML = '';
 
-      const maxShow = Math.min(projects.length, 6);
-      projects.slice(0, maxShow).forEach((p, i) => {
-        const div = document.createElement('div');
-        div.innerHTML = buildWorkCard(p);
-        const card = div.firstElementChild;
+      const FEAT_PER_PAGE = 6;
+      let featPage = 0;
 
-        // İlk ve 4. kart large
-        if ((i === 0 || i === 3) && maxShow > 2) {
-          card.classList.add('work-card--large');
+      function renderFeatPage() {
+        grid.innerHTML = '';
+        const start = featPage * FEAT_PER_PAGE;
+        const pageItems = projects.slice(start, start + FEAT_PER_PAGE);
+
+        pageItems.forEach((p, i) => {
+          const div = document.createElement('div');
+          div.innerHTML = buildWorkCard(p);
+          const card = div.firstElementChild;
+          if ((i === 0 || i === 3) && pageItems.length > 2) {
+            card.classList.add('work-card--large');
+          }
+          grid.appendChild(card);
+        });
+
+        // Pagination
+        const totalPages = Math.ceil(projects.length / FEAT_PER_PAGE);
+        const existingPager = document.getElementById('works-pager');
+        if (existingPager) existingPager.remove();
+
+        if (totalPages > 1) {
+          const pager = document.createElement('div');
+          pager.id = 'works-pager';
+          pager.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:12px;margin-top:24px;';
+          pager.innerHTML = `
+            <button id="featPrev" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;padding:8px 16px;border-radius:4px;border:0.5px solid var(--border);color:var(--text-muted);background:transparent;cursor:pointer;transition:all .2s;" ${featPage===0?'disabled style="opacity:.3;cursor:default"':''}>
+              ← Önceki
+            </button>
+            <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);letter-spacing:.08em;">${featPage+1} / ${totalPages}</span>
+            <button id="featNext" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;padding:8px 16px;border-radius:4px;border:0.5px solid var(--border);color:var(--text-muted);background:transparent;cursor:pointer;transition:all .2s;" ${featPage===totalPages-1?'disabled style="opacity:.3;cursor:default"':''}>
+              Sonraki →
+            </button>`;
+          grid.parentElement.appendChild(pager);
+          pager.querySelector('#featPrev')?.addEventListener('click', () => { if(featPage>0){featPage--;renderFeatPage();attachVideoHandlers();} });
+          pager.querySelector('#featNext')?.addEventListener('click', () => { if(featPage<totalPages-1){featPage++;renderFeatPage();attachVideoHandlers();} });
         }
 
-        grid.appendChild(card);
-      });
+        // Baştan görünür yap
+        grid.querySelectorAll('.work-card').forEach(c => c.style.opacity = '1');
+        if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
+          gsap.from(grid.querySelectorAll('.work-card'), { opacity:0, y:24, duration:.5, stagger:.07, ease:'power3.out', clearProps:'all' });
+        }
+        attachVideoHandlers();
+      }
+
+      renderFeatPage();
 
       // Count label
       const label = document.querySelector('.works-count-label');
       if (label) label.textContent = projects.length + ' iş gösteriliyor';
 
-      // Baştan görünür yap
-      const cards = grid.querySelectorAll('.work-card');
-      cards.forEach(c => c.style.opacity = '1');
-
-      // GSAP ile göster
-      if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
-        gsap.from(cards, {
-          opacity: 0,
-          y: 40,
-          duration: .8,
-          stagger: .1,
-          ease: 'power3.out',
-          scrollTrigger: { trigger: '#works', start: 'top 75%' }
-        });
-      }
-
+      function attachVideoHandlers() {
       // Video kartları için tıklama
       grid.querySelectorAll('.work-card--video').forEach(card => {
         card.addEventListener('click', e => {
@@ -397,6 +418,7 @@ function initWorks() {
           e.preventDefault();
 
           const isMobile = window.innerWidth < 768;
+          const posterSrc = card.dataset.img || '';
           let lb = document.getElementById('works-lightbox');
           if (lb) lb.remove();
 
@@ -405,8 +427,12 @@ function initWorks() {
           lb.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px)';
           lb.innerHTML = `
             <button id="wlbClose" style="position:absolute;top:${isMobile ? '16px' : '24px'};right:${isMobile ? '16px' : '24px'};background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2">✕</button>
-            <div style="width:${isMobile ? '100%' : '90%'};max-width:${isMobile ? '100%' : '960px'};aspect-ratio:16/9;position:relative;background:#000;border-radius:${isMobile ? '0' : '8px'};overflow:hidden;">
-              <video id="wlbVideo" style="width:100%;height:100%;object-fit:contain;" playsinline controls autoplay></video>
+            <div style="display:flex;align-items:center;justify-content:center;max-width:${isMobile?'100vw':'90vw'};max-height:100vh;">
+              <video id="wlbVideo"
+                ${posterSrc ? `poster="${posterSrc}"` : ''}
+                style="max-width:${isMobile?'100vw':'85vw'};max-height:${isMobile?'100vh':'90vh'};width:auto;height:auto;display:block;object-fit:contain;background:#000;border-radius:${isMobile?'0':'8px'};"
+                playsinline controls autoplay preload="metadata">
+              </video>
             </div>`;
           document.body.appendChild(lb);
 
@@ -533,7 +559,8 @@ function initWorks() {
             if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
           });
         });
-      });
+      }); // end image cards
+      } // end attachVideoHandlers
 
     });
   }

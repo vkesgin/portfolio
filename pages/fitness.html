@@ -579,10 +579,38 @@ async function initApp() {
   const saved = getItem('fitness_'+today);
   if(saved) state = {...state,...saved};
 
-  // Kilo sadece pazartesi
-  if(d.getDay()!==1) {
-    document.getElementById('weight-body').innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;font-family:var(--font-mono)">Pazartesi ölçüm günü</div>`;
-  } else { calcWeightDiff(); }
+  // Kilo: başlandığı günün haftasından itibaren aynı güne izin ver
+  const weekDayNames=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+  let firstWeightDay = null, firstWeightDate = null;
+  Object.keys(store).sort().forEach(k => {
+    if(k.startsWith('fitness_20') && !firstWeightDay) {
+      const dat = getItem(k);
+      if(dat?.weight != null) {
+        const dd = new Date(k.replace('fitness_',''));
+        firstWeightDay = dd.getDay();
+        firstWeightDate = dd;
+      }
+    }
+  });
+
+  const weightBody = document.getElementById('weight-body');
+  if(firstWeightDay === null || d.getDay() === firstWeightDay) {
+    // İlk kez veya ölçüm günü → input göster
+    calcWeightDiff();
+  } else {
+    // Sonraki ölçüm gününü hesapla
+    let nextMeasure = new Date();
+    let count = 1;
+    while(nextMeasure.getDay() !== firstWeightDay) {
+      nextMeasure.setDate(nextMeasure.getDate()+1);
+      if(++count > 7) break;
+    }
+    const nm = nextMeasure;
+    weightBody.innerHTML = `<div style="text-align:center;font-family:var(--font-mono);font-size:12px;color:var(--muted);line-height:1.7">
+      Haftalık ölçüm günün: <span style="color:var(--accent)">${weekDayNames[firstWeightDay]}</span><br>
+      Sonraki ölçüm: <span style="color:var(--text)">${nm.getDate()} ${['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'][nm.getMonth()]}</span>
+    </div>`;
+  }
 
   renderUI(); updateHints();
 }

@@ -395,10 +395,15 @@ function initWorks() {
           pager.querySelector('#featNext')?.addEventListener('click', () => { if(featPage<totalPages-1){featPage++;renderFeatPage();attachVideoHandlers();} });
         }
 
-        // Baştan görünür yap
-        grid.querySelectorAll('.work-card').forEach(c => c.style.opacity = '1');
-        if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
-          gsap.from(grid.querySelectorAll('.work-card'), { opacity:0, y:24, duration:.5, stagger:.07, ease:'power3.out', clearProps:'all' });
+        // Baştan görünür yap — GSAP animasyonu opacity 0→1 yapacak, transform temizlenecek
+        if (typeof gsap !== 'undefined') {
+          gsap.fromTo(
+            grid.querySelectorAll('.work-card'),
+            { opacity: 0, y: 24 },
+            { opacity: 1, y: 0, duration: .5, stagger: .07, ease: 'power3.out', clearProps: 'transform' }
+          );
+        } else {
+          grid.querySelectorAll('.work-card').forEach(c => c.style.opacity = '1');
         }
         attachVideoHandlers();
       }

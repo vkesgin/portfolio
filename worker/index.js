@@ -128,6 +128,14 @@ export default {
       return json({ ok: true }, 200, origin);
     }
 
+    if (path === '/api/fitness' && method === 'DELETE') {
+      const body = await request.json();
+      const { key } = body;
+      if (!key) return json({ error: 'Key gerekli' }, 400, origin);
+      await env.DB.prepare('DELETE FROM fitness_store WHERE key=?').bind(key).run();
+      return json({ ok: true }, 200, origin);
+    }
+
     // Proje ekle
     if (path === '/api/projects' && method === 'POST') {
       const data = await request.json();

@@ -1,861 +1,861 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VK Fitness</title>
-    
-    <!-- PWA ve Mobil Uygulama Deneyimi İçin -->
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="VK Fitness">
-    <meta name="theme-color" content="#0a0a0a">
-    <link rel="apple-touch-icon" href="../assets/images/logo.png">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>VK Fitness</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="VK Fitness">
+  <meta name="theme-color" content="#0a0a0a">
 
-    <!-- Fontlar -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 
-    <!-- Inline CSS -->
-    <style>
-        :root {
-            --bg-color: #0a0a0a;
-            --card-bg: #111111;
-            --accent: #00e5ff;
-            --accent-glow: rgba(0, 229, 255, 0.15);
-            --text-main: #ffffff;
-            --text-muted: #888888;
-            --border-color: #333333;
-            --success: #00ff88;
-        }
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111;
+      --surface2: #161616;
+      --border: rgba(255,255,255,0.07);
+      --accent: #00e5ff;
+      --accent-dim: rgba(0,229,255,0.12);
+      --accent-glow: rgba(0,229,255,0.25);
+      --success: #00ff88;
+      --danger: #ff4444;
+      --text: #ffffff;
+      --muted: #555;
+      --muted2: #888;
+      --font-body: 'Space Grotesk', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+      --font-display: 'Bebas Neue', sans-serif;
+      --radius: 14px;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html { height:100%; }
+    body { font-family:var(--font-body); background:var(--bg); color:var(--text); overflow-x:hidden; min-height:100vh; }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: 'Space Grotesk', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            overflow-x: hidden;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-        }
+    /* SCROLLBAR */
+    ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:var(--muted); border-radius:2px; }
 
-        h1, h2, h3, h4 { 
-            font-family: 'Bebas Neue', sans-serif; 
-            letter-spacing: 1px; 
-            font-weight: normal; 
-        }
+    /* HEADER */
+    header {
+      position:fixed; top:0; left:0; right:0; height:56px; z-index:200;
+      background:rgba(10,10,10,0.85); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between; padding:0 20px;
+    }
+    .header-logo { font-family:var(--font-display); font-size:26px; color:var(--accent); letter-spacing:2px; padding-top:3px; }
+    .header-right { display:flex; align-items:center; gap:12px; }
+    .header-date { font-size:12px; color:var(--muted2); font-weight:500; font-family:var(--font-mono); }
 
-        .mono { font-family: 'JetBrains Mono', monospace; }
+    /* BOTTOM NAV */
+    nav {
+      position:fixed; bottom:0; left:0; right:0; height:68px; z-index:200;
+      background:rgba(10,10,10,0.92); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+      border-top:1px solid var(--border);
+      display:flex;
+    }
+    .nav-btn {
+      flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      gap:4px; background:none; border:none; color:var(--muted); cursor:pointer;
+      font-family:var(--font-display); font-size:13px; letter-spacing:1px;
+      transition:color 0.2s; padding-bottom:2px;
+    }
+    .nav-btn svg { transition:transform 0.2s, opacity 0.2s; opacity:0.4; }
+    .nav-btn.active { color:var(--accent); }
+    .nav-btn.active svg { opacity:1; transform:scale(1.1); }
 
-        /* HEADER */
-        header {
-            position: fixed; top: 0; left: 0; width: 100%; height: 60px;
-            background: rgba(10, 10, 10, 0.9);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 0 20px; z-index: 100;
-            border-bottom: 1px solid var(--border-color);
-        }
-        header h1 { color: var(--accent); font-size: 28px; padding-top: 5px; }
-        header .date { font-size: 14px; color: var(--text-muted); font-weight: 600; }
+    /* MAIN */
+    main { padding:72px 16px 84px; min-height:100vh; }
 
-        /* BOTTOM NAV */
-        nav {
-            position: fixed; bottom: 0; left: 0; width: 100%; height: 75px;
-            background: rgba(10, 10, 10, 0.95);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            display: flex; justify-content: space-around; align-items: center;
-            border-top: 1px solid var(--border-color); z-index: 100;
-        }
-        .nav-btn {
-            flex: 1; height: 100%;
-            background: none; border: none; color: var(--text-muted);
-            font-family: 'Bebas Neue', sans-serif; font-size: 20px;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            transition: 0.3s ease; cursor: pointer;
-            padding-top: 5px;
-        }
-        .nav-btn .icon { font-size: 24px; margin-bottom: 4px; transition: transform 0.2s; }
-        .nav-btn.active { color: var(--accent); }
-        .nav-btn.active .icon { transform: scale(1.1); }
+    /* TABS */
+    .tab { display:none; animation:fadeUp 0.3s ease; }
+    .tab.active { display:block; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 
-        /* MAIN */
-        main { padding: 80px 20px 100px 20px; min-height: 100vh; }
-        
-        .tab-content { display: none; }
-        .tab-content.active { display: block; animation: fadeIn 0.4s ease; }
+    /* SECTION LABEL */
+    .section-label {
+      font-family:var(--font-mono); font-size:10px; letter-spacing:2px;
+      color:var(--muted); text-transform:uppercase; margin:20px 0 10px;
+    }
+    .section-label:first-child { margin-top:0; }
 
-        @keyframes fadeIn { 
-            from { opacity: 0; transform: translateY(10px); } 
-            to { opacity: 1; transform: translateY(0); } 
-        }
+    /* CARD */
+    .card {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius); padding:16px 18px; margin-bottom:10px;
+      transition:border-color 0.3s ease, box-shadow 0.3s ease;
+      position:relative; overflow:hidden;
+    }
+    .card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:1px;
+      background:linear-gradient(90deg, transparent, rgba(0,229,255,0), transparent);
+      transition:background 0.3s;
+    }
+    .card.done { border-color:rgba(0,229,255,0.3); box-shadow:0 0 24px rgba(0,229,255,0.06); }
+    .card.done::before { background:linear-gradient(90deg, transparent, rgba(0,229,255,0.4), transparent); }
 
-        /* CARDS */
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px; padding: 20px;
-            margin-bottom: 15px;
-            transition: all 0.3s ease;
-        }
-        .card.completed {
-            border-color: var(--accent);
-            box-shadow: 0 0 20px var(--accent-glow);
-            background: linear-gradient(180deg, var(--card-bg) 0%, rgba(0,229,255,0.05) 100%);
-        }
-        .card-title { 
-            font-size: 20px; color: var(--text-muted); margin-bottom: 15px; 
-            display: flex; justify-content: space-between; align-items: center; 
-        }
+    /* CARD HEADER */
+    .card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    .card-title { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--muted2); letter-spacing:0.5px; text-transform:uppercase; }
+    .card-title svg { color:var(--accent); opacity:0.7; }
+    .card-badge { font-family:var(--font-mono); font-size:11px; color:var(--muted); background:var(--surface2); padding:2px 8px; border-radius:20px; border:1px solid var(--border); }
+    .card-badge.hot { color:var(--accent); border-color:rgba(0,229,255,0.2); background:var(--accent-dim); }
 
-        /* INPUTS & BUTTONS */
-        .input-field {
-            width: 100%;
-            background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);
-            color: white; padding: 15px; border-radius: 12px; font-size: 16px; /* iOS zoom engeli için 16px min */
-            font-family: 'JetBrains Mono', monospace; text-align: center; outline: none;
-            transition: border-color 0.3s;
-        }
-        .input-field:focus { border-color: var(--accent); }
-        
-        .btn {
-            width: 100%; background: var(--accent); color: black;
-            border: none; padding: 15px; border-radius: 12px;
-            font-size: 24px; font-family: 'Bebas Neue', sans-serif;
-            cursor: pointer; min-height: 56px; transition: all 0.3s ease;
-            display: flex; align-items: center; justify-content: center;
-        }
-        .btn:active { transform: scale(0.98); background: #00cce6; }
+    /* CHECKBOX ROW */
+    .check-row { display:flex; align-items:center; gap:12px; cursor:pointer; }
+    .check-box {
+      width:28px; height:28px; border:1.5px solid var(--muted); border-radius:8px;
+      display:flex; align-items:center; justify-content:center;
+      transition:all 0.2s; flex-shrink:0;
+    }
+    .check-box svg { opacity:0; transform:scale(0.7); transition:all 0.2s; }
+    .card.done .check-box { border-color:var(--accent); background:var(--accent); }
+    .card.done .check-box svg { opacity:1; transform:scale(1); }
+    .check-label { font-size:16px; font-weight:600; }
 
-        /* SPECIFIC COMPONENTS */
-        /* Checkbox */
-        .checkbox-wrap { display: flex; align-items: center; gap: 15px; cursor: pointer; }
-        .custom-checkbox { 
-            width: 32px; height: 32px; border: 2px solid var(--text-muted); 
-            border-radius: 8px; display: flex; align-items: center; justify-content: center; 
-            transition: all 0.2s; font-size: 20px; font-weight: bold;
-        }
-        .card.completed .custom-checkbox { border-color: var(--accent); background: var(--accent); color: black; }
+    /* TIMER */
+    .timer-val { font-family:var(--font-mono); font-size:56px; font-weight:700; text-align:center; color:var(--accent); letter-spacing:-2px; margin:8px 0 16px; line-height:1; }
+    .timer-meta { text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-bottom:14px; }
+    .btn-row { display:flex; gap:8px; }
+    .btn-pill {
+      flex:1; height:44px; border-radius:10px; border:1px solid var(--border);
+      background:var(--surface2); color:var(--text); font-family:var(--font-display);
+      font-size:17px; letter-spacing:1px; cursor:pointer; transition:all 0.2s;
+      display:flex; align-items:center; justify-content:center; gap:6px;
+    }
+    .btn-pill:active { transform:scale(0.97); }
+    .btn-pill.accent { background:var(--accent); color:#000; border-color:var(--accent); }
+    .btn-pill.running { color:var(--success); border-color:rgba(0,255,136,0.3); }
 
-        /* Timer */
-        .timer-display { font-size: 64px; font-weight: 700; text-align: center; margin: 5px 0 15px 0; color: var(--accent); }
-        .timer-controls { display: flex; gap: 10px; }
-        .btn-alt { 
-            background: rgba(255,255,255,0.05); color: var(--text-main); 
-            border: 1px solid var(--border-color); flex: 1; padding: 15px; 
-            border-radius: 12px; font-family: 'Bebas Neue'; letter-spacing: 1px; font-size: 20px; 
-            transition: all 0.2s; cursor: pointer;
-        }
-        .btn-alt:active { background: rgba(255,255,255,0.1); }
+    /* NUMBER CONTROL */
+    .num-ctrl { display:flex; align-items:center; justify-content:center; gap:12px; }
+    .num-btn {
+      width:44px; height:44px; border-radius:10px;
+      background:var(--surface2); border:1px solid var(--border);
+      color:var(--text); font-size:20px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      transition:all 0.15s; user-select:none;
+    }
+    .num-btn:active { background:rgba(255,255,255,0.1); transform:scale(0.95); }
+    .num-val { font-family:var(--font-mono); font-size:44px; font-weight:700; width:80px; text-align:center; background:none; border:none; color:var(--text); outline:none; }
+    .num-val-unit { font-size:14px; color:var(--muted2); font-weight:500; }
+    .num-hint { text-align:center; font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:10px; }
+    .num-btn.lg { width:auto; padding:0 12px; font-size:13px; font-weight:700; color:var(--accent); border-color:rgba(0,229,255,0.2); background:var(--accent-dim); }
 
-        /* Number Control */
-        .number-control { display: flex; align-items: center; justify-content: center; gap: 15px; }
-        .number-btn { 
-            width: 48px; height: 48px; border-radius: 12px; 
-            background: rgba(255,255,255,0.1); color: white; border: none; 
-            font-size: 24px; display: flex; align-items: center; justify-content: center; 
-            cursor: pointer; transition: 0.2s;
-        }
-        .number-btn:active { background: rgba(255,255,255,0.2); }
-        .number-input { background: none; border: none; color: white; font-size: 40px; text-align: center; width: 80px; font-weight: bold; outline:none; }
+    /* WATER */
+    .water-track { display:flex; gap:6px; margin-top:4px; }
+    .water-drop {
+      flex:1; height:36px; border-radius:8px; border:1.5px solid var(--muted);
+      transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1); cursor:pointer;
+      background:transparent; position:relative; overflow:hidden;
+    }
+    .water-drop.filled { border-color:var(--accent); background:var(--accent-dim); box-shadow:0 0 8px var(--accent-glow); transform:scaleY(1.05); }
+    .water-drop.filled::after { content:''; position:absolute; bottom:0; left:0; right:0; height:40%; background:rgba(0,229,255,0.25); }
 
-        /* Water */
-        .water-grid { display: flex; justify-content: space-between; margin-top: 15px; }
-        .water-glass { 
-            width: calc(100% / 8 - 4px); aspect-ratio: 1; 
-            border-radius: 50%; border: 2px solid var(--border-color);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); cursor: pointer;
-        }
-        .water-glass.filled { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px var(--accent-glow); transform: scale(1.1); }
+    /* SLEEP SLIDER */
+    .sleep-display { font-family:var(--font-mono); font-size:40px; font-weight:700; text-align:center; color:var(--accent); margin:8px 0 12px; }
+    input[type=range] {
+      width:100%; height:4px; border-radius:2px; appearance:none;
+      background:linear-gradient(to right, var(--accent) var(--pct,50%), var(--muted) var(--pct,50%));
+      outline:none; cursor:pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      appearance:none; width:20px; height:20px; border-radius:50%;
+      background:var(--accent); box-shadow:0 0 12px var(--accent-glow); cursor:pointer;
+    }
 
-        /* Textarea */
-        textarea { 
-            width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); 
-            color: white; border-radius: 12px; padding: 15px; font-family: 'Space Grotesk'; 
-            font-size: 16px; min-height: 100px; resize: none; outline: none; transition: 0.3s;
-        }
-        textarea:focus { border-color: var(--accent); background: rgba(255,255,255,0.08); }
+    /* WEIGHT */
+    .weight-input {
+      width:100%; background:var(--surface2); border:1px solid var(--border);
+      color:var(--text); padding:14px 16px; border-radius:10px;
+      font-family:var(--font-mono); font-size:22px; outline:none;
+      transition:border-color 0.2s;
+    }
+    .weight-input:focus { border-color:rgba(0,229,255,0.3); }
+    .weight-diff { margin-top:8px; font-size:13px; color:var(--muted2); font-family:var(--font-mono); }
 
-        /* Tables & Lists */
-        .weekly-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        .weekly-table th, .weekly-table td { padding: 12px 8px; text-align: center; border-bottom: 1px solid var(--border-color); }
-        .weekly-table th { color: var(--accent); font-family: 'Bebas Neue'; font-size: 18px; letter-spacing: 0.5px; }
-        .weekly-table td:first-child { text-align: left; }
-        .streak-box { text-align: center; padding: 10px; font-size: 28px; color: #ffaa00; font-family: 'Bebas Neue'; letter-spacing: 1px; }
+    /* TEXTAREA */
+    textarea {
+      width:100%; background:var(--surface2); border:1px solid var(--border);
+      color:var(--text); border-radius:10px; padding:14px 16px;
+      font-family:var(--font-body); font-size:15px; min-height:90px; resize:none; outline:none;
+      transition:border-color 0.2s;
+    }
+    textarea:focus { border-color:rgba(0,229,255,0.2); }
+    textarea::placeholder { color:var(--muted); }
 
-        /* Charts */
-        .chart-container { width: 100%; height: 160px; margin-top: 10px; }
+    /* SAVE BTN */
+    .save-btn {
+      width:100%; height:52px; border-radius:12px;
+      background:var(--accent); border:none; color:#000;
+      font-family:var(--font-display); font-size:22px; letter-spacing:2px;
+      cursor:pointer; transition:all 0.3s; margin-top:4px;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+    }
+    .save-btn:active { transform:scale(0.98); }
+    .save-btn.saving { background:var(--success); }
 
-        /* LOGIN SCREEN */
-        #login-screen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-color); z-index: 9999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            padding: 20px;
-        }
-        #login-screen h1 { font-size: 64px; color: var(--accent); margin-bottom: 10px; text-shadow: 0 0 20px var(--accent-glow); }
-        #login-screen p.sub { color: var(--text-muted); margin-bottom: 40px; font-size: 18px; }
+    /* RESET BTN */
+    .reset-btn {
+      width:100%; height:40px; border-radius:10px; margin-top:8px;
+      background:transparent; border:1px solid rgba(255,68,68,0.2);
+      color:var(--danger); font-family:var(--font-mono); font-size:12px;
+      letter-spacing:1px; cursor:pointer; transition:all 0.2s;
+      display:flex; align-items:center; justify-content:center; gap:6px;
+    }
+    .reset-btn:hover { background:rgba(255,68,68,0.08); }
 
-        .stat-row { display:flex; justify-content:space-between; margin-bottom: 12px; font-size: 16px; align-items: center; }
-        .stat-row:last-child { margin-bottom: 0; }
-        .val { color: var(--accent); font-size: 18px; }
-        
-        /* Utility */
-        .trend-up { color: var(--success); font-family: 'JetBrains Mono'; font-size: 14px; }
-        .trend-icon { font-size: 16px; margin-right: 4px; }
-    </style>
+    /* WEEKLY */
+    .streak-pill {
+      display:inline-flex; align-items:center; gap:6px;
+      background:rgba(255,170,0,0.1); border:1px solid rgba(255,170,0,0.2);
+      border-radius:20px; padding:6px 14px; font-size:15px; font-weight:700; color:#ffaa00;
+      margin-bottom:16px;
+    }
+    .progress-ring-wrap { display:flex; justify-content:center; margin:8px 0 20px; }
+    .week-day-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 0; border-bottom:1px solid var(--border); gap:8px;
+    }
+    .week-day-row:last-child { border-bottom:none; }
+    .week-day-date { font-family:var(--font-mono); font-size:12px; color:var(--muted2); width:42px; flex-shrink:0; }
+    .week-day-stats { display:flex; gap:10px; flex:1; flex-wrap:wrap; }
+    .week-stat { font-family:var(--font-mono); font-size:12px; color:var(--muted2); display:flex; align-items:center; gap:3px; }
+    .week-stat.done { color:var(--text); }
+    .week-stat svg { opacity:0.5; }
+    .week-stat.done svg { color:var(--accent); opacity:1; }
+    .del-btn { width:28px; height:28px; border-radius:7px; background:transparent; border:1px solid rgba(255,68,68,0.15); color:rgba(255,68,68,0.4); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s; flex-shrink:0; }
+    .del-btn:hover { background:rgba(255,68,68,0.1); color:var(--danger); border-color:rgba(255,68,68,0.3); }
+
+    .summary-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:4px; }
+    .summary-cell { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px; text-align:center; }
+    .summary-cell .s-val { font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--accent); }
+    .summary-cell .s-label { font-size:10px; color:var(--muted); letter-spacing:0.5px; margin-top:2px; }
+
+    /* RECORDS */
+    .rec-row { display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid var(--border); }
+    .rec-row:last-child { border-bottom:none; }
+    .rec-label { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--muted2); }
+    .rec-label svg { color:var(--accent); opacity:0.6; }
+    .rec-val { font-family:var(--font-mono); font-size:16px; font-weight:700; color:var(--text); }
+    .rec-date { font-family:var(--font-mono); font-size:10px; color:var(--muted); display:block; text-align:right; margin-top:2px; }
+
+    .chart-wrap { height:120px; margin-top:8px; }
+
+    /* ALL STATS */
+    .allstat-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border); font-size:14px; }
+    .allstat-row:last-child { border-bottom:none; }
+    .allstat-val { font-family:var(--font-mono); font-size:18px; font-weight:700; color:var(--accent); }
+
+    /* LOGIN */
+    #login-wrap {
+      position:fixed; inset:0; background:var(--bg); z-index:1000;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px;
+    }
+    .login-logo { font-family:var(--font-display); font-size:72px; color:var(--accent); letter-spacing:4px; margin-bottom:4px; text-shadow:0 0 40px rgba(0,229,255,0.3); }
+    .login-sub { font-family:var(--font-mono); font-size:11px; letter-spacing:3px; color:var(--muted); margin-bottom:40px; }
+    .login-box { width:100%; max-width:300px; }
+    .login-field { position:relative; margin-bottom:12px; }
+    .login-field input {
+      width:100%; background:var(--surface); border:1px solid var(--border);
+      border-radius:10px; padding:14px 14px 14px 42px; font-size:16px;
+      font-family:var(--font-mono); color:var(--text); outline:none; transition:border-color 0.2s;
+    }
+    .login-field input:focus { border-color:rgba(0,229,255,0.3); }
+    .login-field .fi { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--muted); }
+    .login-btn {
+      width:100%; height:50px; border-radius:10px; background:var(--accent);
+      color:#000; border:none; font-family:var(--font-display); font-size:22px; letter-spacing:2px;
+      cursor:pointer; transition:all 0.2s;
+    }
+    .login-err { text-align:center; color:var(--danger); font-size:13px; font-weight:600; margin-top:10px; display:none; }
+    .login-loading { text-align:center; color:var(--muted2); font-size:12px; font-family:var(--font-mono); margin-top:10px; display:none; }
+  </style>
 </head>
 <body>
 
-    <!-- GİRİŞ EKRANI -->
-    <div id="login-screen">
-        <h1>VK FITNESS</h1>
-        <p class="sub">Kişisel Spor Takip</p>
-        <div style="width: 100%; max-width: 320px;">
-            <input type="password" id="pass-input" class="input-field" placeholder="Şifre Giriniz" style="margin-bottom: 15px;">
-            <button class="btn" onclick="login()">GİRİŞ YAP</button>
-            <p id="pass-error" style="color:#ff4444; display:none; margin-top:15px; text-align:center; font-weight:600;">Hatalı Şifre!</p>
+<!-- LOGIN -->
+<div id="login-wrap">
+  <div class="login-logo">VK</div>
+  <div class="login-sub">FITNESS TRACKER</div>
+  <div class="login-box">
+    <div class="login-field">
+      <span class="fi" id="fi-lock"></span>
+      <input type="password" id="pass-input" placeholder="Şifre" autocomplete="current-password">
+    </div>
+    <button class="login-btn" onclick="login()">GİRİŞ</button>
+    <div class="login-err" id="pass-err">Hatalı şifre</div>
+    <div class="login-loading" id="pass-load">Doğrulanıyor...</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+  <header>
+    <div class="header-logo">VK FIT</div>
+    <div class="header-right">
+      <div class="header-date" id="hdr-date"></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- BUGÜN -->
+    <div id="tab-today" class="tab active">
+
+      <div class="section-label">Antrenman</div>
+
+      <!-- Koşu -->
+      <div class="card" id="card-run" onclick="toggleRun()" style="cursor:pointer">
+        <div class="card-head">
+          <div class="card-title"><span id="ico-run"></span>Tempolu Koşu</div>
+          <div class="card-badge" id="badge-run">Yapılmadı</div>
         </div>
+        <div class="check-row">
+          <div class="check-box" id="run-box"><span id="ico-check"></span></div>
+          <span class="check-label">1 Saat Minimum</span>
+        </div>
+      </div>
+
+      <!-- Plank -->
+      <div class="card" id="card-plank">
+        <div class="card-head">
+          <div class="card-title"><span id="ico-plank"></span>Plank</div>
+          <div class="card-badge" id="badge-plank">—</div>
+        </div>
+        <div class="timer-val mono" id="plank-timer">00:00:00</div>
+        <div class="timer-meta" id="plank-meta"></div>
+        <div class="btn-row">
+          <button class="btn-pill" id="btn-plank-start" onclick="startPlank()">BAŞLAT</button>
+          <button class="btn-pill" onclick="stopPlank()">DURDUR</button>
+        </div>
+      </div>
+
+      <div class="section-label">Güç</div>
+
+      <!-- Şınav -->
+      <div class="card" id="card-pushups">
+        <div class="card-head">
+          <div class="card-title"><span id="ico-pushups"></span>Şınav</div>
+          <div class="card-badge" id="badge-pushups">—</div>
+        </div>
+        <div class="num-ctrl">
+          <button class="num-btn" onclick="adj('pushups',-1)">−</button>
+          <input type="number" inputmode="numeric" id="pushups-val" class="num-val" onchange="onChg('pushups',this.value)">
+          <button class="num-btn" onclick="adj('pushups',1)">+</button>
+          <button class="num-btn lg" onclick="adj('pushups',5)">+5</button>
+        </div>
+        <div class="num-hint" id="hint-pushups"></div>
+      </div>
+
+      <!-- Mekik -->
+      <div class="card" id="card-situps">
+        <div class="card-head">
+          <div class="card-title"><span id="ico-situps"></span>Mekik</div>
+          <div class="card-badge" id="badge-situps">—</div>
+        </div>
+        <div class="num-ctrl">
+          <button class="num-btn" onclick="adj('situps',-1)">−</button>
+          <input type="number" inputmode="numeric" id="situps-val" class="num-val" onchange="onChg('situps',this.value)">
+          <button class="num-btn" onclick="adj('situps',1)">+</button>
+          <button class="num-btn lg" onclick="adj('situps',5)">+5</button>
+        </div>
+        <div class="num-hint" id="hint-situps"></div>
+      </div>
+
+      <div class="section-label">Yaşam</div>
+
+      <!-- Su -->
+      <div class="card" id="card-water">
+        <div class="card-head">
+          <div class="card-title"><span id="ico-water"></span>Su</div>
+          <div class="card-badge" id="badge-water">0 / 8</div>
+        </div>
+        <div class="water-track" id="water-track"></div>
+      </div>
+
+      <!-- Uyku -->
+      <div class="card" id="card-sleep">
+        <div class="card-head">
+          <div class="card-title"><span id="ico-sleep"></span>Uyku</div>
+        </div>
+        <div class="sleep-display mono" id="sleep-display">7.5 sa</div>
+        <input type="range" id="sleep-range" min="0" max="12" step="0.5" value="7.5" oninput="onSleep(this.value)">
+      </div>
+
+      <!-- Kilo -->
+      <div class="card" id="card-weight">
+        <div class="card-head">
+          <div class="card-title"><span id="ico-weight"></span>Kilo</div>
+          <div class="card-badge" id="badge-weight-day"></div>
+        </div>
+        <div id="weight-body">
+          <input type="number" inputmode="numeric" id="weight-val" class="weight-input" placeholder="Gram cinsinden... 75400" onchange="onChg('weight',this.value)">
+          <div class="weight-diff" id="weight-diff"></div>
+        </div>
+      </div>
+
+      <!-- Not -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title"><span id="ico-note"></span>Günün Notu</div>
+        </div>
+        <textarea id="note-val" placeholder="Nasıl hissettin?" oninput="onChg('note',this.value)"></textarea>
+      </div>
+
+      <button class="save-btn" id="btn-save" onclick="saveData()">
+        <span id="ico-save"></span>KAYDET
+      </button>
+      <button class="reset-btn" id="btn-reset" onclick="resetToday()">
+        <span id="ico-trash"></span>Bugünün kaydını sil
+      </button>
     </div>
 
-    <!-- UYGULAMA -->
-    <div id="app" style="display: none;">
-        
-        <header>
-            <h1>VK FITNESS</h1>
-            <div class="date" id="today-date-text"></div>
-        </header>
+    <!-- HAFTALIK -->
+    <div id="tab-weekly" class="tab">
+      <div id="streak-pill" class="streak-pill">🔥 — gün streak</div>
 
-        <main>
-            <!-- BUGÜN SEKMESİ -->
-            <div id="tab-today" class="tab-content active">
-                
-                <!-- Koşu -->
-                <div class="card" id="card-run" onclick="toggleRun()">
-                    <div class="card-title"><span>Tempolu Koşu</span><span id="run-check" style="color:var(--accent);font-weight:bold;font-size:24px;"></span></div>
-                    <div class="checkbox-wrap">
-                        <div class="custom-checkbox" id="run-box"></div>
-                        <span style="font-size: 18px; font-weight: 600;">1 Saat (minimum)</span>
-                    </div>
-                </div>
+      <div class="progress-ring-wrap">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#1a1a1a" stroke-width="10"/>
+          <circle id="prog-circle" cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" stroke-width="10"
+            stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314"
+            transform="rotate(-90 60 60)" style="transition:stroke-dashoffset 0.8s ease"/>
+          <text x="60" y="55" text-anchor="middle" fill="white" font-family="Bebas Neue" font-size="26" dy=".35em" id="prog-text">0%</text>
+          <text x="60" y="76" text-anchor="middle" fill="#555" font-family="Space Grotesk" font-size="10">tamamlandı</text>
+        </svg>
+      </div>
 
-                <!-- Plank -->
-                <div class="card" id="card-plank">
-                    <div class="card-title">
-                        <span>Plank</span>
-                        <span id="trend-plank" style="font-size:18px;"></span>
-                    </div>
-                    <div class="timer-display mono" id="plank-timer">00:00:00</div>
-                    <div class="timer-controls">
-                        <button class="btn-alt" id="btn-plank-start" onclick="startPlank()">BAŞLAT</button>
-                        <button class="btn-alt" onclick="stopPlank()">DURDUR</button>
-                    </div>
-                    <div style="margin-top: 15px; font-size:13px; color:var(--text-muted); text-align:center; padding-top: 10px; border-top: 1px solid var(--border-color);" class="mono" id="yt-plank"></div>
-                </div>
+      <div class="section-label">Son 7 Gün</div>
+      <div class="card" style="padding:8px 16px">
+        <div id="week-days"></div>
+      </div>
 
-                <!-- Şınav -->
-                <div class="card" id="card-pushups">
-                    <div class="card-title">
-                        <span>Şınav</span>
-                        <span id="trend-pushups" class="trend-up"></span>
-                    </div>
-                    <div class="number-control">
-                        <button class="number-btn" onclick="adjust('pushups', -1)">-</button>
-                        <input type="number" inputmode="numeric" id="pushups-val" class="number-input mono" onchange="onInputChange('pushups', this.value)">
-                        <button class="number-btn" onclick="adjust('pushups', 1)">+</button>
-                        <button class="number-btn" onclick="adjust('pushups', 5)" style="font-size:18px; font-weight:bold; color:var(--accent);">+5</button>
-                    </div>
-                    <div style="margin-top: 15px; font-size:13px; color:var(--text-muted); text-align:center; padding-top: 10px; border-top: 1px solid var(--border-color);" class="mono" id="yt-pushups"></div>
-                </div>
-
-                <!-- Mekik -->
-                <div class="card" id="card-situps">
-                    <div class="card-title">
-                        <span>Mekik</span>
-                        <span id="trend-situps" class="trend-up"></span>
-                    </div>
-                    <div class="number-control">
-                        <button class="number-btn" onclick="adjust('situps', -1)">-</button>
-                        <input type="number" inputmode="numeric" id="situps-val" class="number-input mono" onchange="onInputChange('situps', this.value)">
-                        <button class="number-btn" onclick="adjust('situps', 1)">+</button>
-                        <button class="number-btn" onclick="adjust('situps', 5)" style="font-size:18px; font-weight:bold; color:var(--accent);">+5</button>
-                    </div>
-                    <div style="margin-top: 15px; font-size:13px; color:var(--text-muted); text-align:center; padding-top: 10px; border-top: 1px solid var(--border-color);" class="mono" id="yt-situps"></div>
-                </div>
-
-                <!-- Su -->
-                <div class="card" id="card-water">
-                    <div class="card-title"><span>Su Tüketimi</span><span id="water-status" class="mono" style="font-size:14px; color:var(--text-muted);">8 Kaldı</span></div>
-                    <div class="water-grid" id="water-grid"></div>
-                </div>
-
-                <!-- Uyku -->
-                <div class="card" id="card-sleep">
-                    <div class="card-title"><span>Uyku Süresi</span></div>
-                    <div class="number-control">
-                        <button class="number-btn" onclick="adjust('sleep', -0.5)">-</button>
-                        <input type="number" inputmode="decimal" step="0.5" id="sleep-val" class="number-input mono" style="width:120px" onchange="onInputChange('sleep', this.value)">
-                        <span style="color:var(--text-muted); font-weight:600;">saat</span>
-                        <button class="number-btn" onclick="adjust('sleep', 0.5)">+</button>
-                    </div>
-                </div>
-
-                <!-- Kilo -->
-                <div class="card" id="card-weight">
-                    <div class="card-title"><span>Kilo Ölçümü</span></div>
-                    <div id="weight-input-container">
-                        <input type="number" inputmode="numeric" id="weight-val" class="input-field" style="text-align:left; font-size:20px;" placeholder="Gram cinsinden... Örn: 75400" onchange="onInputChange('weight', this.value)">
-                        <div id="weight-info" style="margin-top:12px; font-size:14px; color:var(--text-muted); font-weight:600;"></div>
-                    </div>
-                </div>
-
-                <!-- Not -->
-                <div class="card" id="card-note">
-                    <div class="card-title"><span>Günün Notu</span></div>
-                    <textarea id="note-val" placeholder="Kendini nasıl hissediyorsun? Motivasyon bırak..." onchange="onInputChange('note', this.value)"></textarea>
-                </div>
-
-                <!-- Kaydet Butonu -->
-                <button class="btn" id="btn-save" style="margin-top: 5px;" onclick="saveData()">GÜNÜ KAYDET</button>
-            </div>
-
-
-            <!-- HAFTALIK SEKME -->
-            <div id="tab-weekly" class="tab-content">
-                <div class="streak-box" id="streak-display">🔥 0 Gün Streak!</div>
-                
-                <div style="display:flex; justify-content:center; align-items:center; margin: 30px 0; flex-direction:column;">
-                    <div style="position:relative; width: 140px; height: 140px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:8px solid var(--border-color); border-top-color: var(--accent); border-right-color: var(--accent); transform: rotate(-45deg);">
-                        <div style="transform: rotate(45deg); font-size: 48px; color: var(--accent); font-family: 'Bebas Neue';" id="weekly-pct">0%</div>
-                    </div>
-                    <div style="color: var(--text-muted); margin-top: 15px; font-weight:600;">Haftalık Tamamlanma</div>
-                </div>
-
-                <div class="card" style="padding:0; overflow:auto hidden; border-radius:12px;">
-                    <table class="weekly-table">
-                        <tbody id="weekly-tbody"></tbody>
-                    </table>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-bottom: 20px; color: var(--accent); border-bottom:1px solid var(--border-color); padding-bottom:10px;">📉 Haftalık Özet</h3>
-                    <div class="stat-row"><span>Toplam Şınav:</span> <span class="val mono" id="wt-pushups">0</span></div>
-                    <div class="stat-row"><span>Toplam Mekik:</span> <span class="val mono" id="wt-situps">0</span></div>
-                    <div class="stat-row"><span>Ortalama Uyku:</span> <span class="val mono" id="wt-sleep">0s</span></div>
-                </div>
-            </div>
-
-
-            <!-- REKORLAR SEKME -->
-            <div id="tab-records" class="tab-content">
-                <div class="card">
-                    <h3 style="margin-bottom: 20px; color: var(--accent); border-bottom:1px solid var(--border-color); padding-bottom:10px;">🏆 Kişisel Rekorlar</h3>
-                    <div class="stat-row" style="margin-bottom: 15px;">
-                        <span>Max Plank:</span> <span class="val mono" id="rec-plank">00:00:00</span>
-                    </div>
-                    <div class="stat-row" style="margin-bottom: 15px;">
-                        <span>Max Şınav:</span> <span class="val mono" id="rec-pushups">0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span>Max Mekik:</span> <span class="val mono" id="rec-situps">0</span>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-bottom: 15px; color: var(--text-main); font-size:18px;">⚖️ Son 8 Hafta Kilo</h3>
-                    <div class="chart-container" id="chart-weight"></div>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-bottom: 15px; color: var(--text-main); font-size:18px;">📈 Son 30 Gün Şınav</h3>
-                    <div class="chart-container" id="chart-pushups"></div>
-                </div>
-                
-                <div class="card">
-                    <h3 style="margin-bottom: 15px; color: var(--text-main); font-size:18px;">📈 Son 30 Gün Mekik</h3>
-                    <div class="chart-container" id="chart-situps"></div>
-                </div>
-
-                <div class="card">
-                    <h3 style="margin-bottom: 20px; color: var(--accent); border-bottom:1px solid var(--border-color); padding-bottom:10px;">🌎 Tüm Zamanlar</h3>
-                    <div class="stat-row"><span>Toplam Koşu:</span> <span class="val mono" id="tot-run">0</span></div>
-                    <div class="stat-row"><span>Toplam Şınav:</span> <span class="val mono" id="tot-push">0</span></div>
-                    <div class="stat-row"><span>Toplam Mekik:</span> <span class="val mono" id="tot-sit">0</span></div>
-                </div>
-            </div>
-        </main>
-
-        <nav>
-            <button class="nav-btn active" onclick="switchTab('today')">
-                <span class="icon">📅</span>BUGÜN
-            </button>
-            <button class="nav-btn" onclick="switchTab('weekly')">
-                <span class="icon">📊</span>HAFTALIK
-            </button>
-            <button class="nav-btn" onclick="switchTab('records')">
-                <span class="icon">🏆</span>REKORLAR
-            </button>
-        </nav>
+      <div class="section-label">Haftalık Özet</div>
+      <div class="summary-grid" id="week-summary"></div>
     </div>
 
-    <!-- JAVASCRIPT GÖVDESİ -->
-    <script>
-        const API = "https://vk-portfolio-api.vkesgin38.workers.dev";
-        let memoryStore = {};
-        let TOKEN = sessionStorage.getItem('vk_fitness_token') || '';
-        
-        let currentState = { run: false, plank: 0, pushups: 0, situps: 0, water: 0, sleep: 7.5, note: "", weight: null };
-        
-        // Tarih Helper
-        function getLocalDayStr(d) {
-            const offset = d.getTimezoneOffset() * 60000;
-            return new Date(d.getTime() - offset).toISOString().split('T')[0];
-        }
-        
-        const todayDateStr = getLocalDayStr(new Date());
-        let timerInt = null;
-        let plankSeconds = 0;
+    <!-- REKORLAR -->
+    <div id="tab-records" class="tab">
+      <div class="section-label">Kişisel Rekorlar</div>
+      <div class="card" style="padding:8px 18px">
+        <div class="rec-row">
+          <div class="rec-label"><span id="ico-rec-plank"></span>Plank</div>
+          <div><div class="rec-val" id="rec-plank">—</div><div class="rec-date" id="rec-plank-d"></div></div>
+        </div>
+        <div class="rec-row">
+          <div class="rec-label"><span id="ico-rec-push"></span>Şınav</div>
+          <div><div class="rec-val" id="rec-pushups">—</div><div class="rec-date" id="rec-push-d"></div></div>
+        </div>
+        <div class="rec-row">
+          <div class="rec-label"><span id="ico-rec-sit"></span>Mekik</div>
+          <div><div class="rec-val" id="rec-situps">—</div><div class="rec-date" id="rec-sit-d"></div></div>
+        </div>
+      </div>
 
-        // Başlangıç Kontrolü
-        window.onload = () => {
-            if(TOKEN) {
-                document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('app').style.display = 'block';
-                initApp();
-            }
-            
-            // Enter ile giriş aktif
-            document.getElementById('pass-input').addEventListener("keypress", function(e){
-                if (e.key === "Enter") login();
-            });
-        };
+      <div class="section-label">Şınav Trendi (30 gün)</div>
+      <div class="card"><div class="chart-wrap" id="chart-push"></div></div>
 
-        async function login() {
-            const p = document.getElementById('pass-input').value;
-            try {
-                const r = await fetch(`${API}/api/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ password: p })
-                });
-                const d = await r.json();
-                if (!r.ok) throw new Error(d.error || 'Hata');
-                
-                TOKEN = d.token;
-                sessionStorage.setItem('vk_fitness_token', TOKEN);
-                document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('app').style.display = 'block';
-                initApp();
-            } catch (err) {
-                document.getElementById('pass-error').style.display = 'block';
-                setTimeout(() => { document.getElementById('pass-error').style.display = 'none'; }, 2500);
-            }
-        }
+      <div class="section-label">Mekik Trendi (30 gün)</div>
+      <div class="card"><div class="chart-wrap" id="chart-sit"></div></div>
 
-        async function initApp() {
-            // Verileri Backend'den Çek
-            document.getElementById('today-date-text').innerText = "Yüklendi...";
-            try {
-                const r = await fetch(`${API}/api/fitness`, { headers: { Authorization: `Bearer ${TOKEN}` } });
-                if (!r.ok) {
-                    if (r.status === 401) { sessionStorage.removeItem('vk_fitness_token'); location.reload(); return; }
-                    throw new Error('Veri çekilemedi');
-                }
-                const data = await r.json();
-                data.forEach(row => { memoryStore[row.key] = row.value; });
-            } catch (e) {
-                console.error(e);
-            }
+      <div class="section-label">Kilo (8 Hafta)</div>
+      <div class="card"><div class="chart-wrap" id="chart-weight"></div></div>
 
-            // Bugünün verilerini yükle
-            let saved = memoryStore['fitness_' + todayDateStr];
-            if(saved) currentState = { ...currentState, ...JSON.parse(saved) };
-            
-            // Tarih Header
-            const days = ['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
-            const mos = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
-            const d = new Date();
-            document.getElementById('today-date-text').innerText = `${d.getDate()} ${mos[d.getMonth()]} ${d.getFullYear()}, ${days[d.getDay()]}`;
-            
-            // Pazartesi Kilo Kontrolü
-            if(d.getDay() !== 1) { // 1 = Pazartesi
-                document.getElementById('weight-input-container').innerHTML = "<p style='color:var(--text-muted); font-weight:600; text-align:center;'>Pazartesi ölçüm günü.</p>";
-            } else {
-                calculateWeightDiff();
-            }
+      <div class="section-label">Tüm Zamanlar</div>
+      <div class="card" style="padding:4px 18px">
+        <div class="allstat-row"><span>Koşu Günü</span><span class="allstat-val" id="tot-run">0</span></div>
+        <div class="allstat-row"><span>Toplam Şınav</span><span class="allstat-val" id="tot-push">0</span></div>
+        <div class="allstat-row"><span>Toplam Mekik</span><span class="allstat-val" id="tot-sit">0</span></div>
+      </div>
+    </div>
+  </main>
 
-            updateUI();
-            updatePastStats();
-        }
+  <nav>
+    <button class="nav-btn active" id="nav-today" onclick="switchTab('today',this)">
+      <span id="nav-ico-today"></span>BUGÜN
+    </button>
+    <button class="nav-btn" id="nav-weekly" onclick="switchTab('weekly',this)">
+      <span id="nav-ico-weekly"></span>HAFTALIK
+    </button>
+    <button class="nav-btn" id="nav-records" onclick="switchTab('records',this)">
+      <span id="nav-ico-records"></span>REKORLAR
+    </button>
+  </nav>
+</div>
 
-        // --- Data access helpers ---
-        function getStoreItem(key) {
-            return memoryStore[key] ? JSON.parse(memoryStore[key]) : null;
-        }
+<script>
+const API = 'https://vk-portfolio-api.vkesgin38.workers.dev';
+let TOKEN = sessionStorage.getItem('vk_fitness_token') || '';
+let store = {};
+let state = { run:false, plank:0, pushups:0, situps:0, water:0, sleep:7.5, note:'', weight:null };
+let timerInt = null, plankSec = 0;
 
-        async function setStoreItem(key, valObj) {
-            const valStr = JSON.stringify(valObj);
-            memoryStore[key] = valStr; // Local mem update
-            
-            try {
-                await fetch(`${API}/api/fitness`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
-                    body: JSON.stringify({ key, value: valStr })
-                });
-            } catch (e) { console.error("Kayıt hatası", e); }
-        }
+function dayStr(d) {
+  const off = d.getTimezoneOffset()*60000;
+  return new Date(d.getTime()-off).toISOString().split('T')[0];
+}
+const today = dayStr(new Date());
 
-        // İstatistik ve Geçmiş
-        function updatePastStats() {
-            let y = new Date();
-            y.setDate(y.getDate() - 1);
-            let yStr = getLocalDayStr(y);
-            let yData = getStoreItem('fitness_' + yStr);
-            
-            // Şınav Trend
-            let yPush = yData ? yData.pushups : 0;
-            document.getElementById('yt-pushups').innerText = `Dün: ${yPush}`;
-            let tPush = document.getElementById('trend-pushups');
-            if(currentState.pushups > yPush && yPush > 0) {
-                tPush.innerHTML = `<span class="trend-icon">🚀</span>+${Math.round((currentState.pushups - yPush)/yPush * 100)}%`;
-            } else tPush.innerHTML = "";
+// ICONS
+window.addEventListener('DOMContentLoaded', () => {
+  lucide.createIcons();
+  initIcons();
+  if(TOKEN) { hideLogin(); initApp(); }
+  document.getElementById('pass-input').addEventListener('keypress', e => { if(e.key==='Enter') login(); });
+});
 
-            // Mekik Trend
-            let ySit = yData ? yData.situps : 0;
-            document.getElementById('yt-situps').innerText = `Dün: ${ySit}`;
-            let tSit = document.getElementById('trend-situps');
-            if(currentState.situps > ySit && ySit > 0) {
-                tSit.innerHTML = `<span class="trend-icon">🚀</span>+${Math.round((currentState.situps - ySit)/ySit * 100)}%`;
-            } else tSit.innerHTML = "";
-            
-            // Plank PB / Geçmiş
-            let yPlank = yData ? yData.plank : 0;
-            let recs = getRecords();
-            document.getElementById('yt-plank').innerText = `Dün: ${formatTime(yPlank)}  |  Kişisel Rekor: ${formatTime(recs.plank_best)}`;
-            let tPlank = document.getElementById('trend-plank');
-            if(currentState.plank > yPlank && yPlank > 0) tPlank.innerText = "🔥";
-            else tPlank.innerText = "";
-        }
+function initIcons() {
+  const ic = (id, name, size=16) => {
+    const el = document.getElementById(id);
+    if(el) el.innerHTML = `<i data-lucide="${name}" style="width:${size}px;height:${size}px"></i>`;
+  };
+  ic('ico-run','footprints'); ic('ico-check','check',14);
+  ic('ico-plank','timer'); ic('ico-pushups','dumbbell');
+  ic('ico-situps','activity'); ic('ico-water','droplets');
+  ic('ico-sleep','moon'); ic('ico-weight','scale');
+  ic('ico-note','file-text'); ic('ico-save','check',18);
+  ic('ico-trash','trash-2',14);
+  ic('ico-rec-plank','timer'); ic('ico-rec-push','dumbbell'); ic('ico-rec-sit','activity');
+  ic('fi-lock','lock',15);
+  ic('nav-ico-today','calendar',20); ic('nav-ico-weekly','bar-chart-2',20); ic('nav-ico-records','trophy',20);
+  lucide.createIcons();
+}
 
-        function calculateWeightDiff() {
-            let wInfo = document.getElementById('weight-info');
-            if(!wInfo) return;
-            
-            let oldWeight = null;
-            // 1 ila 4 hafta öncesini kontrol et
-            for(let i=7; i<=28; i+=7) {
-                let td = new Date();
-                td.setDate(td.getDate() - i);
-                let ds = getLocalDayStr(td);
-                let data = getStoreItem('fitness_' + ds);
-                if(data && data.weight) { oldWeight = data.weight; break; }
-            }
-            
-            if(oldWeight && currentState.weight) {
-                let diff = currentState.weight - oldWeight;
-                let isGain = diff > 0;
-                let color = isGain ? '#ff4444' : 'var(--success)';
-                let sign = isGain ? '+' : '';
-                wInfo.innerHTML = `Önceki ölçüme göre: <span style="color:${color}; font-family:'JetBrains Mono';">${sign}${diff}g</span>`;
-            } else {
-                wInfo.innerText = "Karşılaştırılacak geçmiş ölçüm bulunamadı.";
-            }
-        }
+// AUTH
+async function login() {
+  const p = document.getElementById('pass-input').value;
+  const errEl = document.getElementById('pass-err');
+  const loadEl = document.getElementById('pass-load');
+  errEl.style.display='none'; loadEl.style.display='block';
+  try {
+    const r = await fetch(`${API}/api/auth/login`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})});
+    const d = await r.json();
+    if(!r.ok) throw new Error();
+    TOKEN = d.token; sessionStorage.setItem('vk_fitness_token',TOKEN);
+    hideLogin(); initApp();
+  } catch {
+    loadEl.style.display='none'; errEl.style.display='block';
+  }
+}
 
-        function getRecords() {
-            return getStoreItem('fitness_records') || {"plank_best":0, "pushups_best":0, "situps_best":0};
-        }
+function hideLogin() {
+  document.getElementById('login-wrap').style.display='none';
+  document.getElementById('app').style.display='block';
+}
 
-        // Arayüz İşlemleri
-        function switchTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
-            
-            document.getElementById('tab-' + tabId).classList.add('active');
-            event.currentTarget.classList.add('active');
-            
-            if(tabId === 'weekly') renderWeekly();
-            if(tabId === 'records') renderRecords();
-            window.scrollTo({top: 0, behavior: 'smooth'});
-        }
+// DATA
+function getItem(k) { return store[k] ? JSON.parse(store[k]) : null; }
+async function setItem(k, val) {
+  const v = JSON.stringify(val); store[k]=v;
+  await fetch(`${API}/api/fitness`,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${TOKEN}`},body:JSON.stringify({key:k,value:v})});
+}
+async function delItem(k) {
+  delete store[k];
+  await fetch(`${API}/api/fitness`,{method:'DELETE',headers:{'Content-Type':'application/json',Authorization:`Bearer ${TOKEN}`},body:JSON.stringify({key:k})});
+}
 
-        // Etkileşimler
-        function toggleRun() {
-            currentState.run = !currentState.run;
-            updateUI();
-        }
+async function initApp() {
+  // Header date
+  const days=['Pazar','Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+  const mos=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+  const d=new Date();
+  document.getElementById('hdr-date').textContent=`${d.getDate()} ${mos[d.getMonth()]}`;
 
-        function formatTime(sec) {
-            let h = Math.floor(sec/3600).toString().padStart(2, '0');
-            let m = Math.floor((sec%3600)/60).toString().padStart(2, '0');
-            let s = (sec%60).toString().padStart(2, '0');
-            return `${h}:${m}:${s}`;
-        }
-        
-        function startPlank() {
-            if(timerInt) return; // Zaten çalışıyorsa
-            plankSeconds = currentState.plank; 
-            document.getElementById('btn-plank-start').innerText = "DEVAM EDİYOR";
-            document.getElementById('btn-plank-start').style.color = "var(--success)";
-            timerInt = setInterval(() => {
-                plankSeconds++;
-                document.getElementById('plank-timer').innerText = formatTime(plankSeconds);
-            }, 1000);
-        }
-        
-        function stopPlank() {
-            if(timerInt) {
-                clearInterval(timerInt);
-                timerInt = null;
-                document.getElementById('btn-plank-start').innerText = "BAŞLAT";
-                document.getElementById('btn-plank-start').style.color = "white";
-                currentState.plank = plankSeconds;
-                updatePastStats();
-                updateUI();
-            }
-        }
+  // Load all data
+  try {
+    const r = await fetch(`${API}/api/fitness`,{headers:{Authorization:`Bearer ${TOKEN}`}});
+    if(r.status===401){sessionStorage.removeItem('vk_fitness_token');location.reload();return;}
+    const rows = await r.json();
+    rows.forEach(row=>store[row.key]=row.value);
+  } catch(e) { console.error(e); }
 
-        function adjust(field, val) {
-            currentState[field] = Math.max(0, currentState[field] + val);
-            updatePastStats();
-            updateUI();
-        }
+  // Load today
+  const saved = getItem('fitness_'+today);
+  if(saved) state = {...state,...saved};
 
-        function toggleWater(index) {
-            if(currentState.water === index + 1) currentState.water = index; 
-            else currentState.water = index + 1;
-            updateUI();
-        }
+  // Kilo sadece pazartesi
+  if(d.getDay()!==1) {
+    document.getElementById('weight-body').innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;font-family:var(--font-mono)">Pazartesi ölçüm günü</div>`;
+  } else { calcWeightDiff(); }
 
-        function onInputChange(field, val) {
-            if(field === 'note') currentState.note = val;
-            if(field === 'weight') { currentState.weight = parseFloat(val); calculateWeightDiff(); }
-            if(field === 'sleep') currentState.sleep = parseFloat(val);
-            if(field === 'pushups') currentState.pushups = parseInt(val) || 0;
-            if(field === 'situps') currentState.situps = parseInt(val) || 0;
-            updatePastStats();
-            updateUI();
-        }
+  renderUI(); updateHints();
+}
 
-        function updateUI() {
-            // Koşu
-            let runCard = document.getElementById('card-run');
-            let runCheck = document.getElementById('run-check');
-            let runBox = document.getElementById('run-box');
-            if(currentState.run) {
-                runCard.classList.add('completed');
-                runCheck.innerHTML = "✓";
-                runBox.innerHTML = "✓";
-            } else {
-                runCard.classList.remove('completed');
-                runCheck.innerHTML = "";
-                runBox.innerHTML = "";
-            }
-            
-            // Plank
-            if(!timerInt) document.getElementById('plank-timer').innerText = formatTime(currentState.plank);
-            let plankCard = document.getElementById('card-plank');
-            if(currentState.plank > 0) plankCard.classList.add('completed');
-            else plankCard.classList.remove('completed');
-            
-            // Şınav & Mekik
-            document.getElementById('pushups-val').value = currentState.pushups || 0;
-            let puCard = document.getElementById('card-pushups');
-            if(currentState.pushups > 0) puCard.classList.add('completed');
-            else puCard.classList.remove('completed');
+function getRecs() { return getItem('fitness_records')||{plank_best:0,pushups_best:0,situps_best:0}; }
 
-            document.getElementById('situps-val').value = currentState.situps || 0;
-            let suCard = document.getElementById('card-situps');
-            if(currentState.situps > 0) suCard.classList.add('completed');
-            else suCard.classList.remove('completed');
+function updateHints() {
+  const yd=new Date(); yd.setDate(yd.getDate()-1);
+  const y = getItem('fitness_'+dayStr(yd));
+  const yPush = y?.pushups||0, ySit = y?.situps||0, yPlank = y?.plank||0;
+  const recs = getRecs();
 
-            // Su
-            let wGrid = document.getElementById('water-grid');
-            wGrid.innerHTML = "";
-            for(let i=0; i<8; i++) {
-                let cls = i < currentState.water ? "water-glass filled" : "water-glass";
-                wGrid.innerHTML += `<div class="${cls}" onclick="toggleWater(${i}); event.stopPropagation();"></div>`;
-            }
-            document.getElementById('water-status').innerText = `${Math.max(0, 8 - currentState.water)} Kaldı`;
-            let wCard = document.getElementById('card-water');
-            if(currentState.water >= 8) wCard.classList.add('completed');
-            else wCard.classList.remove('completed');
+  const phEl = document.getElementById('hint-pushups');
+  if(phEl) phEl.textContent = `Dün: ${yPush}${state.pushups>yPlank&&yPush>0?' 🚀':''} · Rekor: ${recs.pushups_best}`;
+  const shEl = document.getElementById('hint-situps');
+  if(shEl) shEl.textContent = `Dün: ${ySit} · Rekor: ${recs.situps_best}`;
 
-            // Uyku, Not, Kilo
-            document.getElementById('sleep-val').value = currentState.sleep;
-            document.getElementById('note-val').value = currentState.note;
-            let wInput = document.getElementById('weight-val');
-            if(wInput) wInput.value = currentState.weight || "";
-        }
+  const pmEl = document.getElementById('plank-meta');
+  if(pmEl) pmEl.textContent = `Dün: ${fmt(yPlank)} · Rekor: ${fmt(recs.plank_best)}`;
 
-        async function saveData() {
-            let btn = document.getElementById('btn-save');
-            btn.innerHTML = "KAYDEDİLİYOR...";
-            
-            await setStoreItem('fitness_' + todayDateStr, currentState);
-            
-            btn.innerHTML = "KAYDEDİLDİ <span style='font-family:JetBrains Mono'>✓</span>";
-            btn.style.background = "var(--success)";
-            
-            setTimeout(() => {
-                btn.innerHTML = "GÜNÜ KAYDET";
-                btn.style.background = "var(--accent)";
-            }, 2000);
-            
-            // Rekor Güncelleme
-            let recs = getRecords();
-            let updated = false;
-            let ds = todayDateStr.substr(5); // Format MM-DD
-            if(currentState.plank > recs.plank_best) { recs.plank_best = currentState.plank; recs.plank_date = ds; updated=true; }
-            if(currentState.pushups > recs.pushups_best) { recs.pushups_best = currentState.pushups; recs.pushups_date = ds; updated=true; }
-            if(currentState.situps > recs.situps_best) { recs.situps_best = currentState.situps; recs.situps_date = ds; updated=true; }
-            if(updated) await setStoreItem('fitness_records', recs);
-        }
+  const tPlank = document.getElementById('badge-plank');
+  if(tPlank&&state.plank>yPlank&&yPlank>0) { tPlank.textContent='🔥'; tPlank.className='card-badge hot'; }
+  else if(tPlank) { tPlank.textContent=fmt(state.plank); }
+}
 
+function calcWeightDiff() {
+  const el = document.getElementById('weight-diff');
+  if(!el) return;
+  for(let i=7;i<=28;i+=7){
+    const td=new Date(); td.setDate(td.getDate()-i);
+    const d=getItem('fitness_'+dayStr(td));
+    if(d?.weight&&state.weight){
+      const diff=state.weight-d.weight;
+      const col=diff>0?'#ff6b6b':'var(--success)';
+      el.innerHTML=`Önceki: <span style="color:${col};font-weight:700">${diff>0?'+':''}${diff}g</span>`;
+      return;
+    }
+  }
+  el.textContent='';
+}
 
-        /* HAFTALIK RENDER LOGIC */
-        function renderWeekly() {
-            let html = `<tr><th>Tarih</th><th>Koşu</th><th>Plank</th><th>Şınav</th><th>Mekik</th><th>Su</th><th>Uyku</th></tr>`;
-            let tPush = 0, tSit = 0, tSleep = 0, sleepDays = 0, completedTasks = 0;
-            let streak = 0; let isStreakBroken = false;
+// RENDER
+function renderUI() {
+  // Run
+  const rc=document.getElementById('card-run');
+  const rb=document.getElementById('badge-run');
+  if(state.run){ rc.classList.add('done'); rb.textContent='Tamamlandı ✓'; rb.className='card-badge hot'; }
+  else { rc.classList.remove('done'); rb.textContent='Yapılmadı'; rb.className='card-badge'; }
+  const runBoxSvg=document.querySelector('#run-box svg');
+  if(runBoxSvg) runBoxSvg.style.opacity=state.run?'1':'0';
 
-            for(let i=0; i<30; i++) {
-                let td = new Date(); td.setDate(td.getDate() - i);
-                let ds = getLocalDayStr(td);
-                let data = getStoreItem('fitness_' + ds);
-                
-                let didWork = data && (data.run || data.plank > 0 || data.pushups > 0 || data.situps > 0);
-                
-                if(didWork && !isStreakBroken) streak++;
-                else if(i > 0) {
-                    isStreakBroken = true;
-                    if(i === 0 && !didWork) isStreakBroken = false; 
-                }
-                
-                if(i < 7) {
-                    if(data) {
-                        tPush += data.pushups || 0;
-                        tSit += data.situps || 0;
-                        if(data.sleep) { tSleep += data.sleep; sleepDays++; }
-                        let runIcon = data.run ? '<span style="color:var(--accent); font-weight:bold;">✓</span>' : '<span style="color:#555">✗</span>';
-                        if(data.pushups > 0 || data.situps > 0 || data.run || data.plank > 0) completedTasks++;
-                        
-                        html += `<tr>
-                        <td class="mono">${ds.substr(5)}</td>
-                        <td>${runIcon}</td>
-                        <td class="mono" style="color:${data.plank>0? 'white':'#555'}">${formatTime(data.plank||0).substr(3,5)}</td>
-                        <td class="mono" style="color:${data.pushups>0? 'white':'#555'}">${data.pushups||0}</td>
-                        <td class="mono" style="color:${data.situps>0? 'white':'#555'}">${data.situps||0}</td>
-                        <td class="mono" style="color:${data.water>=8? 'var(--accent)':'#555'}">${data.water||0}b</td>
-                        <td class="mono" style="color:${data.sleep>0? 'white':'#555'}">${data.sleep||0}s</td>
-                        </tr>`;
-                    } else {
-                        html += `<tr><td class="mono">${ds.substr(5)}</td><td colspan="6" style="color:var(--text-muted);">Veri Yok</td></tr>`;
-                    }
-                }
-            }
-            
-            document.getElementById('weekly-tbody').innerHTML = html;
-            document.getElementById('streak-display').innerText = `🔥 ${streak} Gün Streak!`;
-            document.getElementById('wt-pushups').innerText = tPush;
-            document.getElementById('wt-situps').innerText = tSit;
-            document.getElementById('wt-sleep').innerText = sleepDays ? (tSleep / sleepDays).toFixed(1) + "s" : "0s";
-            
-            let compPct = Math.round((completedTasks / 7) * 100); 
-            if(compPct>100) compPct=100;
-            document.getElementById('weekly-pct').innerText = `${compPct}%`;
-        }
+  // Plank
+  if(!timerInt) document.getElementById('plank-timer').textContent=fmt(state.plank);
+  document.getElementById('card-plank').classList.toggle('done',state.plank>0);
+  document.getElementById('badge-plank').textContent=state.plank>0?fmt(state.plank):'—';
 
+  // Pushups & Situps
+  document.getElementById('pushups-val').value=state.pushups||0;
+  document.getElementById('card-pushups').classList.toggle('done',state.pushups>0);
+  document.getElementById('badge-pushups').textContent=state.pushups>0?state.pushups+' tekrar':'—';
 
-        /* REKORLAR RENDER LOGIC */
-        function renderRecords() {
-            let recs = getRecords();
-            document.getElementById('rec-plank').innerText = formatTime(recs.plank_best) + (recs.plank_date ? ` (${recs.plank_date})` : '');
-            document.getElementById('rec-pushups').innerText = recs.pushups_best + (recs.pushups_date ? ` (${recs.pushups_date})` : '');
-            document.getElementById('rec-situps').innerText = recs.situps_best + (recs.situps_date ? ` (${recs.situps_date})` : '');
-            
-            let pushArr = [], sitArr = [], weightArr = [];
-            let totRun = 0, totPush = 0, totSit = 0;
-            
-            // 30 Gün Grafik
-            for(let i=29; i>=0; i--) {
-                let td = new Date(); td.setDate(td.getDate() - i);
-                let data = getStoreItem('fitness_' + getLocalDayStr(td));
-                pushArr.push(data ? data.pushups||0 : 0);
-                sitArr.push(data ? data.situps||0 : 0);
-            }
-            
-            // 8 Hafta Kilo Grafik (56 Gün)
-            for(let i=56; i>=0; i--) {
-                let td = new Date(); td.setDate(td.getDate() - i);
-                let data = getStoreItem('fitness_' + getLocalDayStr(td));
-                if(data && data.weight) weightArr.push(data.weight);
-            }
-            
-            // Toplamlar
-            Object.keys(memoryStore).forEach(key => {
-                if (key.startsWith('fitness_20')) {
-                    let data = getStoreItem(key);
-                    if(data && data.run) totRun++;
-                    totPush += (data && data.pushups ? data.pushups : 0);
-                    totSit += (data && data.situps ? data.situps : 0);
-                }
-            });
-            
-            document.getElementById('tot-run').innerText = totRun;
-            document.getElementById('tot-push').innerText = totPush;
-            document.getElementById('tot-sit').innerText = totSit;
-            
-            // SVG Çizim
-            document.getElementById('chart-pushups').innerHTML = renderBarChart(pushArr);
-            document.getElementById('chart-situps').innerHTML = renderBarChart(sitArr);
-            
-            if(weightArr.length >= 2) {
-                document.getElementById('chart-weight').innerHTML = renderLineChart(weightArr);
-            } else {
-                document.getElementById('chart-weight').innerHTML = "<div style='display:flex; height:100%; align-items:center; justify-content:center; color:var(--text-muted); font-size:14px; text-align:center;'>Grafik için en az<br>2 kilo ölçümü (Pazartesi) gerekli.</div>";
-            }
-        }
+  document.getElementById('situps-val').value=state.situps||0;
+  document.getElementById('card-situps').classList.toggle('done',state.situps>0);
+  document.getElementById('badge-situps').textContent=state.situps>0?state.situps+' tekrar':'—';
 
-        function renderBarChart(arr) {
-            if(Math.max(...arr) === 0) return "<div style='display:flex; height:100%; align-items:center; justify-content:center; color:var(--text-muted); font-size:14px;'>Veri yok</div>";
-            let max = Math.max(...arr, 1) * 1.1; // %10 üst boşluk
-            let len = arr.length;
-            let svg = `<svg viewBox="0 0 300 100" style="width:100%; height:100%;" preserveAspectRatio="none">`;
-            arr.forEach((val, i) => {
-                let h = (val / max) * 100;
-                let w = (300 / len) - 2;
-                let x = i * (300 / len);
-                let y = 100 - h;
-                if(h > 0) svg += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="var(--accent)" rx="2"/>`;
-            });
-            svg += `</svg>`;
-            return svg;
-        }
+  // Water
+  const wt=document.getElementById('water-track');
+  wt.innerHTML='';
+  for(let i=0;i<8;i++){
+    const d=document.createElement('div');
+    d.className='water-drop'+(i<state.water?' filled':'');
+    d.onclick=()=>toggleWater(i);
+    wt.appendChild(d);
+  }
+  document.getElementById('badge-water').textContent=`${state.water} / 8`;
+  document.getElementById('card-water').classList.toggle('done',state.water>=8);
 
-        function renderLineChart(arr) {
-            let max = Math.max(...arr);
-            let min = Math.min(...arr);
-            let rng = max - min || 1;
-            let svg = `<svg viewBox="0 -10 300 120" style="width:100%; height:100%; overflow:visible;" preserveAspectRatio="none">`;
-            let pts = [];
-            arr.forEach((val, i) => {
-                let x = i * (300 / (arr.length - 1));
-                let y = 100 - ((val - min) / rng) * 85; 
-                pts.push(`${x},${y}`);
-                svg += `<circle cx="${x}" cy="${y}" r="4" fill="var(--accent)" />`;
-            });
-            svg += `<polyline fill="none" stroke="var(--accent)" stroke-width="2" points="${pts.join(' ')}" />`;
-            svg += `</svg>`;
-            return svg;
-        }
-    </script>
+  // Sleep
+  const sv=state.sleep||7.5;
+  document.getElementById('sleep-display').textContent=sv+'sa';
+  const sr=document.getElementById('sleep-range');
+  sr.value=sv; sr.style.setProperty('--pct',((sv/12)*100)+'%');
 
+  // Note / Weight
+  document.getElementById('note-val').value=state.note||'';
+  const wv=document.getElementById('weight-val');
+  if(wv) wv.value=state.weight||'';
+}
+
+// INTERACTIONS
+function toggleRun() { state.run=!state.run; renderUI(); }
+function adj(f,v) { state[f]=Math.max(0,(state[f]||0)+v); updateHints(); renderUI(); }
+function onChg(f,v) {
+  if(f==='note') state.note=v;
+  else if(f==='weight'){state.weight=parseFloat(v)||null; calcWeightDiff();}
+  else if(f==='pushups') state.pushups=parseInt(v)||0;
+  else if(f==='situps') state.situps=parseInt(v)||0;
+  updateHints(); renderUI();
+}
+function onSleep(v) { state.sleep=parseFloat(v); renderUI(); }
+function toggleWater(i) { state.water=state.water===i+1?i:i+1; renderUI(); }
+
+function fmt(sec) {
+  const h=Math.floor(sec/3600).toString().padStart(2,'0');
+  const m=Math.floor((sec%3600)/60).toString().padStart(2,'0');
+  const s=(sec%60).toString().padStart(2,'0');
+  return `${h}:${m}:${s}`;
+}
+
+function startPlank() {
+  if(timerInt) return;
+  plankSec=state.plank;
+  const btn=document.getElementById('btn-plank-start');
+  btn.textContent='DEVAM'; btn.classList.add('running');
+  timerInt=setInterval(()=>{ plankSec++; document.getElementById('plank-timer').textContent=fmt(plankSec); },1000);
+}
+function stopPlank() {
+  if(!timerInt) return;
+  clearInterval(timerInt); timerInt=null;
+  state.plank=plankSec;
+  const btn=document.getElementById('btn-plank-start');
+  btn.textContent='BAŞLAT'; btn.classList.remove('running');
+  updateHints(); renderUI();
+}
+
+// SAVE
+async function saveData() {
+  const btn=document.getElementById('btn-save');
+  btn.classList.add('saving'); btn.textContent='KAYDEDİLDİ ✓';
+  await setItem('fitness_'+today, state);
+  // Records
+  let recs=getRecs(); let upd=false;
+  const ds=today.substr(5);
+  if(state.plank>recs.plank_best){recs.plank_best=state.plank;recs.plank_date=ds;upd=true;}
+  if(state.pushups>recs.pushups_best){recs.pushups_best=state.pushups;recs.pushups_date=ds;upd=true;}
+  if(state.situps>recs.situps_best){recs.situps_best=state.situps;recs.situps_date=ds;upd=true;}
+  if(upd) await setItem('fitness_records',recs);
+  setTimeout(()=>{ btn.classList.remove('saving'); btn.innerHTML='<span id="ico-save"></span>KAYDET'; lucide.createIcons(); },2000);
+}
+
+// RESET TODAY
+async function resetToday() {
+  if(!confirm('Bugünün kaydını silmek istediğine emin misin?')) return;
+  await delItem('fitness_'+today);
+  state={run:false,plank:0,pushups:0,situps:0,water:0,sleep:7.5,note:'',weight:null};
+  renderUI(); updateHints();
+  const btn=document.getElementById('btn-reset');
+  btn.textContent='Silindi ✓'; btn.style.color='var(--success)';
+  setTimeout(()=>{ btn.innerHTML='<span id="ico-trash"></span>Bugünün kaydını sil'; lucide.createIcons(); btn.style.color=''; },2000);
+}
+
+// TABS
+function switchTab(id,el) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  el.classList.add('active');
+  if(id==='weekly') renderWeekly();
+  if(id==='records') renderRecords();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// WEEKLY
+function renderWeekly() {
+  let streak=0,broken=false,tPush=0,tSit=0,tSleep=0,slDays=0,done=0;
+  const daysEl=document.getElementById('week-days');
+  daysEl.innerHTML='';
+
+  for(let i=0;i<7;i++){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const ds=dayStr(d);
+    const dat=getItem('fitness_'+ds);
+    const worked=dat&&(dat.run||dat.plank>0||dat.pushups>0||dat.situps>0);
+    if(worked&&!broken) streak++;
+    else if(i>0) broken=true;
+    if(dat) {
+      tPush+=dat.pushups||0; tSit+=dat.situps||0;
+      if(dat.sleep){tSleep+=dat.sleep;slDays++;}
+      if(worked) done++;
+    }
+
+    // Row
+    const row=document.createElement('div');
+    row.className='week-day-row';
+    const label=ds===today?'Bugün':['Paz','Pzt','Sal','Çar','Per','Cum','Cmt'][d.getDay()]+' '+d.getDate();
+    row.innerHTML=`<div class="week-day-date">${label}</div>
+    <div class="week-day-stats">
+      <div class="week-stat ${dat?.run?'done':''}"><i data-lucide="footprints" style="width:11px;height:11px"></i> Koşu</div>
+      <div class="week-stat ${dat?.plank>0?'done':''}"><i data-lucide="timer" style="width:11px;height:11px"></i> ${dat?.plank>0?fmt(dat.plank).substr(3):'-'}</div>
+      <div class="week-stat ${dat?.pushups>0?'done':''}"><i data-lucide="dumbbell" style="width:11px;height:11px"></i> ${dat?.pushups||0}</div>
+      <div class="week-stat ${dat?.situps>0?'done':''}"><i data-lucide="activity" style="width:11px;height:11px"></i> ${dat?.situps||0}</div>
+      <div class="week-stat ${dat?.water>=8?'done':''}"><i data-lucide="droplets" style="width:11px;height:11px"></i> ${dat?.water||0}</div>
+    </div>
+    ${dat?`<button class="del-btn" onclick="delDay('${ds}',this)"><i data-lucide="trash-2" style="width:13px;height:13px"></i></button>`:''}`;
+    daysEl.appendChild(row);
+  }
+  lucide.createIcons();
+
+  // Streak
+  document.getElementById('streak-pill').innerHTML=`🔥 ${streak} gün streak`;
+
+  // Progress
+  const pct=Math.round((done/7)*100);
+  document.getElementById('prog-circle').setAttribute('stroke-dashoffset',314-(314*pct/100));
+  document.getElementById('prog-text').textContent=pct+'%';
+
+  // Summary
+  document.getElementById('week-summary').innerHTML=`
+    <div class="summary-cell"><div class="s-val">${tPush}</div><div class="s-label">Şınav</div></div>
+    <div class="summary-cell"><div class="s-val">${tSit}</div><div class="s-label">Mekik</div></div>
+    <div class="summary-cell"><div class="s-val">${slDays?(tSleep/slDays).toFixed(1):0}s</div><div class="s-label">Ort. Uyku</div></div>
+  `;
+}
+
+async function delDay(ds, btn) {
+  if(!confirm(`${ds} tarihli kaydı silmek istediğine emin misin?`)) return;
+  await delItem('fitness_'+ds);
+  if(ds===today) state={run:false,plank:0,pushups:0,situps:0,water:0,sleep:7.5,note:'',weight:null};
+  renderWeekly();
+}
+
+// RECORDS
+function renderRecords() {
+  const recs=getRecs();
+  document.getElementById('rec-plank').textContent=fmt(recs.plank_best);
+  document.getElementById('rec-plank-d').textContent=recs.plank_date||'';
+  document.getElementById('rec-pushups').textContent=recs.pushups_best||0;
+  document.getElementById('rec-push-d').textContent=recs.pushups_date||'';
+  document.getElementById('rec-situps').textContent=recs.situps_best||0;
+  document.getElementById('rec-sit-d').textContent=recs.situps_date||'';
+
+  let pushArr=[],sitArr=[],wArr=[];
+  let totRun=0,totPush=0,totSit=0;
+
+  for(let i=29;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const dat=getItem('fitness_'+dayStr(d));
+    pushArr.push(dat?.pushups||0); sitArr.push(dat?.situps||0);
+  }
+  for(let i=56;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const dat=getItem('fitness_'+dayStr(d));
+    if(dat?.weight) wArr.push(dat.weight);
+  }
+  Object.keys(store).forEach(k=>{
+    if(k.startsWith('fitness_20')){ const d=getItem(k);
+      if(d?.run) totRun++;
+      totPush+=(d?.pushups||0); totSit+=(d?.situps||0);
+    }
+  });
+
+  document.getElementById('tot-run').textContent=totRun;
+  document.getElementById('tot-push').textContent=totPush;
+  document.getElementById('tot-sit').textContent=totSit;
+
+  document.getElementById('chart-push').innerHTML=barChart(pushArr);
+  document.getElementById('chart-sit').innerHTML=barChart(sitArr);
+  document.getElementById('chart-weight').innerHTML=wArr.length>=2?lineChart(wArr):`<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;font-family:var(--font-mono)">En az 2 Pazartesi ölçümü gerekli</div>`;
+}
+
+function barChart(arr) {
+  const max=Math.max(...arr,1)*1.1;
+  const len=arr.length;
+  let svg=`<svg viewBox="0 0 300 100" style="width:100%;height:100%" preserveAspectRatio="none">`;
+  arr.forEach((v,i)=>{ if(v>0){ const h=(v/max)*90,w=(300/len)-1.5,x=i*(300/len),y=100-h; svg+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="var(--accent)" rx="2" opacity="0.8"/>`; }});
+  return svg+'</svg>';
+}
+function lineChart(arr) {
+  const max=Math.max(...arr),min=Math.min(...arr),rng=max-min||1;
+  let pts=[],svg=`<svg viewBox="0 -10 300 120" style="width:100%;height:100%;overflow:visible" preserveAspectRatio="none">`;
+  arr.forEach((v,i)=>{ const x=i*(300/(arr.length-1)),y=100-((v-min)/rng)*80; pts.push(`${x},${y}`); svg+=`<circle cx="${x}" cy="${y}" r="3" fill="var(--accent)"/>`; });
+  return svg+`<polyline fill="none" stroke="var(--accent)" stroke-width="1.5" points="${pts.join(' ')}"/></svg>`;
+}
+</script>
 </body>
 </html>

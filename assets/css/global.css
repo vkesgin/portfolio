@@ -1662,8 +1662,24 @@ img {
   .skills-grid { grid-template-columns: 1fr 1fr; }
 
   /* Works — tek kolon */
-  .works-grid { columns: 1 !important; }
-  .work-card  { break-inside: unset; margin-bottom: 16px; }
+  .works-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .work-card {
+    width: 100%;
+    aspect-ratio: 16/9;
+  }
+  .work-card--large {
+    aspect-ratio: 16/9;
+  }
+  .work-card::before {
+    padding-top: 56.25%;
+  }
+  .work-card--large::before {
+    padding-top: 56.25%;
+  }
 
   /* About preview — tek kolon */
   .about-inner { grid-template-columns: 1fr; }

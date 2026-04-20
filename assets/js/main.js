@@ -396,6 +396,7 @@ function initWorks() {
           if (!videoSrc) return;
           e.preventDefault();
 
+          const isMobile = window.innerWidth < 768;
           let lb = document.getElementById('works-lightbox');
           if (lb) lb.remove();
 
@@ -403,8 +404,8 @@ function initWorks() {
           lb.id = 'works-lightbox';
           lb.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px)';
           lb.innerHTML = `
-            <button id="wlbClose" style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2">✕</button>
-            <div style="width:90%;max-width:960px;aspect-ratio:16/9;position:relative;background:#000;border-radius:8px;overflow:hidden;">
+            <button id="wlbClose" style="position:absolute;top:${isMobile ? '16px' : '24px'};right:${isMobile ? '16px' : '24px'};background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2">✕</button>
+            <div style="width:${isMobile ? '100%' : '90%'};max-width:${isMobile ? '100%' : '960px'};aspect-ratio:16/9;position:relative;background:#000;border-radius:${isMobile ? '0' : '8px'};overflow:hidden;">
               <video id="wlbVideo" style="width:100%;height:100%;object-fit:contain;" playsinline controls autoplay></video>
             </div>`;
           document.body.appendChild(lb);
@@ -432,6 +433,7 @@ function initWorks() {
           const year     = card.querySelector('.work-year')?.textContent  || '';
           if (!imgSrc) return;
 
+          const isMobile = window.innerWidth < 768;
           let lb = document.getElementById('works-lightbox');
           if (lb) lb.remove();
 
@@ -442,9 +444,30 @@ function initWorks() {
             background:rgba(0,0,0,.96);
             display:flex;align-items:center;justify-content:center;
             backdrop-filter:blur(20px);
-            padding:24px;
+            padding:${isMobile ? '0' : '24px'};
           `;
-          lb.innerHTML = `
+
+          lb.innerHTML = isMobile ? `
+            <button id="wlbClose" style="
+              position:absolute;top:16px;right:16px;
+              background:rgba(255,255,255,.05);
+              border:0.5px solid #2a2a2a;
+              color:#888;padding:8px 14px;
+              border-radius:6px;cursor:pointer;
+              font-family:var(--font-mono);font-size:13px;
+              z-index:2;
+            ">✕</button>
+            <div style="width:100%;display:flex;flex-direction:column;max-height:100vh;overflow-y:auto;">
+              <img src="${imgSrc}" alt="${title}" style="width:100%;height:auto;object-fit:contain;background:#000;min-height:30vh;">
+              <div style="padding:24px 20px;display:flex;flex-direction:column;gap:12px;">
+                <span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:#00e5ff;background:rgba(0,229,255,.08);border:0.5px solid rgba(0,229,255,.2);padding:3px 10px;border-radius:3px;display:inline-block;width:fit-content;">${cat}</span>
+                <h3 style="font-family:var(--font-display);font-size:28px;line-height:.95;color:#f0f0f0;letter-spacing:.02em;">${title}</h3>
+                <p style="font-size:13px;color:#888;line-height:1.7;">${desc}</p>
+                <span style="font-family:var(--font-mono);font-size:11px;color:#444;letter-spacing:.08em;">${year}</span>
+                <a href="/pages/portfolio.html" style="margin-top:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#00e5ff;border:0.5px solid rgba(0,229,255,.3);padding:10px 20px;border-radius:4px;text-align:center;display:block;">Tüm İşleri Gör ↗</a>
+              </div>
+            </div>
+          ` : `
             <button id="wlbClose" style="
               position:absolute;top:24px;right:24px;
               background:rgba(255,255,255,.05);

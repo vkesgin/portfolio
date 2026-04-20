@@ -35,9 +35,9 @@
       --font-display: 'Bebas Neue', sans-serif;
       --radius: 14px;
     }
-    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    html { height:100%; }
-    body { font-family:var(--font-body); background:var(--bg); color:var(--text); overflow-x:hidden; min-height:100vh; }
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
+    html { height:100%; touch-action:manipulation; }
+    body { font-family:var(--font-body); background:var(--bg); color:var(--text); overflow-x:hidden; min-height:100vh; touch-action:pan-y; }
 
     /* SCROLLBAR */
     ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:var(--muted); border-radius:2px; }

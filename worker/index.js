@@ -98,11 +98,35 @@ export default {
       const key = path.replace('/files/', '');
       const obj = await env.STORAGE.get(key);
       if (!obj) return new Response('Not Found', { status: 404 });
-      const headers = new Headers();
-      obj.writeHttpMetadata(headers);
-      headers.set('Cache-Control', 'public, max-age=31536000');
-      headers.set('Access-Control-Allow-Origin', origin);
-      return new Response(obj.body, { headers });
+
+      const baseHeaders = new Headers();
+      obj.writeHttpMetadata(baseHeaders);
+      baseHeaders.set('Cache-Control', 'public, max-age=31536000');
+      baseHeaders.set('Access-Control-Allow-Origin', origin);
+      baseHeaders.set('Accept-Ranges', 'bytes');
+      if (obj.size != null) baseHeaders.set('Content-Length', String(obj.size));
+
+      // Range request — video seeking/streaming icin kritik
+      const rangeHeader = request.headers.get('Range');
+      if (rangeHeader && obj.size) {
+        const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+        if (match) {
+          const start = parseInt(match[1]);
+          const end   = match[2] ? parseInt(match[2]) : obj.size - 1;
+          const clampedEnd = Math.min(end, obj.size - 1);
+          const rangedObj = await env.STORAGE.get(key, {
+            range: { offset: start, length: clampedEnd - start + 1 }
+          });
+          if (rangedObj) {
+            const rh = new Headers(baseHeaders);
+            rh.set('Content-Range',  `bytes ${start}-${clampedEnd}/${obj.size}`);
+            rh.set('Content-Length', String(clampedEnd - start + 1));
+            return new Response(rangedObj.body, { status: 206, headers: rh });
+          }
+        }
+      }
+
+      return new Response(obj.body, { headers: baseHeaders });
     }
 
     // === PROTECTED: Auth gerekli ===

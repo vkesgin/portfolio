@@ -355,30 +355,50 @@ function resetZone(id, type) {
 });
 
 function previewFile(file, previewId) {
-  // Format kontrolü
+  // Format kontrolü — MOV uyarısı
   if (file.type === 'video/quicktime' || file.name.toLowerCase().endsWith('.mov')) {
     const warn = document.createElement('div');
     warn.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;border:1px solid rgba(255,170,0,.4);color:#ffaa00;padding:14px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.6)';
-    warn.innerHTML = '⚠️ .MOV formatı mobil tarayıcılarda çalışmayabilir.<br>Lütfen videoı <strong>MP4</strong> formatına çevirip tekrar yükleyin.';
+    warn.innerHTML = '⚠️ .MOV formatı mobil tarayıcılarda çalışmayabilir.<br>Lütfen <strong>MP4</strong> formatına çevirip tekrar yükleyin.';
     document.body.appendChild(warn);
     setTimeout(() => warn.remove(), 5000);
   }
 
   const url = URL.createObjectURL(file);
   const el  = document.getElementById(previewId);
+
   if (file.type.startsWith('image/')) {
-    el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
+    el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:contain;background:#000;border-radius:6px">`;
+    // Görsel boyutuna göre zone oranını ayarla
+    const img = new Image();
+    img.onload = () => {
+      const zone = previewId === 'imgPreview' ? document.getElementById('imgZone') : null;
+      if (zone) zone.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+    };
+    img.src = url;
+
   } else if (file.type.startsWith('video/')) {
     const sizeMB = (file.size / 1024 / 1024).toFixed(0);
     const sizeWarning = file.size > 80 * 1024 * 1024
       ? `<div style="background:rgba(255,100,0,.15);border-top:1px solid rgba(255,100,0,.3);color:#ff8844;padding:6px 10px;font-family:var(--font-mono);font-size:10px;flex-shrink:0;">⚠ ${sizeMB} MB — Yükleme uzun sürebilir</div>`
       : '';
     el.innerHTML = `
-      <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;">
-        <video id="vidPlayerPreview" src="${url}" style="width:100%;flex:1;min-height:0;object-fit:cover;border-radius:6px 6px 0 0;" controls></video>
+      <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;background:#000;border-radius:6px;overflow:hidden;">
+        <video id="vidPlayerPreview" src="${url}" style="width:100%;flex:1;min-height:0;object-fit:contain;" controls></video>
         <button onclick="captureVideoFrame(event)" style="width:100%;height:32px;background:#00e5ff;color:#000;border:none;cursor:pointer;font-family:var(--font-mono);font-weight:700;font-size:10px;text-transform:uppercase;flex-shrink:0;">Kapak Yap</button>
         ${sizeWarning}
       </div>`;
+    // Video metadata yüklendikten sonra zone boyutunu ayarla
+    const zone = document.getElementById('vidZone');
+    const vid  = document.getElementById('vidPlayerPreview');
+    if (vid && zone) {
+      vid.addEventListener('loadedmetadata', () => {
+        if (vid.videoWidth && vid.videoHeight) {
+          zone.style.aspectRatio = `${vid.videoWidth} / ${vid.videoHeight}`;
+          zone.style.maxHeight = '480px';
+        }
+      }, { once: true });
+    }
   }
 }
 
@@ -389,22 +409,28 @@ window.captureVideoFrame = function(e) {
   if (!vid) return;
 
   const canvas = document.createElement('canvas');
-  canvas.width = vid.videoWidth || 1920;
+  canvas.width  = vid.videoWidth  || 1920;
   canvas.height = vid.videoHeight || 1080;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-  
+
   canvas.toBlob(blob => {
     const file = new File([blob], "video-thumb.jpg", { type: "image/jpeg" });
-    window.extractedVideoThumb = file; // SAFEBOUND NATIVE MEMORY
-
+    window.extractedVideoThumb = file;
     try {
       const dataTransfer = new DataTransfer();
       dataTransfer.items.add(file);
       document.getElementById('imgFile').files = dataTransfer.files;
-    } catch(err) { console.warn('Input files sync failed, using memory blob'); }
-
-    previewFile(file, 'imgPreview');
+    } catch(err) { console.warn('Input files sync failed'); }
+    // Kapak önizlemesini göster ve imgZone boyutunu ayarla
+    const imgZone = document.getElementById('imgZone');
+    if (imgZone && vid.videoWidth && vid.videoHeight) {
+      imgZone.style.aspectRatio = `${vid.videoWidth} / ${vid.videoHeight}`;
+      imgZone.style.maxHeight = '480px';
+    }
+    const imgEl = document.getElementById('imgPreview');
+    const url = URL.createObjectURL(file);
+    imgEl.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:contain;background:#000;border-radius:6px">`;
   }, 'image/jpeg', 0.85);
 };
 
@@ -514,6 +540,8 @@ async function toggleFeatured(id, current) {
   });
   await loadProjects();
   renderProjects(document.querySelector('.admin-filters .filter-btn.active')?.dataset.filter || 'all');
+  // Featured tab aktifse orayı da güncelle
+  if (document.getElementById('tab-featured').classList.contains('active')) renderFeatured();
 }
 
 // === DELETE ===
@@ -537,11 +565,14 @@ function renderFeatured() {
     return;
   }
 
-  grid.innerHTML = list.map((p,i) => `
+  // Mevcut görüntüleri koru — yeni HTML hazır olduğunda tek seferde göster
+  const newHtml = list.map((p,i) => `
     <div class="featured-item" data-id="${p.id}" draggable="true">
       <div class="featured-drag">⠿</div>
       <div class="featured-thumb">
-        ${p.image_url ? `<img src="${API}${p.image_url}" alt="${p.title}">` : '<div class="admin-card-placeholder"></div>'}
+        ${p.image_url
+          ? `<img src="${p.image_url.startsWith('http') ? p.image_url : API + p.image_url}" alt="${p.title}" loading="eager" decoding="async">`
+          : '<div class="admin-card-placeholder"></div>'}
       </div>
       <div class="featured-info">
         <div class="featured-title">${p.title}</div>
@@ -551,20 +582,27 @@ function renderFeatured() {
       <button class="admin-btn-del" onclick="toggleFeatured('${p.id}', 1)">Çıkar</button>
     </div>
   `).join('');
+  grid.innerHTML = newHtml;
 
-  // Drag & drop sıralama
+  // Drag & drop — sadece gerçek yer değişiminde kaydet
   let dragSrc = null;
+  let orderChanged = false;
+
   grid.querySelectorAll('.featured-item').forEach(item => {
-    item.addEventListener('dragstart', () => { dragSrc = item; item.style.opacity = '.4'; });
-    item.addEventListener('dragend',   () => { item.style.opacity = '1'; saveFeaturedOrder(); });
+    item.addEventListener('dragstart', () => { dragSrc = item; item.style.opacity = '.4'; orderChanged = false; });
+    item.addEventListener('dragend',   () => {
+      item.style.opacity = '1';
+      if (orderChanged) saveFeaturedOrder();
+    });
     item.addEventListener('dragover',  e => { e.preventDefault(); });
     item.addEventListener('drop', e => {
       e.preventDefault();
-      if (dragSrc !== item) {
+      if (dragSrc && dragSrc !== item) {
         const items = [...grid.querySelectorAll('.featured-item')];
         const srcI  = items.indexOf(dragSrc);
         const dstI  = items.indexOf(item);
         if (srcI < dstI) item.after(dragSrc); else item.before(dragSrc);
+        orderChanged = true;
       }
     });
   });

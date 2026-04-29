@@ -65,61 +65,55 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   background: var(--border);
-  border: 0.5px solid var(--border);
 }
 
 /* === CARD === */
 .port-card {
   position: relative;
   overflow: hidden;
-  cursor: pointer;
   background: var(--bg-primary);
+  cursor: pointer;
   opacity: 0;
 }
 
-.port-card::before {
-  content: "";
-  display: block;
-  padding-top: 75%;
-}
+.port-card::before { display: none; }
 
 .port-card--wide { grid-column: span 2; }
 .port-card--full { grid-column: span 3; }
 
 .port-card-img {
-  position: absolute;
-  inset: 0;
+  position: relative;
   width: 100%;
-  height: 100%;
   overflow: hidden;
 }
 
-.port-card-img img {
-  width: 100%; height: 100%;
-  object-fit: cover;
-  filter: grayscale(20%) brightness(.75);
-  transition: transform var(--dur-slow) var(--ease-out), filter var(--dur-mid) var(--ease-out);
+.port-card-img img,
+.port-card-img video {
+  width: 100%;
+  height: auto;
   display: block;
-  position: absolute; inset: 0;
+  object-fit: cover;
+  filter: brightness(0.8);
+  transition: transform var(--dur-slow) var(--ease-out),
+              filter var(--dur-mid) var(--ease-out);
 }
+
 .port-card:hover .port-card-img img {
-  transform: scale(1.06);
-  filter: grayscale(0%) brightness(.5);
+  transform: scale(1.04);
+  filter: brightness(0.5);
 }
 
 /* === OVERLAY === */
 .port-card-overlay {
-  position: absolute; inset: 0;
-  background: linear-gradient(to top,
-    rgba(0,0,0,.95) 0%,
-    rgba(0,0,0,.4)  50%,
-    transparent     100%);
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  padding: 22px;
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 60%);
   opacity: 0;
-  transition: opacity var(--dur-mid) var(--ease-out);
+  transition: opacity var(--dur-mid);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 20px;
 }
 .port-card:hover .port-card-overlay { opacity: 1; }
 
@@ -260,7 +254,6 @@
 }
 
 @media (max-width: 900px) {
-  .port-grid { grid-template-columns: repeat(2,1fr); }
   .port-card--wide { grid-column: span 2; }
   .lb-inner { grid-template-columns: 1fr; max-height: 90vh; overflow-y: auto; }
   .lb-img-wrap { aspect-ratio: 16/9; }
@@ -269,9 +262,22 @@
 }
 @media (max-width: 600px) {
   #port-hero, #port-gallery { padding-left: 24px; padding-right: 24px; }
-  .port-grid { grid-template-columns: 1fr; }
   .port-card--wide, .port-card--tall { grid-column: span 1; grid-row: span 1; }
   .lb-close { top: 16px; right: 16px; }
+}
+
+@media (max-width: 768px) {
+  .works-grid,
+  .port-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1200px) {
+  .works-grid,
+  .port-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* === VIDEO PLAYER === */

@@ -388,26 +388,11 @@ function initWorks() {
 
           if (isMatch) {
             card.classList.remove('hidden');
-            card.classList.remove('work-card--large');
-            
-            if (filter === 'all') {
-              // Tümü filtresinde orijinal sıra (0, 3 veya sonrasında her 4'te 1 mantığına uygun bir dağılım)
-              if (i === 0 || i === 3 || (i > 5 && i % 4 === 0)) {
-                card.classList.add('work-card--large');
-              }
-            } else {
-              // Gizlenenlere bakma, görünür kartlar arasında her 4'te 1 large kap
-              if (visibleIndex % 4 === 0) {
-                card.classList.add('work-card--large');
-              }
-            }
-            
             visibleIndex++;
             visibleCount++;
             cardsToShow.push(card);
           } else {
             card.classList.add('hidden');
-            card.classList.remove('work-card--large');
           }
         });
 

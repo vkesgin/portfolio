@@ -17,16 +17,6 @@
       const div = document.createElement('div');
       div.innerHTML = buildPortfolioCard(p);
       const card = div.firstElementChild;
-
-      if (projects.length === 1) {
-        card.classList.add('port-card--full');
-      } else {
-        // Geniş kart algoritması: Her 4'te 1 geniş kart (0, 4, 8...), ancak video kartıysa her zaman küçük (span 1) kalsın
-        if (!p.video_url && i % 4 === 0) {
-          card.classList.add('port-card--wide');
-        }
-      }
-
       grid.appendChild(card);
     });
 

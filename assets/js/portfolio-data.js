@@ -67,6 +67,8 @@ function buildWorkCard(p) {
   const videoSrc = getMediaUrl(p.video_url);
   const catLabel = { web:'Web Design', '3d':'3D Animasyon', '2d':'2D Animasyon', video:'Videografi', graphic:'Grafik Tasarım' }[p.category] || p.category;
 
+  console.log('imgSrc:', imgSrc, 'raw:', p.image_url);
+
   // Video kartlarında thumbnail yoksa özel placeholder
   const bgInner = imgSrc
     ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.parentElement.style.background='#111'; this.style.display='none';"`

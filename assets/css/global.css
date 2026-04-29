@@ -497,22 +497,28 @@ img {
   overflow-x: visible; /* Yanlardan kesilmeyi önler */
   /* 3D kavisli carousel efekti derinleştirildi */
   perspective: 1500px;
-  -webkit-mask-image: linear-gradient(to bottom,
-    transparent 0%,
-    rgba(0,0,0,0.3) 10%,
-    black 35%,
-    black 65%,
-    rgba(0,0,0,0.3) 90%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(to bottom,
-    transparent 0%,
-    rgba(0,0,0,0.3) 10%,
-    black 35%,
-    black 65%,
-    rgba(0,0,0,0.3) 90%,
-    transparent 100%
-  );
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.hero-tools-marquee::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, var(--bg-primary) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hero-tools-marquee::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 80px;
+  background: linear-gradient(to top, var(--bg-primary) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 10;
 }
 
 .tools-track {
@@ -544,6 +550,8 @@ img {
   -webkit-backdrop-filter: blur(10px);
   transition: background var(--dur-fast), border-color var(--dur-fast), color var(--dur-fast);
   position: relative;
+  z-index: 11;
+  pointer-events: all;
   overflow: hidden;
   transform-style: preserve-3d;
 }
@@ -659,8 +667,18 @@ img {
     height: 48px !important;
     overflow: hidden !important;
     perspective: none !important;
-    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%) !important;
-    mask-image: linear-gradient(to right, transparent 0%, black 8%, black 92%, transparent 100%) !important;
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+  }
+  .hero-tools-marquee::before {
+    top: 0 !important; bottom: 0 !important; left: 0 !important; right: auto !important;
+    height: 100% !important; width: 30px !important;
+    background: linear-gradient(to right, rgba(10,10,10,0.92) 0%, transparent 100%) !important;
+  }
+  .hero-tools-marquee::after {
+    top: 0 !important; bottom: 0 !important; right: 0 !important; left: auto !important;
+    height: 100% !important; width: 30px !important;
+    background: linear-gradient(to left, rgba(10,10,10,0.92) 0%, transparent 100%) !important;
   }
   .tools-track {
     display: flex !important;

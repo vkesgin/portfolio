@@ -355,64 +355,98 @@ function initWorks() {
       // Statik kartları kaldır
       grid.innerHTML = '';
 
-      const FEAT_PER_PAGE = 6;
-      let featPage = 0;
+      // DOM'a tüm kartları ekle
+      projects.forEach((p, i) => {
+        const div = document.createElement('div');
+        div.innerHTML = buildWorkCard(p);
+        const card = div.firstElementChild;
+        grid.appendChild(card);
+      });
 
-      function renderFeatPage() {
-        grid.innerHTML = '';
-        const start = featPage * FEAT_PER_PAGE;
-        const pageItems = projects.slice(start, start + FEAT_PER_PAGE);
+      // Varsa eski pagination'ı kaldır
+      const existingPager = document.getElementById('works-pager');
+      if (existingPager) existingPager.remove();
 
-        pageItems.forEach((p, i) => {
-          const div = document.createElement('div');
-          div.innerHTML = buildWorkCard(p);
-          const card = div.firstElementChild;
-          if ((i === 0 || i === 3) && pageItems.length > 2) {
-            card.classList.add('work-card--large');
+      attachVideoHandlers();
+
+      const countLabel = document.querySelector('.works-count-label');
+
+      function applyFilter(filter) {
+        const cards = grid.querySelectorAll('.work-card');
+        let visibleCount = 0;
+        let visibleIndex = 0;
+        const cardsToShow = [];
+
+        cards.forEach((card, i) => {
+          const cat = (card.dataset.cat || '').toLowerCase().trim();
+          let isMatch = false;
+          if (filter === 'all') {
+            isMatch = true;
+          } else {
+            isMatch = cat === filter || cat.includes(filter) || filter.includes(cat);
           }
-          grid.appendChild(card);
+
+          if (isMatch) {
+            card.classList.remove('hidden');
+            card.classList.remove('work-card--large');
+            
+            if (filter === 'all') {
+              // Tümü filtresinde orijinal sıra (0, 3 veya sonrasında her 4'te 1 mantığına uygun bir dağılım)
+              if (i === 0 || i === 3 || (i > 5 && i % 4 === 0)) {
+                card.classList.add('work-card--large');
+              }
+            } else {
+              // Gizlenenlere bakma, görünür kartlar arasında her 4'te 1 large kap
+              if (visibleIndex % 4 === 0) {
+                card.classList.add('work-card--large');
+              }
+            }
+            
+            visibleIndex++;
+            visibleCount++;
+            cardsToShow.push(card);
+          } else {
+            card.classList.add('hidden');
+            card.classList.remove('work-card--large');
+          }
         });
 
-        // Pagination
-        const totalPages = Math.ceil(projects.length / FEAT_PER_PAGE);
-        const existingPager = document.getElementById('works-pager');
-        if (existingPager) existingPager.remove();
+        if (countLabel) countLabel.textContent = visibleCount + ' iş gösteriliyor';
 
-        if (totalPages > 1) {
-          const pager = document.createElement('div');
-          pager.id = 'works-pager';
-          pager.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:12px;margin-top:24px;';
-          pager.innerHTML = `
-            <button id="featPrev" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;padding:8px 16px;border-radius:4px;border:0.5px solid var(--border);color:var(--text-muted);background:transparent;cursor:pointer;transition:all .2s;" ${featPage===0?'disabled style="opacity:.3;cursor:default"':''}>
-              ← Önceki
-            </button>
-            <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);letter-spacing:.08em;">${featPage+1} / ${totalPages}</span>
-            <button id="featNext" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;padding:8px 16px;border-radius:4px;border:0.5px solid var(--border);color:var(--text-muted);background:transparent;cursor:pointer;transition:all .2s;" ${featPage===totalPages-1?'disabled style="opacity:.3;cursor:default"':''}>
-              Sonraki →
-            </button>`;
-          grid.parentElement.appendChild(pager);
-          pager.querySelector('#featPrev')?.addEventListener('click', () => { if(featPage>0){featPage--;renderFeatPage();attachVideoHandlers();} });
-          pager.querySelector('#featNext')?.addEventListener('click', () => { if(featPage<totalPages-1){featPage++;renderFeatPage();attachVideoHandlers();} });
-        }
-
-        // Baştan görünür yap — GSAP animasyonu opacity 0→1 yapacak, transform temizlenecek
-        if (typeof gsap !== 'undefined') {
-          gsap.fromTo(
-            grid.querySelectorAll('.work-card'),
-            { opacity: 0, y: 24 },
-            { opacity: 1, y: 0, duration: .5, stagger: .07, ease: 'power3.out', clearProps: 'transform' }
-          );
+        let emptyState = grid.querySelector('.port-empty-filter');
+        if (visibleCount === 0) {
+          if (!emptyState) {
+            emptyState = document.createElement('div');
+            emptyState.className = 'port-empty-filter port-empty';
+            emptyState.style.cssText = 'grid-column:1/-1;text-align:center;padding:40px 0;width:100%;';
+            emptyState.textContent = 'Bu filtreye ait iş bulunamadı.';
+            grid.appendChild(emptyState);
+          }
         } else {
-          grid.querySelectorAll('.work-card').forEach(c => c.style.opacity = '1');
+          if (emptyState) emptyState.remove();
         }
-        attachVideoHandlers();
+
+        if (typeof gsap !== 'undefined' && cardsToShow.length > 0) {
+          // Önce opacity 0 yapıyoruz, stagger ile 1'e çıkartıyoruz
+          gsap.set(cardsToShow, { opacity: 0 });
+          gsap.to(cardsToShow, { opacity: 1, duration: 0.5, stagger: 0.05, ease: 'power2.out', clearProps: 'opacity' });
+        } else {
+          cardsToShow.forEach(c => c.style.opacity = '1');
+        }
       }
 
-      renderFeatPage();
+      const filterBtns = document.querySelectorAll('#works .filter-btn');
+      filterBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          filterBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const filter = (btn.dataset.filter || '').toLowerCase().trim();
+          applyFilter(filter);
+        });
+      });
 
-      // Count label
-      const label = document.querySelector('.works-count-label');
-      if (label) label.textContent = projects.length + ' iş gösteriliyor';
+      // Başlangıç durumu
+      applyFilter('all');
 
       function attachVideoHandlers() {
       // Video kartları için tıklama
@@ -570,28 +604,8 @@ function initWorks() {
     });
   }
 
+  // Sadece ana animasyon kontrolleri için (filtre yukarı taşındı)
   if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
-
-  // Filtre
-  const filterBtns = document.querySelectorAll('#works .filter-btn');
-  const countLabel  = document.querySelector('.works-count-label');
-  filterBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const filter = btn.dataset.filter;
-      let visible  = 0;
-      document.querySelectorAll('.work-card').forEach(card => {
-        const match = filter === 'all' || card.dataset.cat === filter;
-        card.classList.toggle('hidden', !match);
-        if (match) {
-          gsap.fromTo(card, { opacity:0, y:12 }, { opacity:1, y:0, duration:.4, delay: visible*.05 });
-          visible++;
-        }
-      });
-      if (countLabel) countLabel.textContent = visible + ' iş gösteriliyor';
-    });
-  });
 }
 
 // === ABOUT PREVIEW ===

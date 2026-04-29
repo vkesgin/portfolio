@@ -26,7 +26,7 @@ function getMediaUrl(url) {
 
 function buildPortfolioCard(p) {
   const isVideo    = !!p.video_url;
-  const imgSrc     = getMediaUrl(p.image_url);
+  const imgSrc     = getMediaUrl(p.thumbnail_url || p.image_url);
   const videoSrc   = getMediaUrl(p.video_url);
   const catLabel   = { web:'Web Design', '3d':'3D Animasyon', '2d':'2D Animasyon', video:'Videografi', graphic:'Grafik Tasarım' }[p.category] || p.category;
 
@@ -63,13 +63,13 @@ function buildPortfolioCard(p) {
 
 function buildWorkCard(p) {
   const isVideo  = !!p.video_url;
-  const imgSrc   = getMediaUrl(p.image_url);
+  const imgSrc   = getMediaUrl(p.thumbnail_url || p.image_url);
   const videoSrc = getMediaUrl(p.video_url);
   const catLabel = { web:'Web Design', '3d':'3D Animasyon', '2d':'2D Animasyon', video:'Videografi', graphic:'Grafik Tasarım' }[p.category] || p.category;
 
   // Video kartlarında thumbnail yoksa özel placeholder
   const bgInner = imgSrc
-    ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="eager" onerror="this.parentElement.innerHTML=''"`
+    ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.parentElement.style.background='#111'; this.style.display='none';"`
     + ` style="width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(30%) brightness(0.7);transition:transform .6s,filter .4s;">`
     : (isVideo
         ? `<div style="position:absolute;inset:0;background:linear-gradient(135deg,#111 0%,#1a1a1a 60%,#0f1a1a 100%);display:flex;align-items:center;justify-content:center;">

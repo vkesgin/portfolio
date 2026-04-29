@@ -5,7 +5,7 @@ const base    = '/';
 
 async function injectComponent(selector, file) {
   try {
-    const res  = await fetch(base + 'components/' + file);
+    const res  = await fetch(base + 'components/' + file + '?v=' + Date.now());
     if (!res.ok) return;
     const html = await res.text();
     const el   = document.querySelector(selector);

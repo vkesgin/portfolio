@@ -1097,6 +1097,37 @@ img {
   transition: transform var(--dur-slow) var(--ease-out);
 }
 
+.work-bg-placeholder {
+  width: 100%;
+  padding-top: 56.25%; /* 16:9 varsayılan oran */
+  background: var(--bg-surface);
+}
+
+.work-play-icon {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(0,229,255,.6);
+  background: rgba(0,0,0,.5);
+  backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--dur-mid) var(--ease-out);
+  pointer-events: none;
+  color: var(--accent);
+}
+
+.work-play-icon svg { margin-left: 3px; }
+
+.work-card:hover .work-play-icon {
+  background: rgba(0,229,255,.2);
+  border-color: var(--accent);
+  transform: translate(-50%,-50%) scale(1.1);
+  box-shadow: 0 0 24px rgba(0,229,255,.3);
+}
+
 .work-card:hover .work-bg img,
 .work-card:hover .work-bg video {
   transform: scale(1.04);

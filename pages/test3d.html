@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Object Viewer</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { overflow:hidden; background:#EED5B2; font-family:'Segoe UI',sans-serif; }
+    canvas { display:block; width:100vw; height:100vh; }
+
+    #loading {
+      position:fixed; inset:0;
+      background:#1a1a1a;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+      z-index:999;
+      transition:opacity .8s ease;
+    }
+    #loading.fade { opacity:0; pointer-events:none; }
+    #loading.gone { display:none; }
+    .loader-ring {
+      width:52px; height:52px;
+      border:4px solid rgba(255,255,255,.1);
+      border-top-color:#d4a574;
+      border-radius:50%;
+      animation:spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loader-text { color:#a89070; font-size:13px; letter-spacing:2px; text-transform:uppercase; }
+
+    #progress-bar {
+      position:fixed; top:0; left:0; height:3px;
+      background:linear-gradient(90deg,#d4a574,#e8c89e);
+      width:0; z-index:100; transition:width .3s;
+      opacity:0; pointer-events:none;
+    }
+    #progress-bar.active { opacity:1; }
+
+    #btn-load {
+      position:fixed; bottom:24px; right:24px;
+      padding:13px 26px;
+      background:rgba(30,25,20,.88);
+      color:#e8c89e; border:1px solid rgba(212,165,116,.3);
+      border-radius:12px; cursor:pointer;
+      font-size:13px; font-weight:600; letter-spacing:.5px;
+      backdrop-filter:blur(12px); z-index:50;
+      transition:all .25s;
+    }
+    #btn-load:hover { background:rgba(212,165,116,.25); transform:translateY(-2px); }
+
+    /* ─── Panel ─────────────────────── */
+    #panel {
+      position:fixed; bottom:20px; left:20px; width:300px;
+      background:rgba(22,18,14,.93);
+      border:1px solid rgba(212,165,116,.18);
+      border-radius:16px; padding:18px;
+      backdrop-filter:blur(16px); z-index:50;
+      color:#e8c89e; font-size:13px;
+      transform:translateY(calc(100% + 28px));
+      transition:transform .4s cubic-bezier(.34,1.56,.64,1);
+    }
+    #panel.visible { transform:translateY(0); }
+    .ph { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    .ph h3 { font-size:13px; letter-spacing:1.5px; text-transform:uppercase; }
+    .ph button { background:none; border:none; color:#e8c89e; font-size:16px; cursor:pointer; opacity:.5; transition:.2s; }
+    .ph button:hover { opacity:1; }
+    .ps { margin-bottom:12px; }
+    .plabel { font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:#a89070; margin-bottom:5px; display:flex; justify-content:space-between; }
+    .plabel .v { color:#d4a574; }
+    .pslider {
+      width:100%; -webkit-appearance:none; appearance:none;
+      height:4px; border-radius:2px; background:rgba(212,165,116,.12); outline:none;
+    }
+    .pslider::-webkit-slider-thumb {
+      -webkit-appearance:none; width:16px; height:16px;
+      border-radius:50%; background:#d4a574; cursor:pointer;
+    }
+    .prow { display:flex; gap:7px; }
+    .pgroup { flex:1; }
+    .pgroup label { font-size:10px; color:#a89070; display:block; margin-bottom:3px; }
+    .pgroup input {
+      width:100%; background:rgba(255,255,255,.05);
+      border:1px solid rgba(212,165,116,.12);
+      color:#e8c89e; padding:6px 7px;
+      border-radius:6px; font-size:12px; text-align:center;
+    }
+    .olist { max-height:130px; overflow-y:auto; }
+    .oitem {
+      display:flex; align-items:center; gap:8px;
+      padding:8px 10px; border-radius:8px; margin-bottom:4px;
+      cursor:pointer; background:rgba(255,255,255,.04);
+      transition:background .2s;
+    }
+    .oitem:hover { background:rgba(212,165,116,.1); }
+    .oitem.active { background:rgba(212,165,116,.17); border:1px solid rgba(212,165,116,.28); }
+    .oname { flex:1; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .odel { background:none; border:none; color:#e07060; font-size:13px; cursor:pointer; padding:2px 6px; opacity:.6; transition:.2s; }
+    .odel:hover { opacity:1; }
+    .pacts { display:flex; gap:8px; margin-top:10px; }
+    .pbtn { flex:1; padding:9px; border-radius:8px; border:none; font-size:11px; font-weight:700; letter-spacing:1px; cursor:pointer; text-transform:uppercase; transition:.2s; }
+    .pbtn:hover { filter:brightness(1.2); }
+    .pbtn-reset { background:rgba(255,255,255,.07); color:#e8c89e; }
+    .pbtn-remove { background:rgba(224,112,96,.18); color:#e07060; }
+    .ptoggle { display:flex; align-items:center; gap:9px; cursor:pointer; user-select:none; }
+    .ptoggle input { display:none; }
+    .pbox { width:36px; height:20px; background:rgba(255,255,255,.08); border-radius:10px; position:relative; transition:.3s; flex-shrink:0; }
+    .pbox::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; background:#666; border-radius:50%; transition:.3s; }
+    .ptoggle input:checked ~ .pbox { background:rgba(212,165,116,.28); }
+    .ptoggle input:checked ~ .pbox::after { left:18px; background:#d4a574; }
+    .ptoggle-lbl { font-size:12px; }
+  </style>
+</head>
+<body>
+
+  <div id="loading">
+    <div class="loader-ring"></div>
+    <div class="loader-text">Loading scene...</div>
+  </div>
+
+  <div id="progress-bar"></div>
+  <canvas id="canvas"></canvas>
+  <button id="btn-load">&#x2B06; LOAD 3D MODEL</button>
+
+  <div id="panel">
+    <div class="ph">
+      <h3>&#9881; Model Control</h3>
+      <button id="btn-close">&#10005;</button>
+    </div>
+
+    <div class="ps">
+      <div class="plabel">Background Scene (Luma URL)</div>
+      <div class="prow">
+        <input type="text" id="bg-url" class="pslider" style="height:28px; width:100%; border-radius:6px; padding:0 8px;" placeholder="Paste Luma URL or UUID...">
+      </div>
+      <button class="pbtn" id="btn-update-bg" style="width:100%; margin-top:6px; background:rgba(212,165,116,.2); color:#d4a574;">Update Background</button>
+    </div>
+
+    <div class="ps">
+      <label class="ptoggle">
+        <input type="checkbox" id="splat-toggle" checked>
+        <div class="pbox"></div>
+        <span class="ptoggle-lbl">Background Visible</span>
+      </label>
+    </div>
+
+    <div class="ps">
+      <div class="plabel">Scale <span class="v" id="scale-val">1.00</span></div>
+      <input type="range" class="pslider" id="scale-slider" min="0.1" max="10" step="0.05" value="1">
+    </div>
+
+    <div class="ps">
+      <div class="plabel">Position</div>
+      <div class="prow">
+        <div class="pgroup"><label>X</label><input type="number" id="pos-x" value="0" step="0.1"></div>
+        <div class="pgroup"><label>Y</label><input type="number" id="pos-y" value="0" step="0.1"></div>
+        <div class="pgroup"><label>Z</label><input type="number" id="pos-z" value="0" step="0.1"></div>
+      </div>
+    </div>
+
+    <div class="ps">
+      <div class="plabel">Camera Speed <span class="v" id="speed-val">1.00</span></div>
+      <input type="range" class="pslider" id="speed-slider" min="0" max="5" step="0.1" value="1">
+    </div>
+
+    <div class="ps">
+      <div class="plabel">Loaded Objects</div>
+      <div class="olist" id="obj-list">
+        <div style="color:#7a6a5a;font-size:11px;text-align:center;padding:12px;">No objects loaded</div>
+      </div>
+    </div>
+
+    <div class="pacts">
+      <button class="pbtn pbtn-reset" id="btn-reset">&#8634; Reset</button>
+      <button class="pbtn pbtn-remove" id="btn-remove">Remove</button>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept=".glb,.gltf,.obj,.fbx" style="display:none" multiple>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader }  from 'three/addons/loaders/GLTFLoader.js';
+    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+    import { OBJLoader }   from 'three/addons/loaders/OBJLoader.js';
+    import { FBXLoader }   from 'three/addons/loaders/FBXLoader.js';
+    import { LumaSplatsThree } from '@lumaai/luma-web';
+
+    // ── Renderer ───────────────────────────────────────────────
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(innerWidth, innerHeight);
+
+    // ── Scene ──────────────────────────────────────────────────
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xEED5B2);
+    scene.fog = new THREE.FogExp2(0xEED5B2, 0.07);
+
+    const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 100);
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xfff5e6, 0.7));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
+    sun.position.set(5, 8, 3);
+    scene.add(sun);
+
+    // Particles
+    const pCount = 800;
+    const pPos = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      const r = 4 + Math.random() * 8;
+      const th = Math.random() * Math.PI * 2;
+      const ph = (Math.random() - .5) * Math.PI * .6;
+      pPos[i*3]   = r * Math.cos(th) * Math.cos(ph);
+      pPos[i*3+1] = r * Math.sin(ph) + 1;
+      pPos[i*3+2] = r * Math.sin(th) * Math.cos(ph);
+    }
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    scene.add(new THREE.Points(pGeo, new THREE.PointsMaterial({ size: 0.018, color: 0xffffff, transparent: true, opacity: .7 })));
+
+    // ── Loading helpers ────────────────────────────────────────
+    const loadingEl = document.getElementById('loading');
+    const progressBar = document.getElementById('progress-bar');
+    let dismissed = false;
+
+    function dismissLoading() {
+      if (dismissed) return;
+      dismissed = true;
+      loadingEl.classList.add('fade');
+      setTimeout(() => loadingEl.classList.add('gone'), 900);
+    }
+
+    function showProgress(v) {
+      progressBar.classList.add('active');
+      progressBar.style.width = (v * 100) + '%';
+    }
+    function hideProgress() {
+      progressBar.style.width = '100%';
+      setTimeout(() => { progressBar.classList.remove('active'); progressBar.style.width = '0%'; }, 400);
+    }
+
+    // ── Gaussian Splat (permanent background) ──────────────────
+    const timeU = { value: 0 };
+    const defaultSplat = 'https://lumalabs.ai/capture/3a8971f8-84c5-4a16-ad31-db90ea9d1380';
+    let currentSplatUrl = localStorage.getItem('vk_3d_bg') || defaultSplat;
+    document.getElementById('bg-url').value = currentSplatUrl;
+
+    let splat = new LumaSplatsThree({
+      source: currentSplatUrl,
+      enableThreeShaderIntegration: true,
+      onBeforeRender: () => { timeU.value = performance.now() / 1000; }
+    });
+
+    function setupSplatHooks() {
+      splat.setShaderHooks({
+        vertexShaderHooks: {
+          additionalUniforms: { time_s: ['float', timeU] },
+          getSplatTransform: `
+            (vec3 position, uint layersBitmask) {
+              float x = 0.;
+              float z = sin(position.z * 1.0 + time_s) * 0.1;
+              float y = sin(position.x * 2.0 + time_s) * 0.1;
+              return mat4(
+                1.5, 0., 0., 0,
+                0., 1.5, 0., 0,
+                0., 0., 1.5, 0,
+                x,  y,  z, 1.5
+              );
+            }
+          `
+        }
+      });
+    }
+    
+    setupSplatHooks();
+    scene.add(splat);
+
+    // Dismiss loading: splat.onLoad OR 5s timeout OR first render frame
+    splat.onLoad = dismissLoading;
+    setTimeout(dismissLoading, 5000);
+
+    // Update Background Function
+    document.getElementById('btn-update-bg').addEventListener('click', () => {
+      let url = document.getElementById('bg-url').value.trim();
+      if (!url) url = defaultSplat;
+      
+      // Auto-format if user pasted a UUID or full URL
+      let match = url.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+      if (match) url = 'https://lumalabs.ai/capture/' + match[0];
+      
+      document.getElementById('bg-url').value = url;
+      localStorage.setItem('vk_3d_bg', url);
+      
+      // Show loading
+      loadingEl.classList.remove('gone');
+      loadingEl.classList.remove('fade');
+      dismissed = false;
+      
+      // Replace splat
+      scene.remove(splat);
+      splat.dispose();
+      
+      splat = new LumaSplatsThree({
+        source: url,
+        enableThreeShaderIntegration: true,
+        onBeforeRender: () => { timeU.value = performance.now() / 1000; }
+      });
+      setupSplatHooks();
+      scene.add(splat);
+      
+      splat.onLoad = dismissLoading;
+      setTimeout(dismissLoading, 5000);
+      firstFrame = true; // reset so render loop also helps dismiss
+    });
+
+    // ── Object manager ─────────────────────────────────────────
+    const models = [];
+    let selId = null;
+    let uid = 0;
+    let camSpeed = 1;
+
+    // DOM refs
+    const panel      = document.getElementById('panel');
+    const objListEl  = document.getElementById('obj-list');
+    const scaleSlider= document.getElementById('scale-slider');
+    const scaleValEl = document.getElementById('scale-val');
+    const pxEl       = document.getElementById('pos-x');
+    const pyEl       = document.getElementById('pos-y');
+    const pzEl       = document.getElementById('pos-z');
+    const speedSlider= document.getElementById('speed-slider');
+    const speedValEl = document.getElementById('speed-val');
+    const splatToggle= document.getElementById('splat-toggle');
+
+    // Loaders
+    const draco = new DRACOLoader();
+    draco.setDecoderPath('https://unpkg.com/three@0.160.0/examples/jsm/libs/draco/');
+    const gltf = new GLTFLoader(); gltf.setDRACOLoader(draco);
+    const obj  = new OBJLoader();
+    const fbx  = new FBXLoader();
+
+    function fitObject(o, size = 3) {
+      const box = new THREE.Box3().setFromObject(o);
+      const sz = new THREE.Vector3(); box.getSize(sz);
+      const ct = new THREE.Vector3(); box.getCenter(ct);
+      const sc = size / Math.max(sz.x, sz.y, sz.z, 0.001);
+      o.scale.setScalar(sc);
+      const box2 = new THREE.Box3().setFromObject(o);
+      const ct2 = new THREE.Vector3(); box2.getCenter(ct2);
+      o.position.x -= ct2.x;
+      o.position.y -= box2.min.y - 0.05;
+      o.position.z -= ct2.z;
+    }
+
+    function fixMaterials(o) {
+      o.traverse(c => {
+        if (!c.isMesh) return;
+        c.castShadow = c.receiveShadow = true;
+        const ms = Array.isArray(c.material) ? c.material : [c.material];
+        ms.forEach(m => { if (m?.map) m.map.colorSpace = THREE.SRGBColorSpace; if (m) m.needsUpdate = true; });
+      });
+    }
+
+    function addToScene(o3d, name) {
+      fitObject(o3d);
+      fixMaterials(o3d);
+      const id = uid++;
+      const baseScale = o3d.scale.x;
+      scene.add(o3d);
+      models.push({ id, name, o: o3d, baseScale });
+      selId = id;
+      panel.classList.add('visible');
+      syncPanel();
+      renderList();
+    }
+
+    function removeFromScene(id) {
+      const i = models.findIndex(m => m.id === id);
+      if (i < 0) return;
+      const entry = models[i];
+      scene.remove(entry.o);
+      entry.o.traverse(c => {
+        if (!c.isMesh) return;
+        c.geometry?.dispose();
+        (Array.isArray(c.material) ? c.material : [c.material]).forEach(m => m?.dispose());
+      });
+      models.splice(i, 1);
+      if (selId === id) selId = models.length ? models[0].id : null;
+      if (!models.length) panel.classList.remove('visible');
+      syncPanel();
+      renderList();
+    }
+
+    function selectModel(id) { selId = id; syncPanel(); renderList(); }
+    function getSel() { return models.find(m => m.id === selId) ?? null; }
+
+    function syncPanel() {
+      const e = getSel();
+      if (!e) return;
+      const s = e.o.scale.x / e.baseScale;
+      scaleSlider.value = s;
+      scaleValEl.textContent = s.toFixed(2);
+      pxEl.value = e.o.position.x.toFixed(2);
+      pyEl.value = e.o.position.y.toFixed(2);
+      pzEl.value = e.o.position.z.toFixed(2);
+    }
+
+    function renderList() {
+      if (!models.length) {
+        objListEl.innerHTML = '<div style="color:#7a6a5a;font-size:11px;text-align:center;padding:12px">No objects loaded</div>';
+        return;
+      }
+      objListEl.innerHTML = models.map(m => `
+        <div class="oitem ${m.id === selId ? 'active' : ''}" data-id="${m.id}">
+          <span class="oname">&#x1F4E6; ${m.name}</span>
+          <button class="odel" data-del="${m.id}">&#10005;</button>
+        </div>`).join('');
+
+      objListEl.querySelectorAll('.oitem').forEach(el =>
+        el.addEventListener('click', ev => { if (!ev.target.closest('.odel')) selectModel(+el.dataset.id); }));
+      objListEl.querySelectorAll('.odel').forEach(btn =>
+        btn.addEventListener('click', ev => { ev.stopPropagation(); removeFromScene(+btn.dataset.del); }));
+    }
+
+    // File input
+    const fileInput = document.getElementById('file-input');
+    document.getElementById('btn-load').addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', e => {
+      [...e.target.files].forEach(file => {
+        const ext = file.name.split('.').pop().toLowerCase();
+        const url = URL.createObjectURL(file);
+        showProgress(0.2);
+        const onLoad = o3d => { hideProgress(); addToScene(o3d, file.name); URL.revokeObjectURL(url); };
+        const onProg = p => p.total && showProgress(p.loaded / p.total);
+
+        if (ext === 'glb' || ext === 'gltf') gltf.load(url, g => onLoad(g.scene), onProg);
+        else if (ext === 'obj') obj.load(url, onLoad, onProg);
+        else if (ext === 'fbx') fbx.load(url, onLoad, onProg);
+      });
+      fileInput.value = '';
+    });
+
+    // Control events
+    scaleSlider.addEventListener('input', () => {
+      const e = getSel(); if (!e) return;
+      const s = +scaleSlider.value;
+      scaleValEl.textContent = s.toFixed(2);
+      e.o.scale.setScalar(e.baseScale * s);
+    });
+
+    const onPos = () => {
+      const e = getSel(); if (!e) return;
+      e.o.position.set(+pxEl.value||0, +pyEl.value||0, +pzEl.value||0);
+    };
+    pxEl.addEventListener('input', onPos);
+    pyEl.addEventListener('input', onPos);
+    pzEl.addEventListener('input', onPos);
+
+    speedSlider.addEventListener('input', () => {
+      camSpeed = +speedSlider.value;
+      speedValEl.textContent = camSpeed.toFixed(2);
+    });
+
+    // Background toggle: ONLY hides/shows the Gaussian Splat
+    // Loaded 3D objects are NOT affected
+    splatToggle.addEventListener('change', () => { splat.visible = splatToggle.checked; });
+
+    document.getElementById('btn-close').addEventListener('click', () => panel.classList.remove('visible'));
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      const e = getSel(); if (!e) return;
+      fitObject(e.o); e.baseScale = e.o.scale.x; syncPanel();
+    });
+    document.getElementById('btn-remove').addEventListener('click', () => { if (selId !== null) removeFromScene(selId); });
+
+    // ── Camera orbit ───────────────────────────────────────────
+    let angle = 0, vert = 0, targetVert = 0;
+    let drag = false, dragY = 0, dragStart = 0;
+
+    canvas.addEventListener('mousedown', e => { drag = true; dragY = e.clientY; dragStart = targetVert; });
+    window.addEventListener('mousemove', e => {
+      if (!drag) return;
+      targetVert = Math.max(-0.6, Math.min(0.6, dragStart + (e.clientY - dragY) / innerHeight * 2));
+    });
+    window.addEventListener('mouseup', () => drag = false);
+
+    let tY0 = 0, tV0 = 0;
+    canvas.addEventListener('touchstart', e => { tY0 = e.touches[0].clientY; tV0 = targetVert; }, { passive: true });
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      targetVert = Math.max(-0.6, Math.min(0.6, tV0 + (e.touches[0].clientY - tY0) / innerHeight * 2));
+    }, { passive: false });
+    window.addEventListener('wheel', e => e.preventDefault(), { passive: false });
+
+    // ── Render loop ────────────────────────────────────────────
+    let firstFrame = true;
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Dismiss loading on first successful render
+      if (firstFrame) { firstFrame = false; setTimeout(dismissLoading, 600); }
+
+      vert += (targetVert - vert) * 0.05;
+      angle += 0.01 * camSpeed;
+      camera.position.set(5 * Math.sin(angle), 2 + vert * 3, 5 * Math.cos(angle));
+      camera.lookAt(0, 0, 0);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // ── Resize ─────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+    });
+  </script>
+</body>
+</html>

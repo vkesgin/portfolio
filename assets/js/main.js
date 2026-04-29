@@ -340,257 +340,196 @@ function initSkills() {
 
 // === WORKS SCROLL + FILTER ===
 function initWorks() {
-  if (typeof loadFeaturedFromAPI === 'function') {
-    loadFeaturedFromAPI().then(projects => {
-      const grid = document.getElementById('worksGrid');
-      if (!grid) return;
+  if (typeof loadFeaturedFromAPI !== 'function') return;
 
-      if (!projects || !projects.length) {
-        grid.innerHTML = '<div class="port-empty">Ana sayfada gösterilecek seçilmiş bir iş bulunamadı.</div>';
-        const label = document.querySelector('.works-count-label');
-        if (label) label.textContent = '0 iş gösteriliyor';
-        return;
-      }
+  loadFeaturedFromAPI().then(projects => {
+    const grid = document.getElementById('worksGrid');
+    if (!grid) return;
 
-      // Statik kartları kaldır
-      grid.innerHTML = '';
+    if (!projects || !projects.length) {
+      grid.innerHTML = '<div class="port-empty" style="grid-column:1/-1;text-align:center;padding:40px;color:#555;font-family:var(--font-mono);font-size:12px;">Seçilmiş iş bulunamadı.</div>';
+      const label = document.querySelector('.works-count-label');
+      if (label) label.textContent = '0 iş gösteriliyor';
+      return;
+    }
 
-      // DOM'a tüm kartları ekle
-      projects.forEach((p, i) => {
-        const div = document.createElement('div');
-        div.innerHTML = buildWorkCard(p);
-        const card = div.firstElementChild;
+    // Grid'i temizle
+    grid.innerHTML = '';
+
+    // Tüm kartları DOM'a ekle — hemen görünür yap
+    projects.forEach(p => {
+      const div = document.createElement('div');
+      div.innerHTML = buildPortfolioCard(p);
+      const card = div.firstElementChild;
+      if (card) {
+        card.style.opacity = '1';
         grid.appendChild(card);
+      }
+    });
+
+    // Count label
+    const countLabel = document.querySelector('.works-count-label');
+    if (countLabel) countLabel.textContent = projects.length + ' iş gösteriliyor';
+
+    // === FİLTRE ===
+    function applyFilter(filter, animate) {
+      const cards = Array.from(grid.querySelectorAll('.port-card'));
+      const cardsToShow = [];
+
+      cards.forEach(card => {
+        const cat = (card.dataset.cat || '').toLowerCase().trim();
+        const match = filter === 'all' || cat === filter || cat.includes(filter);
+        if (match) {
+          card.classList.remove('hidden');
+          card.style.display = '';
+          cardsToShow.push(card);
+        } else {
+          card.classList.add('hidden');
+          card.style.display = 'none';
+        }
       });
 
-      // Varsa eski pagination'ı kaldır
-      const existingPager = document.getElementById('works-pager');
-      if (existingPager) existingPager.remove();
+      if (countLabel) countLabel.textContent = cardsToShow.length + ' iş gösteriliyor';
 
-      attachVideoHandlers();
-
-      const countLabel = document.querySelector('.works-count-label');
-
-      function applyFilter(filter) {
-        const cards = grid.querySelectorAll('.work-card');
-        let visibleCount = 0;
-        let visibleIndex = 0;
-        const cardsToShow = [];
-
-        cards.forEach((card, i) => {
-          const cat = (card.dataset.cat || '').toLowerCase().trim();
-          let isMatch = false;
-          if (filter === 'all') {
-            isMatch = true;
-          } else {
-            isMatch = cat === filter || cat.includes(filter) || filter.includes(cat);
-          }
-
-          if (isMatch) {
-            card.classList.remove('hidden');
-            visibleIndex++;
-            visibleCount++;
-            cardsToShow.push(card);
-          } else {
-            card.classList.add('hidden');
-          }
-        });
-
-        if (countLabel) countLabel.textContent = visibleCount + ' iş gösteriliyor';
-
-        let emptyState = grid.querySelector('.port-empty-filter');
-        if (visibleCount === 0) {
-          if (!emptyState) {
-            emptyState = document.createElement('div');
-            emptyState.className = 'port-empty-filter port-empty';
-            emptyState.style.cssText = 'grid-column:1/-1;text-align:center;padding:40px 0;width:100%;';
-            emptyState.textContent = 'Bu filtreye ait iş bulunamadı.';
-            grid.appendChild(emptyState);
-          }
-        } else {
-          if (emptyState) emptyState.remove();
+      // Boş durum
+      let emptyEl = grid.querySelector('.port-empty-filter');
+      if (cardsToShow.length === 0) {
+        if (!emptyEl) {
+          emptyEl = document.createElement('div');
+          emptyEl.className = 'port-empty-filter';
+          emptyEl.style.cssText = 'grid-column:1/-1;text-align:center;padding:40px;color:#555;font-family:var(--font-mono);font-size:12px;';
+          emptyEl.textContent = 'Bu filtreye ait iş bulunamadı.';
+          grid.appendChild(emptyEl);
         }
-
-        if (typeof gsap !== 'undefined' && cardsToShow.length > 0) {
-          // Önce opacity 0 yapıyoruz, stagger ile 1'e çıkartıyoruz
-          gsap.set(cardsToShow, { opacity: 0 });
-          gsap.to(cardsToShow, { opacity: 1, duration: 0.5, stagger: 0.05, ease: 'power2.out', clearProps: 'opacity' });
-        } else {
-          cardsToShow.forEach(c => c.style.opacity = '1');
-        }
+      } else {
+        if (emptyEl) emptyEl.remove();
       }
 
-      const filterBtns = document.querySelectorAll('#works .filter-btn');
-      filterBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-          filterBtns.forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-          const filter = (btn.dataset.filter || '').toLowerCase().trim();
-          applyFilter(filter);
-        });
+      // Animasyon sadece filtre değiştiğinde (ilk yüklemede değil)
+      if (animate && typeof gsap !== 'undefined' && cardsToShow.length > 0) {
+        gsap.fromTo(cardsToShow,
+          { opacity: 0, y: 12 },
+          { opacity: 1, y: 0, duration: 0.4, stagger: 0.05, ease: 'power2.out', clearProps: 'all' }
+        );
+      } else {
+        cardsToShow.forEach(c => { c.style.opacity = '1'; c.style.transform = ''; });
+      }
+    }
+
+    // Filtre butonları
+    const filterBtns = document.querySelectorAll('#works .filter-btn');
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        applyFilter((btn.dataset.filter || 'all').toLowerCase().trim(), true);
       });
-
-      // Başlangıç durumu
-      applyFilter('all');
-
-      function attachVideoHandlers() {
-      // Video kartları için tıklama
-      grid.querySelectorAll('.work-card--video').forEach(card => {
-        card.addEventListener('click', e => {
-          const videoSrc = card.dataset.video;
-          if (!videoSrc) return;
-          e.preventDefault();
-
-          const isMobile = window.innerWidth < 768;
-          const posterSrc = card.dataset.img || '';
-          let lb = document.getElementById('works-lightbox');
-          if (lb) lb.remove();
-
-          lb = document.createElement('div');
-          lb.id = 'works-lightbox';
-          lb.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px)';
-          lb.innerHTML = `
-            <button id="wlbClose" style="position:absolute;top:${isMobile ? '16px' : '24px'};right:${isMobile ? '16px' : '24px'};background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2">✕</button>
-            <div style="display:flex;align-items:center;justify-content:center;max-width:${isMobile?'100vw':'90vw'};max-height:100vh;">
-              <video id="wlbVideo"
-                ${posterSrc ? `poster="${posterSrc}"` : ''}
-                style="max-width:${isMobile?'100vw':'85vw'};max-height:${isMobile?'100vh':'90vh'};width:auto;height:auto;display:block;object-fit:contain;background:#000;border-radius:${isMobile?'0':'8px'};"
-                playsinline controls autoplay preload="metadata">
-              </video>
-            </div>`;
-          document.body.appendChild(lb);
-
-          const vid = lb.querySelector('#wlbVideo');
-          vid.src = videoSrc;
-          vid.play().catch(()=>{});
-          document.body.style.overflow = 'hidden';
-
-          const close = () => { vid.pause(); lb.remove(); document.body.style.overflow = ''; };
-          lb.querySelector('#wlbClose').addEventListener('click', close);
-          lb.addEventListener('click', e => { if (e.target === lb) close(); });
-          document.addEventListener('keydown', function esc(event) {
-            if (event.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
-          });
-        });
-      });
-      // Görsel kartları için lightbox
-      grid.querySelectorAll('.work-card:not(.work-card--video)').forEach(card => {
-        card.addEventListener('click', () => {
-          const imgSrc   = card.dataset.img || card.querySelector('img')?.src;
-          const title    = card.querySelector('.work-title')?.textContent || '';
-          const desc     = card.querySelector('.work-desc')?.textContent  || '';
-          const cat      = card.querySelector('.work-cat-label')?.textContent || '';
-          const year     = card.querySelector('.work-year')?.textContent  || '';
-          if (!imgSrc) return;
-
-          const isMobile = window.innerWidth < 768;
-          let lb = document.getElementById('works-lightbox');
-          if (lb) lb.remove();
-
-          lb = document.createElement('div');
-          lb.id = 'works-lightbox';
-          lb.style.cssText = `
-            position:fixed;inset:0;z-index:9000;
-            background:rgba(0,0,0,.96);
-            display:flex;align-items:center;justify-content:center;
-            backdrop-filter:blur(20px);
-            padding:${isMobile ? '0' : '24px'};
-          `;
-
-          lb.innerHTML = isMobile ? `
-            <button id="wlbClose" style="
-              position:absolute;top:16px;right:16px;
-              background:rgba(255,255,255,.05);
-              border:0.5px solid #2a2a2a;
-              color:#888;padding:8px 14px;
-              border-radius:6px;cursor:pointer;
-              font-family:var(--font-mono);font-size:13px;
-              z-index:2;
-            ">✕</button>
-            <div style="width:100%;display:flex;flex-direction:column;max-height:100vh;overflow-y:auto;">
-              <img src="${imgSrc}" alt="${title}" style="width:100%;height:auto;object-fit:contain;background:#000;min-height:30vh;">
-              <div style="padding:24px 20px;display:flex;flex-direction:column;gap:12px;">
-                <span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:#00e5ff;background:rgba(0,229,255,.08);border:0.5px solid rgba(0,229,255,.2);padding:3px 10px;border-radius:3px;display:inline-block;width:fit-content;">${cat}</span>
-                <h3 style="font-family:var(--font-display);font-size:28px;line-height:.95;color:#f0f0f0;letter-spacing:.02em;">${title}</h3>
-                <p style="font-size:13px;color:#888;line-height:1.7;">${desc}</p>
-                <span style="font-family:var(--font-mono);font-size:11px;color:#444;letter-spacing:.08em;">${year}</span>
-                <a href="/pages/portfolio.html" style="margin-top:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#00e5ff;border:0.5px solid rgba(0,229,255,.3);padding:10px 20px;border-radius:4px;text-align:center;display:block;">Tüm İşleri Gör ↗</a>
-              </div>
-            </div>
-          ` : `
-            <button id="wlbClose" style="
-              position:absolute;top:24px;right:24px;
-              background:rgba(255,255,255,.05);
-              border:0.5px solid #2a2a2a;
-              color:#888;padding:8px 14px;
-              border-radius:6px;cursor:pointer;
-              font-family:var(--font-mono);font-size:13px;
-              z-index:2;transition:color .2s,border-color .2s;
-            ">✕</button>
-            <div style="
-              display:flex;gap:32px;align-items:center;
-              max-width:1100px;width:100%;
-            ">
-              <div style="flex:1;overflow:hidden;border-radius:8px;max-height:80vh;">
-                <img src="${imgSrc}" alt="${title}"
-                  style="width:100%;height:100%;object-fit:contain;display:block;max-height:80vh;">
-              </div>
-              <div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;">
-                <span style="
-                  font-family:var(--font-mono);font-size:10px;
-                  letter-spacing:.12em;color:#00e5ff;
-                  background:rgba(0,229,255,.08);
-                  border:0.5px solid rgba(0,229,255,.2);
-                  padding:3px 10px;border-radius:3px;
-                  display:inline-block;width:fit-content;
-                ">${cat}</span>
-                <h3 style="
-                  font-family:var(--font-display);
-                  font-size:32px;line-height:.95;
-                  color:#f0f0f0;letter-spacing:.02em;
-                ">${title}</h3>
-                <p style="
-                  font-size:13px;color:#888;
-                  line-height:1.7;
-                ">${desc}</p>
-                <span style="
-                  font-family:var(--font-mono);
-                  font-size:11px;color:#444;
-                  letter-spacing:.08em;
-                ">${year}</span>
-                <a href="/pages/portfolio.html" style="
-                  margin-top:8px;
-                  font-family:var(--font-mono);font-size:11px;
-                  letter-spacing:.1em;color:#00e5ff;
-                  border:0.5px solid rgba(0,229,255,.3);
-                  padding:10px 20px;border-radius:4px;
-                  text-align:center;
-                  transition:background .2s;
-                  display:block;
-                ">Tüm İşleri Gör ↗</a>
-              </div>
-            </div>`;
-          document.body.appendChild(lb);
-          document.body.style.overflow = 'hidden';
-
-          const close = () => {
-            lb.remove();
-            document.body.style.overflow = '';
-          };
-          lb.querySelector('#wlbClose').addEventListener('click', close);
-          lb.addEventListener('click', e => { if (e.target === lb) close(); });
-          document.addEventListener('keydown', function esc(e) {
-            if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
-          });
-        });
-      }); // end image cards
-      } // end attachVideoHandlers
-
     });
-  }
 
-  // Sadece ana animasyon kontrolleri için (filtre yukarı taşındı)
-  if (typeof gsap === 'undefined' || typeof ScrollTrigger === 'undefined') return;
+    // İlk yükleme — animasyon yok
+    applyFilter('all', false);
+
+    // === LIGHTBOX HANDLERS ===
+
+    // Video kartları
+    grid.querySelectorAll('.port-card--video').forEach(card => {
+      card.addEventListener('click', e => {
+        e.stopPropagation();
+        const videoSrc = card.dataset.video;
+        if (!videoSrc) return;
+
+        const isMobile = window.innerWidth < 768;
+        const posterSrc = card.dataset.img || '';
+        let lb = document.getElementById('works-lightbox');
+        if (lb) lb.remove();
+
+        lb = document.createElement('div');
+        lb.id = 'works-lightbox';
+        lb.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px)';
+        lb.innerHTML = `
+          <button id="wlbClose" style="position:absolute;top:${isMobile?'16px':'24px'};right:${isMobile?'16px':'24px'};background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2">✕</button>
+          <div style="display:flex;align-items:center;justify-content:center;max-width:${isMobile?'100vw':'90vw'};max-height:100vh;">
+            <video id="wlbVideo"
+              ${posterSrc ? `poster="${posterSrc}"` : ''}
+              style="max-width:${isMobile?'100vw':'85vw'};max-height:${isMobile?'100vh':'90vh'};width:auto;height:auto;display:block;object-fit:contain;background:#000;border-radius:${isMobile?'0':'8px'};"
+              playsinline controls autoplay preload="metadata">
+            </video>
+          </div>`;
+        document.body.appendChild(lb);
+        document.body.style.overflow = 'hidden';
+
+        const vid = lb.querySelector('#wlbVideo');
+        vid.src = videoSrc;
+        vid.play().catch(() => {});
+
+        const close = () => { vid.pause(); lb.remove(); document.body.style.overflow = ''; };
+        lb.querySelector('#wlbClose').addEventListener('click', close);
+        lb.addEventListener('click', e => { if (e.target === lb) close(); });
+        document.addEventListener('keydown', function esc(ev) {
+          if (ev.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+        });
+      });
+    });
+
+    // Görsel kartları
+    grid.querySelectorAll('.port-card:not(.port-card--video)').forEach(card => {
+      card.addEventListener('click', () => {
+        const imgSrc = card.dataset.img || card.querySelector('img')?.src;
+        if (!imgSrc) return;
+
+        const title = card.querySelector('.port-card-title')?.textContent || card.querySelector('.work-title')?.textContent || '';
+        const desc  = card.querySelector('.port-desc')?.textContent  || card.querySelector('.work-desc')?.textContent || '';
+        const cat   = card.querySelector('.port-cat-tag')?.textContent || card.querySelector('.work-cat-label')?.textContent || '';
+        const year  = card.querySelector('.port-card-year')?.textContent  || card.querySelector('.work-year')?.textContent || '';
+
+        const isMobile = window.innerWidth < 768;
+        let lb = document.getElementById('works-lightbox');
+        if (lb) lb.remove();
+
+        lb = document.createElement('div');
+        const pathBase = (location.pathname.includes('/pages/') || location.pathname.includes('\\pages\\')) ? '../' : './';
+        lb.id = 'works-lightbox';
+        lb.style.cssText = `position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px);padding:${isMobile?'0':'24px'};`;
+
+        lb.innerHTML = isMobile ? `
+          <button id="wlbClose" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2;">✕</button>
+          <div style="width:100%;display:flex;flex-direction:column;max-height:100vh;overflow-y:auto;">
+            <img src="${imgSrc}" alt="${title}" style="width:100%;height:auto;object-fit:contain;background:#000;">
+            <div style="padding:24px 20px;display:flex;flex-direction:column;gap:12px;">
+              <span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:#00e5ff;background:rgba(0,229,255,.08);border:0.5px solid rgba(0,229,255,.2);padding:3px 10px;border-radius:3px;display:inline-block;width:fit-content;">${cat}</span>
+              <h3 style="font-family:var(--font-display);font-size:28px;line-height:.95;color:#f0f0f0;">${title}</h3>
+              <p style="font-size:13px;color:#888;line-height:1.7;">${desc}</p>
+              <span style="font-family:var(--font-mono);font-size:11px;color:#444;">${year}</span>
+              <a href="${pathBase}pages/portfolio.html" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#00e5ff;border:0.5px solid rgba(0,229,255,.3);padding:10px 20px;border-radius:4px;text-align:center;display:block;">Tüm İşleri Gör ↗</a>
+            </div>
+          </div>` : `
+          <button id="wlbClose" style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2;">✕</button>
+          <div style="display:flex;gap:32px;align-items:center;max-width:1100px;width:100%;">
+            <div style="flex:1;overflow:hidden;border-radius:8px;max-height:80vh;">
+              <img src="${imgSrc}" alt="${title}" style="width:100%;height:auto;max-height:80vh;object-fit:contain;display:block;">
+            </div>
+            <div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:12px;">
+              <span style="font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;color:#00e5ff;background:rgba(0,229,255,.08);border:0.5px solid rgba(0,229,255,.2);padding:3px 10px;border-radius:3px;display:inline-block;width:fit-content;">${cat}</span>
+              <h3 style="font-family:var(--font-display);font-size:32px;line-height:.95;color:#f0f0f0;">${title}</h3>
+              <p style="font-size:13px;color:#888;line-height:1.7;">${desc}</p>
+              <span style="font-family:var(--font-mono);font-size:11px;color:#444;">${year}</span>
+              <a href="${pathBase}pages/portfolio.html" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#00e5ff;border:0.5px solid rgba(0,229,255,.3);padding:10px 20px;border-radius:4px;text-align:center;display:block;">Tüm İşleri Gör ↗</a>
+            </div>
+          </div>`;
+
+        document.body.appendChild(lb);
+        document.body.style.overflow = 'hidden';
+
+        const close = () => { lb.remove(); document.body.style.overflow = ''; };
+        lb.querySelector('#wlbClose').addEventListener('click', close);
+        lb.addEventListener('click', e => { if (e.target === lb) close(); });
+        document.addEventListener('keydown', function esc(e) {
+          if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+        });
+      });
+    });
+
+  });
 }
 
 // === ABOUT PREVIEW ===
@@ -797,24 +736,28 @@ function initNav() {
   window.addEventListener('scroll', updateActiveLinks, { passive: true });
 
   // Hamburger
-  hamburger.addEventListener('click', () => {
-    menuOpen = !menuOpen;
-    hamburger.classList.toggle('open', menuOpen);
-    menu.classList.toggle('open', menuOpen);
-    hamburger.setAttribute('aria-expanded', menuOpen);
-    hamburger.setAttribute('aria-label', menuOpen ? 'Menüyü kapat' : 'Menüyü aç');
-    document.body.style.overflow = menuOpen ? 'hidden' : '';
-  });
+  if (hamburger && menu) {
+    hamburger.addEventListener('click', () => {
+      menuOpen = !menuOpen;
+      hamburger.classList.toggle('open', menuOpen);
+      menu.classList.toggle('open', menuOpen);
+      hamburger.setAttribute('aria-expanded', menuOpen);
+      hamburger.setAttribute('aria-label', menuOpen ? 'Menüyü kapat' : 'Menüyü aç');
+      document.body.style.overflow = menuOpen ? 'hidden' : '';
+    });
+  }
 }
 
 window.closeMenu = function () {
   const hamburger = document.getElementById('hamburger');
   const menu = document.getElementById('mobileMenu');
-  hamburger.classList.remove('open');
-  menu.classList.remove('open');
-  hamburger.setAttribute('aria-expanded', false);
-  hamburger.setAttribute('aria-label', 'Menüyü aç');
-  document.body.style.overflow = '';
+  if (hamburger && menu) {
+    hamburger.classList.remove('open');
+    menu.classList.remove('open');
+    hamburger.setAttribute('aria-expanded', false);
+    hamburger.setAttribute('aria-label', 'Menüyü aç');
+    document.body.style.overflow = '';
+  }
 };
 
 // === TOOLS MARQUEE ===

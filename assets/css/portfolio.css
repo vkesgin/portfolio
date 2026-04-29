@@ -103,6 +103,12 @@
   filter: brightness(0.5);
 }
 
+.port-card-placeholder {
+  width: 100%;
+  padding-top: 75%; /* 4:3 varsayılan oran */
+  background: var(--bg-surface);
+}
+
 /* === OVERLAY === */
 .port-card-overlay {
   position: absolute;

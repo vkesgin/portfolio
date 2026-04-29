@@ -1,13 +1,13 @@
-// Kaç klasör derinlikte olduğumuzu otomatik hesapla
-const depth   = location.pathname.split('/').filter(Boolean).length;
-const isPages = location.pathname.includes('/pages/');
-const base    = '/';
+const isPages = location.pathname.includes('/pages/') || location.pathname.includes('\\pages\\');
+const base    = isPages ? '../' : './';
 
 async function injectComponent(selector, file) {
   try {
     const res  = await fetch(base + 'components/' + file + '?v=' + Date.now());
     if (!res.ok) return;
-    const html = await res.text();
+    let html = await res.text();
+    html = html.replace(/href="\//g, 'href="' + base);
+    html = html.replace(/src="\//g, 'src="' + base);
     const el   = document.querySelector(selector);
     if (el) el.innerHTML = html;
   } catch(e) {

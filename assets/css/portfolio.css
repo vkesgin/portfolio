@@ -70,10 +70,10 @@
 /* === CARD === */
 .port-card {
   position: relative;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--bg-primary);
   cursor: pointer;
-  opacity: 0;
 }
 
 .port-card::before { display: none; }

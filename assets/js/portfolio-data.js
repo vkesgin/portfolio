@@ -44,8 +44,8 @@ function buildPortfolioCard(p) {
          ${isVideo ? `data-video="${videoSrc}"` : ''}>
       <div class="port-card-img">
         ${imgSrc
-          ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.style.display='none'">`
-          : '<div class="port-card-placeholder"></div>'
+          ? `<img src="${imgSrc}" alt="${p.title || ''}" loading="lazy" onerror="this.onerror=null; this.src='https://placehold.co/600x400/1a1a1a/555555?text=Gorsel+Bulunamadi'; this.style.objectFit='contain';">`
+          : '<div class="port-card-placeholder" style="display:flex;align-items:center;justify-content:center;color:#555;font-size:12px;">Görsel Yok</div>'
         }
         ${isVideo ? `
           <div class="port-play-icon">

@@ -129,10 +129,17 @@
 
     let currentProduct = products[0];
 
+    const isMobile = window.innerWidth < 768;
+
     // ─── SAHNE KURULUMU ───
     const canvas = document.getElementById('canvas');
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const renderer = new THREE.WebGLRenderer({ 
+      canvas, 
+      antialias: !isMobile, // Mobilde kasmayı engellemek için AA kapalı
+      alpha: false 
+    });
+    // Mobilde performansı katlamak için piksel oranını 1'e sabitle (Masaüstü aynen kalıyor)
+    renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     const scene = new THREE.Scene();
@@ -148,7 +155,8 @@
     scene.add(dirLight);
 
     // ─── PARTİKÜL EFEKTİ ───
-    const pCount = 1200;
+    // Mobilde 300, masaüstünde 1200 partikül
+    const pCount = isMobile ? 300 : 1200;
     const pPos = new Float32Array(pCount * 3);
     for (let i = 0; i < pCount; i++) {
       const r = 3 + Math.random() * 7;
@@ -219,7 +227,7 @@
       currentSplat = new LumaSplatsThree({
         source: product.lumaUrl,
         enableThreeShaderIntegration: false,
-        particleRevealEnabled: true // Luma'nın kendi havalı yüklenme efekti
+        particleRevealEnabled: !isMobile // Mobilde kasmasını engellemek için açılış efektini kapat
       });
 
       scene.add(currentSplat);

@@ -217,51 +217,62 @@
     scene.add(particles);
 
     // ─── 3D YAZI (TROIKA - LUMA STİLİ) ───
-    // Tam olarak Luma Web Library gibi: objenin önünde zeminde, her zaman kameraya bakıyor
     const FONT_URL = 'https://cdn.jsdelivr.net/gh/googlefonts/montserrat@master/fonts/ttf/Montserrat-Bold.ttf';
     let textMesh = null;
+    let textExtrusions = []; // Kalınlık katmanları
+    let currentTextOpacity = 0; // Pürüzsüz geçiş için
 
-    // Fontu önceden yükle (ilk gösterimde gecikme olmasın)
     preloadFont({ font: FONT_URL }, () => {});
 
+    function makeTextLayer(textStr, offsetX, offsetY, offsetZ, color, opacity) {
+      const t = new Text();
+      t.text = textStr;
+      t.font = FONT_URL;
+      t.fontSize = 0.28;
+      t.anchorX = 'center';
+      t.anchorY = 'middle';
+      t.letterSpacing = 0.05;
+      t.maxWidth = 4;
+      t.textAlign = 'center';
+      t.position.set(offsetX, -0.6 + offsetY, 1.8 + offsetZ);
+      t.rotation.y = Math.PI;
+      t.material = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.3,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+      });
+      t.sync();
+      return t;
+    }
+
     function updateTitle(textStr) {
-      // Eski yazıyı temizle
-      if (textMesh) {
-        scene.remove(textMesh);
-        textMesh.dispose();
-        textMesh = null;
+      // Eski katmanları temizle
+      if (textMesh) { scene.remove(textMesh); textMesh.dispose(); textMesh = null; }
+      textExtrusions.forEach(t => { scene.remove(t); t.dispose(); });
+      textExtrusions = [];
+
+      // Kalınlık efekti: arka arkaya amber/gold katmanlar (extrusion)
+      const extrudeSteps = 6;
+      for (let i = 1; i <= extrudeSteps; i++) {
+        const t = makeTextLayer(textStr, 0, 0, -i * 0.018, 0xd4a574, 0.5 - i * 0.06);
+        textExtrusions.push(t);
+        scene.add(t);
       }
 
-      textMesh = new Text();
+      // Ana metin (en önde, beyaz)
+      textMesh = makeTextLayer(textStr, 0, 0, 0, 0xffffff, 0.95);
       scene.add(textMesh);
-
-      textMesh.text = textStr;
-      textMesh.font = FONT_URL;
-      textMesh.fontSize = 0.28;           // Luma boyutu gibi - objeye oranla mütevazı
-      textMesh.anchorX = 'center';        // Yatay ortalı
-      textMesh.anchorY = 'middle';
-      textMesh.letterSpacing = 0.05;
-      textMesh.maxWidth = 4;              // Uzun isimler 2 satıra geçsin
-      textMesh.textAlign = 'center';
-
-      // Luma'nın "Hello World" pozisyonu gibi: objenin önünde, zemin seviyesinde
-      // Kamera başlangıçta z=+5'te, metin de +z'ye bakıyor → rotation.y = Math.PI
-      textMesh.position.set(0, -0.6, 1.8);
-      textMesh.rotation.y = Math.PI; // +z yönüne yüzle (kameranın başlangıç pozisyonu)
-
-      // Luma stili: beyaz, hafif saydam, glow efekti olmayan sade metin
-      textMesh.material = new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.92,
-        depthWrite: false,  // Splat ile çakışmasın
-      });
-
-      textMesh.sync();
     }
     
     // İlk metni oluştur
     updateTitle(currentProduct.title);
+
+    // Metin yüz normal vektörü (rotation.y=PI sonrası dünya uzayında +z'ye bakıyor)
+    const TEXT_POS = new THREE.Vector3(0, -0.6, 1.8);
+    const TEXT_NORMAL = new THREE.Vector3(0, 0, 1); // kamera başlangıç yönü
 
     // ─── LUMA SPLAT YÖNETİMİ ───
     let currentSplat = null;
@@ -366,6 +377,29 @@
 
       // Partikülleri yavaşça döndür
       particles.rotation.y = time * 0.05;
+
+      // ── METİN GÖRÜNÜRLÜĞÜ + ŞİMMER ──
+      if (textMesh) {
+        // Kamera objenin önünde mi arkasında mı? (dot product)
+        const toCam = camera.position.clone().sub(TEXT_POS);
+        const dot = toCam.dot(TEXT_NORMAL); // > 0 = önde, < 0 = arkada
+        
+        // Pürüzsüz geçiş
+        const targetOpacity = dot > 0.3 ? 1 : (dot > -0.5 ? (dot + 0.5) / 0.8 * 1 : 0);
+        currentTextOpacity += (targetOpacity - currentTextOpacity) * 0.08;
+
+        // Shimmer: sin dalgasıyla parıltı
+        const shimmer = 0.25 + Math.sin(time * 1.8) * 0.2 + Math.sin(time * 3.5) * 0.08;
+        
+        textMesh.material.opacity = currentTextOpacity * 0.95;
+        textMesh.material.emissiveIntensity = currentTextOpacity * shimmer;
+
+        // Extrusion katmanları da aynı opaklık
+        textExtrusions.forEach((t, i) => {
+          t.material.opacity = currentTextOpacity * (0.44 - i * 0.055);
+          t.material.emissiveIntensity = currentTextOpacity * shimmer * 0.6;
+        });
+      }
 
       renderer.render(scene, camera);
     }

@@ -348,25 +348,6 @@
       // Partikülleri yavaşça döndür
       particles.rotation.y = time * 0.05;
 
-      // 3D Yazıyı her zaman kameraya baktır ve açıya göre gizle
-      if (textMesh) {
-        // Yazı hafif yukarı aşağı süzülsün
-        textMesh.position.y = 1.2 + Math.sin(time * 2) * 0.05;
-        textMesh.lookAt(camera.position);
-
-        // Açıya göre yavaşça silikleşme mantığı
-        // currentVert 0.2 civarında tam görünür, 0.8'den sonra (tepeden bakarken) kaybolur
-        let targetOpacity = 1.0;
-        if (currentVert > 0.8) {
-          targetOpacity = Math.max(0, 1.0 - (currentVert - 0.8) * 2);
-        } else if (currentVert < -0.2) {
-          targetOpacity = Math.max(0, 1.0 - (-0.2 - currentVert) * 2);
-        }
-        
-        // Pürüzsüz geçiş
-        textMesh.material.opacity += (targetOpacity - textMesh.material.opacity) * 0.1;
-      }
-
       renderer.render(scene, camera);
     }
     animate();

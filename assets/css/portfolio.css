@@ -84,13 +84,15 @@
 .port-card-img {
   position: relative;
   width: 100%;
+  aspect-ratio: 4/3;
   overflow: hidden;
+  background: var(--bg-surface);
 }
 
 .port-card-img img,
 .port-card-img video {
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
   object-fit: cover;
   filter: brightness(0.8);

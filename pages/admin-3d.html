@@ -119,18 +119,32 @@
       localStorage.setItem('vk_3d_products', JSON.stringify(products)); // Anında hız için yerele yaz
       renderList(); // Ekranı hemen güncelle
       
+      const currentToken = localStorage.getItem('vk_admin_token') || '';
+      if (!currentToken) {
+        alert('HATA: Giriş yapmamışsınız! Lütfen önce ana Admin paneline gidip şifrenizle giriş yapın. Aksi takdirde verileriniz buluta senkronize olmaz.');
+        return;
+      }
+
       try {
-        await fetch(API_URL, {
+        const r = await fetch(API_URL, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + TOKEN
+            'Authorization': 'Bearer ' + currentToken
           },
           body: JSON.stringify({ key: 'vk_3d_products', value: JSON.stringify(products) })
         });
+        
+        if (!r.ok) {
+          if (r.status === 401) {
+            alert('HATA: Oturumunuz süresi dolmuş veya yetkisiz! Lütfen önce ana Admin Paneline girip şifrenizle giriş yapın.');
+          } else {
+            alert('Uyarı: Sunucuya kaydedilirken hata oluştu. Kod: ' + r.status);
+          }
+        }
       } catch(e) {
         console.error('API senkronizasyon hatası:', e);
-        alert('Uyarı: Sunucuya kaydedilirken hata oluştu. Sadece bu tarayıcıda görünecek.');
+        alert('Uyarı: Bağlantı hatası oluştu. Sadece bu tarayıcıda görünecek.');
       }
     }
 

@@ -49,6 +49,42 @@
       border-color:#d4a574; transform:translateY(-10px);
       box-shadow: 0 12px 24px rgba(212,165,116,0.3);
     }
+    .menu-item.active {
+      background: var(--primary);
+      color: #111;
+      border-color: var(--primary);
+      box-shadow: 0 4px 15px rgba(212,165,116,0.3);
+    }
+    
+    /* ─── YENİ: ÜRÜN İSMİ ÖN EKRAN OVERLAY ─── */
+    #ui-overlay {
+      position: absolute;
+      top: 15%; /* Üstten biraz boşluk */
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none; /* Tıklamaları engelle, 3D etkileşimini bozmasın */
+      z-index: 10;
+      text-align: center;
+      width: 100%;
+    }
+    #ui-title {
+      font-family: 'Montserrat', system-ui, sans-serif;
+      font-size: clamp(2rem, 5vw, 4rem);
+      font-weight: 800;
+      color: #ffffff;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin: 0;
+      text-shadow: 0 4px 30px rgba(0,0,0,0.8);
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    #ui-title.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
     .gallery-item img {
       width:100%; height:100%; object-fit:cover; opacity:0.6; transition:0.3s;
     }
@@ -79,7 +115,12 @@
   <div class="vignette"></div>
   <canvas id="canvas"></canvas>
 
-  <!-- Gallery Menu -->
+  <!-- YENİ: Ürün Başlığı (Ekranda Ön Planda) -->
+  <div id="ui-overlay">
+    <h1 id="ui-title"></h1>
+  </div>
+
+  <!-- Bottom Gallery Menu -->
   <div id="gallery-menu">
     <!-- Items will be injected here by JS -->
   </div>
@@ -89,8 +130,7 @@
     "imports": {
       "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
       "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js",
-      "troika-three-text": "https://esm.sh/troika-three-text@0.49.0?external=three"
+      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js"
     }
   }
   </script>
@@ -98,7 +138,6 @@
   <script type="module">
     import * as THREE from 'three';
     import { LumaSplatsThree } from '@lumaai/luma-web';
-    import { Text } from 'troika-three-text';
 
     // ─── VERİTABANI (Admin panelinden dolacak) ───
     const defaultProducts = [
@@ -191,43 +230,19 @@
     }));
     scene.add(particles);
 
-    // ─── 3D HOLOGRAM YAZI (TROIKA TEXT) ───
-    let textMesh = null;
+    // ─── EKRANDA YAZI YÖNETİMİ ───
+    const uiTitle = document.getElementById('ui-title');
 
-    function create3DText(textStr) {
-      if (textMesh) {
-        scene.remove(textMesh);
-        textMesh.dispose();
-      }
-
-      textMesh = new Text();
-      scene.add(textMesh);
-
-      textMesh.text = textStr;
-      // Türkçe uyumlu muhteşem Google Font: Montserrat (TTF formatı)
-      textMesh.font = 'https://cdn.jsdelivr.net/gh/googlefonts/montserrat@master/fonts/ttf/Montserrat-Regular.ttf';
-      textMesh.fontSize = 0.35;
-      textMesh.position.set(0, 1.2, 0);
-      textMesh.anchorX = 'center';
-      textMesh.anchorY = 'bottom';
-      
-      // Premium, solid, metallic material matching the website theme
-      const textMat = new THREE.MeshStandardMaterial({ 
-        color: 0xffffff,
-        emissive: 0xd4a574, // Warm golden/peach emissive
-        emissiveIntensity: 0.15,
-        roughness: 0.2,
-        metalness: 0.8,
-        transparent: true,
-        opacity: 1.0
-      });
-      
-      textMesh.material = textMat;
-      textMesh.sync();
+    function updateTitle(textStr) {
+      uiTitle.classList.remove('show');
+      setTimeout(() => {
+        uiTitle.innerText = textStr;
+        uiTitle.classList.add('show');
+      }, 300); // Küçük bir animasyon gecikmesi
     }
     
     // İlk metni oluştur
-    create3DText(currentProduct.title);
+    updateTitle(currentProduct.title);
 
     // ─── LUMA SPLAT YÖNETİMİ ───
     let currentSplat = null;
@@ -249,7 +264,8 @@
       });
 
       scene.add(currentSplat);
-      create3DText(product.title);
+      currentProduct = product;
+      updateTitle(product.title);
 
       currentSplat.onLoad = () => {
         loadingEl.classList.add('fade');

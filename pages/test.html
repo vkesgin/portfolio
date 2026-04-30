@@ -245,7 +245,9 @@
       textMesh.textAlign = 'center';
 
       // Luma'nın "Hello World" pozisyonu gibi: objenin önünde, zemin seviyesinde
-      textMesh.position.set(0, -0.6, 1.8);  // y=-0.6 zemin, z=1.8 kameraya doğru yakın
+      // Kamera başlangıçta z=+5'te, metin de +z'ye bakıyor → rotation.y = Math.PI
+      textMesh.position.set(0, -0.6, 1.8);
+      textMesh.rotation.y = Math.PI; // +z yönüne yüzle (kameranın başlangıç pozisyonu)
 
       // Luma stili: beyaz, hafif saydam, glow efekti olmayan sade metin
       textMesh.material = new THREE.MeshBasicMaterial({
@@ -364,17 +366,6 @@
 
       // Partikülleri yavaşça döndür
       particles.rotation.y = time * 0.05;
-
-      // Yazıyı daima kameraya döndür (billboard - Luma stili)
-      if (textMesh) {
-        textMesh.lookAt(camera.position);
-        // Yukarıdan bakılınca soluklaş
-        const fadeStart = 0.7, fadeEnd = 1.2;
-        const alpha = currentVert < fadeStart ? 0.92
-          : currentVert > fadeEnd ? 0
-          : 0.92 * (1 - (currentVert - fadeStart) / (fadeEnd - fadeStart));
-        textMesh.material.opacity = alpha;
-      }
 
       renderer.render(scene, camera);
     }

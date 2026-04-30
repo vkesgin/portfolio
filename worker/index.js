@@ -129,15 +129,17 @@ export default {
       return new Response(obj.body, { headers: baseHeaders });
     }
 
-    // === PROTECTED: Auth gerekli ===
-    const user = await authMiddleware(request, env);
-    if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
-
-    // === FITNESS API ===
+    // === PUBLIC: Key-Value (Ayarlar) ===
     if (path === '/api/fitness' && method === 'GET') {
       const { results } = await env.DB.prepare('SELECT * FROM fitness_store').all();
       return json(results, 200, origin);
     }
+
+    // === PROTECTED: Auth gerekli ===
+    const user = await authMiddleware(request, env);
+    if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
+
+    // === FITNESS / SETTINGS API (POST/DELETE) ===
 
     if (path === '/api/fitness' && method === 'POST') {
       const body = await request.json();

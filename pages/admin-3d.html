@@ -82,31 +82,63 @@
   <script>
     const defaultThumb = 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=200&auto=format&fit=crop';
     
+    const API_URL = 'https://vk-portfolio-api.vkesgin38.workers.dev/api/fitness';
+    const TOKEN = localStorage.getItem('vk_admin_token') || '';
+
+    let localProducts = [];
+
     // Verileri Yükle
-    function getProducts() {
+    async function loadProducts() {
+      let loadedFromApi = false;
       try {
-        const data = localStorage.getItem('vk_3d_products');
-        return data ? JSON.parse(data) : [];
-      } catch (e) { return []; }
+        const res = await fetch(API_URL);
+        if (res.ok) {
+          const data = await res.json();
+          const row = data.find(d => d.key === 'vk_3d_products');
+          if (row && row.value) {
+            localProducts = JSON.parse(row.value);
+            localStorage.setItem('vk_3d_products', row.value);
+            loadedFromApi = true;
+          }
+        }
+      } catch(e) {}
+      
+      if (!loadedFromApi) {
+        const saved = localStorage.getItem('vk_3d_products');
+        if (saved) localProducts = JSON.parse(saved);
+      }
+      renderList();
     }
 
-    // Verileri Kaydet
-    function saveProducts(products) {
-      localStorage.setItem('vk_3d_products', JSON.stringify(products));
-      renderList();
+    // Verileri Kaydet (API'ye Gönder)
+    async function saveProducts(products) {
+      localProducts = products;
+      localStorage.setItem('vk_3d_products', JSON.stringify(products)); // Anında hız için yerele yaz
+      renderList(); // Ekranı hemen güncelle
+      
+      try {
+        await fetch(API_URL, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + TOKEN
+          },
+          body: JSON.stringify({ key: 'vk_3d_products', value: JSON.stringify(products) })
+        });
+      } catch(e) {
+        console.error('API senkronizasyon hatası:', e);
+        alert('Uyarı: Sunucuya kaydedilirken hata oluştu. Sadece bu tarayıcıda görünecek.');
+      }
     }
 
     // Listeyi Çiz
     function renderList() {
-      const products = getProducts();
       const listEl = document.getElementById('product-list');
-      
-      if (products.length === 0) {
+      if (!localProducts || localProducts.length === 0) {
         listEl.innerHTML = '<div class="empty-state">Henüz hiç ürün eklemediniz.</div>';
         return;
       }
-
-      listEl.innerHTML = products.map(p => `
+      listEl.innerHTML = localProducts.map(p => `
         <div class="product-item">
           <img src="${p.thumb || defaultThumb}" class="product-img" alt="thumb">
           <div class="product-info">
@@ -130,19 +162,16 @@
     });
 
     // Ürün Ekle
-    document.getElementById('add-form').addEventListener('submit', (e) => {
+    document.getElementById('add-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const title = document.getElementById('p-title').value.trim();
       let url = document.getElementById('p-url').value.trim();
       let thumb = document.getElementById('p-thumb-base64').value;
 
-      // Luma linkini kontrol et ve formatla
+      // Luma linkini formatla
       const match = url.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
-      if (match) {
-        url = 'https://lumalabs.ai/capture/' + match[0];
-      }
-
+      if (match) url = 'https://lumalabs.ai/capture/' + match[0];
       if (!thumb) thumb = defaultThumb;
 
       const newProduct = {
@@ -152,27 +181,24 @@
         thumb: thumb
       };
 
-      const products = getProducts();
-      products.push(newProduct);
-      saveProducts(products);
+      const updated = [...localProducts, newProduct];
+      await saveProducts(updated);
 
-      // Formu temizle
       e.target.reset();
       document.getElementById('p-thumb-base64').value = '';
-      alert(title + ' vitrine eklendi!');
+      alert(title + ' vitrine eklendi ve tüm cihazlarla eşitlendi!');
     });
 
     // Ürün Sil
-    window.deleteProduct = function(id) {
+    window.deleteProduct = async function(id) {
       if(confirm('Bu ürünü vitrinden silmek istediğinize emin misiniz?')) {
-        let products = getProducts();
-        products = products.filter(p => p.id !== id);
-        saveProducts(products);
+        const updated = localProducts.filter(p => p.id !== id);
+        await saveProducts(updated);
       }
     };
 
     // İlk Yükleme
-    renderList();
+    loadProducts();
   </script>
 </body>
 </html>

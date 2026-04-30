@@ -62,27 +62,11 @@
       top: 15%; /* Üstten biraz boşluk */
       left: 50%;
       transform: translateX(-50%);
-      pointer-events: none; /* Tıklamaları engelle, 3D etkileşimini bozmasın */
+      pointer-events: none;
       z-index: 10;
       text-align: center;
       width: 100%;
-    }
-    #ui-title {
-      font-family: 'Montserrat', system-ui, sans-serif;
-      font-size: clamp(2rem, 5vw, 4rem);
-      font-weight: 800;
-      color: #ffffff;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      margin: 0;
-      text-shadow: 0 4px 30px rgba(0,0,0,0.8);
-      opacity: 0;
-      transform: translateY(20px);
-      transition: opacity 0.5s ease, transform 0.5s ease;
-    }
-    #ui-title.show {
-      opacity: 1;
-      transform: translateY(0);
+      display: none; /* Artık kullanılmıyor - troika ile 3D sahnede */
     }
 
     .gallery-item img {
@@ -130,7 +114,8 @@
     "imports": {
       "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
       "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js"
+      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js",
+      "troika-three-text": "https://esm.sh/troika-three-text@0.49.0?external=three"
     }
   }
   </script>
@@ -138,6 +123,7 @@
   <script type="module">
     import * as THREE from 'three';
     import { LumaSplatsThree } from '@lumaai/luma-web';
+    import { Text, preloadFont } from 'troika-three-text';
 
     // ─── VERİTABANI (Admin panelinden dolacak) ───
     const defaultProducts = [
@@ -230,15 +216,46 @@
     }));
     scene.add(particles);
 
-    // ─── EKRANDA YAZI YÖNETİMİ ───
-    const uiTitle = document.getElementById('ui-title');
+    // ─── 3D YAZI (TROIKA - LUMA STİLİ) ───
+    // Tam olarak Luma Web Library gibi: objenin önünde zeminde, her zaman kameraya bakıyor
+    const FONT_URL = 'https://cdn.jsdelivr.net/gh/googlefonts/montserrat@master/fonts/ttf/Montserrat-Bold.ttf';
+    let textMesh = null;
+
+    // Fontu önceden yükle (ilk gösterimde gecikme olmasın)
+    preloadFont({ font: FONT_URL }, () => {});
 
     function updateTitle(textStr) {
-      uiTitle.classList.remove('show');
-      setTimeout(() => {
-        uiTitle.innerText = textStr;
-        uiTitle.classList.add('show');
-      }, 300); // Küçük bir animasyon gecikmesi
+      // Eski yazıyı temizle
+      if (textMesh) {
+        scene.remove(textMesh);
+        textMesh.dispose();
+        textMesh = null;
+      }
+
+      textMesh = new Text();
+      scene.add(textMesh);
+
+      textMesh.text = textStr;
+      textMesh.font = FONT_URL;
+      textMesh.fontSize = 0.28;           // Luma boyutu gibi - objeye oranla mütevazı
+      textMesh.anchorX = 'center';        // Yatay ortalı
+      textMesh.anchorY = 'middle';
+      textMesh.letterSpacing = 0.05;
+      textMesh.maxWidth = 4;              // Uzun isimler 2 satıra geçsin
+      textMesh.textAlign = 'center';
+
+      // Luma'nın "Hello World" pozisyonu gibi: objenin önünde, zemin seviyesinde
+      textMesh.position.set(0, -0.6, 1.8);  // y=-0.6 zemin, z=1.8 kameraya doğru yakın
+
+      // Luma stili: beyaz, hafif saydam, glow efekti olmayan sade metin
+      textMesh.material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: false,  // Splat ile çakışmasın
+      });
+
+      textMesh.sync();
     }
     
     // İlk metni oluştur
@@ -347,6 +364,17 @@
 
       // Partikülleri yavaşça döndür
       particles.rotation.y = time * 0.05;
+
+      // Yazıyı daima kameraya döndür (billboard - Luma stili)
+      if (textMesh) {
+        textMesh.lookAt(camera.position);
+        // Yukarıdan bakılınca soluklaş
+        const fadeStart = 0.7, fadeEnd = 1.2;
+        const alpha = currentVert < fadeStart ? 0.92
+          : currentVert > fadeEnd ? 0
+          : 0.92 * (1 - (currentVert - fadeStart) / (fadeEnd - fadeStart));
+        textMesh.material.opacity = alpha;
+      }
 
       renderer.render(scene, camera);
     }

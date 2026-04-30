@@ -105,7 +105,10 @@
       
       if (!loadedFromApi) {
         const saved = localStorage.getItem('vk_3d_products');
-        if (saved) localProducts = JSON.parse(saved);
+        if (saved) {
+          localProducts = JSON.parse(saved);
+          if (localProducts.length > 0) saveProducts(localProducts); // Otomatik Senkronize Et
+        }
       }
       renderList();
     }

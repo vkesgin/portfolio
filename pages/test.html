@@ -87,42 +87,7 @@
       background: radial-gradient(circle at center, transparent 30%, rgba(15,12,10,0.7) 120%);
     }
 
-    /* ─── METİN KONUM EDİTÖRÜ ─── */
-    #pos-toggle {
-      position: fixed; top: 20px; right: 20px; z-index: 200;
-      width: 44px; height: 44px; border-radius: 50%;
-      background: rgba(212,165,116,0.15); border: 1px solid rgba(212,165,116,0.4);
-      color: #d4a574; font-size: 20px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center;
-      backdrop-filter: blur(10px); transition: all 0.2s;
-    }
-    #pos-toggle:hover { background: rgba(212,165,116,0.3); }
 
-    #pos-panel {
-      position: fixed; top: 74px; right: 20px; z-index: 200;
-      background: rgba(20,16,14,0.92); border: 1px solid rgba(212,165,116,0.3);
-      border-radius: 16px; padding: 20px; width: 260px;
-      backdrop-filter: blur(20px); display: none;
-      font-family: 'Segoe UI', sans-serif; color: #f0f0f0;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
-    }
-    #pos-panel h3 { font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
-      color: #d4a574; margin-bottom: 16px; }
-    .pos-row { margin-bottom: 14px; }
-    .pos-row label { display: flex; justify-content: space-between;
-      font-size: 12px; color: #aaa; margin-bottom: 6px; }
-    .pos-row label span { color: #d4a574; font-weight: 600; }
-    .pos-row input[type=range] {
-      width: 100%; accent-color: #d4a574; cursor: pointer;
-    }
-    #pos-save {
-      width: 100%; padding: 10px; border: none; border-radius: 8px;
-      background: #d4a574; color: #111; font-weight: 700; font-size: 13px;
-      cursor: pointer; margin-top: 4px; transition: 0.2s;
-      letter-spacing: 1px; text-transform: uppercase;
-    }
-    #pos-save:hover { filter: brightness(1.1); }
-    #pos-hint { font-size: 11px; color: #666; text-align: center; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -136,29 +101,7 @@
   <div class="vignette"></div>
   <canvas id="canvas"></canvas>
 
-  <!-- Metin Konum Editörü -->
-  <button id="pos-toggle" title="Yazı konumunu ayarla">⚙️</button>
-  <div id="pos-panel">
-    <h3>📝 Yazı Konumu</h3>
-    <div class="pos-row">
-      <label>Sol ↔ Sağ (X) <span id="val-x">0.0</span></label>
-      <input type="range" id="sl-x" min="-4" max="4" step="0.1" value="0">
-    </div>
-    <div class="pos-row">
-      <label>Aşağı ↕ Yukarı (Y) <span id="val-y">-0.6</span></label>
-      <input type="range" id="sl-y" min="-3" max="3" step="0.1" value="-0.6">
-    </div>
-    <div class="pos-row">
-      <label>İleri ↔ Geri (Z) <span id="val-z">1.8</span></label>
-      <input type="range" id="sl-z" min="-4" max="4" step="0.1" value="1.8">
-    </div>
-    <div class="pos-row">
-      <label>Boyut <span id="val-s">0.28</span></label>
-      <input type="range" id="sl-s" min="0.1" max="1.0" step="0.02" value="0.28">
-    </div>
-    <button id="pos-save">✔ Kaydet</button>
-    <div id="pos-hint">Bu ayarlar sadece bu ürün için kaydedilir</div>
-  </div>
+
 
   <!-- Bottom Gallery Menu -->
   <div id="gallery-menu"></div>
@@ -270,68 +213,38 @@
     }));
     scene.add(particles);
 
-    // ─── 3D YAZI SİSTEMİ ───
+    // ─── 3D YAZI SİSTEMİ (Luma Web Library tarzı) ───
     const FONT_URL = 'https://cdn.jsdelivr.net/gh/googlefonts/montserrat@master/fonts/ttf/Montserrat-Bold.ttf';
     let textMesh = null;
-    let textExtrusions = [];
-    let currentTextOpacity = 1; // Başlangıçta görünür
-
-    // Varsayılan konum - her ürün kendi offset'ini saklayabilir
-    function getTextOffset(product) {
-      return product.textOffset || { x: 0, y: -0.6, z: 1.8, s: 0.28 };
-    }
 
     preloadFont({ font: FONT_URL }, () => {});
 
-    function buildTextLayers(textStr, offset) {
-      // Temizle
+    function updateTitle(textStr) {
       if (textMesh) { scene.remove(textMesh); textMesh.dispose(); textMesh = null; }
-      textExtrusions.forEach(t => { scene.remove(t); t.dispose(); });
-      textExtrusions = [];
 
-      // Extrusion katmanları (arka, amber/gold)
-      for (let i = 6; i >= 1; i--) {
-        const t = new Text();
-        t.font = FONT_URL; t.text = textStr;
-        t.fontSize = offset.s; t.anchorX = 'center'; t.anchorY = 'middle';
-        t.letterSpacing = 0.05; t.maxWidth = 5; t.textAlign = 'center';
-        t.position.set(offset.x, offset.y, offset.z - i * 0.022);
-        t.rotation.y = Math.PI;
-        t.material = new THREE.MeshBasicMaterial({
-          color: 0xd4a574, transparent: true,
-          opacity: Math.max(0, 0.5 - i * 0.06), depthWrite: false
-        });
-        t.renderOrder = 10 + (6 - i);
-        t.sync();
-        textExtrusions.push(t);
-        scene.add(t);
-      }
-
-      // Ana beyaz metin (en önde)
       textMesh = new Text();
-      textMesh.font = FONT_URL; textMesh.text = textStr;
-      textMesh.fontSize = offset.s; textMesh.anchorX = 'center'; textMesh.anchorY = 'middle';
-      textMesh.letterSpacing = 0.05; textMesh.maxWidth = 5; textMesh.textAlign = 'center';
-      textMesh.position.set(offset.x, offset.y, offset.z);
-      textMesh.rotation.y = Math.PI;
+      textMesh.font = FONT_URL;
+      textMesh.text = textStr;
+      textMesh.fontSize = 0.28;
+      textMesh.anchorX = 'center';
+      textMesh.anchorY = 'middle';
+      textMesh.letterSpacing = 0.06;
+      textMesh.textAlign = 'center';
+
+      // Objenin üstünde / önünde — sabit dünya noktası
+      textMesh.position.set(0, 0.8, 0);
+
       textMesh.material = new THREE.MeshBasicMaterial({
-        color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false
+        color: 0xffffff,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+        fog: false
       });
-      textMesh.renderOrder = 20;
+
       textMesh.sync();
       scene.add(textMesh);
-
-      // Metin yüz normal vektörü GÜNCELLE
-      TEXT_POS.set(offset.x, offset.y, offset.z);
     }
-
-    function updateTitle(textStr) {
-      buildTextLayers(textStr, getTextOffset(currentProduct));
-    }
-
-    // Metin yüz normal vektörü (rotation.y=PI → dünyada +z bakıyor)
-    const TEXT_POS = new THREE.Vector3(0, -0.6, 1.8);
-    const TEXT_NORMAL = new THREE.Vector3(0, 0, 1);
 
     // İlk metni oluştur
     updateTitle(currentProduct.title);
@@ -351,8 +264,11 @@
 
       currentSplat = new LumaSplatsThree({
         source: product.lumaUrl,
-        enableThreeShaderIntegration: false,
-        particleRevealEnabled: !isMobile // Mobilde kasmasını engellemek için açılış efektini kapat
+        // Luma dokümanı: enableThreeShaderIntegration açık → fog, tone mapping, 
+        // depth testing ile entegrasyon. Splat depth buffer'a yazmaz ama 
+        // opaque objelerin (yazı) depth'ine göre test yapar.
+        enableThreeShaderIntegration: true,
+        particleRevealEnabled: !isMobile
       });
 
       scene.add(currentSplat);
@@ -397,66 +313,7 @@
     }
     buildMenu();
 
-    // ─── KONUM EDİTÖRÜ ───
-    const slX = document.getElementById('sl-x'), valX = document.getElementById('val-x');
-    const slY = document.getElementById('sl-y'), valY = document.getElementById('val-y');
-    const slZ = document.getElementById('sl-z'), valZ = document.getElementById('val-z');
-    const slS = document.getElementById('sl-s'), valS = document.getElementById('val-s');
 
-    function syncSliders(offset) {
-      slX.value = offset.x; valX.textContent = (+offset.x).toFixed(1);
-      slY.value = offset.y; valY.textContent = (+offset.y).toFixed(1);
-      slZ.value = offset.z; valZ.textContent = (+offset.z).toFixed(1);
-      slS.value = offset.s; valS.textContent = (+offset.s).toFixed(2);
-    }
-
-    function getCurrentOffset() {
-      return { x: +slX.value, y: +slY.value, z: +slZ.value, s: +slS.value };
-    }
-
-    // Slider değişince canlı güncelleme
-    [slX, slY, slZ, slS].forEach(sl => {
-      sl.addEventListener('input', () => {
-        const o = getCurrentOffset();
-        valX.textContent = o.x.toFixed(1);
-        valY.textContent = o.y.toFixed(1);
-        valZ.textContent = o.z.toFixed(1);
-        valS.textContent = o.s.toFixed(2);
-        buildTextLayers(currentProduct.title, o);
-      });
-    });
-
-    // Göster/gizle
-    document.getElementById('pos-toggle').addEventListener('click', () => {
-      const p = document.getElementById('pos-panel');
-      p.style.display = p.style.display === 'block' ? 'none' : 'block';
-      if (p.style.display === 'block') syncSliders(getTextOffset(currentProduct));
-    });
-
-    // Kaydet
-    document.getElementById('pos-save').addEventListener('click', async () => {
-      const offset = getCurrentOffset();
-      currentProduct.textOffset = offset;
-      // Ürünler listesini güncelle
-      const idx = products.findIndex(p => p.id === currentProduct.id);
-      if (idx !== -1) products[idx] = currentProduct;
-      localStorage.setItem('vk_3d_products', JSON.stringify(products));
-
-      // API'ye kaydet
-      try {
-        await fetch('https://vk-portfolio-api.vkesgin38.workers.dev/api/fitness', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: 'vk_3d_products', value: JSON.stringify(products) })
-        });
-      } catch(e) {}
-
-      document.getElementById('pos-panel').style.display = 'none';
-      alert('✔ Konum kaydedildi!');
-    });
-
-    // Slider'ları ilk ürüne göre ayarla
-    syncSliders(getTextOffset(currentProduct));
 
     // ─── KAMERA VE ANİMASYON ───
     let autoAngle = 0;
@@ -501,27 +358,22 @@
       // Partikülleri yavaşça döndür
       particles.rotation.y = time * 0.05;
 
-      // ── METİN GÖRÜNÜRLÜĞÜ + ŞİMMER ──
+      // ── METİN ──
       if (textMesh) {
-        const toCam = camera.position.clone().sub(TEXT_POS);
-        const dot = toCam.dot(TEXT_NORMAL);
-        // Pürüzsüz geçiş: önde=1, kenarda=geçiş, arkada=0
-        const target = dot > 0.5 ? 1 : (dot > -0.8 ? (dot + 0.8) / 1.3 : 0);
-        currentTextOpacity += (target - currentTextOpacity) * 0.07;
+        // 1. Billboard: yazı her zaman kameraya dönük (asla ters görünmez)
+        textMesh.lookAt(camera.position);
 
-        // Shimmer: iki sin dalgası üst üste → organik parıltı
-        const shimmer = 0.6 + Math.sin(time * 1.6) * 0.25 + Math.sin(time * 4.1) * 0.1;
-        const baseOp = Math.max(0, Math.min(1, currentTextOpacity));
-
-        textMesh.material.opacity = baseOp * 0.95;
-        textExtrusions.forEach((t, i) => {
-          t.material.opacity = baseOp * Math.max(0, 0.44 - i * 0.062);
-        });
-
-        // Shimmer için renk değişimi (beyaz → altın)
-        const c = new THREE.Color();
-        c.setHSL(0.08, shimmer * 0.4, 0.9 + Math.sin(time * 1.6) * 0.05);
-        textMesh.material.color = c;
+        // 2. Açıya göre opacity: kamera öndeyken görünür, yandan/arkadan kaybolur
+        // Kamera vektörü: objeden kameraya
+        const camDir = camera.position.clone().normalize(); // Obje merkezde (0,0,0)
+        // Referans yön: sahnenin önü (kameranın başladığı yön)
+        const front = new THREE.Vector3(0, 0, 1);
+        // Sadece yatay açı (Y yok)
+        const camFlat = new THREE.Vector3(camera.position.x, 0, camera.position.z).normalize();
+        const dot = camFlat.dot(front); // 1=ön, 0=yan, -1=arka
+        // Sadece ön yarısında görünsün (dot > 0), smooth fade
+        const targetOp = dot > 0 ? Math.pow(dot, 0.5) : 0;
+        textMesh.material.opacity += (targetOp - textMesh.material.opacity) * 0.08;
       }
 
       renderer.render(scene, camera);

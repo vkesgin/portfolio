@@ -89,7 +89,8 @@
     "imports": {
       "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
       "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
-      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js"
+      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js",
+      "troika-three-text": "https://unpkg.com/troika-three-text@0.49.0/dist/troika-three-text.esm.js"
     }
   }
   </script>
@@ -97,8 +98,7 @@
   <script type="module">
     import * as THREE from 'three';
     import { LumaSplatsThree } from '@lumaai/luma-web';
-    import { FontLoader } from 'three/addons/loaders/FontLoader.js';
-    import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+    import { Text } from 'troika-three-text';
 
     // ─── VERİTABANI (Admin panelinden dolacak) ───
     const defaultProducts = [
@@ -165,41 +165,26 @@
     }));
     scene.add(particles);
 
-    // ─── 3D HOLOGRAM YAZI ───
+    // ─── 3D HOLOGRAM YAZI (TROIKA TEXT) ───
     let textMesh = null;
-    const fontLoader = new FontLoader();
-    let loadedFont = null;
 
-    // Fontu baştan yükle
-    fontLoader.load('https://unpkg.com/three@0.160.0/examples/fonts/helvetiker_bold.typeface.json', (font) => {
-      loadedFont = font;
-      create3DText(currentProduct.title);
-    });
-
-    function create3DText(text) {
-      if (!loadedFont) return;
+    function create3DText(textStr) {
       if (textMesh) {
         scene.remove(textMesh);
-        textMesh.geometry.dispose();
-        textMesh.material.dispose();
+        textMesh.dispose();
       }
 
-      const textGeo = new TextGeometry(text, {
-        font: loadedFont,
-        size: 0.25,
-        height: 0.05,
-        curveSegments: 4,
-        bevelEnabled: true,
-        bevelThickness: 0.01,
-        bevelSize: 0.01,
-        bevelOffset: 0,
-        bevelSegments: 3
-      });
-      
-      textGeo.computeBoundingBox();
-      const xOffset = -0.5 * (textGeo.boundingBox.max.x - textGeo.boundingBox.min.x);
-      textGeo.translate(xOffset, 0, 0); // Merkeze al
+      textMesh = new Text();
+      scene.add(textMesh);
 
+      textMesh.text = textStr;
+      // Türkçe uyumlu muhteşem Google Font: Montserrat
+      textMesh.font = 'https://fonts.gstatic.com/s/montserrat/v25/JTUSjIg1_i6t8kCHKm459Wlhyw.woff2';
+      textMesh.fontSize = 0.35;
+      textMesh.position.set(0, 1.2, 0);
+      textMesh.anchorX = 'center';
+      textMesh.anchorY = 'bottom';
+      
       // Premium, solid, metallic material matching the website theme
       const textMat = new THREE.MeshStandardMaterial({ 
         color: 0xffffff,
@@ -210,11 +195,13 @@
         transparent: true,
         opacity: 1.0
       });
-
-      textMesh = new THREE.Mesh(textGeo, textMat);
-      textMesh.position.set(0, 1.2, 0); // Objenin üstünde
-      scene.add(textMesh);
+      
+      textMesh.material = textMat;
+      textMesh.sync();
     }
+    
+    // İlk metni oluştur
+    create3DText(currentProduct.title);
 
     // ─── LUMA SPLAT YÖNETİMİ ───
     let currentSplat = null;

@@ -35,19 +35,53 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "Person",
-    "name": "Veli Kesgin",
-    "url": "https://velikesgin.com",
-    "image": "https://velikesgin.com/assets/images/veli.jpg",
-    "jobTitle": "Creative Director & Developer",
-    "worksFor": { "@type": "Organization", "name": "Freelance" },
-    "address": { "@type": "PostalAddress", "addressLocality": "Afyonkarahisar", "addressCountry": "TR" },
-    "sameAs": [
-      "https://instagram.com/vkesgin",
-      "https://behance.net/vkesgin",
-      "https://github.com/vkesgin"
-    ],
-    "knowsAbout": ["Web Design","3D Animation","2D Animation","Videography","Graphic Design","Software Development"]
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://velikesgin.com/#person",
+        "name": "Veli Kesgin",
+        "jobTitle": "Web Tasarımcı, 3D Animatör ve Yaratıcı Direktör",
+        "description": "Veli Kesgin, Afyonkarahisar merkezli çok disiplinli bir yaratıcıdır. 2015'ten bu yana web tasarım, 3D animasyon, videografi, grafik tasarım ve yazılım alanlarında hizmet vermektedir.",
+        "url": "https://velikesgin.com",
+        "image": "https://velikesgin.com/assets/images/veli.jpg",
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Afyonkarahisar",
+          "addressRegion": "Afyonkarahisar",
+          "addressCountry": "TR"
+        },
+        "sameAs": [
+          "https://instagram.com/vkesgin",
+          "https://behance.net/vkesgin",
+          "https://github.com/vkesgin",
+          "https://linkedin.com/in/veli-kesgin-9b226014b"
+        ],
+        "knowsAbout": ["Web Tasarım", "3D Animasyon", "2D Animasyon", "Videografi", "Grafik Tasarım", "Yazılım Geliştirme", "GSAP", "Three.js", "Blender", "Cinema 4D"],
+        "hasOccupation": {
+          "@type": "Occupation",
+          "name": "Web Tasarımcı",
+          "occupationLocation": {
+            "@type": "City",
+            "name": "Afyonkarahisar"
+          }
+        }
+      },
+      {
+        "@type": "LocalBusiness",
+        "@id": "https://velikesgin.com/#business",
+        "name": "Veli Kesgin — Freelance Yaratıcı Hizmetler",
+        "description": "Afyonkarahisar merkezli web tasarım, animasyon ve yaratıcı medya hizmetleri",
+        "url": "https://velikesgin.com",
+        "telephone": "",
+        "email": "vkesgin38@gmail.com",
+        "founder": {"@id": "https://velikesgin.com/#person"},
+        "areaServed": {"@type": "Country", "name": "Turkey"},
+        "serviceType": ["Web Tasarım", "3D Animasyon", "Videografi", "Grafik Tasarım"],
+        "priceRange": "$$",
+        "availableLanguage": ["Turkish", "English"],
+        "hasMap": "https://maps.google.com/?q=Afyonkarahisar"
+      }
+    ]
   }
   </script>
   <link rel="preload" href="./assets/images/veli.webp" as="image" type="image/webp">
@@ -78,7 +112,7 @@
       <section id="hero">
     <div class="hero-inner">
       <div class="hero-text-side">
-        <p class="hero-label">Creative Portfolio <span>—</span> 2025</p>
+        <p class="hero-label">Afyonkarahisar <span>—</span> 2015'ten Beri</p>
         <h1 class="hero-title">
           <span class="line-wrap"><span class="line" style="font-size:clamp(40px,7vw,95px);color:var(--text-secondary);letter-spacing:.18em">VELİ</span></span>
           <span class="line-wrap"><span class="line outline-line">KESGİN</span></span>
@@ -88,7 +122,7 @@
           <span id="roleText"></span>
           <span class="type-cursor">_</span>
         </div>
-        <p class="hero-desc">Görsel tasarım · 3D animasyon · Videografi · Yazılım · Dijital Pazarlama · CGI/VFX </p>
+        <p class="hero-desc">Veli Kesgin — Web Tasarım · 3D Animasyon · Videografi · Grafik Tasarım · Yazılım</p>
         <div class="hero-cta">
           <a href="#works" class="btn btn-primary">Çalışmalarımı Gör ↓</a>
           <a href="pages/contact.html" class="btn btn-outline">İletişime Geç</a>

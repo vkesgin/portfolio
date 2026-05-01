@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://velikesgin.com/</loc><priority>1.0</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/services.html</loc><priority>0.9</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/portfolio.html</loc><priority>0.9</priority><changefreq>weekly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/about.html</loc><priority>0.8</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/contact.html</loc><priority>0.8</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/tool-pdf.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/tool-audio.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/tool-bg-remover.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/tool-image.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/tool-palette.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/tool-password.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/tool-qr.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
-  <url><loc>https://velikesgin.com/pages/tool-converter.html</loc><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/</loc><lastmod>2026-05-01</lastmod><priority>1.0</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/services.html</loc><lastmod>2026-05-01</lastmod><priority>0.9</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/portfolio.html</loc><lastmod>2026-05-01</lastmod><priority>0.9</priority><changefreq>weekly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/about.html</loc><lastmod>2026-05-01</lastmod><priority>0.8</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/contact.html</loc><lastmod>2026-05-01</lastmod><priority>0.8</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/tool-pdf.html</loc><lastmod>2026-05-01</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/tool-audio.html</loc><lastmod>2026-05-01</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/tool-bg-remover.html</loc><lastmod>2026-05-01</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/tool-image.html</loc><lastmod>2026-05-01</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/tool-palette.html</loc><lastmod>2026-05-01</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/tool-password.html</loc><lastmod>2026-05-01</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/tool-qr.html</loc><lastmod>2026-05-01</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
+  <url><loc>https://velikesgin.com/pages/tool-converter.html</loc><lastmod>2026-05-01</lastmod><priority>0.7</priority><changefreq>monthly</changefreq></url>
 </urlset>

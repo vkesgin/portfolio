@@ -334,3 +334,79 @@
 @media (max-width: 600px) {
   .abt-photo-inner { max-width: 220px; }
 }
+
+/* === FAQ ACCORDION === */
+#abt-faq {
+  position: relative; z-index: 2;
+  padding: var(--space-xl) 60px;
+  border-top: 0.5px solid var(--border);
+}
+.abt-faq-inner {
+  max-width: 800px;
+  margin: 0 auto;
+}
+.faq-list {
+  display: flex; flex-direction: column; gap: 12px;
+  margin-top: var(--space-lg);
+}
+.faq-item {
+  border: 0.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: rgba(10,10,10,0.5);
+  transition: border-color var(--dur-mid);
+}
+.faq-item:hover { border-color: rgba(0,229,255,0.25); }
+.faq-btn {
+  width: 100%; text-align: left;
+  padding: 24px;
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  font-size: 16px; font-weight: 500;
+  cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: color var(--dur-mid), background var(--dur-mid);
+}
+.faq-btn:hover {
+  color: var(--accent);
+  background: rgba(0,229,255,0.03);
+}
+.faq-icon {
+  font-size: 20px; font-weight: 300;
+  color: var(--text-secondary);
+  transition: transform var(--dur-mid), color var(--dur-mid);
+  display: inline-block;
+  font-family: var(--font-mono);
+}
+.faq-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-mid) var(--ease-out);
+}
+.faq-content-inner {
+  overflow: hidden;
+}
+.faq-text {
+  padding: 0 24px 24px 24px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+/* Active State */
+.faq-item.active { border-color: rgba(0,229,255,0.4); }
+.faq-item.active .faq-btn { color: var(--accent); background: rgba(0,229,255,0.03); }
+.faq-item.active .faq-icon {
+  transform: rotate(45deg);
+  color: var(--accent);
+}
+.faq-item.active .faq-content {
+  grid-template-rows: 1fr;
+}
+
+@media (max-width: 600px) {
+  #abt-faq { padding-left: 24px; padding-right: 24px; }
+  .faq-btn { padding: 18px; font-size: 15px; }
+  .faq-text { padding: 0 18px 18px 18px; }
+}

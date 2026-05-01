@@ -31,11 +31,56 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "Service",
-    "provider": { "@type": "Person", "name": "Veli Kesgin", "url": "https://velikesgin.com" },
-    "serviceType": ["Web Design","3D Animation","2D Animation","Videography","Graphic Design","Software Development"],
-    "areaServed": { "@type": "Country", "name": "Turkey" },
-    "url": "https://velikesgin.com/pages/services.html"
+    "@graph": [
+      {
+        "@type": "Service",
+        "serviceType": "Web Tasarım",
+        "name": "Web Tasarım ve Geliştirme Hizmeti",
+        "description": "Animasyon yoğunluklu, GSAP ve Three.js kullanılarak yapılan interaktif web siteleri. Fiyat: proje bazlı.",
+        "provider": {"@id": "https://velikesgin.com/#person"},
+        "areaServed": "Turkey"
+      },
+      {
+        "@type": "Service",
+        "serviceType": "3D Animasyon",
+        "name": "3D Animasyon Hizmeti",
+        "description": "Fotogerçekçi render'dan stilize animasyona, ürün görselleştirmesinden sinematik sekansa kadar tam prodüksiyon.",
+        "provider": {"@id": "https://velikesgin.com/#person"},
+        "areaServed": "Turkey"
+      },
+      {
+        "@type": "Service",
+        "serviceType": "2D Animasyon",
+        "name": "2D Animasyon Hizmeti",
+        "description": "Karakter animasyonu, motion graphics ve explainer video üretimi.",
+        "provider": {"@id": "https://velikesgin.com/#person"},
+        "areaServed": "Turkey"
+      },
+      {
+        "@type": "Service",
+        "serviceType": "Videografi",
+        "name": "Videografi Hizmeti",
+        "description": "Profesyonel video çekimi, kurgu, montaj ve renk düzenleme hizmetleri.",
+        "provider": {"@id": "https://velikesgin.com/#person"},
+        "areaServed": "Turkey"
+      },
+      {
+        "@type": "Service",
+        "serviceType": "Grafik Tasarım",
+        "name": "Grafik Tasarım Hizmeti",
+        "description": "Kimlik, logo, baskı ve dijital ortamlar için özgün görsel tasarım çalışmaları.",
+        "provider": {"@id": "https://velikesgin.com/#person"},
+        "areaServed": "Turkey"
+      },
+      {
+        "@type": "Service",
+        "serviceType": "Yazılım",
+        "name": "Yazılım Geliştirme Hizmeti",
+        "description": "Modern mimariler ve yaratıcı kütüphaneler ile performanslı, interaktif front-end çözümleri.",
+        "provider": {"@id": "https://velikesgin.com/#person"},
+        "areaServed": "Turkey"
+      }
+    ]
   }
   </script>
   <link rel="stylesheet" href="../assets/css/reset.css">

@@ -762,7 +762,7 @@ async function tdSaveProducts() {
   }
 }
 
-// Listeyi çiz
+// Listeyi çiz (sürükle-bırak sıralama destekli)
 function tdRenderList() {
   const list = document.getElementById('td-product-list');
   if (!list) return;
@@ -770,20 +770,62 @@ function tdRenderList() {
     list.innerHTML = '<div class="admin-loading">Henüz 3D obje eklenmedi.</div>';
     return;
   }
-  list.innerHTML = td_products.map(p => `
-    <div class="admin-card" style="opacity:1">
-      <div class="admin-card-media">
-        <img src="${p.thumb || ''}" alt="${p.title}" loading="lazy">
+
+  list.style.display = 'flex';
+  list.style.flexDirection = 'column';
+  list.style.gap = '8px';
+
+  list.innerHTML = td_products.map((p, i) => `
+    <div class="featured-item" data-id="${p.id}" draggable="true" style="display:flex;align-items:center;gap:12px;background:var(--bg-surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;cursor:default">
+      <div class="featured-drag" title="Sıralamak için sürükle" style="cursor:grab;font-size:18px;color:var(--text-muted);flex-shrink:0">⠿</div>
+      <div style="width:56px;height:56px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#222">
+        <img src="${p.thumb || ''}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover" loading="lazy">
       </div>
-      <div class="admin-card-info">
-        <div class="admin-card-title">${p.title}</div>
-        <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.lumaUrl}</div>
+      <div style="flex:1;min-width:0">
+        <div class="admin-card-title" style="margin-bottom:4px">${p.title}</div>
+        <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.lumaUrl}</div>
       </div>
-      <div class="admin-card-actions">
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">#${i + 1}</span>
         <button class="admin-btn-del" onclick="tdDelete('${p.id}')">Sil</button>
       </div>
     </div>
   `).join('');
+
+  // Drag & drop sıralama
+  let dragSrc = null;
+  let orderChanged = false;
+
+  list.querySelectorAll('.featured-item').forEach(item => {
+    item.addEventListener('dragstart', () => {
+      dragSrc = item;
+      item.style.opacity = '.4';
+      orderChanged = false;
+    });
+    item.addEventListener('dragend', async () => {
+      item.style.opacity = '1';
+      if (orderChanged) {
+        // Yeni sırayı td_products'a yansıt
+        const newOrder = [...list.querySelectorAll('.featured-item')].map(el => el.dataset.id);
+        td_products = newOrder.map(id => td_products.find(p => p.id === id)).filter(Boolean);
+        tdStatus('// sıralama kaydediliyor...');
+        const ok = await tdSaveProducts();
+        if (ok) tdStatus('// sıralama güncellendi ✓');
+        tdRenderList();
+      }
+    });
+    item.addEventListener('dragover', e => e.preventDefault());
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrc && dragSrc !== item) {
+        const items = [...list.querySelectorAll('.featured-item')];
+        const srcI = items.indexOf(dragSrc);
+        const dstI = items.indexOf(item);
+        if (srcI < dstI) item.after(dragSrc); else item.before(dragSrc);
+        orderChanged = true;
+      }
+    });
+  });
 }
 
 // Ekle

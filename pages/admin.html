@@ -166,35 +166,14 @@
     </div>
   </div>
 
-  <!-- TAB: 3D GALERİ -->
+  <!-- TAB: 3D GALERİ (deprecated — yeni sekme: 3D Vitrin) -->
   <div class="admin-panel" id="tab-3dgallery">
     <div class="admin-panel-header">
-      <h2 class="admin-panel-title">3D Galeri Yönetimi</h2>
-      <p class="admin-panel-sub">Luma AI 3D objelerinizi buradan ekleyip silebilirsiniz.</p>
+      <h2 class="admin-panel-title">3D Galeri</h2>
+      <p class="admin-panel-sub">Bu sekme artık kullanılmıyor. Lütfen <strong>3D Vitrin</strong> sekmesini kullanın.</p>
     </div>
-    
-    <div style="background:var(--bg-surface); padding:24px; border-radius:12px; margin-bottom:24px; border:1px solid rgba(255,255,255,0.05);">
-      <h3 style="margin-bottom:16px;">Yeni 3D Ürün Ekle</h3>
-      <form id="form-3d" style="display:flex; flex-direction:column; gap:16px;">
-        <div>
-          <label class="admin-label">Ürün Başlığı</label>
-          <input type="text" id="p3d-title" class="admin-input" placeholder="Örn: Spider-Man" required>
-        </div>
-        <div>
-          <label class="admin-label">Luma AI URL</label>
-          <input type="url" id="p3d-url" class="admin-input" placeholder="https://lumalabs.ai/capture/..." required>
-        </div>
-        <div>
-          <label class="admin-label">Kapak Görseli</label>
-          <input type="file" id="p3d-thumb" class="admin-input" accept="image/*">
-          <input type="hidden" id="p3d-thumb-base64">
-        </div>
-        <button type="submit" class="btn btn-primary" style="align-self:flex-start;">Vitrine Ekle</button>
-      </form>
-    </div>
-
-    <div style="background:var(--bg-surface); padding:24px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
-      <h3 style="margin-bottom:16px;">Ekli 3D Ürünler</h3>
+    <div style="padding:40px;text-align:center;color:var(--text-muted);font-family:var(--font-mono);font-size:13px;">
+      // Bu sekme kaldırıldı. Üstteki <strong style="color:var(--accent)">3D Vitrin</strong> sekmesine geçin.
     </div>
   </div>
 
@@ -308,7 +287,6 @@ document.querySelectorAll('.admin-tab').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'featured') renderFeatured();
-    if (btn.dataset.tab === '3dgallery') load3DProducts();
   });
 });
 
@@ -773,7 +751,7 @@ async function tdSaveProducts() {
   localStorage.setItem('vk_3d_products', payload);
   
   if (!TOKEN) {
-    tdStatus('// localStorage\\'a kaydedildi (token yok)', true);
+    tdStatus("// localStorage'a kaydedildi (token yok)", true);
     return false;
   }
   

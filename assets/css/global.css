@@ -1890,4 +1890,14 @@ html.has-scroll-smooth { scrollbar-width: none; }
 .stats-grid {
   min-height: 160px;
 }
-
+
+/* === TOOL PAGES SEO HERO & FAQ === */
+.tool-hero-text { padding: 40px 60px 0; max-width: 900px; margin: 0 auto; }
+.tool-hero-text h1 { font-family: var(--font-display); font-size: clamp(36px,6vw,72px); color: var(--text-primary); margin-bottom: 16px; }
+.tool-lead { font-size: 16px; color: var(--text-secondary); line-height: 1.8; max-width: 700px; }
+.tool-faq { padding: 40px 60px; max-width: 900px; margin: 0 auto; border-top: 0.5px solid var(--border); margin-top: 40px; }
+.tool-faq h2 { font-family: var(--font-display); font-size: 32px; color: var(--text-primary); margin-bottom: 24px; }
+.tool-faq-item { margin-bottom: 20px; padding: 16px; background: var(--bg-surface); border-radius: var(--radius-md); border: 0.5px solid var(--border); }
+.tool-faq-item h3 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-family: var(--font-mono); letter-spacing: .06em; }
+.tool-faq-item p { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+@media(max-width:768px){ .tool-hero-text, .tool-faq { padding: 24px 20px; } }

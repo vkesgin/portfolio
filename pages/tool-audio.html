@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0a0a0a">
 
   <title>Ücretsiz Ses Kaydedici & Düzenleyici — Veli Kesgin Araçları</title>
-  <meta name="description" content="Tarayıcıdan ücretsiz ses kaydedin ve düzenleyin. Kurulum gerektirmez, anında kullanıma hazır online ses kaydedici.">
+  <meta name="description" content="Ücretsiz ses kaydedici — tarayıcıdan mikrofon ile ses kaydedin ve indirin. Kurulum gerektirmez, MP3/WAV formatında kayıt.">
   <meta name="keywords" content="ücretsiz ses kaydedici, online ses kayıt, ses düzenleyici, tarayıcıda ses kayıt, mikrofon kayıt online">
   <meta name="author" content="Veli Kesgin">
   <meta name="robots" content="index, follow">
@@ -30,13 +30,40 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "Ücretsiz Ses Kaydedici & Düzenleyici",
-    "url": "https://velikesgin.com/pages/tool-audio.html",
-    "applicationCategory": "MultimediaApplication",
-    "operatingSystem": "Web",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TRY" },
-    "provider": { "@type": "Person", "name": "Veli Kesgin", "url": "https://velikesgin.com" }
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "name": "Ücretsiz Ses Kaydedici",
+        "alternateName": "Audio Recorder",
+        "description": "Doğrudan tarayıcınız üzerinden ses kaydedip düzenleyin. Kayıt gerektirmez, sesleriniz cihazınızdan çıkmaz.",
+        "url": "https://velikesgin.com/pages/tool-audio.html",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Web Browser",
+        "browserRequirements": "Requires JavaScript",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "TRY",
+          "availability": "https://schema.org/InStock"
+        },
+        "featureList": ["Ses kaydetme", "Yerel işlem", "WAV formatında indirme", "Kayıt gerektirmez", "Ücretsiz"],
+        "creator": {
+          "@type": "Person",
+          "name": "Veli Kesgin",
+          "url": "https://velikesgin.com"
+        },
+        "keywords": "ücretsiz ses kaydedici, tarayıcıda ses kaydet, online voice recorder, ses kayıt cihazı"
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Ses kaydetmek ücretsiz mi?", "acceptedAnswer": { "@type": "Answer", "text": "Evet, bu araç tamamen ücretsizdir. İstediğiniz kadar ses kaydı yapabilirsiniz." } },
+          { "@type": "Question", "name": "Kayıt süresi sınırı var mı?", "acceptedAnswer": { "@type": "Answer", "text": "Tarayıcınızın ve cihazınızın boş depolama alanına bağlı olarak uzun soluklu kayıtlar gerçekleştirebilirsiniz." } },
+          { "@type": "Question", "name": "Hangi formatta indirebilirim?", "acceptedAnswer": { "@type": "Answer", "text": "Kayıtlarınızı standart ses formatlarında (WAV vb.) bilgisayarınıza veya telefonunuza indirebilirsiniz." } },
+          { "@type": "Question", "name": "Ses kayıtlarım sunucuya yükleniyor mu?", "acceptedAnswer": { "@type": "Answer", "text": "Hayır, tüm kayıt işlemleri yerel olarak yapılır. Mikrofon veriniz hiçbir şekilde sunuculara iletilmez." } }
+        ]
+      }
+    ]
   }
   </script>
   <link rel="stylesheet" href="../assets/css/reset.css">
@@ -57,6 +84,38 @@
   <div id="header-placeholder"></div>
 
   <main>
+    <section class="tool-hero-text">
+      <h1>Ücretsiz Ses Kaydedici</h1>
+      <p class="tool-lead">
+        Veli Kesgin tarafından geliştirilen bu ücretsiz ses kaydedici ile doğrudan 
+        tarayıcınız üzerinden ses kaydedip düzenleyebilirsiniz. 
+        Kayıt gerektirmez, sesleriniz cihazınızdan çıkmaz.
+      </p>
+    </section>
+
+    <section class="tool-faq">
+      <h2>Sıkça Sorulan Sorular</h2>
+      
+      <div class="tool-faq-item">
+        <h3>Ses kaydetmek ücretsiz mi?</h3>
+        <p>Evet, bu araç tamamen ücretsizdir. İstediğiniz kadar ses kaydı yapabilirsiniz.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Kayıt süresi sınırı var mı?</h3>
+        <p>Tarayıcınızın ve cihazınızın boş depolama alanına bağlı olarak uzun soluklu kayıtlar gerçekleştirebilirsiniz.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Hangi formatta indirebilirim?</h3>
+        <p>Kayıtlarınızı standart ses formatlarında (WAV vb.) bilgisayarınıza veya telefonunuza indirebilirsiniz.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Ses kayıtlarım sunucuya yükleniyor mu?</h3>
+        <p>Hayır, tüm kayıt işlemleri yerel olarak yapılır. Mikrofon veriniz hiçbir şekilde sunuculara iletilmez.</p>
+      </div>
+    </section>
     <section id="tool-hero">
       <div class="tool-hero-inner">
         <p class="section-eyebrow">// araçlar — no: 07</p>

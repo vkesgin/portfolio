@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0a0a0a">
 
   <title>Ücretsiz Görsel Küçültücü & Sıkıştırıcı — Veli Kesgin Araçları</title>
-  <meta name="description" content="Görsellerinizi kalite kaybetmeden ücretsiz sıkıştırın ve küçültün. JPG, PNG, WebP destekli online görsel optimizasyon aracı.">
+  <meta name="description" content="Ücretsiz görsel küçültücü — JPG, PNG, WebP görsellerinizi kalite kaybetmeden sıkıştırın. Toplu sıkıştırma destekli, kayıt gerektirmez.">
   <meta name="keywords" content="görsel küçültücü ücretsiz, resim sıkıştır online, jpg küçült, png optimize et, webp dönüştür, görsel boyut küçült">
   <meta name="author" content="Veli Kesgin">
   <meta name="robots" content="index, follow">
@@ -30,13 +30,40 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "Ücretsiz Görsel Küçültücü",
-    "url": "https://velikesgin.com/pages/tool-image.html",
-    "applicationCategory": "GraphicsApplication",
-    "operatingSystem": "Web",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TRY" },
-    "provider": { "@type": "Person", "name": "Veli Kesgin", "url": "https://velikesgin.com" }
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "name": "Ücretsiz Görsel Küçültücü",
+        "alternateName": "Image Resizer & Compressor",
+        "description": "Görselleri kalite kaybetmeden hızlıca sıkıştırın ve boyutlandırın. Kayıt gerektirmez, tarayıcıda çalışır.",
+        "url": "https://velikesgin.com/pages/tool-image.html",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Web Browser",
+        "browserRequirements": "Requires JavaScript",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "TRY",
+          "availability": "https://schema.org/InStock"
+        },
+        "featureList": ["Görsel sıkıştırma", "Boyutlandırma", "Kalite koruma", "Kayıt gerektirmez", "Ücretsiz"],
+        "creator": {
+          "@type": "Person",
+          "name": "Veli Kesgin",
+          "url": "https://velikesgin.com"
+        },
+        "keywords": "görsel küçültücü, fotoğraf sıkıştırma, resim boyutlandırma, ücretsiz image resizer"
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Görsel küçültmek ücretsiz mi?", "acceptedAnswer": { "@type": "Answer", "text": "Evet, bu araç tamamen ücretsizdir. Herhangi bir kayıt veya limit bulunmamaktadır." } },
+          { "@type": "Question", "name": "Kalite kaybı oluyor mu?", "acceptedAnswer": { "@type": "Answer", "text": "Görselleri görsel kaliteyi koruyacak şekilde akıllı algoritmalarla sıkıştırır, gözle görülür bir kayıp yaşamazsınız." } },
+          { "@type": "Question", "name": "Hangi formatlar destekleniyor?", "acceptedAnswer": { "@type": "Answer", "text": "JPG, PNG ve WebP formatındaki görselleri rahatlıkla boyutlandırabilirsiniz." } },
+          { "@type": "Question", "name": "Görsellerim sunucuya kaydediliyor mu?", "acceptedAnswer": { "@type": "Answer", "text": "Hayır, sıkıştırma işlemleri doğrudan tarayıcınızda yapılır ve görselleriniz dışarıya aktarılmaz." } }
+        ]
+      }
+    ]
   }
   </script>
   <link rel="stylesheet" href="../assets/css/reset.css">
@@ -57,6 +84,38 @@
   <div id="header-placeholder"></div>
 
   <main>
+    <section class="tool-hero-text">
+      <h1>Ücretsiz Görsel Küçültücü</h1>
+      <p class="tool-lead">
+        Veli Kesgin tarafından geliştirilen bu ücretsiz araç ile görselleri kalite kaybetmeden
+        hızlıca sıkıştırabilir ve boyutlandırabilirsiniz. 
+        Kayıt gerektirmez, doğrudan tarayıcı üzerinden çalışır.
+      </p>
+    </section>
+
+    <section class="tool-faq">
+      <h2>Sıkça Sorulan Sorular</h2>
+      
+      <div class="tool-faq-item">
+        <h3>Görsel küçültmek ücretsiz mi?</h3>
+        <p>Evet, bu araç tamamen ücretsizdir. Herhangi bir kayıt veya limit bulunmamaktadır.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Kalite kaybı oluyor mu?</h3>
+        <p>Görselleri görsel kaliteyi koruyacak şekilde akıllı algoritmalarla sıkıştırır, gözle görülür bir kayıp yaşamazsınız.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Hangi formatlar destekleniyor?</h3>
+        <p>JPG, PNG ve WebP formatındaki görselleri rahatlıkla boyutlandırabilirsiniz.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Görsellerim sunucuya kaydediliyor mu?</h3>
+        <p>Hayır, sıkıştırma işlemleri doğrudan tarayıcınızda yapılır ve görselleriniz dışarıya aktarılmaz.</p>
+      </div>
+    </section>
     <section id="tool-hero">
       <div class="tool-hero-inner">
         <p class="section-eyebrow">// araçlar — no: 02</p>

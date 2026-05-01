@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0a0a0a">
 
   <title>Ücretsiz Renk Paleti Çıkarıcı — Veli Kesgin Araçları</title>
-  <meta name="description" content="Görsellerden otomatik renk paleti çıkarın. Tasarımcılar için ücretsiz online renk paleti oluşturma ve hex kodu alma aracı.">
+  <meta name="description" content="Ücretsiz renk paleti çıkarıcı — görsellerinizden otomatik renk paleti oluşturun, hex kodlarını alın. Tasarımcılar için ücretsiz online araç.">
   <meta name="keywords" content="renk paleti çıkar, görselden renk al, hex kodu bul, renk paleti oluştur ücretsiz, color palette extractor türkçe">
   <meta name="author" content="Veli Kesgin">
   <meta name="robots" content="index, follow">
@@ -30,13 +30,40 @@
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "Ücretsiz Renk Paleti Çıkarıcı",
-    "url": "https://velikesgin.com/pages/tool-palette.html",
-    "applicationCategory": "DesignApplication",
-    "operatingSystem": "Web",
-    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "TRY" },
-    "provider": { "@type": "Person", "name": "Veli Kesgin", "url": "https://velikesgin.com" }
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "name": "Ücretsiz Renk Paleti Çıkarıcı",
+        "alternateName": "Color Palette Generator",
+        "description": "Herhangi bir görselden ilham veren renk paletleri çıkarın. HEX ve RGB kodlarını kopyalayın, kayıt gerektirmez.",
+        "url": "https://velikesgin.com/pages/tool-palette.html",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Web Browser",
+        "browserRequirements": "Requires JavaScript",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "TRY",
+          "availability": "https://schema.org/InStock"
+        },
+        "featureList": ["Renk paleti çıkarma", "Baskın renk analizi", "HEX ve RGB kodları", "Kayıt gerektirmez", "Ücretsiz"],
+        "creator": {
+          "@type": "Person",
+          "name": "Veli Kesgin",
+          "url": "https://velikesgin.com"
+        },
+        "keywords": "renk paleti çıkarıcı, fotoğraftan renk alma, color palette generator, ücretsiz renk paleti"
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "Renk paleti çıkarmak ücretsiz mi?", "acceptedAnswer": { "@type": "Answer", "text": "Evet, bu araç tamamen ücretsizdir ve sınırsız sayıda görsel için kullanabilirsiniz." } },
+          { "@type": "Question", "name": "Araç nasıl çalışıyor?", "acceptedAnswer": { "@type": "Answer", "text": "Yüklediğiniz görseldeki baskın ve vurgulu renkleri analiz eder, uyumlu bir palet oluşturur." } },
+          { "@type": "Question", "name": "Renk kodlarını kopyalayabilir miyim?", "acceptedAnswer": { "@type": "Answer", "text": "Evet, oluşturulan her rengin üzerine tıklayarak HEX ve RGB kodlarını kolayca kopyalayabilirsiniz." } },
+          { "@type": "Question", "name": "Görsellerim güvende mi?", "acceptedAnswer": { "@type": "Answer", "text": "Kesinlikle. Tüm renk analizi doğrudan cihazınızda gerçekleşir, görseller sunucuya gönderilmez." } }
+        ]
+      }
+    ]
   }
   </script>
   <link rel="stylesheet" href="../assets/css/reset.css">
@@ -58,6 +85,38 @@
   <div id="header-placeholder"></div>
 
   <main>
+    <section class="tool-hero-text">
+      <h1>Ücretsiz Renk Paleti Çıkarıcı</h1>
+      <p class="tool-lead">
+        Veli Kesgin tarafından geliştirilen bu ücretsiz araç ile herhangi bir görselden
+        ilham veren renk paletleri çıkarabilirsiniz. 
+        HEX ve RGB kodlarını anında kopyalayın, tamamen tarayıcıda çalışır.
+      </p>
+    </section>
+
+    <section class="tool-faq">
+      <h2>Sıkça Sorulan Sorular</h2>
+      
+      <div class="tool-faq-item">
+        <h3>Renk paleti çıkarmak ücretsiz mi?</h3>
+        <p>Evet, bu araç tamamen ücretsizdir ve sınırsız sayıda görsel için kullanabilirsiniz.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Araç nasıl çalışıyor?</h3>
+        <p>Yüklediğiniz görseldeki baskın ve vurgulu renkleri analiz eder, uyumlu bir palet oluşturur.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Renk kodlarını kopyalayabilir miyim?</h3>
+        <p>Evet, oluşturulan her rengin üzerine tıklayarak HEX ve RGB kodlarını kolayca kopyalayabilirsiniz.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Görsellerim güvende mi?</h3>
+        <p>Kesinlikle. Tüm renk analizi doğrudan cihazınızda gerçekleşir, görseller sunucuya gönderilmez.</p>
+      </div>
+    </section>
     <section id="tool-hero">
       <div class="tool-hero-inner">
         <p class="section-eyebrow">// araçlar — no: 03</p>

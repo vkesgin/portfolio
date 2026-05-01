@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Vitrin — Veli Kesgin</title>
+  <meta name="description" content="Veli Kesgin'in 3D taramalarını gerçek zamanlı görüntüleyebileceğiniz interaktif 3D vitrin. Gaussian Splat teknolojisiyle hazırlanmış premium 3D deneyim.">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { overflow:hidden; background:#1a1a1a; font-family:'Segoe UI', sans-serif; }
+    canvas { display:block; width:100vw; height:100vh; cursor:grab; }
+    canvas:active { cursor:grabbing; }
+
+    /* Loading Screen */
+    #loading {
+      position:fixed; inset:0; background:#161311;
+      display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px;
+      z-index:999; transition:opacity 1s ease, backdrop-filter 1s ease;
+    }
+    #loading.fade { opacity:0; pointer-events:none; }
+    .loader-ring {
+      width:60px; height:60px; border:2px solid rgba(212,165,116,0.1);
+      border-top-color:#d4a574; border-radius:50%; animation:spin 1s cubic-bezier(0.6, 0.2, 0.4, 0.8) infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loader-text { color:#d4a574; font-size:14px; letter-spacing:4px; text-transform:uppercase; opacity:0.8; }
+
+    /* Bottom Gallery Menu */
+    #gallery-menu {
+      position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+      display:flex; gap:16px; padding:16px;
+      background:rgba(20, 16, 14, 0.6); border:1px solid rgba(212,165,116,0.2);
+      border-radius:24px; backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+      max-width:90vw; overflow-x:auto; scroll-behavior:smooth;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5); z-index:50;
+    }
+    #gallery-menu::-webkit-scrollbar { display:none; }
+    
+    .gallery-item {
+      width:100px; height:100px; border-radius:16px; flex-shrink:0;
+      position:relative; cursor:pointer; overflow:hidden;
+      border:1px solid rgba(255,255,255,0.05); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: linear-gradient(135deg, #2a221c, #1a1512);
+    }
+    .gallery-item:hover {
+      transform:translateY(-5px); border-color:rgba(212,165,116,0.5);
+      box-shadow: 0 8px 20px rgba(212,165,116,0.2);
+    }
+    .gallery-item.active {
+      border-color:#d4a574; transform:translateY(-10px);
+      box-shadow: 0 12px 24px rgba(212,165,116,0.3);
+    }
+    .menu-item.active {
+      background: var(--primary);
+      color: #111;
+      border-color: var(--primary);
+      box-shadow: 0 4px 15px rgba(212,165,116,0.3);
+    }
+    
+    /* ─── YENİ: ÜRÜN İSMİ ÖN EKRAN OVERLAY ─── */
+    #ui-overlay {
+      position: absolute;
+      top: 15%; /* Üstten biraz boşluk */
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+      z-index: 10;
+      text-align: center;
+      width: 100%;
+      display: none; /* Artık kullanılmıyor - troika ile 3D sahnede */
+    }
+
+    .gallery-item img {
+      width:100%; height:100%; object-fit:cover; opacity:0.6; transition:0.3s;
+    }
+    .gallery-item:hover img, .gallery-item.active img { opacity:1; }
+    
+    .gallery-title {
+      position:absolute; bottom:0; left:0; right:0;
+      padding:12px 8px 8px; background:linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+      color:#fff; font-size:11px; text-align:center; font-weight:600; letter-spacing:1px;
+      text-transform:uppercase;
+    }
+
+    /* Overlay Vignette */
+    .vignette {
+      position:fixed; inset:0; pointer-events:none; z-index:10;
+      background: radial-gradient(circle at center, transparent 30%, rgba(15,12,10,0.7) 120%);
+    }
+
+    @media(max-width:768px) {
+      .gallery-item { width: 70px; height: 70px; border-radius: 12px; }
+      .gallery-title { font-size: 9px; padding: 6px 4px 4px; }
+      #gallery-menu { gap: 10px; padding: 10px; bottom: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="loader-ring"></div>
+    <div class="loader-text" id="loading-text">YÜKLENİYOR</div>
+  </div>
+
+  <div class="vignette"></div>
+  <canvas id="canvas"></canvas>
+
+
+
+  <!-- Bottom Gallery Menu -->
+  <div id="gallery-menu"></div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "@lumaai/luma-web": "https://unpkg.com/@lumaai/luma-web@0.2.0/dist/library/luma-web.module.js",
+      "troika-three-text": "https://esm.sh/troika-three-text@0.49.0?external=three"
+    }
+  }
+  </script>
+
+  <script type="module">
+    // WebGL desteği kontrol
+    function checkWebGL() {
+      try {
+        const c = document.createElement('canvas');
+        return !!(window.WebGLRenderingContext && c.getContext('webgl2'));
+      } catch(e) { return false; }
+    }
+    if (!checkWebGL()) {
+      document.getElementById('loading').innerHTML = '<div style="color:#d4a574;font-family:monospace;text-align:center;padding:20px"><p style="font-size:18px;margin-bottom:10px">⚠️ WebGL Desteklenmiyor</p><p style="font-size:13px;color:#888">Tarayıcınız veya cihazınız 3D içeriği görüntülemiyor.<br>Chrome veya Edge kullanmanızı öneririz.</p></div>';
+      throw new Error('WebGL not supported');
+    }
+
+    import * as THREE from 'three';
+    import { LumaSplatsThree } from '@lumaai/luma-web';
+    import { Text, preloadFont } from 'troika-three-text';
+
+    // ─── VERİTABANI (Admin panelinden dolacak) ───
+    const defaultProducts = [
+      { 
+        id: "p1", 
+        title: "Spider-Man", 
+        lumaUrl: "https://lumalabs.ai/capture/3a8971f8-84c5-4a16-ad31-db90ea9d1380",
+        thumb: "https://images.unsplash.com/photo-1608889175123-8ee362201f81?q=80&w=200&auto=format&fit=crop"
+      },
+      { 
+        id: "p2", 
+        title: "Vintage Car", 
+        lumaUrl: "https://lumalabs.ai/capture/1b5f3e33-3900-4398-8795-b585ae1337d0",
+        thumb: "https://images.unsplash.com/photo-1532974208-724bc4b1c1e5?q=80&w=200&auto=format&fit=crop"
+      }
+    ];
+
+    let products = [];
+    
+    // 1. Önce Global API'den veriyi çekmeyi dene
+    try {
+      const res = await fetch('https://vk-portfolio-api.vkesgin38.workers.dev/api/fitness');
+      if (res.ok) {
+        const dbData = await res.json();
+        const row = dbData.find(d => d.key === 'vk_3d_products');
+        if (row && row.value) {
+          products = JSON.parse(row.value);
+          localStorage.setItem('vk_3d_products', row.value); // Cihaza yedekle
+        }
+      }
+    } catch(e) { console.warn('API fetch failed, falling back to local'); }
+    
+    // 2. API boşsa veya çöktüyse yerel önbelleğe (localStorage) bak
+    if (!products || products.length === 0) {
+      try {
+        const saved = localStorage.getItem('vk_3d_products');
+        if (saved) products = JSON.parse(saved);
+      } catch(e) {}
+    }
+    
+    // 3. Hiçbiri yoksa varsayılan ürünleri kullan
+    if (!products || products.length === 0) {
+      products = defaultProducts;
+      localStorage.setItem('vk_3d_products', JSON.stringify(products));
+    }
+
+    let currentProduct = products[0];
+
+    const isMobile = window.innerWidth < 768;
+
+    // ─── SAHNE KURULUMU ───
+    const canvas = document.getElementById('canvas');
+    const renderer = new THREE.WebGLRenderer({ 
+      canvas, 
+      antialias: !isMobile,
+      alpha: false,
+      powerPreference: 'high-performance'
+    });
+    const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio, 1.5);
+    renderer.setPixelRatio(dpr);
+    renderer.shadowMap.enabled = false; // Gölge hesaplama kapalı
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1512); // Koyu premium arkaplan
+    scene.fog = new THREE.FogExp2(0x1a1512, 0.04); // Derinlik hissi için sis
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+
+    // Işıklandırma
+    scene.add(new THREE.AmbientLight(0xffeedd, 0.5));
+    const dirLight = new THREE.DirectionalLight(0xd4a574, 1.5);
+    dirLight.position.set(5, 10, 5);
+    scene.add(dirLight);
+
+    // ─── PARTİKÜL EFEKTİ ───
+    // Mobilde 300, masaüstünde 1200 partikül
+    const pCount = isMobile ? 150 : 600;
+    const pPos = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      const r = 3 + Math.random() * 7;
+      const th = Math.random() * Math.PI * 2;
+      const ph = (Math.random() - 0.5) * Math.PI * 0.8;
+      pPos[i*3]   = r * Math.cos(th) * Math.cos(ph);
+      pPos[i*3+1] = (Math.random() - 0.2) * 5; // Yüksekliğe dağıt
+      pPos[i*3+2] = r * Math.sin(th) * Math.cos(ph);
+    }
+    const pGeo = new THREE.BufferGeometry();
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({ 
+      size: 0.02, color: 0xd4a574, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending 
+    }));
+    scene.add(particles);
+
+    // ─── 3D YAZI SİSTEMİ (Luma Web Library tarzı) ───
+    const FONT_URL = 'https://cdn.jsdelivr.net/gh/googlefonts/montserrat@master/fonts/ttf/Montserrat-Bold.ttf';
+    let textMesh = null;
+
+    preloadFont({ font: FONT_URL }, () => {});
+
+    function updateTitle(textStr) {
+      if (textMesh) { scene.remove(textMesh); textMesh.dispose(); textMesh = null; }
+
+      textMesh = new Text();
+      textMesh.font = FONT_URL;
+      textMesh.text = textStr;
+      textMesh.fontSize = isMobile ? 0.12 : 0.22;
+      textMesh.anchorX = 'center';
+      textMesh.anchorY = 'middle';
+      textMesh.letterSpacing = 0.06;
+      textMesh.textAlign = 'center';
+
+      // Objenin üstünde / önünde — sabit dünya noktası
+      textMesh.position.set(0, isMobile ? 0.5 : 0.8, 0);
+
+      textMesh.material = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+        fog: false
+      });
+
+      textMesh.sync();
+      scene.add(textMesh);
+    }
+
+    // İlk metni oluştur
+    updateTitle(currentProduct.title);
+
+    // ─── LUMA SPLAT YÖNETİMİ ───
+    let currentSplat = null;
+    const loadingEl = document.getElementById('loading');
+
+    function loadProduct(product) {
+      loadingEl.classList.remove('fade');
+      document.getElementById('loading-text').textContent = product.title + " YÜKLENİYOR";
+
+      if (currentSplat) {
+        scene.remove(currentSplat);
+        currentSplat.dispose();
+      }
+
+      currentSplat = new LumaSplatsThree({
+        source: product.lumaUrl,
+        // Luma dokümanı: enableThreeShaderIntegration açık → fog, tone mapping, 
+        // depth testing ile entegrasyon. Splat depth buffer'a yazmaz ama 
+        // opaque objelerin (yazı) depth'ine göre test yapar.
+        enableThreeShaderIntegration: true,
+        particleRevealEnabled: !isMobile
+      });
+
+      scene.add(currentSplat);
+      currentProduct = product;
+      updateTitle(product.title);
+
+      currentSplat.onLoad = () => {
+        loadingEl.classList.add('fade');
+      };
+      
+      // Güvenlik zamanlayıcısı
+      setTimeout(() => loadingEl.classList.add('fade'), 6000);
+    }
+
+    // İlk ürünü yükle
+    loadProduct(currentProduct);
+
+    // ─── ARAYÜZ (GALLERY MENU) ───
+    const galleryMenu = document.getElementById('gallery-menu');
+    
+    function buildMenu() {
+      galleryMenu.innerHTML = '';
+      products.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'gallery-item' + (p.id === currentProduct.id ? ' active' : '');
+        item.innerHTML = `
+          <img src="${p.thumb}" alt="${p.title}">
+          <div class="gallery-title">${p.title}</div>
+        `;
+        item.addEventListener('click', () => {
+          if (p.id === currentProduct.id) return; // Aynı ürün
+          
+          // Menü aktif durumunu güncelle
+          document.querySelectorAll('.gallery-item').forEach(el => el.classList.remove('active'));
+          item.classList.add('active');
+          
+          currentProduct = p;
+          loadProduct(currentProduct);
+        });
+        galleryMenu.appendChild(item);
+      });
+    }
+    buildMenu();
+
+
+
+    // ─── KAMERA VE ANİMASYON ───
+    let autoAngle = 0;
+    let targetVert = 0.2; 
+    let currentVert = 0.2;
+    let isDragging = false;
+    let dragY = 0, dragStartVert = 0;
+
+    // Fare ile yukarı/aşağı bakış (orijinal sistem ama artırılmış dikey limit)
+    canvas.addEventListener('mousedown', e => { isDragging = true; dragY = e.clientY; dragStartVert = targetVert; });
+    window.addEventListener('mousemove', e => {
+      if (!isDragging) return;
+      targetVert = Math.max(-0.6, Math.min(1.8, dragStartVert + (e.clientY - dragY) / window.innerHeight * 2.5));
+    });
+    window.addEventListener('mouseup', () => isDragging = false);
+    canvas.addEventListener('mouseleave', () => isDragging = false);
+
+    // Dokunmatik
+    canvas.addEventListener('touchstart', e => { dragY = e.touches[0].clientY; dragStartVert = targetVert; }, {passive:true});
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      targetVert = Math.max(-0.6, Math.min(1.8, dragStartVert + (e.touches[0].clientY - dragY) / window.innerHeight * 2.5));
+    }, {passive:false});
+
+    // Scroll zoom ekle — mousewheel ile mesafe ayarla:
+    let camRadius = 5;
+    let targetRadius = 5;
+
+    window.addEventListener('wheel', e => {
+      targetRadius += e.deltaY * 0.005;
+      targetRadius = Math.max(3, Math.min(9, targetRadius));
+    }, { passive: true });
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      const time = clock.getElapsedTime();
+
+      // Orijinal Kusursuz Kamera Matematiği
+      currentVert += (targetVert - currentVert) * 0.05;
+      autoAngle += dt * 0.5; // Orijinal yavaş dönüş hızı
+      
+      camRadius += (targetRadius - camRadius) * 0.05;
+      
+      camera.position.x = camRadius * Math.sin(autoAngle);
+      camera.position.z = camRadius * Math.cos(autoAngle);
+      camera.position.y = 2 + currentVert * 4.5; // Yüksekliği çok daha fazla artırabilmek için çarpan büyütüldü
+      
+      camera.lookAt(0, 0, 0);
+
+      // Partikülleri yavaşça döndür
+      particles.rotation.y = time * 0.05;
+
+      // ── METİN ──
+      if (textMesh) {
+        // 1. Billboard: yazı her zaman kameraya dönük (asla ters görünmez)
+        textMesh.lookAt(camera.position);
+
+        // 2. Açıya göre opacity: kamera öndeyken görünür, yandan/arkadan kaybolur
+        // Kamera vektörü: objeden kameraya
+        const camDir = camera.position.clone().normalize(); // Obje merkezde (0,0,0)
+        // Referans yön: sahnenin önü (kameranın başladığı yön)
+        const front = new THREE.Vector3(0, 0, 1);
+        // Sadece yatay açı (Y yok)
+        const camFlat = new THREE.Vector3(camera.position.x, 0, camera.position.z).normalize();
+        const dot = camFlat.dot(front); // 1=ön, 0=yan, -1=arka
+        // Sadece ön yarısında görünsün (dot > 0), smooth fade
+        const targetOp = dot > 0 ? Math.pow(dot, 0.5) : 0;
+        textMesh.material.opacity += (targetOp - textMesh.material.opacity) * 0.08;
+      }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Pencere yeniden boyutlandırma
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

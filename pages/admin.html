@@ -39,6 +39,7 @@
       <button class="admin-tab" data-tab="upload">Yeni İş Ekle</button>
       <button class="admin-tab" data-tab="featured">Seçilmiş İşler</button>
       <button class="admin-tab" data-tab="3dgallery">3D Galeri</button>
+      <button class="admin-tab" data-tab="threed">3D Vitrin</button>
     </div>
     <button class="btn btn-outline" id="logoutBtn" style="font-size:10px;padding:8px 16px">Çıkış</button>
   </nav>
@@ -194,9 +195,59 @@
 
     <div style="background:var(--bg-surface); padding:24px; border-radius:12px; border:1px solid rgba(255,255,255,0.05);">
       <h3 style="margin-bottom:16px;">Ekli 3D Ürünler</h3>
-      <div id="list-3d" style="display:flex; flex-direction:column; gap:12px;">
-        <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
+  <!-- TAB: 3D VİTRİN -->
+  <div class="admin-panel" id="tab-threed">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">3D Vitrin</h2>
+      <p class="admin-panel-sub">Luma AI taramalarını 3D galeriye ekle. <a href="/pages/test.html" target="_blank" style="color:var(--accent)">Vitrini Görüntüle ↗</a></p>
+    </div>
+
+    <div class="threed-layout">
+      
+      <!-- FORM -->
+      <div class="threed-form-wrap">
+        <p class="section-eyebrow" style="margin-bottom:16px">// yeni 3d obje ekle</p>
+        
+        <div class="ct-field">
+          <label class="ct-label">Başlık (3D obje üzerinde görünür)</label>
+          <input type="text" id="td-title" class="ct-input" placeholder="Spider-Man Kupa">
+          <span class="ct-field-line"></span>
+        </div>
+        
+        <div class="ct-field" style="margin-top:24px">
+          <label class="ct-label">Luma AI Linki</label>
+          <input type="url" id="td-url" class="ct-input" placeholder="https://lumalabs.ai/capture/...">
+          <span class="ct-field-line"></span>
+        </div>
+        
+        <div style="margin-top:24px">
+          <label class="ct-label">Kapak Görseli</label>
+          <div class="upload-zone" id="td-img-zone" style="aspect-ratio:16/9;margin-top:8px">
+            <div class="upload-zone-inner" id="td-img-preview">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Kapak görseli seç</span>
+            </div>
+            <input type="file" id="td-img-file" accept="image/*" style="display:none">
+          </div>
+          <input type="hidden" id="td-img-b64">
+        </div>
+
+        <div id="td-status" style="margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);min-height:16px"></div>
+
+        <button class="btn btn-primary" id="td-save-btn" style="margin-top:20px;width:100%;justify-content:center">
+          Vitrine Ekle ↗
+        </button>
       </div>
+
+      <!-- LİSTE -->
+      <div class="threed-list-wrap">
+        <p class="section-eyebrow" style="margin-bottom:16px">// eklenen objeler</p>
+        <div id="td-product-list" class="admin-grid"></div>
+      </div>
+
     </div>
   </div>
 
@@ -752,6 +803,162 @@ window.delete3DProduct = async function(id) {
     await save3DProducts(local3DProducts.filter(p => p.id !== id));
   }
 };
+
+// ═══════════════════════════════════════
+// 3D VİTRİN YÖNETİMİ
+// ═══════════════════════════════════════
+const API_3D = 'https://vk-portfolio-api.vkesgin38.workers.dev/api/fitness';
+let td_products = [];
+
+// Görsel zone tıklama
+const tdZone = document.getElementById('td-img-zone');
+const tdFile = document.getElementById('td-img-file');
+if (tdZone && tdFile) {
+  tdZone.addEventListener('click', () => tdFile.click());
+  tdFile.addEventListener('change', () => {
+    const file = tdFile.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('td-img-b64').value = e.target.result;
+      document.getElementById('td-img-preview').innerHTML = 
+        `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Status mesajı
+function tdStatus(msg, isError) {
+  const el = document.getElementById('td-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--danger)' : 'var(--accent)';
+}
+
+// Ürünleri API'den yükle
+async function tdLoadProducts() {
+  tdStatus('// yükleniyor...');
+  try {
+    const res = await fetch(API_3D, {
+      headers: { 'Authorization': 'Bearer ' + TOKEN }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const row = Array.isArray(data) ? data.find(d => d.key === 'vk_3d_products') : null;
+    td_products = row && row.value ? JSON.parse(row.value) : [];
+    tdStatus('// ' + td_products.length + ' obje yüklendi');
+    tdRenderList();
+  } catch(e) {
+    tdStatus('// API hatası: ' + e.message, true);
+    // localStorage fallback
+    try {
+      const saved = localStorage.getItem('vk_3d_products');
+      if (saved) { td_products = JSON.parse(saved); tdRenderList(); }
+    } catch {}
+  }
+}
+
+// API'ye kaydet
+async function tdSaveProducts() {
+  const payload = JSON.stringify(td_products);
+  localStorage.setItem('vk_3d_products', payload);
+  
+  if (!TOKEN) {
+    tdStatus('// localStorage\\'a kaydedildi (token yok)', true);
+    return false;
+  }
+  
+  try {
+    const r = await fetch(API_3D, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + TOKEN
+      },
+      body: JSON.stringify({ key: 'vk_3d_products', value: payload })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + await r.text());
+    return true;
+  } catch(e) {
+    tdStatus('// Sunucu hatası: ' + e.message, true);
+    return false;
+  }
+}
+
+// Listeyi çiz
+function tdRenderList() {
+  const list = document.getElementById('td-product-list');
+  if (!list) return;
+  if (!td_products.length) {
+    list.innerHTML = '<div class="admin-loading">Henüz 3D obje eklenmedi.</div>';
+    return;
+  }
+  list.innerHTML = td_products.map(p => `
+    <div class="admin-card" style="opacity:1">
+      <div class="admin-card-media">
+        <img src="${p.thumb || ''}" alt="${p.title}" loading="lazy">
+      </div>
+      <div class="admin-card-info">
+        <div class="admin-card-title">${p.title}</div>
+        <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.lumaUrl}</div>
+      </div>
+      <div class="admin-card-actions">
+        <button class="admin-btn-del" onclick="tdDelete('${p.id}')">Sil</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Ekle
+document.getElementById('td-save-btn')?.addEventListener('click', async () => {
+  const title = document.getElementById('td-title')?.value.trim();
+  let url = document.getElementById('td-url')?.value.trim();
+  const thumb = document.getElementById('td-img-b64')?.value || '';
+
+  if (!title) { tdStatus('// Başlık gerekli', true); return; }
+  if (!url) { tdStatus('// Luma AI linki gerekli', true); return; }
+
+  // UUID'yi ayıkla
+  const match = url.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (match) url = 'https://lumalabs.ai/capture/' + match[0];
+
+  tdStatus('// kaydediliyor...');
+  document.getElementById('td-save-btn').disabled = true;
+
+  td_products.push({ id: 'p_' + Date.now(), title, lumaUrl: url, thumb });
+  
+  const ok = await tdSaveProducts();
+  tdRenderList();
+  
+  if (ok) {
+    tdStatus('// ' + title + ' eklendi ✓');
+    document.getElementById('td-title').value = '';
+    document.getElementById('td-url').value = '';
+    document.getElementById('td-img-b64').value = '';
+    document.getElementById('td-img-preview').innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>Kapak görseli seç</span>';
+    document.getElementById('td-img-file').value = '';
+  }
+  
+  document.getElementById('td-save-btn').disabled = false;
+});
+
+// Sil
+window.tdDelete = async function(id) {
+  if (!confirm('Bu objeyi vitrinden silmek istediğinize emin misiniz?')) return;
+  td_products = td_products.filter(p => p.id !== id);
+  tdStatus('// siliniyor...');
+  await tdSaveProducts();
+  tdRenderList();
+  tdStatus('// silindi');
+};
+
+// Sekme değişiminde yükle
+document.querySelectorAll('.admin-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.tab === 'threed') tdLoadProducts();
+  });
+});
 </script>
 
 </body>

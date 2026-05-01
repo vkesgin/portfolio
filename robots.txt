@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /pages/admin.html
+Disallow: /pages/admin-3d.html
+Sitemap: https://velikesgin.com/sitemap.xml

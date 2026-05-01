@@ -268,3 +268,13 @@ body { cursor: auto !important; }
   .upload-form { grid-template-columns: 1fr; }
   .upload-fields-row { grid-template-columns: 1fr; }
 }
+
+ . t h r e e d - l a y o u t   { 
+     d i s p l a y :   g r i d ; 
+     g r i d - t e m p l a t e - c o l u m n s :   3 6 0 p x   1 f r ; 
+     g a p :   v a r ( - - s p a c e - x l ) ; 
+     a l i g n - i t e m s :   s t a r t ; 
+ } 
+ @ m e d i a ( m a x - w i d t h : 7 6 8 p x )   {   . t h r e e d - l a y o u t   {   g r i d - t e m p l a t e - c o l u m n s :   1 f r ;   }   } 
+  
+ 

@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Premium 3D Showcase</title>
+  <meta name="robots" content="noindex, nofollow">
+  <title>3D Vitrin — Veli Kesgin</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { overflow:hidden; background:#1a1a1a; font-family:'Segoe UI', sans-serif; }
@@ -87,7 +88,11 @@
       background: radial-gradient(circle at center, transparent 30%, rgba(15,12,10,0.7) 120%);
     }
 
-
+    @media(max-width:768px) {
+      .gallery-item { width: 70px; height: 70px; border-radius: 12px; }
+      .gallery-title { font-size: 9px; padding: 6px 4px 4px; }
+      #gallery-menu { gap: 10px; padding: 10px; bottom: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -118,6 +123,18 @@
   </script>
 
   <script type="module">
+    // WebGL desteği kontrol
+    function checkWebGL() {
+      try {
+        const c = document.createElement('canvas');
+        return !!(window.WebGLRenderingContext && c.getContext('webgl2'));
+      } catch(e) { return false; }
+    }
+    if (!checkWebGL()) {
+      document.getElementById('loading').innerHTML = '<div style="color:#d4a574;font-family:monospace;text-align:center;padding:20px"><p style="font-size:18px;margin-bottom:10px">⚠️ WebGL Desteklenmiyor</p><p style="font-size:13px;color:#888">Tarayıcınız veya cihazınız 3D içeriği görüntülemiyor.<br>Chrome veya Edge kullanmanızı öneririz.</p></div>';
+      throw new Error('WebGL not supported');
+    }
+
     import * as THREE from 'three';
     import { LumaSplatsThree } from '@lumaai/luma-web';
     import { Text, preloadFont } from 'troika-three-text';
@@ -175,16 +192,18 @@
     const canvas = document.getElementById('canvas');
     const renderer = new THREE.WebGLRenderer({ 
       canvas, 
-      antialias: !isMobile, // Mobilde kasmayı engellemek için AA kapalı
-      alpha: false 
+      antialias: !isMobile,
+      alpha: false,
+      powerPreference: 'high-performance'
     });
-    // Mobilde performansı katlamak için piksel oranını 1'e sabitle (Masaüstü aynen kalıyor)
-    renderer.setPixelRatio(isMobile ? 1 : Math.min(window.devicePixelRatio, 2));
+    const dpr = isMobile ? 1 : Math.min(window.devicePixelRatio, 1.5);
+    renderer.setPixelRatio(dpr);
+    renderer.shadowMap.enabled = false; // Gölge hesaplama kapalı
     renderer.setSize(window.innerWidth, window.innerHeight);
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1512); // Koyu premium arkaplan
-    scene.fog = new THREE.FogExp2(0x1a1512, 0.08); // Derinlik hissi için sis
+    scene.fog = new THREE.FogExp2(0x1a1512, 0.04); // Derinlik hissi için sis
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
 
@@ -196,7 +215,7 @@
 
     // ─── PARTİKÜL EFEKTİ ───
     // Mobilde 300, masaüstünde 1200 partikül
-    const pCount = isMobile ? 300 : 1200;
+    const pCount = isMobile ? 150 : 600;
     const pPos = new Float32Array(pCount * 3);
     for (let i = 0; i < pCount; i++) {
       const r = 3 + Math.random() * 7;
@@ -225,14 +244,14 @@
       textMesh = new Text();
       textMesh.font = FONT_URL;
       textMesh.text = textStr;
-      textMesh.fontSize = 0.28;
+      textMesh.fontSize = isMobile ? 0.12 : 0.22;
       textMesh.anchorX = 'center';
       textMesh.anchorY = 'middle';
       textMesh.letterSpacing = 0.06;
       textMesh.textAlign = 'center';
 
       // Objenin üstünde / önünde — sabit dünya noktası
-      textMesh.position.set(0, 0.8, 0);
+      textMesh.position.set(0, isMobile ? 0.5 : 0.8, 0);
 
       textMesh.material = new THREE.MeshBasicMaterial({
         color: 0xffffff,
@@ -338,6 +357,15 @@
       targetVert = Math.max(-0.6, Math.min(1.8, dragStartVert + (e.touches[0].clientY - dragY) / window.innerHeight * 2.5));
     }, {passive:false});
 
+    // Scroll zoom ekle — mousewheel ile mesafe ayarla:
+    let camRadius = 5;
+    let targetRadius = 5;
+
+    window.addEventListener('wheel', e => {
+      targetRadius += e.deltaY * 0.005;
+      targetRadius = Math.max(3, Math.min(9, targetRadius));
+    }, { passive: true });
+
     const clock = new THREE.Clock();
 
     function animate() {
@@ -349,8 +377,10 @@
       currentVert += (targetVert - currentVert) * 0.05;
       autoAngle += dt * 0.5; // Orijinal yavaş dönüş hızı
       
-      camera.position.x = 5 * Math.sin(autoAngle);
-      camera.position.z = 5 * Math.cos(autoAngle);
+      camRadius += (targetRadius - camRadius) * 0.05;
+      
+      camera.position.x = camRadius * Math.sin(autoAngle);
+      camera.position.z = camRadius * Math.cos(autoAngle);
       camera.position.y = 2 + currentVert * 4.5; // Yüksekliği çok daha fazla artırabilmek için çarpan büyütüldü
       
       camera.lookAt(0, 0, 0);

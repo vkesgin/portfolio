@@ -177,13 +177,13 @@ export default {
 
     // === ADMIN: KPSS KULLANICI YÖNETİMİ ===
     if (path === '/api/admin/kpss-users' && method === 'GET') {
-      const admin = await auth(request, env);
+      const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
       const { results } = await env.DB.prepare('SELECT id, username, full_name, created_at FROM kpss_users ORDER BY id DESC').all();
       return json(results, 200, origin);
     }
     if (path === '/api/admin/kpss-users' && method === 'POST') {
-      const admin = await auth(request, env);
+      const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
       const d = await request.json();
       if (!d.username || !d.password) return json({ error: 'Kullanıcı adı ve şifre zorunlu' }, 400, origin);
@@ -196,7 +196,7 @@ export default {
       }
     }
     if (path.match(/^\/api\/admin\/kpss-users\/\d+$/) && method === 'DELETE') {
-      const admin = await auth(request, env);
+      const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
       const id = path.split('/').pop();
       await env.DB.prepare('DELETE FROM kpss_users WHERE id=?').bind(id).run();

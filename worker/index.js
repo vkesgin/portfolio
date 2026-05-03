@@ -224,6 +224,18 @@ export default {
       const todayDate = new Date().toISOString().split('T')[0];
       try {
         await env.DB.prepare('INSERT INTO kpss_users (username, password, full_name, exam_name, exam_date) VALUES (?, ?, ?, ?, ?)').bind(d.username, d.password, d.full_name || '', 'KPSS', todayDate).run();
+          await env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS inspire_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            post_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            is_public INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(post_id) REFERENCES inspire_posts(id) ON DELETE CASCADE,
+            FOREIGN KEY(user_id) REFERENCES inspire_users(id) ON DELETE CASCADE
+          )
+        `).run();
         return json({ ok: true }, 201, origin);
       } catch(e) {
         return json({ error: 'Kullanıcı zaten var veya DB hatası' }, 400, origin);
@@ -554,6 +566,19 @@ if (path.startsWith('/api/kpss')) {
       `).bind(meta.last_row_id).first();
       
       return json(newPost, 201, origin);
+    }
+
+    
+    if (cleanPath.match(/^\/api\/inspire\/posts\/\d+\/notes$/) && method === 'POST') {
+      const user = await inspireAuth(request, env);
+      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
+      const postId = cleanPath.split('/')[4];
+      const d = await request.json();
+      if (!d.content) return json({ error: 'İçerik gerekli' }, 400, origin);
+      await env.DB.prepare(
+        'INSERT INTO inspire_notes (post_id, user_id, content, is_public) VALUES (?, ?, ?, ?)'
+      ).bind(postId, user.userId, d.content, d.is_public ? 1 : 0).run();
+      return json({ ok: true }, 201, origin);
     }
 
     if (cleanPath.match(/^\/api\/inspire\/posts\/\d+$/) && method === 'DELETE') {

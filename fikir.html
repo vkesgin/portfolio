@@ -327,9 +327,7 @@
       </div>
     </div>
     
-    <div id="admin-notice" class="admin-notice">
-      <strong>Admin Modu Aktif:</strong> Yeni kullanıcı oluşturmak için /admin sayfasına gidiniz.
-    </div>
+    
 
     <div class="masonry-grid" id="posts-grid">
       <!-- Posts will be injected here -->
@@ -346,6 +344,7 @@
       <form id="add-form">
         <select id="post-type" class="modal-input" required>
           <option value="reels">Instagram Reels / Post</option>
+          <option value="pinterest">Pinterest Linki</option>
           <option value="video">Direkt Video Linki (.mp4)</option>
           <option value="image">Direkt Görsel Linki (.jpg, .png)</option>
         </select>
@@ -427,9 +426,7 @@
       
       document.getElementById('user-greeting').textContent = `Hoş geldin, ${currentUser.full_name || currentUser.username}!`;
       
-      if (currentUser.username === 'vkesgin38') {
-        document.getElementById('admin-notice').style.display = 'block';
-      }
+      
       
       loadPosts();
     }
@@ -454,6 +451,7 @@
       const desc = document.getElementById('post-desc').value;
       
       // Instagram link cleanup
+      if (type === 'pinterest') { url = url.split('?')[0]; }
       if (type === 'reels' && url.includes('instagram.com')) {
         url = url.split('?')[0]; // Query parametrelerini temizle
         if (url.endsWith('/')) url = url.slice(0, -1);
@@ -486,7 +484,7 @@
       grid.innerHTML = '<div style="text-align:center;width:100%;padding:40px;"><div class="spinner"></div></div>';
       
       try {
-        const res = await fetch(`${API_URL}/api/inspire/posts`);
+        const res = await fetch(`${API_URL}/api/inspire/posts`, { headers: { 'Authorization': `Bearer ${token}` } });
         const posts = await res.json();
         
         grid.innerHTML = '';
@@ -518,6 +516,32 @@
           const canDelete = currentUser.username === 'vkesgin38' || currentUser.id === p.user_id;
           const deleteHtml = canDelete ? `<button class="delete-post" onclick="deletePost(${p.id})">Sil</button>` : '';
 
+          if (p.type === 'pinterest') {
+            mediaHtml = `<div style="padding: 10px; display: flex; justify-content: center;"><a data-pin-do="embedPin" data-pin-width="medium" href="${p.url}"></a></div>`;
+          }
+
+          let notesHtml = '';
+          if (p.notes && p.notes.length > 0) {
+            notesHtml = '<div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;"><strong style="font-size:12px;color:#aaa">Notlar:</strong>';
+            p.notes.forEach(n => {
+              const lock = n.is_public ? '' : ' <span style="font-size:10px;color:#666">(Sadece sana özel)</span>';
+              notesHtml += `<div style="font-size:13px; color:#ccc; margin-top:5px; padding:8px; background:rgba(0,0,0,0.2); border-radius:8px;"><b>@${n.author}</b>: ${n.content}${lock}</div>`;
+            });
+            notesHtml += '</div>';
+          }
+          
+          const addNoteForm = `
+            <div style="margin-top:10px; display:flex; flex-direction:column; gap:5px;">
+              <input type="text" id="note-input-${p.id}" placeholder="Bir not ekle..." style="width:100%; padding:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:6px; color:#fff; font-size:12px; box-sizing:border-box;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label style="font-size:11px; color:#888; display:flex; align-items:center; gap:4px;">
+                  <input type="checkbox" id="note-public-${p.id}"> Diğer kullanıcılar da görsün
+                </label>
+                <button onclick="addNote(${p.id})" style="background:var(--accent); color:#000; border:none; padding:4px 10px; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer;">Ekle</button>
+              </div>
+            </div>
+          `;
+
           card.innerHTML = `
             <div class="post-media">${mediaHtml}</div>
             <div class="post-info">
@@ -526,6 +550,8 @@
                 <span class="author-badge">@${p.author || 'Anonim'}</span>
                 ${deleteHtml}
               </div>
+              ${notesHtml}
+              ${addNoteForm}
             </div>
           `;
           grid.appendChild(card);
@@ -533,10 +559,30 @@
         
         // Instagram scriptini tetikle
         if (window.instgrm) {
-          window.instgrm.Embeds.process();
+          window.instgrm.Embeds.process();\n        }\n        if (window.PinUtils) {\n          window.PinUtils.build();
         }
       } catch(e) {
         grid.innerHTML = '<div style="color:red;text-align:center;">Fikirler yüklenirken hata oluştu.</div>';
+      }
+    }
+
+    
+    async function addNote(postId) {
+      const input = document.getElementById('note-input-'+postId);
+      const pub = document.getElementById('note-public-'+postId);
+      const content = input.value.trim();
+      if (!content) return;
+      
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/posts/${postId}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ content: content, is_public: pub.checked })
+        });
+        if (!res.ok) throw new Error();
+        loadPosts();
+      } catch(e) {
+        alert('Not eklenemedi');
       }
     }
 
@@ -555,5 +601,6 @@
   </script>
   <!-- Instagram Embed Script for processing embeds if needed -->
   <script async src="https://www.instagram.com/embed.js"></script>
+<script async defer src="//assets.pinterest.com/js/pinit.js"></script>
 </body>
 </html>

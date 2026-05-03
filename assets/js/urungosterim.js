@@ -204,7 +204,7 @@ function onMouseMove(e) {
   };
   
   targetRotation.y += deltaMove.x * 0.01;
-  targetRotation.x += deltaMove.y * 0.01;
+  targetRotation.x -= deltaMove.y * 0.01;
   
   previousMousePosition = { x: e.offsetX, y: e.offsetY };
 }
@@ -228,7 +228,7 @@ function onTouchMove(e) {
     y: e.touches[0].clientY - previousMousePosition.y
   };
   targetRotation.y += deltaMove.x * 0.01;
-  targetRotation.x += deltaMove.y * 0.01;
+  targetRotation.x -= deltaMove.y * 0.01;
   previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 }
 

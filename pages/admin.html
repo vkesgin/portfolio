@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="../assets/css/variables.css">
   <link rel="stylesheet" href="../assets/css/global.css">
   <link rel="stylesheet" href="../assets/css/admin.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
 </head>
 <body>
 
@@ -349,6 +350,24 @@
 
 </div>
 
+<!-- CROP MODAL -->
+<div id="cropModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.9); align-items:center; justify-content:center; flex-direction:column; padding:20px;">
+  <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:100%; width:500px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="color:#fff; margin:0; font-family:var(--font-display); font-size:18px;">Görseli Ayarla (1:1)</h3>
+      <button id="cropRotateBtn" class="btn btn-outline" style="padding:6px 12px; font-size:11px;">Döndür ↻</button>
+    </div>
+    <div style="width:100%; height:350px; background:#000; border-radius:6px; overflow:hidden;">
+      <img id="cropImage" src="" style="max-width:100%; max-height:100%; display:block;">
+    </div>
+    <div style="display:flex; justify-content:space-between; margin-top:20px; gap:12px;">
+      <button class="btn btn-outline" id="cropCancelBtn" style="flex:1; justify-content:center;">İptal</button>
+      <button class="btn btn-primary" id="cropSaveBtn" style="flex:1; justify-content:center;">Onayla</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script>
 // ============================================================
 // API ENDPOINT
@@ -1093,21 +1112,64 @@ document.querySelectorAll('.admin-tab').forEach(btn => {
 // ═══════════════════════════════════════
 // KÜP VİTRİN YÖNETİMİ
 // ═══════════════════════════════════════
+window.cubeCroppedFiles = {};
+let currentCropFace = null;
+let cropper = null;
+
+const cropModal = document.getElementById('cropModal');
+const cropImg = document.getElementById('cropImage');
+
 const cubeFaces = ['front', 'right', 'back', 'left', 'top', 'bottom'];
 cubeFaces.forEach(face => {
   const zone = document.getElementById('cube-z-' + face);
   const input = document.getElementById('cube-f-' + face);
-  const preview = document.getElementById('cube-p-' + face);
   
   if (zone && input) {
     zone.addEventListener('click', () => input.click());
     input.addEventListener('change', () => {
       if (input.files[0]) {
+        currentCropFace = face;
         const url = URL.createObjectURL(input.files[0]);
-        preview.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
+        cropImg.src = url;
+        cropModal.style.display = 'flex';
+        
+        if (cropper) cropper.destroy();
+        cropper = new Cropper(cropImg, {
+          aspectRatio: 1,
+          viewMode: 1,
+          dragMode: 'move',
+          autoCropArea: 1,
+          background: false
+        });
+        input.value = ''; // Reset input
       }
     });
   }
+});
+
+document.getElementById('cropRotateBtn')?.addEventListener('click', () => {
+  if (cropper) cropper.rotate(90);
+});
+
+document.getElementById('cropCancelBtn')?.addEventListener('click', () => {
+  cropModal.style.display = 'none';
+  if (cropper) cropper.destroy();
+});
+
+document.getElementById('cropSaveBtn')?.addEventListener('click', () => {
+  if (!cropper) return;
+  const canvas = cropper.getCroppedCanvas({ width: 1024, height: 1024 });
+  canvas.toBlob(blob => {
+    const file = new File([blob], `cube_${currentCropFace}.jpg`, { type: 'image/jpeg' });
+    window.cubeCroppedFiles[currentCropFace] = file;
+    
+    // Preview update
+    const url = URL.createObjectURL(file);
+    document.getElementById('cube-p-' + currentCropFace).innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
+    
+    cropModal.style.display = 'none';
+    cropper.destroy();
+  }, 'image/jpeg', 0.85);
 });
 
 async function loadCubeProducts() {
@@ -1149,7 +1211,7 @@ document.getElementById('cube-save-btn')?.addEventListener('click', async () => 
   const status = document.getElementById('cube-status');
   if (!title) { status.textContent = 'Başlık zorunlu'; status.style.color = 'var(--danger)'; return; }
   
-  const files = cubeFaces.map(face => document.getElementById('cube-f-' + face).files[0]);
+  const files = cubeFaces.map(face => window.cubeCroppedFiles[face]);
   if (files.some(f => !f)) {
     status.textContent = 'Tüm 6 yüz için görsel seçmelisiniz!';
     status.style.color = 'var(--danger)';
@@ -1189,7 +1251,7 @@ document.getElementById('cube-save-btn')?.addEventListener('click', async () => 
     
     document.getElementById('cube-title').value = '';
     cubeFaces.forEach(face => {
-      document.getElementById('cube-f-' + face).value = '';
+      window.cubeCroppedFiles[face] = null;
       document.getElementById('cube-p-' + face).innerHTML = 'Seç';
     });
     

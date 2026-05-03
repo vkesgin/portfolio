@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "@lumaai/luma-web": "^0.2.2"
+    "@lumaai/luma-web": "^0.2.2",
+    "cropperjs": "^2.1.1"
   }
 }

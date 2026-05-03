@@ -150,21 +150,30 @@
 .ct-field:focus-within .ct-label { color: var(--accent); }
 
 .ct-input, .ct-textarea, .ct-select {
-  width: 100%; background: transparent;
-  border: none; border-bottom: 0.5px solid var(--border);
+  width: 100%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.10);
   color: var(--text-primary);
-  font-family: var(--font-body); font-size: 15px;
-  padding: 8px 0 12px;
+  font-family: var(--font-body); font-size: 14px;
+  padding: 11px 14px;
+  border-radius: 10px;
   outline: none;
-  transition: border-color var(--dur-fast);
+  transition: border-color .25s, background .25s, box-shadow .25s;
+  box-sizing: border-box;
   appearance: none; -webkit-appearance: none;
 }
+.ct-input:hover, .ct-textarea:hover, .ct-select:hover {
+  border-color: rgba(255,255,255,0.20);
+  background: rgba(255,255,255,0.06);
+}
 .ct-input:focus, .ct-textarea:focus, .ct-select:focus {
-  border-bottom-color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(0,229,255,0.05);
+  box-shadow: 0 0 0 3px rgba(0,229,255,0.12);
 }
 .ct-input::placeholder, .ct-textarea::placeholder {
-  color: var(--text-muted);
-  font-size: 14px;
+  color: rgba(255,255,255,0.25);
+  font-size: 13px;
 }
 .ct-textarea {
   resize: none; min-height: 140px;
@@ -175,7 +184,7 @@
 
 .ct-select-wrap { position: relative; }
 .ct-select-arrow {
-  position: absolute; right: 0; top: 50%;
+  position: absolute; right: 14px; top: 50%;
   transform: translateY(-50%);
   font-size: 14px; color: var(--text-muted);
   pointer-events: none;
@@ -184,13 +193,8 @@
 .ct-field:focus-within .ct-select-arrow { color: var(--accent); }
 
 .ct-field-line {
-  position: absolute; bottom: 0; left: 0;
-  width: 0; height: 1px;
-  background: var(--accent);
-  transition: width var(--dur-mid) var(--ease-out);
-  display: block;
+  display: none;
 }
-.ct-field:focus-within .ct-field-line { width: 100%; }
 
 .ct-char-count {
   position: absolute; bottom: -18px; right: 0;
@@ -207,9 +211,8 @@
 .ct-field.has-error .ct-input,
 .ct-field.has-error .ct-textarea,
 .ct-field.has-error .ct-select {
-  border-bottom-color: var(--danger);
+  border-color: var(--danger);
 }
-.ct-field.has-error .ct-field-line { background: var(--danger); width: 100%; }
 
 /* === SUBMIT === */
 .ct-form-bottom {

@@ -260,17 +260,28 @@ function onTouchMove(e) {
 }
 
 function snapToNearestFace() {
-  let maxDot = -Infinity;
-  let bestQ = allowedOrientations[0];
+  const normals = [
+    new THREE.Vector3(0, 0, 1),  // 0: Front
+    new THREE.Vector3(1, 0, 0),  // 1: Right
+    new THREE.Vector3(0, 0, -1), // 2: Back
+    new THREE.Vector3(-1, 0, 0), // 3: Left
+    new THREE.Vector3(0, 1, 0),  // 4: Top
+    new THREE.Vector3(0, -1, 0)  // 5: Bottom
+  ];
   
-  for(let i=0; i<allowedOrientations.length; i++) {
-    // Math.abs handles equivalent rotations (q and -q)
-    const dot = Math.abs(targetQuaternion.dot(allowedOrientations[i]));
-    if(dot > maxDot) {
-      maxDot = dot;
-      bestQ = allowedOrientations[i];
+  let maxZ = -Infinity;
+  let bestFaceIndex = 0;
+  
+  // Find which face normal is pointing most towards the camera (+Z)
+  for(let i=0; i<6; i++) {
+    const worldNormal = normals[i].clone().applyQuaternion(targetQuaternion);
+    if(worldNormal.z > maxZ) {
+      maxZ = worldNormal.z;
+      bestFaceIndex = i;
     }
   }
+  
+  const bestQ = allowedOrientations[bestFaceIndex];
   
   const dummy = { t: 0 };
   const startQ = targetQuaternion.clone();

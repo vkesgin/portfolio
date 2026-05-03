@@ -536,6 +536,42 @@
   </div>
 </div>
 
+<!-- ─── ONBOARDING ─── -->
+<div id="onboardingScreen" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(8,8,12,0.96);backdrop-filter:blur(20px);display:none;align-items:center;justify-content:center;">
+  <div style="background:linear-gradient(135deg,#0f0f1a,#12131f);border:1px solid rgba(0,229,255,0.2);border-radius:24px;padding:40px;max-width:480px;width:90%;box-shadow:0 32px 80px rgba(0,0,0,0.7);">
+    <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:.12em;margin-bottom:8px;">// HOŞ GELDİN 🎉</div>
+    <h2 style="font-size:26px;font-weight:700;margin-bottom:8px;">Sınav Tarihini Belirle</h2>
+    <p style="color:var(--text2);font-size:14px;line-height:1.6;margin-bottom:28px;">STUDY.OS sana özel bir çalışma kampı oluşturabilmek için sınavın tarihini bilmeli. Bu ayarı daha sonra Ayarlar'dan değiştirebilirsin.</p>
+    <div class="form-field" style="margin-bottom:16px;">
+      <label class="form-label">Sınav Adı (ör: KPSS Ön Lisans)</label>
+      <input type="text" id="obExamName" class="form-input" placeholder="KPSS" value="KPSS">
+    </div>
+    <div class="form-field" style="margin-bottom:28px;">
+      <label class="form-label">Sınav Tarihi</label>
+      <input type="date" id="obExamDate" class="form-input" min="2026-01-01">
+    </div>
+    <button class="btn-success" style="width:100%;font-size:15px;padding:14px" onclick="finishOnboarding()">Hazır, Başlayalım! 🚀</button>
+    <p id="obError" style="color:#ff5050;font-size:12px;text-align:center;margin-top:10px;min-height:16px;"></p>
+  </div>
+</div>
+
+<!-- ─── TUTORIAL MODAL ─── -->
+<div id="tutorialModal" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);align-items:flex-end;justify-content:center;">
+  <div style="background:linear-gradient(135deg,#0d0e1d,#111228);border:1px solid rgba(0,229,255,0.25);border-radius:24px 24px 0 0;padding:32px 28px 40px;width:100%;max-width:560px;max-height:70vh;overflow-y:auto;box-shadow:0 -20px 60px rgba(0,0,0,0.6);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent);letter-spacing:.1em;" id="tutStep">ADIM 1 / 4</div>
+      <button onclick="closeTutorial()" style="background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div id="tutContent"></div>
+    <div style="display:flex;gap:12px;margin-top:24px;">
+      <button id="tutPrevBtn" onclick="tutorialPrev()" style="flex:1;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--text2);border-radius:12px;padding:12px;cursor:pointer;">← Geri</button>
+      <button id="tutNextBtn" onclick="tutorialNext()" style="flex:2;background:var(--accent);border:none;color:#000;border-radius:12px;padding:12px;font-weight:700;cursor:pointer;">İleri →</button>
+    </div>
+    <!-- Nokta indikatörler -->
+    <div style="display:flex;gap:6px;justify-content:center;margin-top:16px;" id="tutDots"></div>
+  </div>
+</div>
+
 <!-- ─── APP ─── -->
 <div id="app">
   <!-- Sidebar -->
@@ -545,6 +581,10 @@
       <div class="sidebar-name" id="sName">Yükleniyor...</div>
       <div class="sidebar-rank" id="sRank">Aday Memur</div>
       <div class="sidebar-xp" id="sXp">0 XP</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button onclick="startTutorial()" style="flex:1;background:rgba(0,229,255,0.12);border:1px solid rgba(0,229,255,0.3);color:var(--accent);border-radius:8px;padding:6px 0;font-family:var(--mono);font-size:10px;cursor:pointer;transition:background .2s" onmouseover="this.style.background='rgba(0,229,255,0.22)'" onmouseout="this.style.background='rgba(0,229,255,0.12)'">? Rehber</button>
+        <button onclick="logout()" style="flex:1;background:rgba(255,80,80,0.1);border:1px solid rgba(255,80,80,0.25);color:#ff5050;border-radius:8px;padding:6px 0;font-family:var(--mono);font-size:10px;cursor:pointer;transition:background .2s" onmouseover="this.style.background='rgba(255,80,80,0.2)'" onmouseout="this.style.background='rgba(255,80,80,0.1)'">✕ Çıkış</button>
+      </div>
     </div>
     <nav class="sidebar-nav">
       <button class="nav-btn active" onclick="goto('dashboard')" data-page="dashboard">
@@ -875,19 +915,51 @@ async function login() {
 // ─── APP ───
 function showApp() {
   document.getElementById('loginScreen').style.display = 'none';
+  
+  // İlk giriş kontrolü — sınav tarihi yoksa ya da bugün ise onboarding göster
+  const isFirstTime = !USER?.exam_date || USER.exam_date === new Date().toISOString().split('T')[0];
+  if (isFirstTime) {
+    const ob = document.getElementById('onboardingScreen');
+    ob.style.display = 'flex';
+    document.getElementById('obExamDate').value = '2026-09-06'; // varsayılan öner
+    return; // onboarding bitmeden app açılmasın
+  }
+
+  _showAppAfterOnboarding();
+}
+
+function _showAppAfterOnboarding() {
+  document.getElementById('onboardingScreen').style.display = 'none';
   document.getElementById('app').classList.add('visible');
   updateSidebar();
   loadDashboard();
-  // Exam date defaults
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('examDate').value = today;
   if (USER) {
     document.getElementById('setExamName').value = USER.exam_name || 'KPSS';
     document.getElementById('setExamDate').value = USER.exam_date || '2026-09-06';
-    if (!USER.exam_date) {
-      USER.exam_date = '2026-09-06'; // Varsayılan Sınav Tarihi
-    }
   }
+}
+
+async function finishOnboarding() {
+  const exam_name = document.getElementById('obExamName').value.trim() || 'KPSS';
+  const exam_date = document.getElementById('obExamDate').value;
+  const errEl = document.getElementById('obError');
+  if (!exam_date) { errEl.textContent = 'Lütfen bir sınav tarihi seçin.'; return; }
+  errEl.textContent = '';
+  
+  const r = await fetch(`${API}/api/kpss/settings`, {
+    method: 'PUT', headers: authHeaders(),
+    body: JSON.stringify({ exam_name, exam_date })
+  });
+  const d = await r.json();
+  USER = { ...USER, ...d.user, exam_name, exam_date };
+  sessionStorage.setItem('kpss_user', JSON.stringify(USER));
+  
+  _showAppAfterOnboarding();
+  
+  // 1 sn sonra tutorial başlat
+  setTimeout(() => startTutorial(), 800);
 }
 
 function updateSidebar() {
@@ -1506,6 +1578,114 @@ function logout() {
   TOKEN = ''; USER = null;
   document.getElementById('app').classList.remove('visible');
   document.getElementById('loginScreen').style.display = 'flex';
+}
+
+// ─── TUTORIAL ───
+const TUTORIAL_STEPS = [
+  {
+    icon: '🎯',
+    title: 'Komuta Merkezi',
+    body: `<p style="color:var(--text2);line-height:1.7;font-size:14px;">Ana ekranın olan <strong>Komuta Merkezi</strong>, bugün yapman gereken tüm görevleri, hocaların YouTube bağlantılarını ve notlarını bir arada gösterir.</p>
+    <div style="background:rgba(0,229,255,0.08);border:1px solid rgba(0,229,255,0.2);border-radius:12px;padding:14px;margin-top:14px;">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--accent);margin-bottom:10px;">// BUGÜNÜN GÖREVLERİ — ÖRNEK</div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;">
+        <span style="font-size:18px;">📚</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;">Tarih — Türk Tarihine Giriş</div>
+          <div style="font-size:11px;color:var(--text3);">Hedef: 30 soru</div>
+        </div>
+        <a href="#" style="background:#ff0000;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;font-family:var(--mono);text-decoration:none;">▶ İzle</a>
+      </div>
+    </div>`,
+  },
+  {
+    icon: '👨‍🏫',
+    title: 'Hoca Yönetimi',
+    body: `<p style="color:var(--text2);line-height:1.7;font-size:14px;">Her derse bir hoca ve YouTube playlist linki atayabilirsin. Görevin yanındaki <strong style="color:#ff3333;">▶ İzle</strong> butonu direkt hocanın videosuna götürür.</p>
+    <p style="color:var(--text2);font-size:13px;margin-top:10px;">Hoca eklemek için: <strong style="color:var(--accent);">⚙ Ayarlar → Hoca Yönetimi</strong> bölümüne git.</p>
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;margin-top:14px;font-size:12px;font-family:var(--mono);color:var(--text3);">Ders Adı: Matematik<br>Hoca Adı: Ramazan Yetgin<br>YouTube Linki: https://youtube.com/...</div>
+    <button onclick="goto('settings'); closeTutorial();" style="width:100%;margin-top:14px;background:rgba(0,229,255,0.12);border:1px solid rgba(0,229,255,0.3);color:var(--accent);border-radius:10px;padding:10px;font-family:var(--mono);font-size:12px;cursor:pointer;">→ Şimdi Hoca Ekle</button>`,
+  },
+  {
+    icon: '📋',
+    title: 'Müfredat Oluşturma',
+    body: `<p style="color:var(--text2);line-height:1.7;font-size:14px;">Müfredat sayfasından <strong style="color:var(--accent2);">📅 BENİM HOCAM 60 Günlük KPSS Kampı Üret</strong> butonuna bastığında sistem;
+    <br><br>
+    ✅ Bugünden sınava kadar tüm günleri hesaplar<br>
+    ✅ Konuları günlere dengeli dağıtır<br>
+    ✅ Son 30 gün sadece Genel Deneme koyar<br>
+    ✅ Her güne Paragraf çözümü ekler</p>
+    <button onclick="goto('curriculum'); closeTutorial();" style="width:100%;margin-top:14px;background:rgba(255,200,0,0.12);border:1px solid rgba(255,200,0,0.3);color:var(--gold);border-radius:10px;padding:10px;font-family:var(--mono);font-size:12px;cursor:pointer;">→ Müfredata Git</button>`,
+  },
+  {
+    icon: '🚀',
+    title: 'Hazırsın!',
+    body: `<p style="color:var(--text2);line-height:1.7;font-size:14px;">Sistem tam anlamıyla hazır! İşte hızlı özet:</p>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+      <div style="display:flex;gap:10px;align-items:center;background:rgba(255,255,255,0.04);border-radius:8px;padding:10px;">
+        <span>📊</span><span style="font-size:13px;color:var(--text2);"><strong style="color:#fff;">Deneme Takip</strong> — Doğru/Yanlış gir, neti otomatik hesaplar</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;background:rgba(255,255,255,0.04);border-radius:8px;padding:10px;">
+        <span>⏱</span><span style="font-size:13px;color:var(--text2);"><strong style="color:#fff;">Odaklanma Modu</strong> — Pomodoro ile konsantrasyonunu yönet</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;background:rgba(255,255,255,0.04);border-radius:8px;padding:10px;">
+        <span>📝</span><span style="font-size:13px;color:var(--text2);"><strong style="color:#fff;">Not Defteri</strong> — Önemli notuları kaybet, ana sayfada gör</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;background:rgba(255,255,255,0.04);border-radius:8px;padding:10px;">
+        <span>🔥</span><span style="font-size:13px;color:var(--text2);"><strong style="color:#fff;">XP Sistemi</strong> — Görev tamamladıkça XP kazan, rütbe atla</span>
+      </div>
+    </div>
+    <button onclick="closeTutorial()" style="width:100%;margin-top:20px;background:var(--accent);border:none;color:#000;border-radius:12px;padding:14px;font-weight:700;font-size:14px;cursor:pointer;">Mükemmel, Başlayalım! 🎉</button>`,
+  },
+];
+
+let tutCurrentStep = 0;
+
+function startTutorial() {
+  tutCurrentStep = 0;
+  document.getElementById('tutorialModal').style.display = 'flex';
+  renderTutorialStep();
+}
+
+function closeTutorial() {
+  document.getElementById('tutorialModal').style.display = 'none';
+}
+
+function tutorialNext() {
+  if (tutCurrentStep < TUTORIAL_STEPS.length - 1) {
+    tutCurrentStep++;
+    renderTutorialStep();
+  } else {
+    closeTutorial();
+  }
+}
+
+function tutorialPrev() {
+  if (tutCurrentStep > 0) {
+    tutCurrentStep--;
+    renderTutorialStep();
+  }
+}
+
+function renderTutorialStep() {
+  const step = TUTORIAL_STEPS[tutCurrentStep];
+  const total = TUTORIAL_STEPS.length;
+  
+  document.getElementById('tutStep').textContent = `ADIM ${tutCurrentStep + 1} / ${total}`;
+  document.getElementById('tutContent').innerHTML = `
+    <div style="font-size:36px;margin-bottom:12px;">${step.icon}</div>
+    <h3 style="font-size:20px;font-weight:700;margin-bottom:14px;">${step.title}</h3>
+    ${step.body}
+  `;
+  
+  // Dots
+  document.getElementById('tutDots').innerHTML = Array.from({length: total}, (_, i) => 
+    `<div style="width:${i===tutCurrentStep?20:6}px;height:6px;border-radius:3px;background:${i===tutCurrentStep?'var(--accent)':'rgba(255,255,255,0.15)'};transition:width .3s;"></div>`
+  ).join('');
+  
+  // Buttons
+  document.getElementById('tutPrevBtn').style.display = tutCurrentStep === 0 ? 'none' : 'block';
+  document.getElementById('tutNextBtn').textContent = tutCurrentStep === total - 1 ? 'Tamamla ✓' : 'İleri →';
 }
 
 // ─── BAŞLANGIÇ ───

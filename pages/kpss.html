@@ -892,7 +892,10 @@ function showApp() {
   document.getElementById('examDate').value = today;
   if (USER) {
     document.getElementById('setExamName').value = USER.exam_name || 'KPSS';
-    document.getElementById('setExamDate').value = USER.exam_date || '';
+    document.getElementById('setExamDate').value = USER.exam_date || '2026-09-06';
+    if (!USER.exam_date) {
+      USER.exam_date = '2026-09-06'; // Varsayılan Sınav Tarihi
+    }
   }
 }
 
@@ -1225,7 +1228,11 @@ async function deleteExam(id) {
 }
 
 async function generateAutoCurriculum() {
-  if(!confirm("Bu işlem mevcut tüm planlarınızı silip önümüzdeki ilk Pazartesi gününden itibaren 60 GÜNLÜK DEV BENİM HOCAM KPSS KAMPI (Tarih, Mat, Türkçe, Coğrafya, Vatandaşlık, Günlük Paragraf ve Pazar Denemeleri) oluşturacaktır. Onaylıyor musunuz?")) return;
+  let examDateStr = USER?.exam_date || document.getElementById('setExamDate').value || '2026-09-06';
+  const examDateObj = new Date(examDateStr);
+  const now = new Date();
+  
+  if(!confirm(`Sınav tarihiniz ${examDateStr} olarak hesaplanacaktır. Bu işlem mevcut tüm planlarınızı silip önümüzdeki ilk Pazartesi gününden sınav gününe kadar DEV BENİM HOCAM KPSS KAMPI oluşturacaktır. Son 1 ay ful deneme kampı uygulanacaktır. Onaylıyor musunuz?`)) return;
   
   document.getElementById('toast').className = 'show';
   document.getElementById('toast').textContent = "Eski planlar temizleniyor...";
@@ -1275,42 +1282,70 @@ async function generateAutoCurriculum() {
     "İdare Hukuku 3", "Uluslararası Kuruluşlar", "Vatandaşlık Genel Tekrar 1", "Vatandaşlık Genel Tekrar 2"
   ];
 
-  let date = new Date();
-  while(date.getDay() !== 1) { date.setDate(date.getDate() + 1); } // 1 = Pazartesi
+  let d = new Date();
+  while(d.getDay() !== 1) { d.setDate(d.getDate() + 1); } // 1 = Pazartesi
 
   const planList = [];
   let t_idx=0, m_idx=0, tu_idx=0, c_idx=0, v_idx=0;
+  let dayCount = 0;
 
-  for(let day=0; day<60; day++) {
-    const d = new Date(date);
-    d.setDate(d.getDate() + day);
+  while(d < examDateObj) {
     const dateStr = d.toISOString().split('T')[0];
     const dow = d.getDay(); // 1 Mon ... 6 Sat, 0 Sun
+    const daysRemaining = Math.ceil((examDateObj - d) / (1000 * 60 * 60 * 24));
 
-    // Her gün rutin
-    if (dow !== 0) {
-      planList.push({ date: dateStr, lesson_name: 'Türkçe', topic_name: 'Günlük Paragraf Çözümü', target_question_count: 20, status: 'Planlandı', is_video_watched: 1 });
-    }
+    if (daysRemaining <= 30) {
+      // SON 1 AY: SADECE FULL DENEME VE GÜNCEL BİLGİLER
+      planList.push({ date: dateStr, lesson_name: 'Deneme', topic_name: 'Türkiye Geneli GK-GY Denemesi', target_question_count: 120, status: 'Planlandı', is_video_watched: 1 });
+      planList.push({ date: dateStr, lesson_name: 'Tekrar', topic_name: 'Deneme Analizi ve Eksik Kapatma', target_question_count: 50, status: 'Planlandı', is_video_watched: 1 });
+      
+      if(dow === 1 || dow === 4) {
+         planList.push({ date: dateStr, lesson_name: 'Güncel', topic_name: 'Güncel Bilgiler Çalışması', target_question_count: 20, status: 'Planlandı', is_video_watched: 1 });
+      }
+    } else {
+      // KONU AŞAMASI (İlk 60 Gün ve Sonrası Branş Denemeleri)
+      
+      // Her gün paragraf rutin
+      if (dow !== 0) {
+        planList.push({ date: dateStr, lesson_name: 'Türkçe', topic_name: 'Günlük Paragraf Çözümü', target_question_count: 20, status: 'Planlandı', is_video_watched: 1 });
+      }
 
-    if (dow === 1 || dow === 3 || dow === 5) {
-      // Pazartesi, Çarşamba, Cuma: Tarih, Coğrafya, Türkçe
-      if (tarih[t_idx]) planList.push({ date: dateStr, lesson_name: 'Tarih', topic_name: tarih[t_idx], target_question_count: 40, status: 'Planlandı', is_video_watched: 0 });
-      if (cografya[c_idx]) planList.push({ date: dateStr, lesson_name: 'Coğrafya', topic_name: cografya[c_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
-      if (turkce[tu_idx]) planList.push({ date: dateStr, lesson_name: 'Türkçe', topic_name: turkce[tu_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
-      t_idx++; c_idx++; tu_idx++;
-    } 
-    else if (dow === 2 || dow === 4 || dow === 6) {
-      // Salı, Perşembe, Cumartesi: Matematik, Vatandaşlık
-      if (mat[m_idx]) planList.push({ date: dateStr, lesson_name: 'Matematik', topic_name: mat[m_idx], target_question_count: 40, status: 'Planlandı', is_video_watched: 0 });
-      if (vatandaslik[v_idx]) planList.push({ date: dateStr, lesson_name: 'Vatandaşlık', topic_name: vatandaslik[v_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
-      m_idx++; v_idx++;
-    } 
-    else if (dow === 0) {
-      // Pazar: Haftalık Tekrar ve Deneme Sınavı
-      planList.push({ date: dateStr, lesson_name: 'Genel Tekrar', topic_name: 'Haftalık Öğrenilen Konuların Tekrarı', target_question_count: 50, status: 'Planlandı', is_video_watched: 1 });
-      const denemeName = day < 40 ? 'Haftalık Branş Denemeleri' : 'Genel Kültür - Genel Yetenek Denemesi';
-      planList.push({ date: dateStr, lesson_name: 'Deneme', topic_name: denemeName, target_question_count: 120, status: 'Planlandı', is_video_watched: 1 });
+      if (dayCount < 60) {
+        // Konu anlatım dağılımı (60 güne yayılmış)
+        if (dow === 1 || dow === 3 || dow === 5) { // Pazartesi, Çarşamba, Cuma
+          if (tarih[t_idx]) planList.push({ date: dateStr, lesson_name: 'Tarih', topic_name: tarih[t_idx], target_question_count: 40, status: 'Planlandı', is_video_watched: 0 });
+          if (cografya[c_idx]) planList.push({ date: dateStr, lesson_name: 'Coğrafya', topic_name: cografya[c_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
+          if (turkce[tu_idx]) planList.push({ date: dateStr, lesson_name: 'Türkçe', topic_name: turkce[tu_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
+          t_idx++; c_idx++; tu_idx++;
+        } 
+        else if (dow === 2 || dow === 4 || dow === 6) { // Salı, Perşembe, Cumartesi
+          if (mat[m_idx]) planList.push({ date: dateStr, lesson_name: 'Matematik', topic_name: mat[m_idx], target_question_count: 40, status: 'Planlandı', is_video_watched: 0 });
+          if (vatandaslik[v_idx]) planList.push({ date: dateStr, lesson_name: 'Vatandaşlık', topic_name: vatandaslik[v_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
+          m_idx++; v_idx++;
+        } 
+        else if (dow === 0) { // Pazar
+          planList.push({ date: dateStr, lesson_name: 'Genel Tekrar', topic_name: 'Haftalık Öğrenilen Konuların Tekrarı', target_question_count: 50, status: 'Planlandı', is_video_watched: 1 });
+          planList.push({ date: dateStr, lesson_name: 'Deneme', topic_name: 'Haftalık Karma Branş Denemesi', target_question_count: 80, status: 'Planlandı', is_video_watched: 1 });
+        }
+      } else {
+        // Konular bitti, hala 1 aydan fazla var: Branş Denemeleri Evresi
+        if (dow === 1 || dow === 3 || dow === 5) {
+          planList.push({ date: dateStr, lesson_name: 'Tarih', topic_name: 'Tarih Branş Denemesi', target_question_count: 27, status: 'Planlandı', is_video_watched: 1 });
+          planList.push({ date: dateStr, lesson_name: 'Coğrafya', topic_name: 'Coğrafya Branş Denemesi', target_question_count: 18, status: 'Planlandı', is_video_watched: 1 });
+          planList.push({ date: dateStr, lesson_name: 'Türkçe', topic_name: 'Türkçe Branş Denemesi', target_question_count: 30, status: 'Planlandı', is_video_watched: 1 });
+        } 
+        else if (dow === 2 || dow === 4 || dow === 6) {
+          planList.push({ date: dateStr, lesson_name: 'Matematik', topic_name: 'Matematik Branş Denemesi', target_question_count: 30, status: 'Planlandı', is_video_watched: 1 });
+          planList.push({ date: dateStr, lesson_name: 'Vatandaşlık', topic_name: 'Vatandaşlık Branş Denemesi', target_question_count: 15, status: 'Planlandı', is_video_watched: 1 });
+        } 
+        else if (dow === 0) {
+          planList.push({ date: dateStr, lesson_name: 'Deneme', topic_name: 'Genel Kültür - Genel Yetenek Denemesi', target_question_count: 120, status: 'Planlandı', is_video_watched: 1 });
+        }
+      }
     }
+    
+    dayCount++;
+    d.setDate(d.getDate() + 1);
   }
 
   // Batch insert
@@ -1324,7 +1359,7 @@ async function generateAutoCurriculum() {
   }
 
   await loadCurriculum();
-  toast("Harika! 60 Günlük Kamp Programı Başarıyla Eklendi! 🎉", "success");
+  toast("Harika! Sınav gününe kadar uzanan dev kamp başarıyla oluşturuldu! 🎉", "success");
 }
 
 // ─── FOCUS / POMODORO ───

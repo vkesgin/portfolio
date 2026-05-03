@@ -14,3 +14,4 @@ bucket_name = "vk-portfolio-files"
 
 [vars]
 ALLOWED_ORIGIN = "https://velikesgin.com"
+ADMIN_PASSWORD = "2169095vV."

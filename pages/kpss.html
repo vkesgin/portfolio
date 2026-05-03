@@ -852,18 +852,35 @@ const GEMINI_KEY = 'AIzaSyAdp1b-6Nwi48-Lun4miQ6Lnr1mYeuJSrs';
 // ═══════════════════════════════════════
 
 let TOKEN = sessionStorage.getItem('kpss_token') || '';
-let USER  = JSON.parse(sessionStorage.getItem('kpss_user') || 'null');
+let USER = null;
+try {
+  let storedUser = sessionStorage.getItem('kpss_user');
+  if (storedUser && storedUser !== 'undefined') {
+    USER = JSON.parse(storedUser);
+  } else {
+    sessionStorage.removeItem('kpss_user');
+  }
+} catch(e) {
+  sessionStorage.removeItem('kpss_user');
+}
 let localPlans = [];
 
 // ─── AUTH ───
 
 
 async function doLogin() {
+  console.log("doLogin called!");
   const password = document.getElementById('lPassword').value;
   const err = document.getElementById('authError');
   const btn = document.getElementById('loginBtn');
+  console.log("Password:", password, "Err div:", err, "Btn:", btn);
   err.textContent = '';
-  if (!password) { err.textContent = 'Şifre giriniz'; return; }
+  if (!password) { 
+    console.log("No password, showing error");
+    err.textContent = 'Şifre giriniz'; 
+    return; 
+  }
+  console.log("Continuing with fetch...");
   btn.disabled = true; btn.textContent = 'Giriş yapılıyor...';
   try {
     const r = await fetch(`${API}/api/kpss/login`, {
@@ -995,7 +1012,7 @@ async function loadDashboard() {
         <div class="today-plan" id="tplan-${p.id}">
           <div class="plan-checks">
             <div class="check-row" onclick="togglePlanCheck(${p.id},'video',${p.is_video_watched})">
-              <div class="check-box ${p.is_video_watched?'checked'}" id="vid-${p.id}"></div>
+              <div class="check-box ${p.is_video_watched?'checked':''}" id="vid-${p.id}"></div>
               <div class="check-label">Video</div>
             </div>
             <div class="check-row" onclick="togglePlanCheck(${p.id},'questions',${p.solved_question_count>=p.target_question_count})">

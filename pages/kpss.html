@@ -645,7 +645,7 @@
       <div class="table-actions">
         <button class="btn-outline" onclick="addPlanRow()">+ Yeni Satır Ekle</button>
         <button class="btn-success" onclick="savePlans()">✓ Değişiklikleri Kaydet</button>
-        <button class="btn-outline" onclick="generateAutoCurriculum()" style="border-color:var(--accent2); color:var(--accent2)">📅 Ramazan Yetgin & Mat. Programı Üret</button>
+        <button class="btn-outline" onclick="generateAutoCurriculum()" style="border-color:var(--accent2); color:var(--accent2)">📅 BENİM HOCAM 60 Günlük KPSS Kampı Üret</button>
       </div>
       <div style="overflow-x:auto">
         <table class="plan-table">
@@ -1225,83 +1225,106 @@ async function deleteExam(id) {
 }
 
 async function generateAutoCurriculum() {
-  if(!confirm("Bu işlem mevcut planlarınızı silip en yakın Pazartesi gününden itibaren yeni bir Tarih (Ramazan Yetgin 2026) ve Matematik programı oluşturacaktır. Onaylıyor musunuz?")) return;
+  if(!confirm("Bu işlem mevcut tüm planlarınızı silip önümüzdeki ilk Pazartesi gününden itibaren 60 GÜNLÜK DEV BENİM HOCAM KPSS KAMPI (Tarih, Mat, Türkçe, Coğrafya, Vatandaşlık, Günlük Paragraf ve Pazar Denemeleri) oluşturacaktır. Onaylıyor musunuz?")) return;
   
-  toast("Müfredat oluşturuluyor...", "");
+  document.getElementById('toast').className = 'show';
+  document.getElementById('toast').textContent = "Eski planlar temizleniyor...";
   
   for (const plan of localPlans) {
     if (plan.id) await fetch(`${API}/api/kpss/plans/${plan.id}`, { method:'DELETE', headers: authHeaders() });
   }
   localPlans = [];
 
-  const tarihKonulari = [
-    "İslamiyet Öncesi Türk Tarihi (Bölüm 1)", "İslamiyet Öncesi Türk Tarihi (Bölüm 2)", 
-    "İlk Türk İslam Devletleri (Bölüm 1)", "İlk Türk İslam Devletleri (Bölüm 2)", 
-    "Anadolu Selçuklu Devleti ve Beylikleri", 
-    "Osmanlı Kültür ve Medeniyeti (Kısım 1)", "Osmanlı Kültür ve Medeniyeti (Kısım 2)", "Osmanlı Kültür ve Medeniyeti (Kısım 3)", "Osmanlı Kültür ve Medeniyeti (Kısım 4)", 
-    "Osmanlı Kuruluş Dönemi", 
-    "Osmanlı Yükselme Dönemi (Bölüm 1)", "Osmanlı Yükselme Dönemi (Bölüm 2)", 
-    "17. Yüzyıl Osmanlı (Duraklama) (Bölüm 1)", "17. Yüzyıl Osmanlı (Duraklama) (Bölüm 2)", 
-    "18. Yüzyıl Osmanlı (Gerileme) (Bölüm 1)", "18. Yüzyıl Osmanlı (Gerileme) (Bölüm 2)", 
-    "19. Yüzyıl Osmanlı (Dağılma) (Bölüm 1)", "19. Yüzyıl Osmanlı (Dağılma) (Bölüm 2)", "19. Yüzyıl Osmanlı (Dağılma) (Bölüm 3)", 
-    "20. Yüzyıl Başlarında Osmanlı (Bölüm 1)", "20. Yüzyıl Başlarında Osmanlı (Bölüm 2)", 
-    "Kurtuluş Savaşı Hazırlık (Bölüm 1)", "Kurtuluş Savaşı Hazırlık (Bölüm 2)", "Kurtuluş Savaşı Hazırlık (Bölüm 3)", 
-    "I. TBMM Dönemi", 
-    "Kurtuluş Savaşı Muharebeler (Bölüm 1)", "Kurtuluş Savaşı Muharebeler (Bölüm 2)", 
-    "Atatürk İlke ve İnkılapları (Bölüm 1)", "Atatürk İlke ve İnkılapları (Bölüm 2)", 
-    "Çağdaş Türk ve Dünya Tarihi (Bölüm 1)", "Çağdaş Türk ve Dünya Tarihi (Bölüm 2)", "Çağdaş Türk ve Dünya Tarihi (Bölüm 3)"
+  const tarih = [
+    "İslamiyet Öncesi Türk Tarihi 1", "İslamiyet Öncesi Türk Tarihi 2", "İlk Türk İslam Devletleri 1", "İlk Türk İslam Devletleri 2",
+    "Anadolu Selçuklu ve Beylikler", "Osmanlı Kültür ve Medeniyeti 1", "Osmanlı Kültür ve Medeniyeti 2", "Osmanlı Kültür ve Medeniyeti 3",
+    "Osmanlı Kuruluş Dönemi", "Osmanlı Yükselme Dönemi 1", "Osmanlı Yükselme Dönemi 2", "17. Yüzyıl Osmanlı (Duraklama)",
+    "18. Yüzyıl Osmanlı (Gerileme)", "19. Yüzyıl Osmanlı (Dağılma) 1", "19. Yüzyıl Osmanlı (Dağılma) 2", "20. Yüzyıl Başlarında Osmanlı 1",
+    "20. Yüzyıl Başlarında Osmanlı 2", "Kurtuluş Savaşı Hazırlık 1", "Kurtuluş Savaşı Hazırlık 2", "I. TBMM Dönemi",
+    "Kurtuluş Savaşı Muharebeler 1", "Kurtuluş Savaşı Muharebeler 2", "Atatürk İlke ve İnkılapları 1", "Atatürk İlke ve İnkılapları 2",
+    "Atatürk Dönemi İç ve Dış Politika", "Çağdaş Türk ve Dünya Tarihi 1", "Çağdaş Türk ve Dünya Tarihi 2", "Çağdaş Türk ve Dünya Tarihi 3",
+    "Tarih Genel Tekrar / Soru Çözümü 1", "Tarih Genel Tekrar / Soru Çözümü 2"
   ];
-
-  const matKonulari = [
-    "Temel Kavramlar (Bölüm 1)", "Temel Kavramlar (Bölüm 2)", "Temel Kavramlar (Bölüm 3)", 
-    "Bölme - Bölünebilme", 
-    "EBOB - EKOK", 
-    "Rasyonel Sayılar", 
-    "Birinci Dereceden Denklemler", 
-    "Basit Eşitsizlikler", 
-    "Mutlak Değer", 
-    "Üslü Sayılar (Bölüm 1)", "Üslü Sayılar (Bölüm 2)", 
-    "Köklü Sayılar (Bölüm 1)", "Köklü Sayılar (Bölüm 2)", 
-    "Çarpanlara Ayırma", 
-    "Oran - Orantı", 
-    "Sayı ve Kesir Problemleri (1)", "Sayı ve Kesir Problemleri (2)", "Sayı ve Kesir Problemleri (3)", "Sayı ve Kesir Problemleri (4)", 
-    "Yaş Problemleri", 
-    "İşçi Problemleri", 
-    "Hareket Problemleri (1)", "Hareket Problemleri (2)", 
-    "Yüzde Problemleri", "Kar-Zarar Problemleri", "Karışım Problemleri", 
-    "Kümeler ve Kartezyen Çarpım", 
-    "Fonksiyonlar (Bölüm 1)", "Fonksiyonlar (Bölüm 2)", 
-    "Permütasyon ve Kombinasyon", "Olasılık", 
-    "Sayısal Mantık"
+  const mat = [
+    "Temel Kavramlar 1", "Temel Kavramlar 2", "Sayı Basamakları", "Bölme ve Bölünebilme", "EBOB - EKOK", "Rasyonel Sayılar",
+    "Birinci Dereceden Denklemler", "Basit Eşitsizlikler", "Mutlak Değer", "Üslü Sayılar 1", "Üslü Sayılar 2", "Köklü Sayılar 1",
+    "Köklü Sayılar 2", "Çarpanlara Ayırma", "Oran - Orantı", "Sayı ve Kesir Problemleri 1", "Sayı ve Kesir Problemleri 2",
+    "Yaş Problemleri", "İşçi Problemleri", "Hareket Problemleri", "Yüzde, Kar-Zarar Problemleri 1", "Yüzde, Kar-Zarar Problemleri 2",
+    "Karışım Problemleri", "Kümeler ve Kartezyen Çarpım", "Fonksiyonlar", "Permütasyon ve Kombinasyon", "Olasılık",
+    "Sayısal Mantık 1", "Sayısal Mantık 2", "Matematik Genel Tekrar"
+  ];
+  const turkce = [
+    "Sözcükte Anlam 1", "Sözcükte Anlam 2", "Cümlede Anlam 1", "Cümlede Anlam 2", "Ses Bilgisi", "Yazım Kuralları 1",
+    "Yazım Kuralları 2", "Noktalama İşaretleri 1", "Noktalama İşaretleri 2", "Sözcükte Yapı", "İsimler ve Tamlamalar",
+    "Sıfatlar ve Zamirler", "Zarflar, Edat, Bağlaç, Ünlem", "Fiiller (Eylemler) 1", "Fiiller (Eylemler) 2", "Fiilimsiler",
+    "Cümlenin Ögeleri", "Cümle Türleri", "Anlatım Bozuklukları 1", "Anlatım Bozuklukları 2", "Sözel Mantık 1",
+    "Sözel Mantık 2", "Sözel Mantık 3", "Türkçe Genel Tekrar 1", "Türkçe Genel Tekrar 2"
+  ];
+  const cografya = [
+    "Türkiye'nin Coğrafi Konumu 1", "Türkiye'nin Coğrafi Konumu 2", "Türkiye'nin Yer Şekilleri 1", "Türkiye'nin Yer Şekilleri 2",
+    "Türkiye'nin Yer Şekilleri 3", "Türkiye'nin İklimi 1", "Türkiye'nin İklimi 2", "Türkiye'nin Bitki Örtüsü ve Topraklar",
+    "Türkiye'de Nüfus ve Yerleşme 1", "Türkiye'de Nüfus ve Yerleşme 2", "Türkiye'de Tarım 1", "Türkiye'de Tarım 2",
+    "Türkiye'de Hayvancılık", "Türkiye'de Madenler 1", "Türkiye'de Madenler 2", "Türkiye'de Enerji Kaynakları",
+    "Türkiye'de Sanayi", "Türkiye'de Ulaşım", "Türkiye'de Ticaret ve Turizm", "Türkiye'nin Bölgesel Kalkınma Projeleri",
+    "Coğrafya Genel Tekrar 1", "Coğrafya Genel Tekrar 2"
+  ];
+  const vatandaslik = [
+    "Hukukun Temel Kavramları 1", "Hukukun Temel Kavramları 2", "Hukukun Temel Kavramları 3", "Devlet ve Devlet Biçimleri",
+    "Türk Anayasa Tarihi", "1982 Anayasası Temel İlkeler", "Temel Hak ve Hürriyetler 1", "Temel Hak ve Hürriyetler 2",
+    "Yasama 1", "Yasama 2", "Yürütme 1", "Yürütme 2", "Yargı 1", "Yargı 2", "İdare Hukuku 1", "İdare Hukuku 2",
+    "İdare Hukuku 3", "Uluslararası Kuruluşlar", "Vatandaşlık Genel Tekrar 1", "Vatandaşlık Genel Tekrar 2"
   ];
 
   let date = new Date();
-  while(date.getDay() !== 1) { // 1 = Pazartesi
-    date.setDate(date.getDate() + 1);
+  while(date.getDay() !== 1) { date.setDate(date.getDate() + 1); } // 1 = Pazartesi
+
+  const planList = [];
+  let t_idx=0, m_idx=0, tu_idx=0, c_idx=0, v_idx=0;
+
+  for(let day=0; day<60; day++) {
+    const d = new Date(date);
+    d.setDate(d.getDate() + day);
+    const dateStr = d.toISOString().split('T')[0];
+    const dow = d.getDay(); // 1 Mon ... 6 Sat, 0 Sun
+
+    // Her gün rutin
+    if (dow !== 0) {
+      planList.push({ date: dateStr, lesson_name: 'Türkçe', topic_name: 'Günlük Paragraf Çözümü', target_question_count: 20, status: 'Planlandı', is_video_watched: 1 });
+    }
+
+    if (dow === 1 || dow === 3 || dow === 5) {
+      // Pazartesi, Çarşamba, Cuma: Tarih, Coğrafya, Türkçe
+      if (tarih[t_idx]) planList.push({ date: dateStr, lesson_name: 'Tarih', topic_name: tarih[t_idx], target_question_count: 40, status: 'Planlandı', is_video_watched: 0 });
+      if (cografya[c_idx]) planList.push({ date: dateStr, lesson_name: 'Coğrafya', topic_name: cografya[c_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
+      if (turkce[tu_idx]) planList.push({ date: dateStr, lesson_name: 'Türkçe', topic_name: turkce[tu_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
+      t_idx++; c_idx++; tu_idx++;
+    } 
+    else if (dow === 2 || dow === 4 || dow === 6) {
+      // Salı, Perşembe, Cumartesi: Matematik, Vatandaşlık
+      if (mat[m_idx]) planList.push({ date: dateStr, lesson_name: 'Matematik', topic_name: mat[m_idx], target_question_count: 40, status: 'Planlandı', is_video_watched: 0 });
+      if (vatandaslik[v_idx]) planList.push({ date: dateStr, lesson_name: 'Vatandaşlık', topic_name: vatandaslik[v_idx], target_question_count: 30, status: 'Planlandı', is_video_watched: 0 });
+      m_idx++; v_idx++;
+    } 
+    else if (dow === 0) {
+      // Pazar: Haftalık Tekrar ve Deneme Sınavı
+      planList.push({ date: dateStr, lesson_name: 'Genel Tekrar', topic_name: 'Haftalık Öğrenilen Konuların Tekrarı', target_question_count: 50, status: 'Planlandı', is_video_watched: 1 });
+      const denemeName = day < 40 ? 'Haftalık Branş Denemeleri' : 'Genel Kültür - Genel Yetenek Denemesi';
+      planList.push({ date: dateStr, lesson_name: 'Deneme', topic_name: denemeName, target_question_count: 120, status: 'Planlandı', is_video_watched: 1 });
+    }
   }
 
-  for(let i=0; i<32; i++) {
-    const currentDate = new Date(date);
-    currentDate.setDate(currentDate.getDate() + i);
-    const dateStr = currentDate.toISOString().split('T')[0];
-
-    if(tarihKonulari[i]) {
-      const p = { date: dateStr, lesson_name: 'Tarih', topic_name: tarihKonulari[i], target_question_count: 40, solved_question_count: 0, status: 'Planlandı', is_video_watched: 0 };
-      const r = await fetch(`${API}/api/kpss/plans`, { method:'POST', headers: authHeaders(), body: JSON.stringify(p) });
-      const d = await r.json();
-      localPlans.push(d);
-    }
-    
-    if(matKonulari[i]) {
-      const p = { date: dateStr, lesson_name: 'Matematik', topic_name: matKonulari[i], target_question_count: 30, solved_question_count: 0, status: 'Planlandı', is_video_watched: 0 };
-      const r = await fetch(`${API}/api/kpss/plans`, { method:'POST', headers: authHeaders(), body: JSON.stringify(p) });
-      const d = await r.json();
-      localPlans.push(d);
-    }
+  // Batch insert
+  const batchSize = 10;
+  for (let i = 0; i < planList.length; i += batchSize) {
+    const batch = planList.slice(i, i + batchSize);
+    await Promise.all(batch.map(p => 
+      fetch(`${API}/api/kpss/plans`, { method:'POST', headers: authHeaders(), body: JSON.stringify(p) })
+    ));
+    document.getElementById('toast').textContent = `Müfredat yükleniyor... %${Math.round((i/planList.length)*100)}`;
   }
 
-  renderPlanTable();
-  toast("Program başarıyla eklendi! ✓", "success");
+  await loadCurriculum();
+  toast("Harika! 60 Günlük Kamp Programı Başarıyla Eklendi! 🎉", "success");
 }
 
 // ─── FOCUS / POMODORO ───

@@ -1,7 +1,2 @@
-/admin /pages/admin 301
-/fitness /pages/fitness 301
-/pages-admin /pages/admin 301
-/pages-fitness /pages/fitness 301
-/admin-3d /pages/admin-3d 301
-/3d-gallery /pages/test.html 200
-/kpss /pages/kpss.html 200
+/pages/* /:splat 301
+/3d-gallery /gallery-3d 301

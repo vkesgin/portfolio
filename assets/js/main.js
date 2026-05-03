@@ -487,7 +487,7 @@ function initWorks() {
         if (lb) lb.remove();
 
         lb = document.createElement('div');
-        const pathBase = (location.pathname.includes('/pages/') || location.pathname.includes('\\pages\\')) ? '../' : './';
+        const pathBase = '/';
         lb.id = 'works-lightbox';
         lb.style.cssText = `position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.96);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(20px);padding:${isMobile?'0':'24px'};`;
 
@@ -500,7 +500,7 @@ function initWorks() {
               <h3 style="font-family:var(--font-display);font-size:28px;line-height:.95;color:#f0f0f0;">${title}</h3>
               <p style="font-size:13px;color:#888;line-height:1.7;">${desc}</p>
               <span style="font-family:var(--font-mono);font-size:11px;color:#444;">${year}</span>
-              <a href="${pathBase}pages/portfolio.html" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#00e5ff;border:0.5px solid rgba(0,229,255,.3);padding:10px 20px;border-radius:4px;text-align:center;display:block;">Tüm İşleri Gör ↗</a>
+              <a href="/portfolio" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#00e5ff;border:0.5px solid rgba(0,229,255,.3);padding:10px 20px;border-radius:4px;text-align:center;display:block;">Tüm İşleri Gör ↗</a>
             </div>
           </div>` : `
           <button id="wlbClose" style="position:absolute;top:24px;right:24px;background:rgba(255,255,255,.05);border:0.5px solid #2a2a2a;color:#888;padding:8px 14px;border-radius:6px;cursor:pointer;font-family:var(--font-mono);font-size:13px;z-index:2;">✕</button>
@@ -513,7 +513,7 @@ function initWorks() {
               <h3 style="font-family:var(--font-display);font-size:32px;line-height:.95;color:#f0f0f0;">${title}</h3>
               <p style="font-size:13px;color:#888;line-height:1.7;">${desc}</p>
               <span style="font-family:var(--font-mono);font-size:11px;color:#444;">${year}</span>
-              <a href="${pathBase}pages/portfolio.html" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#00e5ff;border:0.5px solid rgba(0,229,255,.3);padding:10px 20px;border-radius:4px;text-align:center;display:block;">Tüm İşleri Gör ↗</a>
+              <a href="/portfolio" style="font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:#00e5ff;border:0.5px solid rgba(0,229,255,.3);padding:10px 20px;border-radius:4px;text-align:center;display:block;">Tüm İşleri Gör ↗</a>
             </div>
           </div>`;
 

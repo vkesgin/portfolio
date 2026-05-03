@@ -1,5 +1,4 @@
-const isPages = location.pathname.includes('/pages/') || location.pathname.includes('\\pages\\');
-const base    = isPages ? '../' : './';
+const base = '/';
 
 async function injectComponent(selector, file) {
   try {

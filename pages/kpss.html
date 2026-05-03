@@ -522,45 +522,12 @@
   <div class="login-wrap">
     <div class="login-logo">STUDY<span>.</span>OS</div>
     <div class="login-subtitle">// kpss takip sistemi</div>
-    <div class="login-tabs">
-      <button class="login-tab active" onclick="setLoginMode('login')">Giriş Yap</button>
-      <button class="login-tab" onclick="setLoginMode('register')">Kayıt Ol</button>
-    </div>
-
     <div id="loginForm">
       <div class="form-field">
-        <label class="form-label">Kullanıcı Adı</label>
-        <input type="text" class="form-input" id="lUsername" placeholder="kullanici_adi" autocomplete="username">
+        <label class="form-label">Admin Şifresi</label>
+        <input type="password" class="form-input" id="lPassword" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
       </div>
-      <div class="form-field">
-        <label class="form-label">Şifre</label>
-        <input type="password" class="form-input" id="lPassword" placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <button class="btn-primary" id="loginBtn" onclick="doLogin()">Giriş Yap ↗</button>
-    </div>
-
-    <div id="registerForm" style="display:none">
-      <div class="form-field">
-        <label class="form-label">Ad Soyad</label>
-        <input type="text" class="form-input" id="rFullName" placeholder="Adın Soyadın">
-      </div>
-      <div class="form-field">
-        <label class="form-label">Kullanıcı Adı</label>
-        <input type="text" class="form-input" id="rUsername" placeholder="benzersiz_kullanici_adi">
-      </div>
-      <div class="form-field">
-        <label class="form-label">Şifre</label>
-        <input type="password" class="form-input" id="rPassword" placeholder="güçlü_bir_şifre">
-      </div>
-      <div class="form-field">
-        <label class="form-label">Sınav Adı</label>
-        <input type="text" class="form-input" id="rExamName" placeholder="KPSS, EKPSS, vb.">
-      </div>
-      <div class="form-field">
-        <label class="form-label">Sınav Tarihi</label>
-        <input type="date" class="form-input" id="rExamDate">
-      </div>
-      <button class="btn-primary" id="registerBtn" onclick="doRegister()">Kaydı Tamamla ↗</button>
+      <button class="btn-primary" id="loginBtn" onclick="doLogin()">Sisteme Gir ↗</button>
     </div>
 
     <div class="form-error" id="authError"></div>
@@ -889,25 +856,19 @@ let USER  = JSON.parse(sessionStorage.getItem('kpss_user') || 'null');
 let localPlans = [];
 
 // ─── AUTH ───
-function setLoginMode(mode) {
-  document.querySelectorAll('.login-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&mode==='login')||(i===1&&mode==='register')));
-  document.getElementById('loginForm').style.display = mode==='login' ? 'block' : 'none';
-  document.getElementById('registerForm').style.display = mode==='register' ? 'block' : 'none';
-  document.getElementById('authError').textContent = '';
-}
+
 
 async function doLogin() {
-  const username = document.getElementById('lUsername').value.trim();
   const password = document.getElementById('lPassword').value;
   const err = document.getElementById('authError');
   const btn = document.getElementById('loginBtn');
   err.textContent = '';
-  if (!username || !password) { err.textContent = 'Tüm alanları doldurun'; return; }
+  if (!password) { err.textContent = 'Şifre giriniz'; return; }
   btn.disabled = true; btn.textContent = 'Giriş yapılıyor...';
   try {
     const r = await fetch(`${API}/api/kpss/login`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ password })
     });
     const d = await r.json();
     if (!r.ok) { err.textContent = d.error || 'Giriş hatası'; return; }
@@ -916,34 +877,10 @@ async function doLogin() {
     sessionStorage.setItem('kpss_user', JSON.stringify(USER));
     showApp();
   } catch(e) { err.textContent = 'Bağlantı hatası: ' + e.message; }
-  finally { btn.disabled = false; btn.textContent = 'Giriş Yap ↗'; }
+  finally { btn.disabled = false; btn.textContent = 'Sisteme Gir ↗'; }
 }
 
-async function doRegister() {
-  const full_name = document.getElementById('rFullName').value.trim();
-  const username  = document.getElementById('rUsername').value.trim();
-  const password  = document.getElementById('rPassword').value;
-  const exam_name = document.getElementById('rExamName').value.trim() || 'KPSS';
-  const exam_date = document.getElementById('rExamDate').value;
-  const err = document.getElementById('authError');
-  const btn = document.getElementById('registerBtn');
-  err.textContent = '';
-  if (!username || !password || !exam_date) { err.textContent = 'Kullanıcı adı, şifre ve sınav tarihi zorunludur'; return; }
-  btn.disabled = true; btn.textContent = 'Kaydediliyor...';
-  try {
-    const r = await fetch(`${API}/api/kpss/register`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, full_name, exam_name, exam_date })
-    });
-    const d = await r.json();
-    if (!r.ok) { err.textContent = d.error || 'Kayıt hatası'; return; }
-    TOKEN = d.token; USER = d.user;
-    sessionStorage.setItem('kpss_token', TOKEN);
-    sessionStorage.setItem('kpss_user', JSON.stringify(USER));
-    showApp();
-  } catch(e) { err.textContent = 'Bağlantı hatası: ' + e.message; }
-  finally { btn.disabled = false; btn.textContent = 'Kaydı Tamamla ↗'; }
-}
+
 
 // ─── APP ───
 function showApp() {

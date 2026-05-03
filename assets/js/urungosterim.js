@@ -11,8 +11,20 @@ let textures = [];
 // Drag interactions
 let isDragging = false;
 let previousMousePosition = { x: 0, y: 0 };
-let currentRotation = { x: 0, y: 0 };
-let targetRotation = { x: 0, y: 0 };
+
+let targetQuaternion = new THREE.Quaternion();
+let currentQuaternion = new THREE.Quaternion();
+let snapTween = null;
+
+// 6 allowed perfectly upright orientations
+const allowedOrientations = [
+  new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, 0)),             // Front
+  new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -Math.PI/2, 0)),    // Right
+  new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI, 0)),       // Back
+  new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI/2, 0)),     // Left
+  new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI/2, 0, 0)),     // Top
+  new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI/2, 0, 0))     // Bottom
+];
 
 async function init() {
   // Fetch Products
@@ -168,7 +180,8 @@ async function loadProduct(index) {
   });
 
   // Reset rotation
-  targetRotation = { x: 0, y: 0 };
+  targetQuaternion.identity();
+  currentQuaternion.identity();
 
   setTimeout(() => {
     loading.style.opacity = '0';
@@ -194,7 +207,7 @@ function renderThumbs() {
 function onMouseDown(e) {
   isDragging = true;
   previousMousePosition = { x: e.offsetX, y: e.offsetY };
-  gsap.killTweensOf(targetRotation);
+  if(snapTween) snapTween.kill();
 }
 function onMouseMove(e) {
   if (!isDragging) return;
@@ -203,8 +216,15 @@ function onMouseMove(e) {
     y: e.offsetY - previousMousePosition.y
   };
   
-  targetRotation.y += deltaMove.x * 0.01;
-  targetRotation.x -= deltaMove.y * 0.01;
+  // Rotate around world Y (horizontal mouse) and world X (vertical mouse)
+  const deltaQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    deltaMove.y * 0.008,
+    deltaMove.x * 0.008,
+    0,
+    'XYZ'
+  ));
+  // Premultiply applies the rotation in world space
+  targetQuaternion.premultiply(deltaQ);
   
   previousMousePosition = { x: e.offsetX, y: e.offsetY };
 }
@@ -218,7 +238,7 @@ function onTouchStart(e) {
   if(e.touches.length > 1) return;
   isDragging = true;
   previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  gsap.killTweensOf(targetRotation);
+  if(snapTween) snapTween.kill();
 }
 function onTouchMove(e) {
   if (!isDragging) return;
@@ -227,25 +247,41 @@ function onTouchMove(e) {
     x: e.touches[0].clientX - previousMousePosition.x,
     y: e.touches[0].clientY - previousMousePosition.y
   };
-  targetRotation.y += deltaMove.x * 0.01;
-  targetRotation.x -= deltaMove.y * 0.01;
+  
+  const deltaQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    deltaMove.y * 0.008,
+    deltaMove.x * 0.008,
+    0,
+    'XYZ'
+  ));
+  targetQuaternion.premultiply(deltaQ);
+  
   previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 }
 
 function snapToNearestFace() {
-  // We want to snap X and Y to the nearest 90 degrees (Math.PI / 2)
-  const snapAngle = Math.PI / 2;
-  const targetX = Math.round(targetRotation.x / snapAngle) * snapAngle;
-  let targetY = Math.round(targetRotation.y / snapAngle) * snapAngle;
+  let maxDot = -Infinity;
+  let bestQ = allowedOrientations[0];
   
-  // Prevent flipping the cube upside down completely on X (limit X between -PI/2 and PI/2)
-  const clampedX = Math.max(-Math.PI/2, Math.min(Math.PI/2, targetX));
+  for(let i=0; i<allowedOrientations.length; i++) {
+    // Math.abs handles equivalent rotations (q and -q)
+    const dot = Math.abs(targetQuaternion.dot(allowedOrientations[i]));
+    if(dot > maxDot) {
+      maxDot = dot;
+      bestQ = allowedOrientations[i];
+    }
+  }
   
-  gsap.to(targetRotation, {
-    x: clampedX,
-    y: targetY,
-    duration: 0.6,
-    ease: "power2.out"
+  const dummy = { t: 0 };
+  const startQ = targetQuaternion.clone();
+  
+  snapTween = gsap.to(dummy, {
+    t: 1,
+    duration: 0.5,
+    ease: "power2.out",
+    onUpdate: () => {
+      targetQuaternion.slerpQuaternions(startQ, bestQ, dummy.t);
+    }
   });
 }
 
@@ -260,16 +296,8 @@ function animate() {
   
   if (cube) {
     // Smoothly interpolate current rotation to target rotation
-    currentRotation.x += (targetRotation.x - currentRotation.x) * 0.1;
-    currentRotation.y += (targetRotation.y - currentRotation.y) * 0.1;
-    
-    // Create quaternions for X and Y rotations separately and multiply them
-    // This avoids gimbal lock issues when rotating interactively
-    const qx = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), currentRotation.x);
-    const qy = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), currentRotation.y);
-    
-    qy.multiply(qx);
-    cube.quaternion.copy(qy);
+    currentQuaternion.slerp(targetQuaternion, 0.15);
+    cube.quaternion.copy(currentQuaternion);
   }
   
   renderer.render(scene, camera);

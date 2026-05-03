@@ -175,14 +175,16 @@ export default {
       return json(results, 200, origin);
     }
 
+    const cleanPath = path.replace(/\/$/, '');
+
     // === ADMIN: KPSS KULLANICI YÖNETİMİ ===
-    if (path === '/api/admin/kpss-users' && method === 'GET') {
+    if (cleanPath === '/api/admin/kpss-users' && method === 'GET') {
       const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
       const { results } = await env.DB.prepare('SELECT id, username, full_name, created_at FROM kpss_users ORDER BY id DESC').all();
       return json(results, 200, origin);
     }
-    if (path === '/api/admin/kpss-users' && method === 'POST') {
+    if (cleanPath === '/api/admin/kpss-users' && method === 'POST') {
       const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
       const d = await request.json();
@@ -195,10 +197,10 @@ export default {
         return json({ error: 'Kullanıcı zaten var veya DB hatası' }, 400, origin);
       }
     }
-    if (path.match(/^\/api\/admin\/kpss-users\/\d+$/) && method === 'DELETE') {
+    if (cleanPath.match(/^\/api\/admin\/kpss-users\/\d+$/) && method === 'DELETE') {
       const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
-      const id = path.split('/').pop();
+      const id = cleanPath.split('/').pop();
       await env.DB.prepare('DELETE FROM kpss_users WHERE id=?').bind(id).run();
       return json({ ok: true }, 200, origin);
     }
@@ -226,6 +228,11 @@ if (path.startsWith('/api/kpss')) {
     
     let user = await env.DB.prepare("SELECT * FROM kpss_users WHERE username=? AND password=?").bind(username, password).first();
     if (!user) return json({ error: 'Hatalı kullanıcı adı veya şifre' }, 401, origin);
+
+    if (user.username === 'vkesgin38' && user.full_name === 'Admin') {
+       await env.DB.prepare("UPDATE kpss_users SET full_name='Veli Kesgin' WHERE username='vkesgin38'").run();
+       user.full_name = 'Veli Kesgin';
+    }
 
     const token = await signKpssJWT({ userId: user.id, username: user.username }, env.JWT_SECRET || 'secret');
     return json({ token, user: { id:user.id, username:user.username, full_name:user.full_name, exam_name:user.exam_name, exam_date:user.exam_date, xp:user.xp } }, 200, origin);

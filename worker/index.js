@@ -82,6 +82,38 @@ async function kpssAuth(request, env) {
   return verifyKpssJWT(token, env.JWT_SECRET);
 }
 
+// Inspire JWT helpers
+async function signInspireJWT(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret + '_inspire'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body   = btoa(JSON.stringify({ ...payload, iat: Date.now() }));
+  const sig    = await crypto.subtle.sign('HMAC', key, enc.encode(`${header}.${body}`));
+  return `${header}.${body}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
+}
+async function verifyInspireJWT(token, secret) {
+  try {
+    const [header, body, sig] = token.split('.');
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw', enc.encode(secret + '_inspire'), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    );
+    const valid = await crypto.subtle.verify('HMAC', key,
+      Uint8Array.from(atob(sig), c => c.charCodeAt(0)),
+      enc.encode(`${header}.${body}`)
+    );
+    if (!valid) return null;
+    return JSON.parse(atob(body));
+  } catch { return null; }
+}
+async function inspireAuth(request, env) {
+  const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
+  if (!token) return null;
+  return verifyInspireJWT(token, env.JWT_SECRET);
+}
+
 export default {
   async fetch(request, env) {
     const url    = new URL(request.url);
@@ -517,6 +549,126 @@ if (path.startsWith('/api/kpss')) {
     }
 
 
-    return json({ error: 'Bulunamadı' }, 404, origin);
+    // === INSPIRE ROUTES ===
+    // 1. Table Init
+    if (path === '/api/inspire/init' && method === 'GET') {
+      try {
+        await env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS inspire_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            full_name TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `).run();
+        await env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS inspire_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            type TEXT NOT NULL, 
+            url TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(user_id) REFERENCES inspire_users(id) ON DELETE CASCADE
+          )
+        `).run();
+        return json({ok: true}, 200, origin);
+      } catch(e) {
+        return json({error: e.message}, 500, origin);
+      }
+    }
+
+    // 2. Admin User Management
+    if (cleanPath === '/api/admin/inspire-users' && method === 'GET') {
+      const admin = await authMiddleware(request, env);
+      if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
+      const { results } = await env.DB.prepare('SELECT id, username, full_name, created_at FROM inspire_users ORDER BY id DESC').all();
+      return json(results, 200, origin);
+    }
+    if (cleanPath === '/api/admin/inspire-users' && method === 'POST') {
+      const admin = await authMiddleware(request, env);
+      if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
+      const d = await request.json();
+      if (!d.username || !d.password) return json({ error: 'Kullanıcı adı ve şifre zorunlu' }, 400, origin);
+      try {
+        await env.DB.prepare('INSERT INTO inspire_users (username, password, full_name) VALUES (?, ?, ?)').bind(d.username, d.password, d.full_name || '').run();
+        return json({ ok: true }, 201, origin);
+      } catch(e) {
+        return json({ error: 'Kullanıcı zaten var veya DB hatası' }, 400, origin);
+      }
+    }
+    if (cleanPath.match(/^\/api\/admin\/inspire-users\/\d+$/) && method === 'DELETE') {
+      const admin = await authMiddleware(request, env);
+      if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
+      const id = cleanPath.split('/').pop();
+      await env.DB.prepare('DELETE FROM inspire_users WHERE id=?').bind(id).run();
+      return json({ ok: true }, 200, origin);
+    }
+
+    // 3. User Login
+    if (path === '/api/inspire/login' && method === 'POST') {
+      const { username, password } = await request.json().catch(() => ({}));
+      if (!username || !password) return json({ error: 'Kullanıcı adı ve şifre gereklidir' }, 401, origin);
+      
+      if (username === 'vkesgin38' && password === env.ADMIN_PASSWORD) {
+         const exists = await env.DB.prepare("SELECT * FROM inspire_users WHERE username='vkesgin38'").first();
+         if (!exists) {
+           await env.DB.prepare("INSERT INTO inspire_users (username,password,full_name) VALUES ('vkesgin38',?,'Veli Kesgin')").bind(password).run();
+         }
+      }
+      
+      let user = await env.DB.prepare("SELECT * FROM inspire_users WHERE username=? AND password=?").bind(username, password).first();
+      if (!user) return json({ error: 'Hatalı kullanıcı adı veya şifre' }, 401, origin);
+
+      const token = await signInspireJWT({ userId: user.id, username: user.username }, env.JWT_SECRET || 'secret');
+      return json({ token, user: { id:user.id, username:user.username, full_name:user.full_name } }, 200, origin);
+    }
+
+    // 4. Posts
+    if (path === '/api/inspire/posts' && method === 'GET') {
+      const { results } = await env.DB.prepare(`
+        SELECT p.*, u.full_name as author 
+        FROM inspire_posts p 
+        LEFT JOIN inspire_users u ON p.user_id = u.id 
+        ORDER BY p.id DESC
+      `).all();
+      return json(results, 200, origin);
+    }
+
+    if (path === '/api/inspire/posts' && method === 'POST') {
+      const user = await inspireAuth(request, env);
+      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
+      const d = await request.json();
+      if (!d.type || !d.url) return json({ error: 'Tip ve URL gerekli' }, 400, origin);
+      
+      const { meta } = await env.DB.prepare(
+        'INSERT INTO inspire_posts (user_id, type, url, description) VALUES (?, ?, ?, ?)'
+      ).bind(user.userId, d.type, d.url, d.description || '').run();
+      
+      const newPost = await env.DB.prepare(`
+        SELECT p.*, u.full_name as author 
+        FROM inspire_posts p 
+        LEFT JOIN inspire_users u ON p.user_id = u.id 
+        WHERE p.id=?
+      `).bind(meta.last_row_id).first();
+      
+      return json(newPost, 201, origin);
+    }
+
+    if (cleanPath.match(/^\/api\/inspire\/posts\/\d+$/) && method === 'DELETE') {
+      const user = await inspireAuth(request, env);
+      const admin = await authMiddleware(request, env);
+      if (!user && !admin) return json({ error: 'Yetkisiz' }, 401, origin);
+      
+      const id = cleanPath.split('/').pop();
+      
+      if (admin) {
+        await env.DB.prepare('DELETE FROM inspire_posts WHERE id=?').bind(id).run();
+      } else {
+        await env.DB.prepare('DELETE FROM inspire_posts WHERE id=? AND user_id=?').bind(id, user.userId).run();
+      }
+      return json({ ok: true }, 200, origin);
+    }
   }
 };

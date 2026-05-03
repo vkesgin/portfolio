@@ -276,6 +276,15 @@ if (path.startsWith('/api/kpss')) {
     return json({ ok: true }, 200, origin);
   }
 
+  if (path.match(/^\/api\/kpss\/teachers\/\d+$/) && method === 'PUT') {
+    const id = path.split('/').pop();
+    const d = await request.json();
+    await env.DB.prepare(
+      'UPDATE kpss_teachers SET lesson_name=?, teacher_name=?, youtube_url=? WHERE id=? AND user_id=?'
+    ).bind(d.lesson_name||'', d.teacher_name||'', d.youtube_url||'', id, uid).run();
+    return json({ ok: true }, 200, origin);
+  }
+
   // ─── DENEME SINAVLARI ───
   if (path === '/api/kpss/exams' && method === 'GET') {
     const { results } = await env.DB.prepare(

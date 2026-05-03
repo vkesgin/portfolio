@@ -1419,11 +1419,23 @@ async function loadSettings() {
   const teachers = await r.json();
   const list = document.getElementById('teachersSettingsList');
   list.innerHTML = teachers.map(t => `
-    <div class="teacher-item">
-      <div class="teacher-lesson">${t.lesson_name}</div>
-      <div class="teacher-name">${t.teacher_name}</div>
-      ${t.youtube_url ? `<a class="teacher-yt" href="${t.youtube_url}" target="_blank">▶</a>` : ''}
-      <button class="btn-danger" style="margin-left:auto" onclick="deleteTeacher(${t.id})">Sil</button>
+    <div class="teacher-item" style="flex-wrap: wrap; align-items: flex-end; padding:12px 0;">
+      <div style="display:flex; flex-direction:column; gap:4px; width:100px;">
+        <span style="font-family:var(--mono); font-size:9px; color:var(--text3);">DERS</span>
+        <input type="text" class="form-input" style="padding:4px 4px; font-family:var(--mono); font-size:11px; color:var(--accent)" value="${t.lesson_name}" id="edit-tL-${t.id}">
+      </div>
+      <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:120px;">
+        <span style="font-family:var(--mono); font-size:9px; color:var(--text3);">HOCA ADI</span>
+        <input type="text" class="form-input" style="padding:4px 4px; font-size:13px;" value="${t.teacher_name}" id="edit-tN-${t.id}">
+      </div>
+      <div style="display:flex; flex-direction:column; gap:4px; flex:2; min-width:150px;">
+        <span style="font-family:var(--mono); font-size:9px; color:var(--text3);">YOUTUBE LİNKİ</span>
+        <input type="url" class="form-input" style="padding:4px 4px; font-family:var(--mono); font-size:11px;" value="${t.youtube_url||''}" placeholder="Link yok" id="edit-tU-${t.id}">
+      </div>
+      <div style="display:flex; gap:6px; margin-left:auto;">
+        <button class="btn-success" style="padding:6px 12px; height:auto;" onclick="updateTeacher(${t.id})">Kaydet</button>
+        <button class="btn-danger" style="padding:6px 12px; height:auto;" onclick="deleteTeacher(${t.id})">Sil</button>
+      </div>
     </div>`).join('') || '<div class="empty">Hoca eklenmemiş</div>';
 }
 
@@ -1440,7 +1452,23 @@ async function addTeacher() {
   document.getElementById('newTName').value = '';
   document.getElementById('newTUrl').value = '';
   loadSettings();
+  loadDashboard();
   toast('Hoca eklendi ✓', 'success');
+}
+
+async function updateTeacher(id) {
+  const lesson_name = document.getElementById(`edit-tL-${id}`).value.trim();
+  const teacher_name = document.getElementById(`edit-tN-${id}`).value.trim();
+  const youtube_url = document.getElementById(`edit-tU-${id}`).value.trim();
+  if (!lesson_name || !teacher_name) { toast('Ders ve hoca adı zorunludur', 'error'); return; }
+  
+  await fetch(`${API}/api/kpss/teachers/${id}`, {
+    method:'PUT', headers: authHeaders(),
+    body: JSON.stringify({ lesson_name, teacher_name, youtube_url })
+  });
+  loadSettings();
+  loadDashboard();
+  toast('Hoca güncellendi ✓', 'success');
 }
 
 async function deleteTeacher(id) {

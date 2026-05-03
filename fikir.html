@@ -564,7 +564,10 @@
         
         // Instagram scriptini tetikle
         if (window.instgrm) {
-          window.instgrm.Embeds.process();\n        }\n        if (window.PinUtils) {\n          window.PinUtils.build();
+          window.instgrm.Embeds.process();
+        }
+        if (window.PinUtils) {
+          window.PinUtils.build();
         }
       } catch(e) {
         grid.innerHTML = '<div style="color:red;text-align:center;">Fikirler yüklenirken hata oluştu.</div>';

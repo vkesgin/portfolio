@@ -29,7 +29,7 @@
       --sidebar: 240px;
       --radius: 10px;
     }
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--body); overflow: hidden; }
+    html, body { height: 100%; height: 100dvh; background: var(--bg); color: var(--text); font-family: var(--body); overflow: hidden; }
 
     /* ─── LOGIN ─── */
     #loginScreen {
@@ -101,7 +101,7 @@
       width: var(--sidebar); flex-shrink: 0;
       background: var(--bg2); border-right: 0.5px solid var(--border);
       display: flex; flex-direction: column;
-      height: 100vh; overflow: hidden;
+      height: 100dvh; overflow: hidden;
     }
     .sidebar-user {
       padding: 28px 20px 20px;
@@ -161,7 +161,7 @@
     /* MAIN */
     #main {
       flex: 1; overflow-y: auto; padding: 28px 32px;
-      height: 100vh;
+      height: 100dvh;
     }
     .page { display: none; }
     .page.active { display: block; }
@@ -210,13 +210,18 @@
     .plan-checks { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
     .check-row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
     .check-box {
-      width: 18px; height: 18px; border-radius: 4px;
+      width: 20px; height: 20px; border-radius: 6px;
       border: 1.5px solid var(--border2); background: var(--bg4);
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; transition: all .2s;
+      flex-shrink: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative; overflow: hidden;
     }
-    .check-box.checked { background: var(--accent-dim); border-color: var(--accent); }
-    .check-box.checked::after { content: '✓'; font-size: 11px; color: var(--accent); }
+    .check-box.checked { background: var(--accent-dim); border-color: var(--accent); transform: scale(1.05); }
+    .check-box.checked::after { 
+      content: '✓'; font-size: 12px; color: var(--accent); 
+      animation: checkPop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+    @keyframes checkPop { 0% { opacity: 0; transform: scale(0.5) rotate(-15deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
     .check-label { font-family: var(--mono); font-size: 10px; color: var(--text3); }
     .plan-info { flex: 1; }
     .plan-lesson { font-size: 18px; font-weight: 700; color: var(--accent2); }
@@ -458,9 +463,9 @@
     /* ─── MOBILE ─── */
     @media (max-width: 768px) {
       :root { --sidebar: 0px; }
-      #sidebar { display: none; position: fixed; z-index: 200; width: 240px; height: 100vh; }
+      #sidebar { display: none; position: fixed; z-index: 200; width: 240px; height: 100dvh; }
       #sidebar.open { display: flex; }
-      #main { padding: 16px; }
+      #main { padding: 16px 16px 80px 16px; height: 100dvh; }
       .dash-grid { grid-template-columns: 1fr; }
       .stats-row { grid-template-columns: repeat(3,1fr); }
       .exam-form { grid-template-columns: 1fr 1fr; }
@@ -468,24 +473,24 @@
       .mobile-nav {
         position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
         background: var(--bg2); border-top: 0.5px solid var(--border);
-        display: flex; padding: 8px 0 12px;
+        display: flex; padding: 10px 0; padding-bottom: env(safe-area-inset-bottom, 10px);
       }
       .mobile-nav-btn {
         flex: 1; display: flex; flex-direction: column; align-items: center;
-        gap: 3px; background: none; border: none; color: var(--text3);
+        gap: 4px; background: none; border: none; color: var(--text3);
         font-family: var(--mono); font-size: 9px; letter-spacing: .06em;
-        cursor: pointer; padding: 4px;
+        cursor: pointer; padding: 4px; transition: color 0.2s;
       }
       .mobile-nav-btn.active { color: var(--accent); }
-      .mobile-nav-icon { font-size: 20px; }
-      body { padding-bottom: 70px; }
-      #main { height: calc(100vh - 70px); }
+      .mobile-nav-icon { font-size: 22px; }
+      body { padding-bottom: 0; }
       .hamburger {
         display: block; background: none; border: none; color: var(--text2);
-        font-size: 20px; cursor: pointer; padding: 4px;
+        font-size: 24px; cursor: pointer; padding: 4px;
       }
       .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-      .page-title { margin-bottom: 0; font-size: 28px; }
+      .page-title { margin-bottom: 0; font-size: 24px; }
+      .chat-wrap { height: calc(100dvh - 180px); }
     }
     @media (min-width: 769px) {
       .mobile-nav { display: none; }
@@ -553,9 +558,6 @@
       </button>
       <button class="nav-btn" onclick="goto('exams')" data-page="exams">
         <span class="nav-icon">📊</span> Deneme Takip
-      </button>
-      <button class="nav-btn" onclick="goto('ai')" data-page="ai">
-        <span class="nav-icon">🤖</span> AI Asistanı
       </button>
       <button class="nav-btn" onclick="goto('focus')" data-page="focus">
         <span class="nav-icon">⏱</span> Odaklanma Modu
@@ -643,6 +645,7 @@
       <div class="table-actions">
         <button class="btn-outline" onclick="addPlanRow()">+ Yeni Satır Ekle</button>
         <button class="btn-success" onclick="savePlans()">✓ Değişiklikleri Kaydet</button>
+        <button class="btn-outline" onclick="generateAutoCurriculum()" style="border-color:var(--accent2); color:var(--accent2)">📅 Ramazan Yetgin & Mat. Programı Üret</button>
       </div>
       <div style="overflow-x:auto">
         <table class="plan-table">
@@ -709,25 +712,7 @@
       <div class="exam-list" id="examList"><div class="empty">Henüz deneme eklenmedi</div></div>
     </div>
 
-    <!-- AI ASISTANI -->
-    <div class="page" id="page-ai">
-      <div class="page-header">
-        <button class="hamburger" onclick="toggleSidebar()">☰</button>
-        <div class="page-title">AI Asistanı</div>
-      </div>
-      <div class="chat-wrap">
-        <div class="chat-messages" id="chatMessages">
-          <div class="chat-msg ai">
-            <div class="chat-avatar">AI</div>
-            <div class="chat-bubble" id="aiWelcome">Merhaba! KPSS konularında sorularını yanıtlamaya hazırım.</div>
-          </div>
-        </div>
-        <div class="chat-input-row">
-          <input type="text" class="chat-input" id="chatInput" placeholder="Bir soru sor..." onkeydown="if(event.key==='Enter')sendChat()">
-          <button class="chat-send" id="chatSendBtn" onclick="sendChat()">GÖNDER ↗</button>
-        </div>
-      </div>
-    </div>
+
 
     <!-- ODAKLANMA MODU -->
     <div class="page" id="page-focus">
@@ -830,9 +815,6 @@
     <button class="mobile-nav-btn" onclick="goto('exams')" data-mpage="exams">
       <span class="mobile-nav-icon">📊</span><span>Deneme</span>
     </button>
-    <button class="mobile-nav-btn" onclick="goto('ai')" data-mpage="ai">
-      <span class="mobile-nav-icon">🤖</span><span>AI</span>
-    </button>
     <button class="mobile-nav-btn" onclick="goto('focus')" data-mpage="focus">
       <span class="mobile-nav-icon">⏱</span><span>Odak</span>
     </button>
@@ -905,8 +887,6 @@ function showApp() {
   document.getElementById('app').classList.add('visible');
   updateSidebar();
   loadDashboard();
-  // AI welcome
-  if (USER) document.getElementById('aiWelcome').textContent = `Selam ${USER.full_name || USER.username}! KPSS konularında sorularını yanıtlamaya hazırım.`;
   // Exam date defaults
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('examDate').value = today;
@@ -1051,26 +1031,67 @@ async function loadDashboard() {
 }
 
 async function togglePlanCheck(id, type, currentVal) {
-  const plan = await fetch(`${API}/api/kpss/plans`, { headers: authHeaders() })
-    .then(r=>r.json()).then(plans => plans.find(p=>p.id===id)).catch(()=>null);
-  if (!plan) return;
-
-  let is_video_watched = plan.is_video_watched;
-  let solved_question_count = plan.solved_question_count;
-
-  if (type === 'video') is_video_watched = is_video_watched ? 0 : 1;
-  if (type === 'questions') {
-    solved_question_count = solved_question_count >= plan.target_question_count ? 0 : plan.target_question_count;
+  // --- OPTIMISTIC UI GÜNCELLEMESİ ---
+  const boxId = type === 'video' ? `vid-${id}` : `q-${id}`;
+  const box = document.getElementById(boxId);
+  const parent = document.getElementById(`tplan-${id}`);
+  let isCheckedNow = false;
+  
+  if (box) {
+    box.style.pointerEvents = 'none';
+    if (box.classList.contains('checked')) {
+      box.classList.remove('checked');
+    } else {
+      box.classList.add('checked');
+      isCheckedNow = true;
+    }
   }
 
-  const r = await fetch(`${API}/api/kpss/plans/${id}`, {
-    method: 'PUT', headers: authHeaders(),
-    body: JSON.stringify({ ...plan, is_video_watched, solved_question_count })
-  });
-  const d = await r.json();
-  if (d.xpGain > 0) toast(`+${d.xpGain} XP Kazandın! 🎉`, 'success');
-  if (d.user?.xp !== undefined) { USER.xp = d.user.xp; updateSidebar(); }
-  loadDashboard();
+  try {
+    const plan = await fetch(`${API}/api/kpss/plans`, { headers: authHeaders() })
+      .then(r=>r.json()).then(plans => plans.find(p=>p.id===id)).catch(()=>null);
+    if (!plan) throw new Error("Plan bulunamadı");
+
+    let is_video_watched = plan.is_video_watched;
+    let solved_question_count = plan.solved_question_count;
+
+    if (type === 'video') is_video_watched = isCheckedNow ? 1 : 0;
+    if (type === 'questions') {
+      solved_question_count = isCheckedNow ? plan.target_question_count : 0;
+    }
+
+    const r = await fetch(`${API}/api/kpss/plans/${id}`, {
+      method: 'PUT', headers: authHeaders(),
+      body: JSON.stringify({ ...plan, is_video_watched, solved_question_count })
+    });
+    const d = await r.json();
+    
+    if (d.xpGain > 0) toast(`+${d.xpGain} XP Kazandın! 🎉`, 'success');
+    if (d.user?.xp !== undefined) { USER.xp = d.user.xp; updateSidebar(); }
+    
+    // UI Durum Güncellemesi (Yenileme yapmadan)
+    if (parent && d.plan) {
+      const statusEl = parent.querySelector('.plan-status');
+      const targetEl = parent.querySelector('.plan-target');
+      if (statusEl) {
+        statusEl.textContent = d.plan.status;
+        if (d.plan.status === 'Tamamlandı') statusEl.classList.add('done');
+        else statusEl.classList.remove('done');
+      }
+      if (targetEl) {
+        targetEl.textContent = `🎯 Hedef: ${d.plan.target_question_count} soru | Çözülen: ${d.plan.solved_question_count}`;
+      }
+    }
+  } catch (e) {
+    // Hata olursa UI'ı geri al
+    if (box) {
+      if (isCheckedNow) box.classList.remove('checked');
+      else box.classList.add('checked');
+    }
+    toast('Güncelleme başarısız', 'error');
+  } finally {
+    if (box) box.style.pointerEvents = 'auto';
+  }
 }
 
 async function saveNote() {
@@ -1203,43 +1224,85 @@ async function deleteExam(id) {
   loadExams();
 }
 
-// ─── AI ───
-async function sendChat() {
-  const input = document.getElementById('chatInput');
-  const msg = input.value.trim();
-  if (!msg) return;
-  input.value = '';
-
-  const msgs = document.getElementById('chatMessages');
-  msgs.innerHTML += `<div class="chat-msg user"><div class="chat-avatar">SEN</div><div class="chat-bubble">${msg}</div></div>`;
-
-  const thinkingId = 'thinking-' + Date.now();
-  msgs.innerHTML += `<div class="chat-msg ai" id="${thinkingId}"><div class="chat-avatar">AI</div><div class="chat-bubble" style="color:var(--text3)">Düşünüyor...</div></div>`;
-  msgs.scrollTop = msgs.scrollHeight;
-
-  const btn = document.getElementById('chatSendBtn');
-  btn.disabled = true;
-
-  try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents: [{ parts: [{ text: msg + '\n\n(Cevabı kısa, maddeler halinde, düz metin olarak ver. ** veya ## kullanma.)' }] }] })
-    });
-    const d = await r.json();
-    const answer = d.candidates?.[0]?.content?.parts?.[0]?.text || 'Yanıt alınamadı.';
-    const clean = answer.replace(/\*\*/g,'').replace(/##/g,'').replace(/\* /g,'• ').trim();
-    document.getElementById(thinkingId).querySelector('.chat-bubble').textContent = clean;
-    document.getElementById(thinkingId).querySelector('.chat-bubble').style.color = '';
-  } catch(e) {
-    document.getElementById(thinkingId).querySelector('.chat-bubble').textContent = 'Hata: ' + e.message;
+async function generateAutoCurriculum() {
+  if(!confirm("Bu işlem mevcut planlarınızı silip en yakın Pazartesi gününden itibaren yeni bir Tarih (Ramazan Yetgin 2026) ve Matematik programı oluşturacaktır. Onaylıyor musunuz?")) return;
+  
+  toast("Müfredat oluşturuluyor...", "");
+  
+  for (const plan of localPlans) {
+    if (plan.id) await fetch(`${API}/api/kpss/plans/${plan.id}`, { method:'DELETE', headers: authHeaders() });
   }
-  btn.disabled = false;
-  msgs.scrollTop = msgs.scrollHeight;
-}
+  localPlans = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('chatInput')?.addEventListener('keydown', e => { if(e.key==='Enter') sendChat(); });
-});
+  const tarihKonulari = [
+    "İslamiyet Öncesi Türk Tarihi (Bölüm 1)", "İslamiyet Öncesi Türk Tarihi (Bölüm 2)", 
+    "İlk Türk İslam Devletleri (Bölüm 1)", "İlk Türk İslam Devletleri (Bölüm 2)", 
+    "Anadolu Selçuklu Devleti ve Beylikleri", 
+    "Osmanlı Kültür ve Medeniyeti (Kısım 1)", "Osmanlı Kültür ve Medeniyeti (Kısım 2)", "Osmanlı Kültür ve Medeniyeti (Kısım 3)", "Osmanlı Kültür ve Medeniyeti (Kısım 4)", 
+    "Osmanlı Kuruluş Dönemi", 
+    "Osmanlı Yükselme Dönemi (Bölüm 1)", "Osmanlı Yükselme Dönemi (Bölüm 2)", 
+    "17. Yüzyıl Osmanlı (Duraklama) (Bölüm 1)", "17. Yüzyıl Osmanlı (Duraklama) (Bölüm 2)", 
+    "18. Yüzyıl Osmanlı (Gerileme) (Bölüm 1)", "18. Yüzyıl Osmanlı (Gerileme) (Bölüm 2)", 
+    "19. Yüzyıl Osmanlı (Dağılma) (Bölüm 1)", "19. Yüzyıl Osmanlı (Dağılma) (Bölüm 2)", "19. Yüzyıl Osmanlı (Dağılma) (Bölüm 3)", 
+    "20. Yüzyıl Başlarında Osmanlı (Bölüm 1)", "20. Yüzyıl Başlarında Osmanlı (Bölüm 2)", 
+    "Kurtuluş Savaşı Hazırlık (Bölüm 1)", "Kurtuluş Savaşı Hazırlık (Bölüm 2)", "Kurtuluş Savaşı Hazırlık (Bölüm 3)", 
+    "I. TBMM Dönemi", 
+    "Kurtuluş Savaşı Muharebeler (Bölüm 1)", "Kurtuluş Savaşı Muharebeler (Bölüm 2)", 
+    "Atatürk İlke ve İnkılapları (Bölüm 1)", "Atatürk İlke ve İnkılapları (Bölüm 2)", 
+    "Çağdaş Türk ve Dünya Tarihi (Bölüm 1)", "Çağdaş Türk ve Dünya Tarihi (Bölüm 2)", "Çağdaş Türk ve Dünya Tarihi (Bölüm 3)"
+  ];
+
+  const matKonulari = [
+    "Temel Kavramlar (Bölüm 1)", "Temel Kavramlar (Bölüm 2)", "Temel Kavramlar (Bölüm 3)", 
+    "Bölme - Bölünebilme", 
+    "EBOB - EKOK", 
+    "Rasyonel Sayılar", 
+    "Birinci Dereceden Denklemler", 
+    "Basit Eşitsizlikler", 
+    "Mutlak Değer", 
+    "Üslü Sayılar (Bölüm 1)", "Üslü Sayılar (Bölüm 2)", 
+    "Köklü Sayılar (Bölüm 1)", "Köklü Sayılar (Bölüm 2)", 
+    "Çarpanlara Ayırma", 
+    "Oran - Orantı", 
+    "Sayı ve Kesir Problemleri (1)", "Sayı ve Kesir Problemleri (2)", "Sayı ve Kesir Problemleri (3)", "Sayı ve Kesir Problemleri (4)", 
+    "Yaş Problemleri", 
+    "İşçi Problemleri", 
+    "Hareket Problemleri (1)", "Hareket Problemleri (2)", 
+    "Yüzde Problemleri", "Kar-Zarar Problemleri", "Karışım Problemleri", 
+    "Kümeler ve Kartezyen Çarpım", 
+    "Fonksiyonlar (Bölüm 1)", "Fonksiyonlar (Bölüm 2)", 
+    "Permütasyon ve Kombinasyon", "Olasılık", 
+    "Sayısal Mantık"
+  ];
+
+  let date = new Date();
+  while(date.getDay() !== 1) { // 1 = Pazartesi
+    date.setDate(date.getDate() + 1);
+  }
+
+  for(let i=0; i<32; i++) {
+    const currentDate = new Date(date);
+    currentDate.setDate(currentDate.getDate() + i);
+    const dateStr = currentDate.toISOString().split('T')[0];
+
+    if(tarihKonulari[i]) {
+      const p = { date: dateStr, lesson_name: 'Tarih', topic_name: tarihKonulari[i], target_question_count: 40, solved_question_count: 0, status: 'Planlandı', is_video_watched: 0 };
+      const r = await fetch(`${API}/api/kpss/plans`, { method:'POST', headers: authHeaders(), body: JSON.stringify(p) });
+      const d = await r.json();
+      localPlans.push(d);
+    }
+    
+    if(matKonulari[i]) {
+      const p = { date: dateStr, lesson_name: 'Matematik', topic_name: matKonulari[i], target_question_count: 30, solved_question_count: 0, status: 'Planlandı', is_video_watched: 0 };
+      const r = await fetch(`${API}/api/kpss/plans`, { method:'POST', headers: authHeaders(), body: JSON.stringify(p) });
+      const d = await r.json();
+      localPlans.push(d);
+    }
+  }
+
+  renderPlanTable();
+  toast("Program başarıyla eklendi! ✓", "success");
+}
 
 // ─── FOCUS / POMODORO ───
 let timerInterval = null;

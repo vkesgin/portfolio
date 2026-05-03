@@ -50,6 +50,38 @@ async function authMiddleware(request, env) {
   return await verifyJWT(token, env.JWT_SECRET);
 }
 
+// KPSS JWT helpers
+async function signKpssJWT(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret + '_kpss'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body   = btoa(JSON.stringify({ ...payload, iat: Date.now() }));
+  const sig    = await crypto.subtle.sign('HMAC', key, enc.encode(`${header}.${body}`));
+  return `${header}.${body}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
+}
+async function verifyKpssJWT(token, secret) {
+  try {
+    const [header, body, sig] = token.split('.');
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw', enc.encode(secret + '_kpss'), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    );
+    const valid = await crypto.subtle.verify('HMAC', key,
+      Uint8Array.from(atob(sig), c => c.charCodeAt(0)),
+      enc.encode(`${header}.${body}`)
+    );
+    if (!valid) return null;
+    return JSON.parse(atob(body));
+  } catch { return null; }
+}
+async function kpssAuth(request, env) {
+  const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
+  if (!token) return null;
+  return verifyKpssJWT(token, env.JWT_SECRET);
+}
+
 export default {
   async fetch(request, env) {
     const url    = new URL(request.url);
@@ -142,136 +174,6 @@ export default {
       const { results } = await env.DB.prepare('SELECT * FROM fitness_store').all();
       return json(results, 200, origin);
     }
-
-    // === PROTECTED: Auth gerekli ===
-    const user = await authMiddleware(request, env);
-    if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
-
-    // === FITNESS / SETTINGS API (POST/DELETE) ===
-
-    if (path === '/api/fitness' && method === 'POST') {
-      const body = await request.json();
-      const { key, value } = body;
-      if (!key || !value) return json({ error: 'Eksik veri' }, 400, origin);
-      
-      await env.DB.prepare(`
-        INSERT INTO fitness_store (key, value) VALUES (?, ?)
-        ON CONFLICT(key) DO UPDATE SET value=excluded.value
-      `).bind(key, value).run();
-      
-      return json({ ok: true }, 200, origin);
-    }
-
-    if (path === '/api/fitness' && method === 'DELETE') {
-      const body = await request.json();
-      const { key } = body;
-      if (!key) return json({ error: 'Key gerekli' }, 400, origin);
-      await env.DB.prepare('DELETE FROM fitness_store WHERE key=?').bind(key).run();
-      return json({ ok: true }, 200, origin);
-    }
-
-    // Proje ekle
-    if (path === '/api/projects' && method === 'POST') {
-      const data = await request.json();
-      const id   = nanoid();
-      await env.DB.prepare(`
-        INSERT INTO projects (id,title,category,description,tags,year,image_url,video_url,thumbnail_url,is_featured,featured_order)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)
-      `).bind(
-        id, data.title, data.category,
-        data.description || '', data.tags || '', data.year || new Date().getFullYear().toString(),
-        data.image_url || '', data.video_url || '', data.thumbnail_url || '',
-        data.is_featured ? 1 : 0, data.featured_order || 0
-      ).run();
-      const project = await env.DB.prepare('SELECT * FROM projects WHERE id=?').bind(id).first();
-      return json(project, 201, origin);
-    }
-
-    // Proje güncelle
-    if (path.match(/^\/api\/projects\/[^/]+$/) && method === 'PUT') {
-      const id   = path.split('/').pop();
-      const data = await request.json();
-      await env.DB.prepare(`
-        UPDATE projects SET
-          title=?, category=?, description=?, tags=?, year=?,
-          image_url=?, video_url=?, thumbnail_url=?,
-          is_featured=?, featured_order=?
-        WHERE id=?
-      `).bind(
-        data.title, data.category,
-        data.description || '', data.tags || '', data.year || '',
-        data.image_url || '', data.video_url || '', data.thumbnail_url || '',
-        data.is_featured ? 1 : 0, data.featured_order || 0,
-        id
-      ).run();
-      const project = await env.DB.prepare('SELECT * FROM projects WHERE id=?').bind(id).first();
-      return json(project, 200, origin);
-    }
-
-    // Proje sil
-    if (path.match(/^\/api\/projects\/[^/]+$/) && method === 'DELETE') {
-      const id = path.split('/').pop();
-      const project = await env.DB.prepare('SELECT * FROM projects WHERE id=?').bind(id).first();
-      if (project) {
-        // R2'den dosyaları sil
-        if (project.image_url)   await env.STORAGE.delete(project.image_url.replace('/files/',''));
-        if (project.video_url)   await env.STORAGE.delete(project.video_url.replace('/files/',''));
-        if (project.thumbnail_url) await env.STORAGE.delete(project.thumbnail_url.replace('/files/',''));
-      }
-      await env.DB.prepare('DELETE FROM projects WHERE id=?').bind(id).run();
-      return json({ ok: true }, 200, origin);
-    }
-
-    // Dosya yükle
-    if (path === '/api/upload' && method === 'POST') {
-      const form     = await request.formData();
-      const file     = form.get('file');
-      const fileType = form.get('type') || 'image';
-      if (!file) return json({ error: 'Dosya yok' }, 400, origin);
-
-      const ext      = file.name.split('.').pop().toLowerCase();
-      const key      = `${fileType}s/${nanoid()}.${ext}`;
-      const buffer   = await file.arrayBuffer();
-
-      await env.STORAGE.put(key, buffer, {
-        httpMetadata: { contentType: file.type },
-      });
-
-      const fileUrl = `/files/${key}`;
-      return json({ url: fileUrl, key }, 201, origin);
-    }
-
-// KPSS JWT helpers
-async function signKpssJWT(payload, secret) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret + '_kpss'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body   = btoa(JSON.stringify({ ...payload, iat: Date.now() }));
-  const sig    = await crypto.subtle.sign('HMAC', key, enc.encode(`${header}.${body}`));
-  return `${header}.${body}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
-}
-async function verifyKpssJWT(token, secret) {
-  try {
-    const [header, body, sig] = token.split('.');
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw', enc.encode(secret + '_kpss'), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
-    );
-    const valid = await crypto.subtle.verify('HMAC', key,
-      Uint8Array.from(atob(sig), c => c.charCodeAt(0)),
-      enc.encode(`${header}.${body}`)
-    );
-    if (!valid) return null;
-    return JSON.parse(atob(body));
-  } catch { return null; }
-}
-async function kpssAuth(request, env) {
-  const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
-  if (!token) return null;
-  return verifyKpssJWT(token, env.JWT_SECRET);
-}
 
 // ─── KPSS ROUTES ───
 if (path.startsWith('/api/kpss')) {
@@ -480,6 +382,105 @@ if (path.startsWith('/api/kpss')) {
   }
 }
 // ─── KPSS ROUTES SONU ───
+
+    // === PROTECTED: Auth gerekli ===
+    const user = await authMiddleware(request, env);
+    if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
+
+    // === FITNESS / SETTINGS API (POST/DELETE) ===
+
+    if (path === '/api/fitness' && method === 'POST') {
+      const body = await request.json();
+      const { key, value } = body;
+      if (!key || !value) return json({ error: 'Eksik veri' }, 400, origin);
+      
+      await env.DB.prepare(`
+        INSERT INTO fitness_store (key, value) VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+      `).bind(key, value).run();
+      
+      return json({ ok: true }, 200, origin);
+    }
+
+    if (path === '/api/fitness' && method === 'DELETE') {
+      const body = await request.json();
+      const { key } = body;
+      if (!key) return json({ error: 'Key gerekli' }, 400, origin);
+      await env.DB.prepare('DELETE FROM fitness_store WHERE key=?').bind(key).run();
+      return json({ ok: true }, 200, origin);
+    }
+
+    // Proje ekle
+    if (path === '/api/projects' && method === 'POST') {
+      const data = await request.json();
+      const id   = nanoid();
+      await env.DB.prepare(`
+        INSERT INTO projects (id,title,category,description,tags,year,image_url,video_url,thumbnail_url,is_featured,featured_order)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)
+      `).bind(
+        id, data.title, data.category,
+        data.description || '', data.tags || '', data.year || new Date().getFullYear().toString(),
+        data.image_url || '', data.video_url || '', data.thumbnail_url || '',
+        data.is_featured ? 1 : 0, data.featured_order || 0
+      ).run();
+      const project = await env.DB.prepare('SELECT * FROM projects WHERE id=?').bind(id).first();
+      return json(project, 201, origin);
+    }
+
+    // Proje güncelle
+    if (path.match(/^\/api\/projects\/[^/]+$/) && method === 'PUT') {
+      const id   = path.split('/').pop();
+      const data = await request.json();
+      await env.DB.prepare(`
+        UPDATE projects SET
+          title=?, category=?, description=?, tags=?, year=?,
+          image_url=?, video_url=?, thumbnail_url=?,
+          is_featured=?, featured_order=?
+        WHERE id=?
+      `).bind(
+        data.title, data.category,
+        data.description || '', data.tags || '', data.year || '',
+        data.image_url || '', data.video_url || '', data.thumbnail_url || '',
+        data.is_featured ? 1 : 0, data.featured_order || 0,
+        id
+      ).run();
+      const project = await env.DB.prepare('SELECT * FROM projects WHERE id=?').bind(id).first();
+      return json(project, 200, origin);
+    }
+
+    // Proje sil
+    if (path.match(/^\/api\/projects\/[^/]+$/) && method === 'DELETE') {
+      const id = path.split('/').pop();
+      const project = await env.DB.prepare('SELECT * FROM projects WHERE id=?').bind(id).first();
+      if (project) {
+        // R2'den dosyaları sil
+        if (project.image_url)   await env.STORAGE.delete(project.image_url.replace('/files/',''));
+        if (project.video_url)   await env.STORAGE.delete(project.video_url.replace('/files/',''));
+        if (project.thumbnail_url) await env.STORAGE.delete(project.thumbnail_url.replace('/files/',''));
+      }
+      await env.DB.prepare('DELETE FROM projects WHERE id=?').bind(id).run();
+      return json({ ok: true }, 200, origin);
+    }
+
+    // Dosya yükle
+    if (path === '/api/upload' && method === 'POST') {
+      const form     = await request.formData();
+      const file     = form.get('file');
+      const fileType = form.get('type') || 'image';
+      if (!file) return json({ error: 'Dosya yok' }, 400, origin);
+
+      const ext      = file.name.split('.').pop().toLowerCase();
+      const key      = `${fileType}s/${nanoid()}.${ext}`;
+      const buffer   = await file.arrayBuffer();
+
+      await env.STORAGE.put(key, buffer, {
+        httpMetadata: { contentType: file.type },
+      });
+
+      const fileUrl = `/files/${key}`;
+      return json({ url: fileUrl, key }, 201, origin);
+    }
+
 
     return json({ error: 'Bulunamadı' }, 404, origin);
   }

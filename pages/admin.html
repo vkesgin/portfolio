@@ -39,6 +39,7 @@
       <button class="admin-tab" data-tab="upload">Yeni İş Ekle</button>
       <button class="admin-tab" data-tab="featured">Seçilmiş İşler</button>
       <button class="admin-tab" data-tab="threed">3D Vitrin</button>
+      <button class="admin-tab" data-tab="kpss">KPSS Üyeleri</button>
     </div>
     <button class="btn btn-outline" id="logoutBtn" style="font-size:10px;padding:8px 16px">Çıkış</button>
   </nav>
@@ -220,6 +221,41 @@
     </div>
   </div>
 
+  <!-- TAB: KPSS YÖNETİMİ -->
+  <div class="admin-panel" id="tab-kpss">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">KPSS Üye Yönetimi</h2>
+      <p class="admin-panel-sub">Sadece admin yeni üye ekleyebilir. Sizin hesabınız ilk girişte vkesgin38 olarak otomatik güncellenecektir.</p>
+    </div>
+    
+    <div class="upload-form" style="max-width: 600px; margin-bottom: 30px;">
+      <div class="admin-field">
+        <label class="admin-label">Kullanıcı Adı</label>
+        <input type="text" id="kUsername" class="admin-input" placeholder="örn: vkesgin38">
+        <span class="admin-field-line"></span>
+      </div>
+      <div class="admin-field">
+        <label class="admin-label">Ad Soyad</label>
+        <input type="text" id="kFullName" class="admin-input" placeholder="örn: Veli Kesgin">
+        <span class="admin-field-line"></span>
+      </div>
+      <div class="admin-field">
+        <label class="admin-label">Şifre</label>
+        <input type="text" id="kPassword" class="admin-input" placeholder="Giriş şifresi">
+        <span class="admin-field-line"></span>
+      </div>
+      <button class="btn btn-primary" onclick="addKpssUser()" style="margin-top: 10px; width: 100%; justify-content: center;">Yeni Üye Oluştur ↗</button>
+      <p id="kpssStatus" style="font-size:12px; color:var(--accent); margin-top:10px; text-align:center; min-height:16px;"></p>
+    </div>
+
+    <div class="admin-panel-header" style="margin-top: 40px; margin-bottom:16px;">
+      <h3 class="admin-panel-title" style="font-size:14px;">Mevcut Üyeler</h3>
+    </div>
+    <div id="kpssUsersList" style="display:flex; flex-direction:column; gap:8px;">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -277,6 +313,7 @@ document.querySelectorAll('.admin-tab').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'featured') renderFeatured();
+    if (btn.dataset.tab === 'kpss') loadKpssUsers();
   });
 });
 
@@ -679,6 +716,89 @@ async function saveFeaturedOrder() {
   renderFeatured();
 }
 
+// ═══════════════════════════════════════
+// KPSS YÖNETİMİ
+// ═══════════════════════════════════════
+async function loadKpssUsers() {
+  const list = document.getElementById('kpssUsersList');
+  list.innerHTML = '<div class="admin-loading">Yükleniyor...</div>';
+  try {
+    const r = await fetch(`${API}/api/admin/kpss-users`, {
+      headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    if (!r.ok) throw new Error('Yüklenemedi');
+    const data = await r.json();
+    if (!data.length) {
+      list.innerHTML = '<div class="admin-empty">Henüz KPSS üyesi yok.</div>';
+      return;
+    }
+    list.innerHTML = data.map(u => `
+      <div class="featured-item" style="display:flex;align-items:center;gap:12px;background:var(--bg-surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;cursor:default">
+        <div style="flex:1;min-width:0">
+          <div class="admin-card-title" style="margin-bottom:4px">${u.full_name || 'İsimsiz'} (@${u.username})</div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">${u.created_at}</div>
+        </div>
+        <button class="admin-btn-del" onclick="deleteKpssUser('${u.id}')">Sil</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="admin-empty" style="color:var(--danger)">Hata: ${e.message}</div>`;
+  }
+}
+
+async function addKpssUser() {
+  const status = document.getElementById('kpssStatus');
+  status.textContent = 'Ekleniyor...';
+  status.style.color = 'var(--text-muted)';
+  const username = document.getElementById('kUsername').value.trim();
+  const full_name = document.getElementById('kFullName').value.trim();
+  const password = document.getElementById('kPassword').value;
+  
+  if (!username || !password) {
+    status.textContent = 'Kullanıcı adı ve şifre zorunlu!';
+    status.style.color = 'var(--danger)';
+    return;
+  }
+  
+  try {
+    const r = await fetch(`${API}/api/admin/kpss-users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ username, full_name, password })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Hata');
+    
+    status.textContent = 'Kullanıcı başarıyla oluşturuldu ✓';
+    status.style.color = 'var(--accent)';
+    document.getElementById('kUsername').value = '';
+    document.getElementById('kFullName').value = '';
+    document.getElementById('kPassword').value = '';
+    
+    loadKpssUsers();
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch (e) {
+    status.textContent = e.message;
+    status.style.color = 'var(--danger)';
+  }
+}
+
+async function deleteKpssUser(id) {
+  if (!confirm('Kullanıcıyı ve ona ait tüm KPSS verilerini kalıcı olarak silmek istediğinize emin misiniz?')) return;
+  try {
+    const r = await fetch(`${API}/api/admin/kpss-users/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    if (r.ok) {
+      loadKpssUsers();
+    } else {
+      alert('Silinemedi.');
+    }
+  } catch(e) {
+    alert('Bağlantı hatası');
+  }
+}
 
 // ═══════════════════════════════════════
 // 3D VİTRİN YÖNETİMİ

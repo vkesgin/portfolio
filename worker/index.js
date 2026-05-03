@@ -175,28 +175,58 @@ export default {
       return json(results, 200, origin);
     }
 
+    // === ADMIN: KPSS KULLANICI YÖNETİMİ ===
+    if (path === '/api/admin/kpss-users' && method === 'GET') {
+      const admin = await auth(request, env);
+      if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
+      const { results } = await env.DB.prepare('SELECT id, username, full_name, created_at FROM kpss_users ORDER BY id DESC').all();
+      return json(results, 200, origin);
+    }
+    if (path === '/api/admin/kpss-users' && method === 'POST') {
+      const admin = await auth(request, env);
+      if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
+      const d = await request.json();
+      if (!d.username || !d.password) return json({ error: 'Kullanıcı adı ve şifre zorunlu' }, 400, origin);
+      const todayDate = new Date().toISOString().split('T')[0];
+      try {
+        await env.DB.prepare('INSERT INTO kpss_users (username, password, full_name, exam_name, exam_date) VALUES (?, ?, ?, ?, ?)').bind(d.username, d.password, d.full_name || '', 'KPSS', todayDate).run();
+        return json({ ok: true }, 201, origin);
+      } catch(e) {
+        return json({ error: 'Kullanıcı zaten var veya DB hatası' }, 400, origin);
+      }
+    }
+    if (path.match(/^\/api\/admin\/kpss-users\/\d+$/) && method === 'DELETE') {
+      const admin = await auth(request, env);
+      if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
+      const id = path.split('/').pop();
+      await env.DB.prepare('DELETE FROM kpss_users WHERE id=?').bind(id).run();
+      return json({ ok: true }, 200, origin);
+    }
+
 // ─── KPSS ROUTES ───
 if (path.startsWith('/api/kpss')) {
 
   // GİRİŞ YAP
   if (path === '/api/kpss/login' && method === 'POST') {
-    const { password } = await request.json().catch(() => ({}));
-    if (!password || password !== env.ADMIN_PASSWORD) return json({ error: 'Hatalı şifre' }, 401, origin);
+    const { username, password } = await request.json().catch(() => ({}));
+    if (!username || !password) return json({ error: 'Kullanıcı adı ve şifre gereklidir' }, 401, origin);
     
-    let user = await env.DB.prepare("SELECT * FROM kpss_users WHERE username='admin'").first();
-    if (!user) {
-      const todayDate = new Date().toISOString().split('T')[0];
-      await env.DB.prepare("INSERT INTO kpss_users (username,password,full_name,exam_name,exam_date) VALUES ('admin','','Admin','KPSS',?)").bind(todayDate).run();
-      user = await env.DB.prepare("SELECT * FROM kpss_users WHERE username='admin'").first();
-      const teachers = [
-        [user.id,'Matematik','Mehmet Bilge YILDIZ','https://www.youtube.com/playlist?list=PL8xiaE-wCWlYAj1jWjyNJzKBGLVZjwPOm'],
-        [user.id,'Tarih','Ramazan YETGİN','https://www.youtube.com/watch?v=atJmg95Tj2c'],
-        [user.id,'Türkçe','Öznur Saat YILDIRIM','https://www.youtube.com/watch?v=52SNuDuWvW8'],
-      ];
-      for (const t of teachers) {
-        await env.DB.prepare('INSERT INTO kpss_teachers (user_id,lesson_name,teacher_name,youtube_url) VALUES (?,?,?,?)').bind(...t).run();
-      }
+    if (username === 'vkesgin38' && password === env.ADMIN_PASSWORD) {
+       const oldAdmin = await env.DB.prepare("SELECT * FROM kpss_users WHERE username='admin'").first();
+       if (oldAdmin) {
+          await env.DB.prepare("UPDATE kpss_users SET username='vkesgin38', full_name='Veli Kesgin', password=? WHERE username='admin'").bind(password).run();
+       } else {
+          const exists = await env.DB.prepare("SELECT * FROM kpss_users WHERE username='vkesgin38'").first();
+          if (!exists) {
+            const todayDate = new Date().toISOString().split('T')[0];
+            await env.DB.prepare("INSERT INTO kpss_users (username,password,full_name,exam_name,exam_date) VALUES ('vkesgin38',?,'Veli Kesgin','KPSS',?)").bind(password, todayDate).run();
+          }
+       }
     }
+    
+    let user = await env.DB.prepare("SELECT * FROM kpss_users WHERE username=? AND password=?").bind(username, password).first();
+    if (!user) return json({ error: 'Hatalı kullanıcı adı veya şifre' }, 401, origin);
+
     const token = await signKpssJWT({ userId: user.id, username: user.username }, env.JWT_SECRET || 'secret');
     return json({ token, user: { id:user.id, username:user.username, full_name:user.full_name, exam_name:user.exam_name, exam_date:user.exam_date, xp:user.xp } }, 200, origin);
   }

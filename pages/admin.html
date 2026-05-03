@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin â€” VK Portfolio</title>
+  <title>Admin — VK Portfolio</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="stylesheet" href="../assets/css/reset.css">
   <link rel="stylesheet" href="../assets/css/variables.css">
@@ -18,12 +18,12 @@
     <div class="login-logo">VK<span>.</span></div>
     <p class="login-label">// admin panel</p>
     <div class="ct-field">
-      <label class="ct-label">Åifre</label>
-      <input type="password" id="loginPass" class="ct-input" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" autocomplete="current-password">
+      <label class="ct-label">Şifre</label>
+      <input type="password" id="loginPass" class="ct-input" placeholder="••••••••" autocomplete="current-password">
       <span class="ct-field-line"></span>
     </div>
     <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;margin-top:8px">
-      GiriÅŸ Yap â†—
+      Giriş Yap ↗
     </button>
     <p class="login-error" id="loginError"></p>
   </div>
@@ -35,22 +35,22 @@
   <nav id="adminNav">
     <a class="admin-logo" href="/">VK<span>.</span></a>
     <div class="admin-nav-links">
-      <button class="admin-tab active" data-tab="projects">TÃ¼m Ä°ÅŸler</button>
-      <button class="admin-tab" data-tab="upload">Yeni Ä°ÅŸ Ekle</button>
-      <button class="admin-tab" data-tab="featured">SeÃ§ilmiÅŸ Ä°ÅŸler</button>
+      <button class="admin-tab active" data-tab="projects">Tüm İşler</button>
+      <button class="admin-tab" data-tab="upload">Yeni İş Ekle</button>
+      <button class="admin-tab" data-tab="featured">Seçilmiş İşler</button>
       <button class="admin-tab" data-tab="threed">3D Vitrin</button>
-      <button class="admin-tab" data-tab="cube">KÃ¼p Vitrin</button>
-      <button class="admin-tab" data-tab="kpss">KPSS Ãœyeleri</button>
+      <button class="admin-tab" data-tab="cube">Küp Vitrin</button>
+      <button class="admin-tab" data-tab="kpss">KPSS Üyeleri</button>
     </div>
-    <button class="btn btn-outline" id="logoutBtn" style="font-size:10px;padding:8px 16px">Ã‡Ä±kÄ±ÅŸ</button>
+    <button class="btn btn-outline" id="logoutBtn" style="font-size:10px;padding:8px 16px">Çıkış</button>
   </nav>
 
-  <!-- TAB: TÃœM Ä°ÅLER -->
+  <!-- TAB: TÜM İŞLER -->
   <div class="admin-panel active" id="tab-projects">
     <div class="admin-panel-header">
-      <h2 class="admin-panel-title">TÃ¼m Ä°ÅŸler</h2>
+      <h2 class="admin-panel-title">Tüm İşler</h2>
       <div class="admin-filters">
-        <button class="filter-btn active" data-filter="all">TÃ¼mÃ¼</button>
+        <button class="filter-btn active" data-filter="all">Tümü</button>
         <button class="filter-btn" data-filter="web">Web</button>
         <button class="filter-btn" data-filter="3d">3D</button>
         <button class="filter-btn" data-filter="2d">2D</button>
@@ -59,14 +59,14 @@
       </div>
     </div>
     <div class="admin-grid" id="projectsGrid">
-      <div class="admin-loading">YÃ¼kleniyor...</div>
+      <div class="admin-loading">Yükleniyor...</div>
     </div>
   </div>
 
-  <!-- TAB: YENÄ° Ä°Å EKLE -->
+  <!-- TAB: YENİ İŞ EKLE -->
   <div class="admin-panel" id="tab-upload">
     <div class="admin-panel-header">
-      <h2 class="admin-panel-title" id="uploadPanelTitle">Yeni Ä°ÅŸ Ekle</h2>
+      <h2 class="admin-panel-title" id="uploadPanelTitle">Yeni İş Ekle</h2>
     </div>
     <div class="upload-form">
 
@@ -74,8 +74,8 @@
         <div class="upload-zone" id="imgZone">
           <div class="upload-zone-inner" id="imgPreview">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            <span>GÃ¶rsel SeÃ§</span>
-            <span class="upload-zone-sub">JPG Â· PNG Â· WebP</span>
+            <span>Görsel Seç</span>
+            <span class="upload-zone-sub">JPG · PNG · WebP</span>
           </div>
           <input type="file" id="imgFile" accept="image/*" style="display:none">
         </div>
@@ -83,8 +83,8 @@
         <div class="upload-zone" id="vidZone">
           <div class="upload-zone-inner" id="vidPreview">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="2" y="6" width="15" height="12" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg>
-            <span>Video SeÃ§</span>
-            <span class="upload-zone-sub">MP4 Â· MOV Â· WebM</span>
+            <span>Video Seç</span>
+            <span class="upload-zone-sub">MP4 · MOV · WebM</span>
           </div>
           <input type="file" id="vidFile" accept="video/*" style="display:none">
         </div>
@@ -92,8 +92,8 @@
 
       <div class="upload-fields">
         <div class="admin-field">
-          <label class="admin-label">BaÅŸlÄ±k</label>
-          <input type="text" id="fTitle" class="admin-input" placeholder="Proje baÅŸlÄ±ÄŸÄ±">
+          <label class="admin-label">Başlık</label>
+          <input type="text" id="fTitle" class="admin-input" placeholder="Proje başlığı">
           <span class="admin-field-line"></span>
         </div>
 
@@ -106,34 +106,34 @@
                 <option value="3d">3D Animasyon</option>
                 <option value="2d">2D Animasyon</option>
                 <option value="video">Videografi</option>
-                <option value="graphic">Grafik TasarÄ±m</option>
+                <option value="graphic">Grafik Tasarım</option>
               </select>
-              <span class="admin-select-arrow">â†“</span>
+              <span class="admin-select-arrow">↓</span>
             </div>
             <span class="admin-field-line"></span>
           </div>
           <div class="admin-field">
-            <label class="admin-label">YÄ±l</label>
+            <label class="admin-label">Yıl</label>
             <input type="text" id="fYear" class="admin-input" placeholder="2024">
             <span class="admin-field-line"></span>
           </div>
         </div>
 
         <div class="admin-field">
-          <label class="admin-label">AÃ§Ä±klama</label>
-          <textarea id="fDesc" class="admin-textarea" rows="3" placeholder="Proje hakkÄ±nda kÄ±sa aÃ§Ä±klama..."></textarea>
+          <label class="admin-label">Açıklama</label>
+          <textarea id="fDesc" class="admin-textarea" rows="3" placeholder="Proje hakkında kısa açıklama..."></textarea>
           <span class="admin-field-line"></span>
         </div>
 
         <div class="admin-field">
-          <label class="admin-label">Etiketler (virgÃ¼lle ayÄ±r)</label>
+          <label class="admin-label">Etiketler (virgülle ayır)</label>
           <input type="text" id="fTags" class="admin-input" placeholder="Blender, Cinema4D, Render">
           <span class="admin-field-line"></span>
         </div>
 
         <div class="admin-toggle-row">
           <label class="admin-toggle-label">
-            <span>SeÃ§ilmiÅŸ Ä°ÅŸlere ekle</span>
+            <span>Seçilmiş İşlere ekle</span>
             <div class="toggle-track">
               <input type="checkbox" id="fFeatured">
               <span class="toggle-thumb"></span>
@@ -143,37 +143,37 @@
 
         <div class="upload-actions">
           <button class="btn btn-primary" id="saveBtn">
-            <span id="saveBtnText">Kaydet â†—</span>
-            <span id="saveBtnLoad" style="display:none">YÃ¼kleniyor...</span>
+            <span id="saveBtnText">Kaydet ↗</span>
+            <span id="saveBtnLoad" style="display:none">Yükleniyor...</span>
           </button>
-          <button class="btn btn-outline" id="cancelEditBtn" style="display:none">Ä°ptal</button>
+          <button class="btn btn-outline" id="cancelEditBtn" style="display:none">İptal</button>
           <div class="upload-progress" id="uploadProgress" style="display:none">
             <div class="upload-progress-bar" id="uploadProgressBar"></div>
-            <span id="uploadProgressText">GÃ¶rsel yÃ¼kleniyor...</span>
+            <span id="uploadProgressText">Görsel yükleniyor...</span>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- TAB: SEÃ‡Ä°LMÄ°Å Ä°ÅLER -->
+  <!-- TAB: SEÇİLMİŞ İŞLER -->
   <div class="admin-panel" id="tab-featured">
     <div class="admin-panel-header">
-      <h2 class="admin-panel-title">SeÃ§ilmiÅŸ Ä°ÅŸler</h2>
-      <p class="admin-panel-sub">Ana sayfada gÃ¶sterilecek iÅŸler. SÃ¼rÃ¼kle-bÄ±rak ile sÄ±rala.</p>
+      <h2 class="admin-panel-title">Seçilmiş İşler</h2>
+      <p class="admin-panel-sub">Ana sayfada gösterilecek işler. Sürükle-bırak ile sırala.</p>
     </div>
     <div class="featured-grid" id="featuredGrid">
-      <div class="admin-loading">YÃ¼kleniyor...</div>
+      <div class="admin-loading">Yükleniyor...</div>
     </div>
   </div>
 
 
 
-  <!-- TAB: 3D VÄ°TRÄ°N -->
+  <!-- TAB: 3D VİTRİN -->
   <div class="admin-panel" id="tab-threed">
     <div class="admin-panel-header">
       <h2 class="admin-panel-title">3D Vitrin</h2>
-      <p class="admin-panel-sub">Luma AI taramalarÄ±nÄ± 3D galeriye ekle. <a href="/pages/gallery-3d.html" target="_blank" style="color:var(--accent)">Vitrini GÃ¶rÃ¼ntÃ¼le â†—</a></p>
+      <p class="admin-panel-sub">Luma AI taramalarını 3D galeriye ekle. <a href="/pages/gallery-3d.html" target="_blank" style="color:var(--accent)">Vitrini Görüntüle ↗</a></p>
     </div>
 
     <div class="threed-layout">
@@ -183,7 +183,7 @@
         <p class="section-eyebrow" style="margin-bottom:16px">// yeni 3d obje ekle</p>
         
         <div class="ct-field">
-          <label class="ct-label">BaÅŸlÄ±k (3D obje Ã¼zerinde gÃ¶rÃ¼nÃ¼r)</label>
+          <label class="ct-label">Başlık (3D obje üzerinde görünür)</label>
           <input type="text" id="td-title" class="ct-input" placeholder="Spider-Man Kupa">
           <span class="ct-field-line"></span>
         </div>
@@ -195,11 +195,11 @@
         </div>
         
         <div style="margin-top:24px">
-          <label class="ct-label">Kapak GÃ¶rseli</label>
+          <label class="ct-label">Kapak Görseli</label>
           <div class="upload-zone" id="td-img-zone" style="aspect-ratio:16/9;margin-top:8px">
             <div class="upload-zone-inner" id="td-img-preview">
               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              <span>Kapak gÃ¶rseli seÃ§</span>
+              <span>Kapak görseli seç</span>
             </div>
             <input type="file" id="td-img-file" accept="image/*" style="display:none">
           </div>
@@ -209,11 +209,11 @@
         <div id="td-status" style="margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);min-height:16px"></div>
 
         <button class="btn btn-primary" id="td-save-btn" style="margin-top:20px;width:100%;justify-content:center">
-          Vitrine Ekle â†—
+          Vitrine Ekle ↗
         </button>
       </div>
 
-      <!-- LÄ°STE -->
+      <!-- LİSTE -->
       <div class="threed-list-wrap">
         <p class="section-eyebrow" style="margin-bottom:16px">// eklenen objeler</p>
         <div id="td-product-list" class="admin-grid"></div>
@@ -222,75 +222,75 @@
     </div>
   </div>
 
-  <!-- TAB: KÃœP VÄ°TRÄ°N (3D KÃœP) -->
+  <!-- TAB: KÜP VİTRİN (3D KÜP) -->
   <div class="admin-panel" id="tab-cube">
     <div class="admin-panel-header">
-      <h2 class="admin-panel-title">KÃ¼p Vitrin (3D ÃœrÃ¼n GÃ¶sterim)</h2>
-      <p class="admin-panel-sub">ÃœrÃ¼nÃ¼n 6 yÃ¼zÃ¼ iÃ§in gÃ¶rsel yÃ¼kleyin. <a href="/pages/urungosterim.html" target="_blank" style="color:var(--accent)">Vitrine Git â†—</a></p>
+      <h2 class="admin-panel-title">Küp Vitrin (3D Ürün Gösterim)</h2>
+      <p class="admin-panel-sub">Ürünün 6 yüzü için görsel yükleyin. <a href="/pages/urungosterim.html" target="_blank" style="color:var(--accent)">Vitrine Git ↗</a></p>
     </div>
 
     <div class="threed-layout">
       <!-- FORM -->
       <div class="threed-form-wrap">
-        <p class="section-eyebrow" style="margin-bottom:16px">// yeni kÃ¼p obje ekle</p>
+        <p class="section-eyebrow" style="margin-bottom:16px">// yeni küp obje ekle</p>
         
         <div class="ct-field">
-          <label class="ct-label">BaÅŸlÄ±k</label>
-          <input type="text" id="cube-title" class="ct-input" placeholder="ÃœrÃ¼n AdÄ±">
+          <label class="ct-label">Başlık</label>
+          <input type="text" id="cube-title" class="ct-input" placeholder="Ürün Adı">
           <span class="ct-field-line"></span>
         </div>
         
         <div style="margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
           <!-- Front -->
           <div>
-            <label class="ct-label">Ã–n YÃ¼z (Front)</label>
+            <label class="ct-label">Ön Yüz (Front)</label>
             <div class="upload-zone" id="cube-z-front" style="aspect-ratio:1;margin-top:8px;padding:10px">
-              <div class="upload-zone-inner" id="cube-p-front" style="font-size:10px">SeÃ§</div>
+              <div class="upload-zone-inner" id="cube-p-front" style="font-size:10px">Seç</div>
               <input type="file" id="cube-f-front" accept="image/*" style="display:none">
             </div>
             <input type="hidden" id="cube-u-front">
           </div>
           <!-- Right -->
           <div>
-            <label class="ct-label">SaÄŸ YÃ¼z (Right)</label>
+            <label class="ct-label">Sağ Yüz (Right)</label>
             <div class="upload-zone" id="cube-z-right" style="aspect-ratio:1;margin-top:8px;padding:10px">
-              <div class="upload-zone-inner" id="cube-p-right" style="font-size:10px">SeÃ§</div>
+              <div class="upload-zone-inner" id="cube-p-right" style="font-size:10px">Seç</div>
               <input type="file" id="cube-f-right" accept="image/*" style="display:none">
             </div>
             <input type="hidden" id="cube-u-right">
           </div>
           <!-- Back -->
           <div>
-            <label class="ct-label">Arka YÃ¼z (Back)</label>
+            <label class="ct-label">Arka Yüz (Back)</label>
             <div class="upload-zone" id="cube-z-back" style="aspect-ratio:1;margin-top:8px;padding:10px">
-              <div class="upload-zone-inner" id="cube-p-back" style="font-size:10px">SeÃ§</div>
+              <div class="upload-zone-inner" id="cube-p-back" style="font-size:10px">Seç</div>
               <input type="file" id="cube-f-back" accept="image/*" style="display:none">
             </div>
             <input type="hidden" id="cube-u-back">
           </div>
           <!-- Left -->
           <div>
-            <label class="ct-label">Sol YÃ¼z (Left)</label>
+            <label class="ct-label">Sol Yüz (Left)</label>
             <div class="upload-zone" id="cube-z-left" style="aspect-ratio:1;margin-top:8px;padding:10px">
-              <div class="upload-zone-inner" id="cube-p-left" style="font-size:10px">SeÃ§</div>
+              <div class="upload-zone-inner" id="cube-p-left" style="font-size:10px">Seç</div>
               <input type="file" id="cube-f-left" accept="image/*" style="display:none">
             </div>
             <input type="hidden" id="cube-u-left">
           </div>
           <!-- Top -->
           <div>
-            <label class="ct-label">Ãœst YÃ¼z (Top)</label>
+            <label class="ct-label">Üst Yüz (Top)</label>
             <div class="upload-zone" id="cube-z-top" style="aspect-ratio:1;margin-top:8px;padding:10px">
-              <div class="upload-zone-inner" id="cube-p-top" style="font-size:10px">SeÃ§</div>
+              <div class="upload-zone-inner" id="cube-p-top" style="font-size:10px">Seç</div>
               <input type="file" id="cube-f-top" accept="image/*" style="display:none">
             </div>
             <input type="hidden" id="cube-u-top">
           </div>
           <!-- Bottom -->
           <div>
-            <label class="ct-label">Alt YÃ¼z (Bottom)</label>
+            <label class="ct-label">Alt Yüz (Bottom)</label>
             <div class="upload-zone" id="cube-z-bottom" style="aspect-ratio:1;margin-top:8px;padding:10px">
-              <div class="upload-zone-inner" id="cube-p-bottom" style="font-size:10px">SeÃ§</div>
+              <div class="upload-zone-inner" id="cube-p-bottom" style="font-size:10px">Seç</div>
               <input type="file" id="cube-f-bottom" accept="image/*" style="display:none">
             </div>
             <input type="hidden" id="cube-u-bottom">
@@ -300,50 +300,50 @@
         <div id="cube-status" style="margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);min-height:16px"></div>
 
         <button class="btn btn-primary" id="cube-save-btn" style="margin-top:20px;width:100%;justify-content:center">
-          KÃ¼p Vitrine Ekle â†—
+          Küp Vitrine Ekle ↗
         </button>
       </div>
 
-      <!-- LÄ°STE -->
+      <!-- LİSTE -->
       <div class="threed-list-wrap">
-        <p class="section-eyebrow" style="margin-bottom:16px">// eklenen kÃ¼pler</p>
+        <p class="section-eyebrow" style="margin-bottom:16px">// eklenen küpler</p>
         <div id="cube-product-list" class="admin-grid"></div>
       </div>
     </div>
   </div>
 
-  <!-- TAB: KPSS YÃ–NETÄ°MÄ° -->
+  <!-- TAB: KPSS YÖNETİMİ -->
   <div class="admin-panel" id="tab-kpss">
     <div class="admin-panel-header">
-      <h2 class="admin-panel-title">KPSS Ãœye YÃ¶netimi</h2>
-      <p class="admin-panel-sub">Sadece admin yeni Ã¼ye ekleyebilir. Sizin hesabÄ±nÄ±z ilk giriÅŸte vkesgin38 olarak otomatik gÃ¼ncellenecektir.</p>
+      <h2 class="admin-panel-title">KPSS Üye Yönetimi</h2>
+      <p class="admin-panel-sub">Sadece admin yeni üye ekleyebilir. Sizin hesabınız ilk girişte vkesgin38 olarak otomatik güncellenecektir.</p>
     </div>
     
     <div class="upload-form" style="max-width: 600px; margin-bottom: 30px;">
       <div class="admin-field">
-        <label class="admin-label">KullanÄ±cÄ± AdÄ±</label>
-        <input type="text" id="kUsername" class="admin-input" placeholder="Ã¶rn: vkesgin38">
+        <label class="admin-label">Kullanıcı Adı</label>
+        <input type="text" id="kUsername" class="admin-input" placeholder="örn: vkesgin38">
         <span class="admin-field-line"></span>
       </div>
       <div class="admin-field">
         <label class="admin-label">Ad Soyad</label>
-        <input type="text" id="kFullName" class="admin-input" placeholder="Ã¶rn: Veli Kesgin">
+        <input type="text" id="kFullName" class="admin-input" placeholder="örn: Veli Kesgin">
         <span class="admin-field-line"></span>
       </div>
       <div class="admin-field">
-        <label class="admin-label">Åifre</label>
-        <input type="text" id="kPassword" class="admin-input" placeholder="GiriÅŸ ÅŸifresi">
+        <label class="admin-label">Şifre</label>
+        <input type="text" id="kPassword" class="admin-input" placeholder="Giriş şifresi">
         <span class="admin-field-line"></span>
       </div>
-      <button class="btn btn-primary" onclick="addKpssUser()" style="margin-top: 10px; width: 100%; justify-content: center;">Yeni Ãœye OluÅŸtur â†—</button>
+      <button class="btn btn-primary" onclick="addKpssUser()" style="margin-top: 10px; width: 100%; justify-content: center;">Yeni Üye Oluştur ↗</button>
       <p id="kpssStatus" style="font-size:12px; color:var(--accent); margin-top:10px; text-align:center; min-height:16px;"></p>
     </div>
 
     <div class="admin-panel-header" style="margin-top: 40px; margin-bottom:16px;">
-      <h3 class="admin-panel-title" style="font-size:14px;">Mevcut Ãœyeler</h3>
+      <h3 class="admin-panel-title" style="font-size:14px;">Mevcut Üyeler</h3>
     </div>
     <div id="kpssUsersList" style="display:flex; flex-direction:column; gap:8px;">
-      <div class="admin-loading">YÃ¼kleniyor...</div>
+      <div class="admin-loading">Yükleniyor...</div>
     </div>
   </div>
 
@@ -378,7 +378,7 @@ async function login() {
     TOKEN = d.token;
     sessionStorage.setItem('vk_admin_token', TOKEN);
     showDashboard();
-  } catch { err.textContent = 'BaÄŸlantÄ± hatasÄ±'; }
+  } catch { err.textContent = 'Bağlantı hatası'; }
 }
 
 document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -419,7 +419,7 @@ async function loadProjects() {
 function renderProjects(filter) {
   const grid = document.getElementById('projectsGrid');
   const list = filter === 'all' ? allProjects : allProjects.filter(p => p.category === filter);
-  if (!list.length) { grid.innerHTML = '<div class="admin-empty">HenÃ¼z iÅŸ yok.</div>'; return; }
+  if (!list.length) { grid.innerHTML = '<div class="admin-empty">Henüz iş yok.</div>'; return; }
 
   grid.innerHTML = list.map(p => `
     <div class="admin-card" data-id="${p.id}">
@@ -430,7 +430,7 @@ function renderProjects(filter) {
           ? `<img src="${API}${p.image_url}" alt="${p.title}" loading="lazy">`
           : '<div class="admin-card-placeholder"></div>'
         }
-        ${p.is_featured ? '<span class="featured-badge">â˜… SeÃ§ilmiÅŸ</span>' : ''}
+        ${p.is_featured ? '<span class="featured-badge">★ Seçilmiş</span>' : ''}
       </div>
       <div class="admin-card-info">
         <div class="admin-card-title">${p.title}</div>
@@ -440,9 +440,9 @@ function renderProjects(filter) {
         </div>
       </div>
       <div class="admin-card-actions">
-        <button class="admin-btn-edit" onclick="editProject('${p.id}')">DÃ¼zenle</button>
+        <button class="admin-btn-edit" onclick="editProject('${p.id}')">Düzenle</button>
         <button class="admin-btn-feat ${p.is_featured ? 'active' : ''}" onclick="toggleFeatured('${p.id}', ${p.is_featured})">
-          ${p.is_featured ? 'â˜… SeÃ§ilmiÅŸ' : 'â˜† SeÃ§'}
+          ${p.is_featured ? '★ Seçilmiş' : '☆ Seç'}
         </button>
         <button class="admin-btn-del" onclick="deleteProject('${p.id}')">Sil</button>
       </div>
@@ -485,10 +485,10 @@ function editProject(id) {
     document.getElementById('vidPreview').innerHTML = `<video src="${API}${p.video_url}" style="width:100%;height:100%;object-fit:cover" muted></video>`;
   }
 
-  document.getElementById('uploadPanelTitle').textContent = 'Ä°ÅŸ DÃ¼zenle';
+  document.getElementById('uploadPanelTitle').textContent = 'İş Düzenle';
   document.getElementById('cancelEditBtn').style.display  = 'inline-flex';
 
-  // Upload tabÄ±na geÃ§
+  // Upload tabına geç
   document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
   document.querySelector('[data-tab="upload"]').classList.add('active');
@@ -509,14 +509,14 @@ function resetForm() {
   document.getElementById('vidFile').value = '';
   resetZone('imgPreview', 'image');
   resetZone('vidPreview', 'video');
-  document.getElementById('uploadPanelTitle').textContent = 'Yeni Ä°ÅŸ Ekle';
+  document.getElementById('uploadPanelTitle').textContent = 'Yeni İş Ekle';
   document.getElementById('cancelEditBtn').style.display  = 'none';
 }
 
 function resetZone(id, type) {
   const icons = { image: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>', video: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="2" y="6" width="15" height="12" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg>' };
-  const labels = { image: 'GÃ¶rsel SeÃ§', video: 'Video SeÃ§' };
-  const subs   = { image: 'JPG Â· PNG Â· WebP', video: 'MP4 Â· MOV Â· WebM' };
+  const labels = { image: 'Görsel Seç', video: 'Video Seç' };
+  const subs   = { image: 'JPG · PNG · WebP', video: 'MP4 · MOV · WebM' };
   document.getElementById(id).innerHTML = `${icons[type]}<span>${labels[type]}</span><span class="upload-zone-sub">${subs[type]}</span>`;
 }
 
@@ -540,11 +540,11 @@ function resetZone(id, type) {
 });
 
 function previewFile(file, previewId) {
-  // Format kontrolÃ¼ â€” MOV uyarÄ±sÄ±
+  // Format kontrolü — MOV uyarısı
   if (file.type === 'video/quicktime' || file.name.toLowerCase().endsWith('.mov')) {
     const warn = document.createElement('div');
     warn.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;border:1px solid rgba(255,170,0,.4);color:#ffaa00;padding:14px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.6)';
-    warn.innerHTML = 'âš ï¸ .MOV formatÄ± mobil tarayÄ±cÄ±larda Ã§alÄ±ÅŸmayabilir.<br>LÃ¼tfen <strong>MP4</strong> formatÄ±na Ã§evirip tekrar yÃ¼kleyin.';
+    warn.innerHTML = '⚠️ .MOV formatı mobil tarayıcılarda çalışmayabilir.<br>Lütfen <strong>MP4</strong> formatına çevirip tekrar yükleyin.';
     document.body.appendChild(warn);
     setTimeout(() => warn.remove(), 5000);
   }
@@ -554,7 +554,7 @@ function previewFile(file, previewId) {
 
   if (file.type.startsWith('image/')) {
     el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:contain;background:#000;border-radius:6px">`;
-    // GÃ¶rsel boyutuna gÃ¶re zone oranÄ±nÄ± ayarla
+    // Görsel boyutuna göre zone oranını ayarla
     const img = new Image();
     img.onload = () => {
       const zone = previewId === 'imgPreview' ? document.getElementById('imgZone') : null;
@@ -565,7 +565,7 @@ function previewFile(file, previewId) {
   } else if (file.type.startsWith('video/')) {
     const sizeMB = (file.size / 1024 / 1024).toFixed(0);
     const sizeWarning = file.size > 80 * 1024 * 1024
-      ? `<div style="background:rgba(255,100,0,.15);border-top:1px solid rgba(255,100,0,.3);color:#ff8844;padding:6px 10px;font-family:var(--font-mono);font-size:10px;flex-shrink:0;">âš  ${sizeMB} MB â€” YÃ¼kleme uzun sÃ¼rebilir</div>`
+      ? `<div style="background:rgba(255,100,0,.15);border-top:1px solid rgba(255,100,0,.3);color:#ff8844;padding:6px 10px;font-family:var(--font-mono);font-size:10px;flex-shrink:0;">⚠ ${sizeMB} MB — Yükleme uzun sürebilir</div>`
       : '';
     el.innerHTML = `
       <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;background:#000;border-radius:6px;overflow:hidden;">
@@ -573,7 +573,7 @@ function previewFile(file, previewId) {
         <button onclick="captureVideoFrame(event)" style="width:100%;height:32px;background:#00e5ff;color:#000;border:none;cursor:pointer;font-family:var(--font-mono);font-weight:700;font-size:10px;text-transform:uppercase;flex-shrink:0;">Kapak Yap</button>
         ${sizeWarning}
       </div>`;
-    // Video metadata yÃ¼klendikten sonra zone boyutunu ayarla
+    // Video metadata yüklendikten sonra zone boyutunu ayarla
     const zone = document.getElementById('vidZone');
     const vid  = document.getElementById('vidPlayerPreview');
     if (vid && zone) {
@@ -607,7 +607,7 @@ window.captureVideoFrame = function(e) {
       dataTransfer.items.add(file);
       document.getElementById('imgFile').files = dataTransfer.files;
     } catch(err) { console.warn('Input files sync failed'); }
-    // Kapak Ã¶nizlemesini gÃ¶ster ve imgZone boyutunu ayarla
+    // Kapak önizlemesini göster ve imgZone boyutunu ayarla
     const imgZone = document.getElementById('imgZone');
     if (imgZone && vid.videoWidth && vid.videoHeight) {
       imgZone.style.aspectRatio = `${vid.videoWidth} / ${vid.videoHeight}`;
@@ -634,12 +634,12 @@ async function uploadFile(file, type, onProgress) {
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try { resolve(JSON.parse(xhr.responseText).url); }
-        catch { reject(new Error('Sunucu yanÄ±tÄ± okunamadÄ±')); }
+        catch { reject(new Error('Sunucu yanıtı okunamadı')); }
       } else {
-        reject(new Error(`YÃ¼kleme hatasÄ±: ${xhr.status}`));
+        reject(new Error(`Yükleme hatası: ${xhr.status}`));
       }
     });
-    xhr.addEventListener('error', () => reject(new Error('AÄŸ baÄŸlantÄ± hatasÄ±')));
+    xhr.addEventListener('error', () => reject(new Error('Ağ bağlantı hatası')));
     xhr.send(form);
   });
 }
@@ -653,7 +653,7 @@ function showProgress(text, pct) {
 
 document.getElementById('saveBtn').addEventListener('click', async () => {
   const title = document.getElementById('fTitle').value.trim();
-  if (!title) { alert('BaÅŸlÄ±k gerekli'); return; }
+  if (!title) { alert('Başlık gerekli'); return; }
 
   const btnText = document.getElementById('saveBtnText');
   const btnLoad = document.getElementById('saveBtnLoad');
@@ -668,13 +668,13 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     const vidFile = document.getElementById('vidFile').files[0];
 
     if (imgFile) {
-      showProgress('GÃ¶rsel yÃ¼kleniyor... 0%', 0);
-      imgUrl = await uploadFile(imgFile, 'image', pct => showProgress(`GÃ¶rsel yÃ¼kleniyor... ${pct}%`, pct));
+      showProgress('Görsel yükleniyor... 0%', 0);
+      imgUrl = await uploadFile(imgFile, 'image', pct => showProgress(`Görsel yükleniyor... ${pct}%`, pct));
     }
     if (vidFile) {
       const sizeMB = (vidFile.size / 1024 / 1024).toFixed(0);
-      showProgress(`Video yÃ¼kleniyor... 0% (${sizeMB} MB)`, 0);
-      vidUrl = await uploadFile(vidFile, 'video', pct => showProgress(`Video yÃ¼kleniyor... ${pct}%`, pct));
+      showProgress(`Video yükleniyor... 0% (${sizeMB} MB)`, 0);
+      vidUrl = await uploadFile(vidFile, 'video', pct => showProgress(`Video yükleniyor... ${pct}%`, pct));
     }
 
     showProgress('Kaydediliyor...', 90);
@@ -699,9 +699,9 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
       body: JSON.stringify(payload)
     });
 
-    if (!r.ok) throw new Error('KayÄ±t hatasÄ±');
+    if (!r.ok) throw new Error('Kayıt hatası');
 
-    showProgress('TamamlandÄ±!', 100);
+    showProgress('Tamamlandı!', 100);
     setTimeout(() => { document.getElementById('uploadProgress').style.display = 'none'; }, 1500);
 
     await loadProjects();
@@ -725,13 +725,13 @@ async function toggleFeatured(id, current) {
   });
   await loadProjects();
   renderProjects(document.querySelector('.admin-filters .filter-btn.active')?.dataset.filter || 'all');
-  // Featured tab aktifse orayÄ± da gÃ¼ncelle
+  // Featured tab aktifse orayı da güncelle
   if (document.getElementById('tab-featured').classList.contains('active')) renderFeatured();
 }
 
 // === DELETE ===
 async function deleteProject(id) {
-  if (!confirm('Bu iÅŸi silmek istediÄŸine emin misin?')) return;
+  if (!confirm('Bu işi silmek istediğine emin misin?')) return;
   await fetch(`${API}/api/projects/${id}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${TOKEN}` }
@@ -746,14 +746,14 @@ function renderFeatured() {
   const grid = document.getElementById('featuredGrid');
 
   if (!list.length) {
-    grid.innerHTML = '<div class="admin-empty">SeÃ§ilmiÅŸ iÅŸ yok. Ä°ÅŸleri dÃ¼zenlerken "SeÃ§ilmiÅŸ Ä°ÅŸlere ekle" seÃ§eneÄŸini aÃ§Ä±n.</div>';
+    grid.innerHTML = '<div class="admin-empty">Seçilmiş iş yok. İşleri düzenlerken "Seçilmiş İşlere ekle" seçeneğini açın.</div>';
     return;
   }
 
-  // Mevcut gÃ¶rÃ¼ntÃ¼leri koru â€” yeni HTML hazÄ±r olduÄŸunda tek seferde gÃ¶ster
+  // Mevcut görüntüleri koru — yeni HTML hazır olduğunda tek seferde göster
   const newHtml = list.map((p,i) => `
     <div class="featured-item" data-id="${p.id}" draggable="true">
-      <div class="featured-drag">â ¿</div>
+      <div class="featured-drag">⠿</div>
       <div class="featured-thumb">
         ${p.image_url
           ? `<img src="${p.image_url.startsWith('http') ? p.image_url : API + p.image_url}" alt="${p.title}" loading="eager" decoding="async">`
@@ -764,12 +764,12 @@ function renderFeatured() {
         <span class="admin-cat-tag">${p.category}</span>
       </div>
       <div class="featured-order">${i+1}</div>
-      <button class="admin-btn-del" onclick="toggleFeatured('${p.id}', 1)">Ã‡Ä±kar</button>
+      <button class="admin-btn-del" onclick="toggleFeatured('${p.id}', 1)">Çıkar</button>
     </div>
   `).join('');
   grid.innerHTML = newHtml;
 
-  // Drag & drop â€” sadece gerÃ§ek yer deÄŸiÅŸiminde kaydet
+  // Drag & drop — sadece gerçek yer değişiminde kaydet
   let dragSrc = null;
   let orderChanged = false;
 
@@ -808,26 +808,26 @@ async function saveFeaturedOrder() {
   renderFeatured();
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// KPSS YÃ–NETÄ°MÄ°
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════
+// KPSS YÖNETİMİ
+// ═══════════════════════════════════════
 async function loadKpssUsers() {
   const list = document.getElementById('kpssUsersList');
-  list.innerHTML = '<div class="admin-loading">YÃ¼kleniyor...</div>';
+  list.innerHTML = '<div class="admin-loading">Yükleniyor...</div>';
   try {
     const r = await fetch(`${API}/api/admin/kpss-users`, {
       headers: { Authorization: `Bearer ${TOKEN}` }
     });
-    if (!r.ok) throw new Error('YÃ¼klenemedi');
+    if (!r.ok) throw new Error('Yüklenemedi');
     const data = await r.json();
     if (!data.length) {
-      list.innerHTML = '<div class="admin-empty">HenÃ¼z KPSS Ã¼yesi yok.</div>';
+      list.innerHTML = '<div class="admin-empty">Henüz KPSS üyesi yok.</div>';
       return;
     }
     list.innerHTML = data.map(u => `
       <div class="featured-item" style="display:flex;align-items:center;gap:12px;background:var(--bg-surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;cursor:default">
         <div style="flex:1;min-width:0">
-          <div class="admin-card-title" style="margin-bottom:4px">${u.full_name || 'Ä°simsiz'} (@${u.username})</div>
+          <div class="admin-card-title" style="margin-bottom:4px">${u.full_name || 'İsimsiz'} (@${u.username})</div>
           <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">${u.created_at}</div>
         </div>
         <button class="admin-btn-del" onclick="deleteKpssUser('${u.id}')">Sil</button>
@@ -847,7 +847,7 @@ async function addKpssUser() {
   const password = document.getElementById('kPassword').value;
   
   if (!username || !password) {
-    status.textContent = 'KullanÄ±cÄ± adÄ± ve ÅŸifre zorunlu!';
+    status.textContent = 'Kullanıcı adı ve şifre zorunlu!';
     status.style.color = 'var(--danger)';
     return;
   }
@@ -861,7 +861,7 @@ async function addKpssUser() {
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || 'Hata');
     
-    status.textContent = 'KullanÄ±cÄ± baÅŸarÄ±yla oluÅŸturuldu âœ“';
+    status.textContent = 'Kullanıcı başarıyla oluşturuldu ✓';
     status.style.color = 'var(--accent)';
     document.getElementById('kUsername').value = '';
     document.getElementById('kFullName').value = '';
@@ -876,7 +876,7 @@ async function addKpssUser() {
 }
 
 async function deleteKpssUser(id) {
-  if (!confirm('KullanÄ±cÄ±yÄ± ve ona ait tÃ¼m KPSS verilerini kalÄ±cÄ± olarak silmek istediÄŸinize emin misiniz?')) return;
+  if (!confirm('Kullanıcıyı ve ona ait tüm KPSS verilerini kalıcı olarak silmek istediğinize emin misiniz?')) return;
   try {
     const r = await fetch(`${API}/api/admin/kpss-users/${id}`, {
       method: 'DELETE',
@@ -888,17 +888,17 @@ async function deleteKpssUser(id) {
       alert('Silinemedi.');
     }
   } catch(e) {
-    alert('BaÄŸlantÄ± hatasÄ±');
+    alert('Bağlantı hatası');
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// 3D VÄ°TRÄ°N YÃ–NETÄ°MÄ°
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════
+// 3D VİTRİN YÖNETİMİ
+// ═══════════════════════════════════════
 const API_3D = 'https://vk-portfolio-api.vkesgin38.workers.dev/api/fitness';
 let td_products = [];
 
-// GÃ¶rsel zone tÄ±klama
+// Görsel zone tıklama
 const tdZone = document.getElementById('td-img-zone');
 const tdFile = document.getElementById('td-img-file');
 if (tdZone && tdFile) {
@@ -916,7 +916,7 @@ if (tdZone && tdFile) {
   });
 }
 
-// Status mesajÄ±
+// Status mesajı
 function tdStatus(msg, isError) {
   const el = document.getElementById('td-status');
   if (!el) return;
@@ -924,9 +924,9 @@ function tdStatus(msg, isError) {
   el.style.color = isError ? 'var(--danger)' : 'var(--accent)';
 }
 
-// ÃœrÃ¼nleri API'den yÃ¼kle
+// Ürünleri API'den yükle
 async function tdLoadProducts() {
-  tdStatus('// yÃ¼kleniyor...');
+  tdStatus('// yükleniyor...');
   try {
     const res = await fetch(API_3D, {
       headers: { 'Authorization': 'Bearer ' + TOKEN }
@@ -935,10 +935,10 @@ async function tdLoadProducts() {
     const data = await res.json();
     const row = Array.isArray(data) ? data.find(d => d.key === 'vk_3d_products') : null;
     td_products = row && row.value ? JSON.parse(row.value) : [];
-    tdStatus('// ' + td_products.length + ' obje yÃ¼klendi');
+    tdStatus('// ' + td_products.length + ' obje yüklendi');
     tdRenderList();
   } catch(e) {
-    tdStatus('// API hatasÄ±: ' + e.message, true);
+    tdStatus('// API hatası: ' + e.message, true);
     // localStorage fallback
     try {
       const saved = localStorage.getItem('vk_3d_products');
@@ -966,20 +966,20 @@ async function tdSaveProducts() {
       },
       body: JSON.stringify({ key: 'vk_3d_products', value: payload })
     });
-    if (!r.ok) throw new Error('HTTP ' + r.status + ' â€” ' + await r.text());
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + await r.text());
     return true;
   } catch(e) {
-    tdStatus('// Sunucu hatasÄ±: ' + e.message, true);
+    tdStatus('// Sunucu hatası: ' + e.message, true);
     return false;
   }
 }
 
-// Listeyi Ã§iz (sÃ¼rÃ¼kle-bÄ±rak sÄ±ralama destekli)
+// Listeyi çiz (sürükle-bırak sıralama destekli)
 function tdRenderList() {
   const list = document.getElementById('td-product-list');
   if (!list) return;
   if (!td_products.length) {
-    list.innerHTML = '<div class="admin-loading">HenÃ¼z 3D obje eklenmedi.</div>';
+    list.innerHTML = '<div class="admin-loading">Henüz 3D obje eklenmedi.</div>';
     return;
   }
 
@@ -989,7 +989,7 @@ function tdRenderList() {
 
   list.innerHTML = td_products.map((p, i) => `
     <div class="featured-item" data-id="${p.id}" draggable="true" style="display:flex;align-items:center;gap:12px;background:var(--bg-surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;cursor:default">
-      <div class="featured-drag" title="SÄ±ralamak iÃ§in sÃ¼rÃ¼kle" style="cursor:grab;font-size:18px;color:var(--text-muted);flex-shrink:0">â ¿</div>
+      <div class="featured-drag" title="Sıralamak için sürükle" style="cursor:grab;font-size:18px;color:var(--text-muted);flex-shrink:0">⠿</div>
       <div style="width:56px;height:56px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#222">
         <img src="${p.thumb || ''}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover" loading="lazy">
       </div>
@@ -1004,7 +1004,7 @@ function tdRenderList() {
     </div>
   `).join('');
 
-  // Drag & drop sÄ±ralama
+  // Drag & drop sıralama
   let dragSrc = null;
   let orderChanged = false;
 
@@ -1017,12 +1017,12 @@ function tdRenderList() {
     item.addEventListener('dragend', async () => {
       item.style.opacity = '1';
       if (orderChanged) {
-        // Yeni sÄ±rayÄ± td_products'a yansÄ±t
+        // Yeni sırayı td_products'a yansıt
         const newOrder = [...list.querySelectorAll('.featured-item')].map(el => el.dataset.id);
         td_products = newOrder.map(id => td_products.find(p => p.id === id)).filter(Boolean);
-        tdStatus('// sÄ±ralama kaydediliyor...');
+        tdStatus('// sıralama kaydediliyor...');
         const ok = await tdSaveProducts();
-        if (ok) tdStatus('// sÄ±ralama gÃ¼ncellendi âœ“');
+        if (ok) tdStatus('// sıralama güncellendi ✓');
         tdRenderList();
       }
     });
@@ -1046,10 +1046,10 @@ document.getElementById('td-save-btn')?.addEventListener('click', async () => {
   let url = document.getElementById('td-url')?.value.trim();
   const thumb = document.getElementById('td-img-b64')?.value || '';
 
-  if (!title) { tdStatus('// BaÅŸlÄ±k gerekli', true); return; }
+  if (!title) { tdStatus('// Başlık gerekli', true); return; }
   if (!url) { tdStatus('// Luma AI linki gerekli', true); return; }
 
-  // UUID'yi ayÄ±kla
+  // UUID'yi ayıkla
   const match = url.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
   if (match) url = 'https://lumalabs.ai/capture/' + match[0];
 
@@ -1062,11 +1062,11 @@ document.getElementById('td-save-btn')?.addEventListener('click', async () => {
   tdRenderList();
   
   if (ok) {
-    tdStatus('// ' + title + ' eklendi âœ“');
+    tdStatus('// ' + title + ' eklendi ✓');
     document.getElementById('td-title').value = '';
     document.getElementById('td-url').value = '';
     document.getElementById('td-img-b64').value = '';
-    document.getElementById('td-img-preview').innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>Kapak gÃ¶rseli seÃ§</span>';
+    document.getElementById('td-img-preview').innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>Kapak görseli seç</span>';
     document.getElementById('td-img-file').value = '';
   }
   
@@ -1075,7 +1075,7 @@ document.getElementById('td-save-btn')?.addEventListener('click', async () => {
 
 // Sil
 window.tdDelete = async function(id) {
-  if (!confirm('Bu objeyi vitrinden silmek istediÄŸinize emin misiniz?')) return;
+  if (!confirm('Bu objeyi vitrinden silmek istediğinize emin misiniz?')) return;
   td_products = td_products.filter(p => p.id !== id);
   tdStatus('// siliniyor...');
   await tdSaveProducts();
@@ -1083,16 +1083,124 @@ window.tdDelete = async function(id) {
   tdStatus('// silindi');
 };
 
-// Sekme deÄŸiÅŸiminde yÃ¼kle
+// Sekme değişiminde yükle
 document.querySelectorAll('.admin-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.dataset.tab === 'threed') tdLoadProducts();
   });
 });
 
+// ═══════════════════════════════════════
+// KÜP VİTRİN YÖNETİMİ
+// ═══════════════════════════════════════
+const cubeFaces = ['front', 'right', 'back', 'left', 'top', 'bottom'];
+cubeFaces.forEach(face => {
+  const zone = document.getElementById('cube-z-' + face);
+  const input = document.getElementById('cube-f-' + face);
+  const preview = document.getElementById('cube-p-' + face);
+  
+  if (zone && input) {
+    zone.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => {
+      if (input.files[0]) {
+        const url = URL.createObjectURL(input.files[0]);
+        preview.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
+      }
+    });
+  }
+});
 
-$script
+async function loadCubeProducts() {
+  const list = document.getElementById('cube-product-list');
+  if (!list) return;
+  list.innerHTML = '<div class="admin-loading">Yükleniyor...</div>';
+  try {
+    const r = await fetch(`${API}/api/projects?category=3dcube`);
+    const data = await r.json();
+    if (!data.length) {
+      list.innerHTML = '<div class="admin-empty">Henüz eklenmiş küp yok.</div>';
+      return;
+    }
+    list.innerHTML = data.map(p => {
+      let faces = [];
+      try { faces = JSON.parse(p.description); } catch(e){}
+      const frontImg = faces[0] ? (faces[0].startsWith('http') ? faces[0] : API + faces[0]) : '';
+      return `
+      <div class="admin-card" style="aspect-ratio:auto; padding-bottom:12px">
+        <div class="admin-card-media" style="aspect-ratio:1">
+          ${frontImg ? `<img src="${frontImg}" style="object-fit:cover">` : '<div class="admin-card-placeholder"></div>'}
+        </div>
+        <div class="admin-card-info">
+          <div class="admin-card-title">${p.title}</div>
+        </div>
+        <div class="admin-card-actions">
+          <button class="admin-btn-del" onclick="deleteProject('${p.id}'); setTimeout(loadCubeProducts, 500)">Sil</button>
+        </div>
+      </div>
+      `
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="admin-empty" style="color:var(--danger)">Hata oluştu</div>';
+  }
+}
+
+document.getElementById('cube-save-btn')?.addEventListener('click', async () => {
+  const title = document.getElementById('cube-title').value.trim();
+  const status = document.getElementById('cube-status');
+  if (!title) { status.textContent = 'Başlık zorunlu'; status.style.color = 'var(--danger)'; return; }
+  
+  const files = cubeFaces.map(face => document.getElementById('cube-f-' + face).files[0]);
+  if (files.some(f => !f)) {
+    status.textContent = 'Tüm 6 yüz için görsel seçmelisiniz!';
+    status.style.color = 'var(--danger)';
+    return;
+  }
+  
+  status.textContent = 'Görseller yükleniyor...';
+  status.style.color = 'var(--text-muted)';
+  
+  try {
+    const urls = [];
+    for(let i=0; i<6; i++) {
+      status.textContent = 'Yükleniyor (' + (i+1) + '/6)...';
+      const url = await uploadFile(files[i], 'image');
+      urls.push(url);
+    }
+    
+    status.textContent = 'Küp kaydediliyor...';
+    
+    const payload = {
+      title,
+      category: '3dcube',
+      description: JSON.stringify(urls),
+      image_url: urls[0]
+    };
+    
+    const r = await fetch(`${API}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+      body: JSON.stringify(payload)
+    });
+    
+    if(!r.ok) throw new Error('Kayıt hatası');
+    
+    status.textContent = 'Küp başarıyla eklendi ✓';
+    status.style.color = 'var(--accent)';
+    
+    document.getElementById('cube-title').value = '';
+    cubeFaces.forEach(face => {
+      document.getElementById('cube-f-' + face).value = '';
+      document.getElementById('cube-p-' + face).innerHTML = 'Seç';
+    });
+    
+    loadCubeProducts();
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch(e) {
+    status.textContent = e.message;
+    status.style.color = 'var(--danger)';
+  }
+});
 </script>
+
 </body>
 </html>
-

@@ -342,12 +342,7 @@
         <button class="close-modal" onclick="closeModal()">×</button>
       </div>
       <form id="add-form">
-        <select id="post-type" class="modal-input" required>
-          <option value="reels">Instagram Reels / Post</option>
-          <option value="pinterest">Pinterest Linki</option>
-          <option value="video">Direkt Video Linki (.mp4)</option>
-          <option value="image">Direkt Görsel Linki (.jpg, .png)</option>
-        </select>
+        
         <input type="url" id="post-url" class="modal-input" placeholder="Link (Örn: https://instagram.com/reel/...)" required>
         <textarea id="post-desc" class="modal-input" placeholder="Bu fikir hakkında ne düşünüyorsun? (İsteğe bağlı)"></textarea>
         <button type="submit" class="btn btn-primary" style="width:100%" id="submit-post-btn">Paylaş</button>
@@ -446,7 +441,13 @@
       const btn = document.getElementById('submit-post-btn');
       btn.innerHTML = '<div class="spinner"></div>';
       
-      let type = document.getElementById('post-type').value;
+      
+      let type = 'image';
+      if (url.includes('instagram.com')) type = 'reels';
+      else if (url.includes('pinterest.')) type = 'pinterest';
+      else if (url.includes('drive.google.com')) type = 'drive';
+      else if (url.match(/\.(mp4|webm|mov)(\?|$)/i)) type = 'video';
+
       let url = document.getElementById('post-url').value;
       const desc = document.getElementById('post-desc').value;
       
@@ -516,7 +517,11 @@
           const canDelete = currentUser.username === 'vkesgin38' || currentUser.id === p.user_id;
           const deleteHtml = canDelete ? `<button class="delete-post" onclick="deletePost(${p.id})">Sil</button>` : '';
 
-          if (p.type === 'pinterest') {
+          if (p.type === 'drive') {
+            const driveId = p.url.match(/\/d\/([^\/]+)/);
+            const iframeUrl = driveId ? `https://drive.google.com/file/d/${driveId[1]}/preview` : p.url;
+            mediaHtml = `<iframe src="${iframeUrl}" width="100%" height="450" frameborder="0" allowfullscreen></iframe>`;
+          } else if (p.type === 'pinterest') {
             mediaHtml = `<div style="padding: 10px; display: flex; justify-content: center;"><a data-pin-do="embedPin" data-pin-width="medium" href="${p.url}"></a></div>`;
           }
 

@@ -442,13 +442,13 @@
       btn.innerHTML = '<div class="spinner"></div>';
       
       
+      let url = document.getElementById('post-url').value;
       let type = 'image';
       if (url.includes('instagram.com')) type = 'reels';
       else if (url.includes('pinterest.')) type = 'pinterest';
       else if (url.includes('drive.google.com')) type = 'drive';
       else if (url.match(/\.(mp4|webm|mov)(\?|$)/i)) type = 'video';
 
-      let url = document.getElementById('post-url').value;
       const desc = document.getElementById('post-desc').value;
       
       // Instagram link cleanup

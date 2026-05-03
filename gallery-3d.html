@@ -200,6 +200,56 @@
         bottom: 16px;
       }
     }
+
+    #free-view-btn {
+      position: fixed;
+      top: 30px;
+      right: 30px;
+      background: rgba(20, 16, 14, 0.6);
+      border: 1px solid rgba(212, 165, 116, 0.2);
+      color: #d4a574;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-family: 'Segoe UI', sans-serif;
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 100;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    #free-view-btn:hover {
+      border-color: rgba(212, 165, 116, 0.5);
+      background: rgba(30, 24, 21, 0.8);
+      transform: translateY(-2px);
+    }
+
+    #free-view-btn.active {
+      background: #d4a574;
+      color: #111;
+      border-color: #d4a574;
+      box-shadow: 0 4px 20px rgba(212, 165, 116, 0.4);
+    }
+    
+    @media(max-width:768px) {
+      #free-view-btn {
+        top: 20px;
+        right: 20px;
+        padding: 8px 12px;
+        font-size: 11px;
+      }
+      #free-view-btn svg {
+        width: 16px;
+        height: 16px;
+      }
+    }
   </style>
 </head>
 
@@ -213,6 +263,16 @@
 
   <div class="vignette"></div>
   <canvas id="canvas"></canvas>
+
+  <!-- Free View Toggle -->
+  <button id="free-view-btn">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path d="M21 12c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z" />
+      <path d="M12 4v16" />
+    </svg>
+    Serbest Görünüm
+  </button>
 
 
 
@@ -244,6 +304,7 @@
     }
 
     import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { LumaSplatsThree } from '@lumaai/luma-web';
     import { Text, preloadFont } from 'troika-three-text';
 
@@ -448,19 +509,64 @@
     let currentVert = 0.2;
     let isDragging = false;
     let dragY = 0, dragStartVert = 0;
+    let isFreeView = false;
+    
+    // OrbitControls for Free View
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enabled = false;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 2;
+    controls.maxDistance = 20;
+    controls.enablePan = false; // LookAt remains origin
+    
+    // Toggle Logic
+    const freeViewBtn = document.getElementById('free-view-btn');
+    freeViewBtn.addEventListener('click', () => {
+      isFreeView = !isFreeView;
+      if (isFreeView) {
+        freeViewBtn.classList.add('active');
+        freeViewBtn.innerHTML = `
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+          Otomatik Düzene Dön
+        `;
+        controls.enabled = true;
+      } else {
+        freeViewBtn.classList.remove('active');
+        freeViewBtn.innerHTML = `
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path d="M21 12c0 4.418-4.03 8-9 8s-9-3.582-9-8 4.03-8 9-8 9 3.582 9 8z" />
+            <path d="M12 4v16" />
+          </svg>
+          Serbest Görünüm
+        `;
+        controls.enabled = false;
+        
+        // Reverse calculate to preserve camera position and seamlessly resume rotation
+        camRadius = Math.sqrt(camera.position.x**2 + camera.position.z**2);
+        targetRadius = camRadius;
+        autoAngle = Math.atan2(camera.position.x, camera.position.z);
+        currentVert = (camera.position.y - 2) / 4.5;
+        targetVert = currentVert;
+      }
+    });
 
     // Fare ile yukarı/aşağı bakış (orijinal sistem ama artırılmış dikey limit)
-    canvas.addEventListener('mousedown', e => { isDragging = true; dragY = e.clientY; dragStartVert = targetVert; });
+    canvas.addEventListener('mousedown', e => { if(isFreeView) return; isDragging = true; dragY = e.clientY; dragStartVert = targetVert; });
     window.addEventListener('mousemove', e => {
-      if (!isDragging) return;
+      if (!isDragging || isFreeView) return;
       targetVert = Math.max(-0.6, Math.min(1.8, dragStartVert + (e.clientY - dragY) / window.innerHeight * 2.5));
     });
     window.addEventListener('mouseup', () => isDragging = false);
     canvas.addEventListener('mouseleave', () => isDragging = false);
 
     // Dokunmatik
-    canvas.addEventListener('touchstart', e => { dragY = e.touches[0].clientY; dragStartVert = targetVert; }, { passive: true });
+    canvas.addEventListener('touchstart', e => { if(isFreeView) return; dragY = e.touches[0].clientY; dragStartVert = targetVert; }, { passive: true });
     canvas.addEventListener('touchmove', e => {
+      if(isFreeView) return;
       e.preventDefault();
       targetVert = Math.max(-0.6, Math.min(1.8, dragStartVert + (e.touches[0].clientY - dragY) / window.innerHeight * 2.5));
     }, { passive: false });
@@ -470,6 +576,7 @@
     let targetRadius = 5;
 
     window.addEventListener('wheel', e => {
+      if(isFreeView) return;
       targetRadius += e.deltaY * 0.005;
       targetRadius = Math.max(3, Math.min(9, targetRadius));
     }, { passive: true });
@@ -481,17 +588,21 @@
       const dt = clock.getDelta();
       const time = clock.getElapsedTime();
 
-      // Orijinal Kusursuz Kamera Matematiği
-      currentVert += (targetVert - currentVert) * 0.05;
-      autoAngle += dt * 0.5; // Orijinal yavaş dönüş hızı
+      if (!isFreeView) {
+        // Orijinal Kusursuz Kamera Matematiği
+        currentVert += (targetVert - currentVert) * 0.05;
+        autoAngle += dt * 0.5; // Orijinal yavaş dönüş hızı
 
-      camRadius += (targetRadius - camRadius) * 0.05;
+        camRadius += (targetRadius - camRadius) * 0.05;
 
-      camera.position.x = camRadius * Math.sin(autoAngle);
-      camera.position.z = camRadius * Math.cos(autoAngle);
-      camera.position.y = 2 + currentVert * 4.5; // Yüksekliği çok daha fazla artırabilmek için çarpan büyütüldü
+        camera.position.x = camRadius * Math.sin(autoAngle);
+        camera.position.z = camRadius * Math.cos(autoAngle);
+        camera.position.y = 2 + currentVert * 4.5; // Yüksekliği çok daha fazla artırabilmek için çarpan büyütüldü
 
-      camera.lookAt(0, 0, 0);
+        camera.lookAt(0, 0, 0);
+      } else {
+        controls.update(); // Gerekli (enableDamping için)
+      }
 
       // Partikülleri yavaşça döndür
       particles.rotation.y = time * 0.05;

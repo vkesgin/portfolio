@@ -551,12 +551,32 @@ if (path.startsWith('/api/kpss')) {
     // 4. Posts
     if (path === '/api/inspire/posts' && method === 'GET') {
       const { results } = await env.DB.prepare(`
-        SELECT p.*, u.full_name as author 
+        SELECT p.*, u.full_name as author,
+        (
+          SELECT json_group_array(json_object('id', n.id, 'content', n.content, 'author', nu.full_name, 'is_public', n.is_public, 'user_id', n.user_id))
+          FROM inspire_notes n 
+          LEFT JOIN inspire_users nu ON n.user_id = nu.id 
+          WHERE n.post_id = p.id
+        ) as notes_json
         FROM inspire_posts p 
         LEFT JOIN inspire_users u ON p.user_id = u.id 
         ORDER BY p.id DESC
       `).all();
-      return json(results, 200, origin);
+      
+      const parsedResults = results.map(r => {
+        let notes = [];
+        try {
+          if (r.notes_json) {
+            notes = JSON.parse(r.notes_json);
+            // sqlite json_group_array might return '[{}]' if empty due to some joins, let's filter nulls
+            notes = notes.filter(n => n.id !== null);
+          }
+        } catch(e) {}
+        r.notes = notes;
+        delete r.notes_json;
+        return r;
+      });
+      return json(parsedResults, 200, origin);
     }
 
     if (path === '/api/inspire/posts' && method === 'POST') {
@@ -599,10 +619,39 @@ if (path.startsWith('/api/kpss')) {
       
       const id = cleanPath.split('/').pop();
       
-      if (admin) {
+      if (admin || (user && user.username === 'vkesgin38')) {
         await env.DB.prepare('DELETE FROM inspire_posts WHERE id=?').bind(id).run();
       } else {
         await env.DB.prepare('DELETE FROM inspire_posts WHERE id=? AND user_id=?').bind(id, user.userId).run();
+      }
+      return json({ ok: true }, 200, origin);
+    }
+    
+    // Notes Delete
+    if (cleanPath.match(/^\/api\/inspire\/notes\/\d+$/) && method === 'DELETE') {
+      const user = await inspireAuth(request, env);
+      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
+      const id = cleanPath.split('/').pop();
+      if (user.username === 'vkesgin38') {
+        await env.DB.prepare('DELETE FROM inspire_notes WHERE id=?').bind(id).run();
+      } else {
+        await env.DB.prepare('DELETE FROM inspire_notes WHERE id=? AND user_id=?').bind(id, user.userId).run();
+      }
+      return json({ ok: true }, 200, origin);
+    }
+    
+    // Notes Edit
+    if (cleanPath.match(/^\/api\/inspire\/notes\/\d+$/) && method === 'PUT') {
+      const user = await inspireAuth(request, env);
+      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
+      const id = cleanPath.split('/').pop();
+      const d = await request.json();
+      if (!d.content) return json({ error: 'İçerik gerekli' }, 400, origin);
+      
+      if (user.username === 'vkesgin38') {
+        await env.DB.prepare('UPDATE inspire_notes SET content=? WHERE id=?').bind(d.content, id).run();
+      } else {
+        await env.DB.prepare('UPDATE inspire_notes SET content=? WHERE id=? AND user_id=?').bind(d.content, id, user.userId).run();
       }
       return json({ ok: true }, 200, origin);
     }

@@ -702,6 +702,37 @@
         alert('Not eklenemedi');
       }
     }
+    
+    async function editNote(noteId, oldContent) {
+      const newContent = prompt('Notu düzenle:', oldContent);
+      if (!newContent || newContent.trim() === '' || newContent === oldContent) return;
+      
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/notes/${noteId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ content: newContent.trim() })
+        });
+        if (!res.ok) throw new Error();
+        loadPosts();
+      } catch(e) {
+        alert('Not düzenlenemedi');
+      }
+    }
+    
+    async function deleteNote(noteId) {
+      if (!confirm('Bu notu silmek istediğinize emin misiniz?')) return;
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/notes/${noteId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error();
+        loadPosts();
+      } catch(e) {
+        alert('Not silinemedi');
+      }
+    }
 
     async function deletePost(id) {
       if(!confirm('Bu fikri silmek istediğine emin misin?')) return;

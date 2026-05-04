@@ -474,6 +474,7 @@ if (path.startsWith('/api/kpss')) {
             created_at TEXT DEFAULT (datetime('now'))
           )
         `).run();
+        try { await env.DB.prepare('ALTER TABLE inspire_users ADD COLUMN is_first_login INTEGER DEFAULT 1').run(); } catch(e) {}
         await env.DB.prepare(`
           CREATE TABLE IF NOT EXISTS inspire_posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -495,7 +496,7 @@ if (path.startsWith('/api/kpss')) {
     if (cleanPath === '/api/admin/inspire-users' && method === 'GET') {
       const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
-      const { results } = await env.DB.prepare('SELECT id, username, full_name, created_at FROM inspire_users ORDER BY id DESC').all();
+      const { results } = await env.DB.prepare('SELECT id, username, full_name, created_at, password FROM inspire_users ORDER BY id DESC').all();
       return json(results, 200, origin);
     }
     if (cleanPath === '/api/admin/inspire-users' && method === 'POST') {
@@ -534,7 +535,17 @@ if (path.startsWith('/api/kpss')) {
       if (!user) return json({ error: 'Hatalı kullanıcı adı veya şifre' }, 401, origin);
 
       const token = await signInspireJWT({ userId: user.id, username: user.username }, env.JWT_SECRET || 'secret');
-      return json({ token, user: { id:user.id, username:user.username, full_name:user.full_name } }, 200, origin);
+      return json({ token, user: { id:user.id, username:user.username, full_name:user.full_name, is_first_login: user.is_first_login } }, 200, origin);
+    }
+
+    
+    if (path === '/api/inspire/change-password' && method === 'POST') {
+      const user = await inspireAuth(request, env);
+      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
+      const { newPassword } = await request.json();
+      if (!newPassword || newPassword.length < 4) return json({ error: 'Gecerli bir sifre giriniz' }, 400, origin);
+      await env.DB.prepare('UPDATE inspire_users SET password=?, is_first_login=0 WHERE id=?').bind(newPassword, user.userId).run();
+      return json({ ok: true }, 200, origin);
     }
 
     // 4. Posts

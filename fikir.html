@@ -602,30 +602,7 @@
                 <a href="${p.url}" target="_blank" style="color:var(--accent); font-weight:bold; text-decoration:none; display:block; padding:15px; border:1px solid rgba(0,229,255,0.2); border-radius:8px;">🔗 Dış Bağlantıyı Aç / Ziyaret Et</a>
                 <div class="microlink-spinner" style="margin-top:10px; font-size:11px; color:#888;">Önizleme Yükleniyor...</div>
               </div>
-              <script>
-                fetch('https://api.microlink.io?url=' + encodeURIComponent('${p.url}'))
-                  .then(r => r.json())
-                  .then(data => {
-                    const el = document.getElementById('link-preview-${p.id}');
-                    if(!el) return;
-                    if(data.status === 'success' && data.data) {
-                      const img = data.data.image ? data.data.image.url : (data.data.logo ? data.data.logo.url : '');
-                      const title = data.data.title || '${p.url}';
-                      const desc = data.data.description ? data.data.description.substring(0,80)+'...' : '';
-                      el.innerHTML = `<a href="${p.url}" target="_blank" style="text-decoration:none; color:inherit; display:block; text-align:left;">
-                        ${img ? `<img src="${img}" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; margin-bottom:10px;">` : ''}
-                        <h4 style="margin:0 0 5px 0; font-size:14px; color:#fff;">${title}</h4>
-                        <p style="margin:0; font-size:11px; color:#888;">${desc}</p>
-                      </a>`;
-                      el.style.padding = '15px';
-                    } else {
-                      el.querySelector('.microlink-spinner').style.display = 'none';
-                    }
-                  }).catch(() => {
-                    const el = document.getElementById('link-preview-${p.id}');
-                    if(el) el.querySelector('.microlink-spinner').style.display = 'none';
-                  });
-              <\/script>`;
+`;
           }
 
           let notesHtml = '';
@@ -663,6 +640,35 @@
             </div>
           `;
           grid.appendChild(card);
+          
+          if (p.type === 'link') {
+            fetch('https://api.microlink.io?url=' + encodeURIComponent(p.url))
+              .then(r => r.json())
+              .then(data => {
+                const el = document.getElementById('link-preview-' + p.id);
+                if(!el) return;
+                if(data.status === 'success' && data.data) {
+                  const img = data.data.image ? data.data.image.url : (data.data.logo ? data.data.logo.url : '');
+                  const title = data.data.title || p.url;
+                  const desc = data.data.description ? data.data.description.substring(0,80)+'...' : '';
+                  el.innerHTML = `<a href="${p.url}" target="_blank" style="text-decoration:none; color:inherit; display:block; text-align:left;">
+                    ${img ? `<img src="${img}" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; margin-bottom:10px;">` : ''}
+                    <h4 style="margin:0 0 5px 0; font-size:14px; color:#fff;">${title}</h4>
+                    <p style="margin:0; font-size:11px; color:#888;">${desc}</p>
+                  </a>`;
+                  el.style.padding = '15px';
+                } else {
+                  const spinner = el.querySelector('.microlink-spinner');
+                  if(spinner) spinner.style.display = 'none';
+                }
+              }).catch(() => {
+                const el = document.getElementById('link-preview-' + p.id);
+                if(el) {
+                  const spinner = el.querySelector('.microlink-spinner');
+                  if(spinner) spinner.style.display = 'none';
+                }
+              });
+          }
         });
         
         // Instagram scriptini tetikle

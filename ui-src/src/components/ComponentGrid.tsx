@@ -204,12 +204,11 @@ export default function ComponentGrid() {
 
                 {comp.image_url ? (
                   /*
-                   * HOVER FIX: absolute inset-0 ile sabit boyutlu kapsayıcı.
-                   * Padding = buton etrafındaki nefes boşluğu.
-                   * flex items-center KULLANMA — h-full'ı 0'a düşürür.
-                   * RiveDemo ve canvas bu kutu içinde tam boyutlanır.
+                   * CRITICAL: Explicit pixel height, no h-full chain.
+                   * ResizeObserver in RiveDemo reads this container's real px size.
+                   * padding = breathing room around the animation.
                    */
-                  <div className="absolute" style={{ inset: "24px" }}>
+                  <div style={{ position: "absolute", inset: "20px" }}>
                     <RiveDemo
                       src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`}
                       artboard={cfg.artboard}

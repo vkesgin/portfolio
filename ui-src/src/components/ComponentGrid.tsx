@@ -215,8 +215,8 @@ export default function ComponentGrid() {
           return (
             <div key={comp.id} className="group flex flex-col bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden hover:border-white/10 transition-colors">
               {/* PREVIEW */}
-              <div className="relative aspect-[4/3] w-full bg-black/40 overflow-hidden">
-                <div className="absolute top-4 right-4 z-10 flex gap-2">
+              <div className="relative w-full bg-black/40" style={{ aspectRatio: "4/3" }}>
+                <div className="absolute top-3 right-3 z-10 flex gap-2">
                   {comp.is_featured ? (
                     <span className="px-2 py-1 text-[10px] font-bold tracking-wider rounded bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white">PRO</span>
                   ) : (
@@ -224,7 +224,9 @@ export default function ComponentGrid() {
                   )}
                 </div>
                 {comp.image_url ? (
-                  <div className="w-full h-full group-hover:scale-105 transition-transform duration-500">
+                  // ÖNEMLİ: transform/scale KULLANMA — Rive'ın pointer koordinatlarını bozar
+                  // absolute inset-0 → RiveDemo'nun h-full düzgün çalışması için
+                  <div className="absolute inset-0 flex items-center justify-center p-8">
                     <RiveDemo
                       src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`}
                       artboard={cfg.artboard}
@@ -232,7 +234,7 @@ export default function ComponentGrid() {
                     />
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-white/20 text-sm">Görsel Yok</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-white/20 text-sm">Görsel Yok</div>
                 )}
               </div>
 
@@ -304,27 +306,33 @@ export default function ComponentGrid() {
               ) : (
                 <div className="flex flex-col lg:flex-row h-full">
                   {/* Sol: Animasyon Preview */}
-                  <div className="lg:w-2/5 p-6 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20">
-                    <div className="w-full max-w-xs aspect-square rounded-2xl overflow-hidden border border-white/10 bg-black/40">
-                      <RiveDemo
-                        src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
-                        artboard={selectedCfg.artboard}
-                        stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
-                      />
+                  <div className="lg:w-2/5 p-6 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20 gap-4">
+                    {/* relative container → RiveDemo absolute inset-0 için şart */}
+                    <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ aspectRatio: "1" }}>
+                      <div className="absolute inset-0 flex items-center justify-center p-6">
+                        <RiveDemo
+                          src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
+                          artboard={selectedCfg.artboard}
+                          stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+                        />
+                      </div>
                     </div>
                     {/* Animasyon tipi badge */}
-                    <div className="absolute bottom-4 left-1/4 transform -translate-x-1/2">
-                      {selectedCfg.inputs?.length === 0 && (selectedCfg.stateMachines?.length ?? 0) > 0 && (
-                        <span className="text-[10px] text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-2 py-1 rounded-full">
-                          ✓ hover ile etkileş
-                        </span>
-                      )}
-                      {(selectedCfg.inputs ?? []).some(i => i.type === 0) && (
-                        <span className="text-[10px] text-[#ff2b73] bg-[#ff2b73]/10 border border-[#ff2b73]/20 px-2 py-1 rounded-full">
-                          🎯 tıkla — ateşle
-                        </span>
-                      )}
-                    </div>
+                    {selectedCfg.inputs?.length === 0 && (selectedCfg.stateMachines?.length ?? 0) > 0 && (
+                      <span className="text-[11px] text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1.5 rounded-full">
+                        ✦ üzerine gel — hover aktif
+                      </span>
+                    )}
+                    {(selectedCfg.inputs ?? []).some(i => i.type === 0) && (
+                      <span className="text-[11px] text-[#ff2b73] bg-[#ff2b73]/10 border border-[#ff2b73]/20 px-3 py-1.5 rounded-full">
+                        ✦ tıkla — animasyon ateşle
+                      </span>
+                    )}
+                    {(selectedCfg.inputs ?? []).some(i => i.type === 1) && (
+                      <span className="text-[11px] text-purple-400 bg-purple-400/10 border border-purple-400/20 px-3 py-1.5 rounded-full">
+                        ✦ hover boolean aktif
+                      </span>
+                    )}
                   </div>
 
                   {/* Sağ: Kod */}

@@ -18,91 +18,93 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
   const cfg: any = {
     src,
     autoplay: true,
-    // KRITIK: CSS ile scale'lenen canvas'ta Rive'ın hit-test koordinatlarını düzeltir
-    // Bu olmadan native hover (pointer events) çalışmaz
+    // Bu iki ayar native hover için kritik:
+    // 1. Canvas'ı container boyutuna eşitle (ResizeObserver ile)
+    // 2. Rive'ın iç koordinat sistemi CSS boyutuyla senkron kalır
     shouldResizeCanvasToContainer: true,
+    // Layout'u container'a otomatik uyarla
+    useDevicePixelRatio: true,
   };
   if (artboard) cfg.artboard = artboard;
   if (stateMachines?.length) cfg.stateMachines = stateMachines;
 
   const { rive, RiveComponent } = useRive(cfg);
 
-  // useMemo: rive hazır olunca input'ları al (RiveViewer pattern)
   const allInputs = useMemo(() => {
     if (!rive) return [];
     const sms = (stateMachines?.length ? stateMachines : rive.stateMachineNames) ?? [];
     const inputs: any[] = [];
     for (const sm of sms) {
-      try {
-        const smInputs = rive.stateMachineInputs(sm) ?? [];
-        inputs.push(...smInputs);
-      } catch (_) {}
+      try { inputs.push(...(rive.stateMachineInputs(sm) ?? [])); } catch (_) {}
     }
     return inputs;
   }, [rive]);
 
-  // Trigger inputları — tıklamada ateşlenir
   const triggerInputs = useMemo(
     () => allInputs.filter((i) => i.type === StateMachineInputType.Trigger),
     [allInputs]
   );
 
-  // Hover/number input'ları ref'e yaz
   useEffect(() => {
     hoverBooleans.current = allInputs.filter((i) => {
       const n = i.name.toLowerCase();
-      return (
-        i.type === StateMachineInputType.Boolean &&
-        (n.includes("hover") || n.includes("over") || n.includes("active"))
-      );
+      return i.type === StateMachineInputType.Boolean &&
+        (n.includes("hover") || n.includes("over") || n.includes("active") || n.includes("pressed"));
     });
     xNumbers.current = allInputs.filter((i) => {
       if (i.type !== StateMachineInputType.Number) return false;
       const n = i.name.toLowerCase();
-      return n === "x" || n === "xpos" || n.endsWith("_x") || n.includes("mousex");
+      return n === "x" || n.includes("xpos") || n.endsWith("_x") || n.includes("mousex");
     });
     yNumbers.current = allInputs.filter((i) => {
       if (i.type !== StateMachineInputType.Number) return false;
       const n = i.name.toLowerCase();
-      return n === "y" || n === "ypos" || n.endsWith("_y") || n.includes("mousey");
+      return n === "y" || n.includes("ypos") || n.endsWith("_y") || n.includes("mousey");
     });
   }, [allInputs]);
 
-  // Mouse koordinatı takibi (cursor-follow animasyonlar için)
+  // Cursor-follow (number input'lar)
   useEffect(() => {
     if (!xNumbers.current.length && !yNumbers.current.length) return;
     const onMove = (e: MouseEvent) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const xVal = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1)) * 100;
-      const yVal = Math.max(0, Math.min((e.clientY - rect.top) / rect.height, 1)) * 100;
-      xNumbers.current.forEach((i) => { i.value = xVal; });
-      yNumbers.current.forEach((i) => { i.value = yVal; });
+      const x = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1)) * 100;
+      const y = Math.max(0, Math.min((e.clientY - rect.top) / rect.height, 1)) * 100;
+      xNumbers.current.forEach((i) => { i.value = x; });
+      yNumbers.current.forEach((i) => { i.value = y; });
     };
     window.addEventListener("mousemove", onMove);
     return () => window.removeEventListener("mousemove", onMove);
   }, [rive]);
 
-  // Tıklamada trigger'ları ateşle
   const handleClick = () => {
-    triggerInputs.forEach((t) => {
-      try { t.fire(); } catch (_) {}
-    });
+    triggerInputs.forEach((t) => { try { t.fire(); } catch (_) {} });
   };
+
+  // Boolean hover için explicit set — native hover Rive'ın kendi pointer listener'ı halleder
+  const handlePointerEnter = () => hoverBooleans.current.forEach((i) => { i.value = true; });
+  const handlePointerLeave = () => hoverBooleans.current.forEach((i) => { i.value = false; });
 
   return (
     <div
       ref={containerRef}
-      className="w-full h-full cursor-pointer"
-      onMouseEnter={() => hoverBooleans.current.forEach((i) => { i.value = true; })}
-      onMouseLeave={() => hoverBooleans.current.forEach((i) => { i.value = false; })}
-      onClick={handleClick}
+      // position:relative + w-full h-full → RiveObserver'ın doğru bounding box alması için şart
+      className="relative w-full h-full cursor-pointer"
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onPointerDown={handleClick}
     >
       {/*
-        pointerEvents:all → Rive'ın native hover/click listener'larının canvas'a ulaşmasını garantiler.
-        shouldResizeCanvasToContainer ile birlikte native hover tam çalışır.
+        absolute inset-0 → canvas tam olarak container'ı kaplar.
+        display:block → inline white-space sorununu önler.
+        pointer-events:all → Rive'ın kendi pointer listener'ları canvas'a ulaşır
+                              (bu sayede native hover tam çalışır).
       */}
-      <RiveComponent style={{ width: "100%", height: "100%", pointerEvents: "all" }} />
+      <RiveComponent
+        className="absolute inset-0 w-full h-full"
+        style={{ display: "block", pointerEvents: "all" }}
+      />
     </div>
   );
 }

@@ -1563,7 +1563,7 @@ function loadRiveInspector() {
 }
 
 // Bir .riv dosyasının içindeki tüm State Machine'leri + input'ları döndürür
-async function inspectRivFile(file) {
+async function inspectRivFile(file, artboardName) {
   try {
     await loadRiveInspector();
     if (!window.rive) throw new Error('Rive yüklenemedi');
@@ -1573,8 +1573,11 @@ async function inspectRivFile(file) {
 
     return await new Promise(resolve => {
       const timeout = setTimeout(() => resolve({ stateMachines: [] }), 6000);
+      const config = { buffer, canvas, autoplay: false };
+      if (artboardName) config.artboard = artboardName;
+      
       const r = new rive.Rive({
-        buffer, canvas, autoplay: false,
+        ...config,
         onLoad: () => {
           clearTimeout(timeout);
           const smNames = r.stateMachineNames || [];
@@ -1675,7 +1678,9 @@ if (uiRivZone && uiRivFile) {
     // Tarama başlat
     document.getElementById('ui-sm-panel').style.display = 'none';
     document.getElementById('ui-sm-scanning').style.display = 'block';
-    const result = await inspectRivFile(file);
+    
+    const artboardValue = document.getElementById('ui-artboard').value.trim();
+    const result = await inspectRivFile(file, artboardValue);
     renderSmPanel(result);
   });
 }
@@ -1743,6 +1748,9 @@ function uiStartEdit(p) {
 
 document.getElementById('ui-cancel-btn')?.addEventListener('click', uiResetForm);
 
+// Global data storage for Edit functionality
+let uiProjectsData = [];
+
 async function loadUiComponents() {
   const list = document.getElementById('ui-product-list');
   if (!list) return;
@@ -1750,8 +1758,9 @@ async function loadUiComponents() {
   try {
     const r = await fetch(`${API}/api/projects?category=uilib`);
     const data = await r.json();
+    uiProjectsData = data; // Store globally
     if (!data.length) { list.innerHTML = '<div class="admin-empty">Henüz bileşen eklenmedi.</div>'; return; }
-    list.innerHTML = data.map(p => {
+    list.innerHTML = data.map((p, index) => {
       let cfg = { artboard: '', stateMachines: [] };
       try { if (p.tags) cfg = JSON.parse(p.tags); } catch(e){}
       const sms = cfg.stateMachines || (cfg.statemachine ? [cfg.statemachine] : []);
@@ -1771,7 +1780,7 @@ async function loadUiComponents() {
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0">
-          <button class="admin-btn-edit" onclick="uiStartEdit(${JSON.stringify(JSON.stringify(p))})">Düzenle</button>
+          <button class="admin-btn-edit" onclick="uiStartEditById('${p.id}')">Düzenle</button>
           <button class="admin-btn-del" onclick="deleteProject('${p.id}');setTimeout(loadUiComponents,500)">Sil</button>
         </div>
       </div>`;
@@ -1781,7 +1790,10 @@ async function loadUiComponents() {
   }
 }
 
-window.uiStartEdit = function(jsonStr) { try { uiStartEdit(JSON.parse(jsonStr)); } catch(e){} };
+window.uiStartEditById = function(id) {
+  const p = uiProjectsData.find(item => item.id === id);
+  if (p) uiStartEdit(p);
+};
 
 document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
   const title   = document.getElementById('ui-title').value.trim();

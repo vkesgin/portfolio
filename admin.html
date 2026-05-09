@@ -409,7 +409,7 @@
   <div class="admin-panel" id="tab-uilib">
     <div class="admin-panel-header">
       <h2 class="admin-panel-title">Bileşen Kütüphanesi</h2>
-      <p class="admin-panel-sub">Next.js vitrininde sergilenecek Rive ve React bileşenlerini yönetin. <a href="http://localhost:3000" target="_blank" style="color:var(--accent)">Vitrini Gör ↗</a></p>
+      <p class="admin-panel-sub">Next.js vitrininde sergilenecek Rive animasyonlarını yönetin. <a href="http://localhost:3000" target="_blank" style="color:var(--accent)">Vitrini Gör ↗</a></p>
     </div>
 
     <div class="threed-layout">
@@ -423,33 +423,39 @@
           <span class="ct-field-line"></span>
         </div>
         
-        <div style="margin-top:24px">
-          <label class="ct-label">.riv Animasyon Dosyası</label>
-          <div class="upload-zone" id="ui-riv-zone" style="margin-top:8px;padding:12px;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(255,255,255,0.2);border-radius:8px;cursor:pointer">
-            <span id="ui-riv-name" style="font-size:12px;color:var(--text-muted)">Dosya Seç (.riv)</span>
-            <input type="file" id="ui-riv-file" accept=".riv" style="display:none">
-          </div>
-          <p style="font-size:10px;color:var(--text-muted);margin-top:6px">// Düzenleme modunda boş bırakırsanız mevcut dosya korunur.</p>
+        <!-- Artboard (optional) -->
+        <div class="ct-field" style="margin-top:16px">
+          <label class="ct-label">Artboard Adı <span style="color:#555">(opsiyonel — birden fazla artboard varsa belirt)</span></label>
+          <input type="text" id="ui-artboard" class="ct-input" placeholder="Örn: Artboard 2">
+          <span class="ct-field-line"></span>
         </div>
 
-        <div style="margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-          <div class="ct-field">
-            <label class="ct-label">Artboard Adı <span style="color:#555">(opsiyonel)</span></label>
-            <input type="text" id="ui-artboard" class="ct-input" placeholder="Artboard 2">
-            <span class="ct-field-line"></span>
-            <p style="font-size:10px;color:#555;margin-top:4px">// Kedi için: <b style="color:#aaa">Artboard 2</b></p>
+        <!-- .riv dosya seçici -->
+        <div style="margin-top:24px">
+          <label class="ct-label">.riv Animasyon Dosyası</label>
+          <div class="upload-zone" id="ui-riv-zone" style="margin-top:8px;padding:16px;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;flex-direction:column;gap:6px">
+            <span id="ui-riv-name" style="font-size:12px;color:var(--text-muted)">Dosya Seç (.riv)</span>
+            <span style="font-size:10px;color:#444">// Seçince içindeki State Machine'ler otomatik taranır</span>
+            <input type="file" id="ui-riv-file" accept=".riv" style="display:none">
           </div>
-          <div class="ct-field">
-            <label class="ct-label" style="color:#ff2b73">★ State Machine Adı</label>
-            <input type="text" id="ui-statemachine" class="ct-input" placeholder="State Machine 1" style="border-color:rgba(255,43,115,0.4)">
-            <span class="ct-field-line" style="background:#ff2b73"></span>
-            <p style="font-size:10px;color:#777;margin-top:4px">Araç=<b style="color:#ff2b73">bumpy</b> &nbsp;|&nbsp; Kedi=<b style="color:#ff2b73">State Machine 1</b></p>
+        </div>
+
+        <!-- STATE MACHINE TARAMA SONUÇLARI -->
+        <div id="ui-sm-panel" style="margin-top:16px;display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <label class="ct-label" style="color:#ff2b73;margin:0">⚙ Tespit Edilen State Machine'ler</label>
+            <button onclick="uiSelectAllSMs()" style="font-size:10px;color:#ff2b73;background:none;border:none;cursor:pointer;font-family:var(--font-mono)">Tümünü Seç</button>
           </div>
+          <div id="ui-sm-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+
+        <div id="ui-sm-scanning" style="margin-top:12px;display:none;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">
+          ⚙ Dosya analiz ediliyor...
         </div>
 
         <div class="ct-field" style="margin-top:24px">
           <label class="ct-label">React Kaynak Kodu <span style="color:#555">(opsiyonel)</span></label>
-          <textarea id="ui-code" class="admin-textarea" rows="5" placeholder="export default function MyComponent() { ... }" style="font-family:monospace;font-size:11px"></textarea>
+          <textarea id="ui-code" class="admin-textarea" rows="4" placeholder="export default function MyComponent() { ... }" style="font-family:monospace;font-size:11px"></textarea>
           <span class="ct-field-line"></span>
         </div>
 
@@ -1542,13 +1548,135 @@ const uiRivName = document.getElementById('ui-riv-name');
 let editingUiId = null;
 let editingUiCurrentRivUrl = '';
 
+// ── Rive CDN yükleyici (dosya inceleme için) ──────────────────────────────
+let _riveInspectReady = false;
+function loadRiveInspector() {
+  return new Promise(resolve => {
+    if (_riveInspectReady && window.rive) { resolve(); return; }
+    if (window.rive) { _riveInspectReady = true; resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/@rive-app/canvas@2.21.6/rive.js';
+    s.onload  = () => { _riveInspectReady = true; resolve(); };
+    s.onerror = () => resolve(); // sessizce geç
+    document.head.appendChild(s);
+  });
+}
+
+// Bir .riv dosyasının içindeki tüm State Machine'leri + input'ları döndürür
+async function inspectRivFile(file) {
+  try {
+    await loadRiveInspector();
+    if (!window.rive) throw new Error('Rive yüklenemedi');
+    const buffer = await file.arrayBuffer();
+    const canvas = document.createElement('canvas');
+    canvas.width = 100; canvas.height = 100;
+
+    return await new Promise(resolve => {
+      const timeout = setTimeout(() => resolve({ stateMachines: [] }), 6000);
+      const r = new rive.Rive({
+        buffer, canvas, autoplay: false,
+        onLoad: () => {
+          clearTimeout(timeout);
+          const smNames = r.stateMachineNames || [];
+          const result = { stateMachines: smNames.map(sm => {
+            let inputs = [];
+            try { inputs = (r.stateMachineInputs(sm) || []).map(i => ({ name: i.name, type: i.type })); } catch(_) {}
+            return { name: sm, inputs };
+          })};
+          try { r.cleanup(); } catch(_) {}
+          resolve(result);
+        },
+        onLoadError: () => { clearTimeout(timeout); resolve({ stateMachines: [] }); }
+      });
+    });
+  } catch(e) {
+    return { stateMachines: [] };
+  }
+}
+
+// SM input type badge metinleri
+// type: 0=Trigger, 1=Boolean, 2=Number
+function smInputBadge(inp) {
+  if (inp.type === 0) return `<span style="color:#ff2b73;font-size:9px;border:1px solid rgba(255,43,115,0.4);padding:1px 4px;border-radius:4px">🎯 ${inp.name}</span>`;
+  if (inp.type === 2) {
+    const n = inp.name.toLowerCase();
+    const isCursor = n.includes('x') || n.includes('y') || n.includes('pos');
+    return `<span style="color:${isCursor?'#00e5ff':'#aaa'};font-size:9px;border:1px solid rgba(${isCursor?'0,229,255':'170,170,170'},0.3);padding:1px 4px;border-radius:4px">${isCursor?'🖱':'#'} ${inp.name}</span>`;
+  }
+  if (inp.type === 1) {
+    const n = inp.name.toLowerCase();
+    const isHover = n.includes('hover') || n.includes('over');
+    return `<span style="color:${isHover?'#34d399':'#888'};font-size:9px;border:1px solid rgba(${isHover?'52,211,153':'136,136,136'},0.3);padding:1px 4px;border-radius:4px">${isHover?'🖐':'⚪'} ${inp.name}</span>`;
+  }
+  return '';
+}
+
+// SM otomatik etiket (cursor/click/hover tespiti)
+function smAutoLabel(sm) {
+  const labels = [];
+  sm.inputs.forEach(i => {
+    const n = i.name.toLowerCase();
+    if (i.type === 0) labels.push('Tıklama');
+    if (i.type === 2 && (n.includes('x') || n.includes('y') || n.includes('pos'))) labels.push('Cursor Takibi');
+    if (i.type === 1 && (n.includes('hover') || n.includes('over'))) labels.push('Hover');
+  });
+  return [...new Set(labels)].join(', ') || 'Dahili Animasyon';
+}
+
+// Tespit edilen SM'leri panelde göster
+function renderSmPanel(result) {
+  const panel = document.getElementById('ui-sm-panel');
+  const list  = document.getElementById('ui-sm-list');
+  const scanning = document.getElementById('ui-sm-scanning');
+  scanning.style.display = 'none';
+
+  if (!result.stateMachines.length) {
+    panel.style.display = 'block';
+    list.innerHTML = '<div style="color:#666;font-size:11px;font-family:var(--font-mono)">// Bu dosyada State Machine bulunamadı — animasyon autoplay çalışır</div>';
+    return;
+  }
+
+  panel.style.display = 'block';
+  list.innerHTML = result.stateMachines.map((sm, i) => `
+    <label style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,43,115,0.15);border-radius:8px;padding:10px 12px;cursor:pointer">
+      <input type="checkbox" name="ui-sm-check" value="${sm.name}" ${i === 0 ? 'checked' : ''}
+             style="margin-top:2px;accent-color:#ff2b73;cursor:pointer;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="color:#fff;font-size:12px;font-weight:500;font-family:var(--font-mono)">${sm.name}</div>
+        <div style="color:#666;font-size:10px;margin-top:2px">${smAutoLabel(sm)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+          ${sm.inputs.map(smInputBadge).join('')}
+          ${!sm.inputs.length ? '<span style="color:#444;font-size:9px">// input yok — Rive dahili listener</span>' : ''}
+        </div>
+      </div>
+    </label>`).join('');
+}
+
+// Tümünü seç/kaldır
+window.uiSelectAllSMs = function() {
+  const boxes = document.querySelectorAll('[name="ui-sm-check"]');
+  const allChecked = [...boxes].every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; });
+};
+
+// Seçili SM'leri array olarak al
+function getSelectedSMs() {
+  return [...document.querySelectorAll('[name="ui-sm-check"]:checked')].map(b => b.value);
+}
+
+// Dosya zone
 if (uiRivZone && uiRivFile) {
   uiRivZone.addEventListener('click', () => uiRivFile.click());
-  uiRivFile.addEventListener('change', () => {
-    if (uiRivFile.files[0]) {
-      uiRivName.textContent = uiRivFile.files[0].name;
-      uiRivName.style.color = 'var(--accent)';
-    }
+  uiRivFile.addEventListener('change', async () => {
+    const file = uiRivFile.files[0];
+    if (!file) return;
+    uiRivName.textContent = '📎 ' + file.name;
+    uiRivName.style.color = 'var(--accent)';
+    // Tarama başlat
+    document.getElementById('ui-sm-panel').style.display = 'none';
+    document.getElementById('ui-sm-scanning').style.display = 'block';
+    const result = await inspectRivFile(file);
+    renderSmPanel(result);
   });
 }
 
@@ -1564,12 +1692,13 @@ function uiResetForm() {
   editingUiCurrentRivUrl = '';
   document.getElementById('ui-title').value = '';
   document.getElementById('ui-artboard').value = '';
-  document.getElementById('ui-statemachine').value = '';
   document.getElementById('ui-code').value = '';
   document.getElementById('ui-is-pro').checked = false;
   uiRivFile.value = '';
   uiRivName.textContent = 'Dosya Seç (.riv)';
   uiRivName.style.color = 'var(--text-muted)';
+  document.getElementById('ui-sm-panel').style.display = 'none';
+  document.getElementById('ui-sm-scanning').style.display = 'none';
   document.getElementById('ui-save-btn').textContent = 'Kütüphaneye Ekle ↗';
   document.getElementById('ui-save-btn').style.background = '#ff2b73';
   document.getElementById('ui-cancel-btn').style.display = 'none';
@@ -1583,16 +1712,32 @@ function uiStartEdit(p) {
   document.getElementById('ui-title').value = p.title || '';
   document.getElementById('ui-code').value = p.description || '';
   document.getElementById('ui-is-pro').checked = !!p.is_featured;
-  let config = { artboard: '', statemachine: '' };
-  try { if (p.tags) config = JSON.parse(p.tags); } catch(e){}
-  document.getElementById('ui-artboard').value = config.artboard || '';
-  document.getElementById('ui-statemachine').value = config.statemachine || '';
+  let cfg = { artboard: '', stateMachines: [] };
+  try { if (p.tags) cfg = JSON.parse(p.tags); } catch(e){}
+  document.getElementById('ui-artboard').value = cfg.artboard || '';
+
+  // Mevcut SM'leri göster (düzenleme modunda)
+  const existingSMs = cfg.stateMachines || (cfg.statemachine ? [cfg.statemachine] : []);
+  if (existingSMs.length) {
+    const panel = document.getElementById('ui-sm-panel');
+    const list  = document.getElementById('ui-sm-list');
+    panel.style.display = 'block';
+    list.innerHTML = existingSMs.map(sm => `
+      <label style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(124,58,237,0.3);border-radius:8px;padding:10px 12px;cursor:pointer">
+        <input type="checkbox" name="ui-sm-check" value="${sm}" checked style="accent-color:#7c3aed;cursor:pointer">
+        <div>
+          <div style="color:#fff;font-size:12px;font-family:var(--font-mono)">${sm}</div>
+          <div style="color:#7c3aed;font-size:10px">// kayıtlı</div>
+        </div>
+      </label>`).join('') + `<p style="font-size:10px;color:#555;margin-top:8px">// Yeni .riv seçersen mevcut SM'ler güncellenir</p>`;
+  }
+
   uiRivName.textContent = p.image_url ? '📎 Mevcut dosya korunacak (değiştirmek için seç)' : 'Dosya Seç (.riv)';
   uiRivName.style.color = p.image_url ? 'var(--accent)' : 'var(--text-muted)';
   document.getElementById('ui-save-btn').textContent = 'Güncelle ↗';
   document.getElementById('ui-save-btn').style.background = '#7c3aed';
   document.getElementById('ui-cancel-btn').style.display = 'flex';
-  document.getElementById('ui-form-eyebrow').textContent = '// bileşeni düzenle → ' + p.title;
+  document.getElementById('ui-form-eyebrow').textContent = '// düzenle → ' + p.title;
   document.getElementById('tab-uilib').querySelector('.threed-form-wrap').scrollIntoView({ behavior: 'smooth' });
 }
 
@@ -1605,53 +1750,49 @@ async function loadUiComponents() {
   try {
     const r = await fetch(`${API}/api/projects?category=uilib`);
     const data = await r.json();
-    if (!data.length) {
-      list.innerHTML = '<div class="admin-empty">Henüz bileşen eklenmedi.</div>';
-      return;
-    }
+    if (!data.length) { list.innerHTML = '<div class="admin-empty">Henüz bileşen eklenmedi.</div>'; return; }
     list.innerHTML = data.map(p => {
-      let cfg = { artboard: '', statemachine: '' };
+      let cfg = { artboard: '', stateMachines: [] };
       try { if (p.tags) cfg = JSON.parse(p.tags); } catch(e){}
-      const smBadge = cfg.statemachine
-        ? `<span style="font-size:10px;color:#ff2b73;font-family:var(--font-mono);margin-left:6px">SM: ${cfg.statemachine}</span>`
-        : `<span style="font-size:10px;color:#ff4444;font-family:var(--font-mono);margin-left:6px">⚠ SM ayarlı değil</span>`;
+      const sms = cfg.stateMachines || (cfg.statemachine ? [cfg.statemachine] : []);
+      const smBadges = sms.length
+        ? sms.map(s => `<span style="font-size:9px;color:#ff2b73;border:1px solid rgba(255,43,115,0.4);padding:1px 5px;border-radius:4px;font-family:var(--font-mono)">${s}</span>`).join(' ')
+        : `<span style="font-size:9px;color:#ff4444;border:1px solid rgba(255,68,68,0.3);padding:1px 5px;border-radius:4px">⚠ SM yok</span>`;
       return `
-      <div style="background:var(--bg-surface); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px;">
+      <div style="background:var(--bg-surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px">
         <div style="flex:1;min-width:0">
-          <div class="admin-card-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
-            ${p.title}
-            ${p.is_featured ? '<span style="color:#ff2b73;font-size:10px;border:1px solid #ff2b73;padding:2px 4px;border-radius:4px">PRO</span>' : '<span style="color:#10b981;font-size:10px;border:1px solid #10b981;padding:2px 4px;border-radius:4px">FREE</span>'}
-            ${smBadge}
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+            <span class="admin-card-title" style="margin:0">${p.title}</span>
+            ${p.is_featured ? '<span style="color:#ff2b73;font-size:9px;border:1px solid #ff2b73;padding:1px 4px;border-radius:4px">PRO</span>' : '<span style="color:#10b981;font-size:9px;border:1px solid #10b981;padding:1px 4px;border-radius:4px">FREE</span>'}
+            ${smBadges}
           </div>
-          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-            ${p.image_url ? '📎 ' + p.image_url.split('/').pop() : 'dosya yok'}
-            ${cfg.artboard ? ' | AB: ' + cfg.artboard : ''}
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${p.image_url ? '📎 ' + p.image_url.split('/').pop() : 'dosya yok'}${cfg.artboard ? ' · AB: '+cfg.artboard : ''}
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0">
           <button class="admin-btn-edit" onclick="uiStartEdit(${JSON.stringify(JSON.stringify(p))})">Düzenle</button>
-          <button class="admin-btn-del" onclick="deleteProject('${p.id}'); setTimeout(loadUiComponents, 500)">Sil</button>
+          <button class="admin-btn-del" onclick="deleteProject('${p.id}');setTimeout(loadUiComponents,500)">Sil</button>
         </div>
       </div>`;
     }).join('');
-  } catch (e) {
+  } catch(e) {
     list.innerHTML = '<div class="admin-empty" style="color:var(--danger)">Hata oluştu</div>';
   }
 }
 
-// Global wrapper — onclick içinden JSON parse için
-window.uiStartEdit = function(jsonStr) {
-  try { uiStartEdit(JSON.parse(jsonStr)); } catch(e){}
-};
+window.uiStartEdit = function(jsonStr) { try { uiStartEdit(JSON.parse(jsonStr)); } catch(e){} };
 
 document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
-  const title = document.getElementById('ui-title').value.trim();
-  const code = document.getElementById('ui-code').value.trim();
-  const isPro = document.getElementById('ui-is-pro').checked;
+  const title   = document.getElementById('ui-title').value.trim();
+  const code    = document.getElementById('ui-code').value.trim();
+  const isPro   = document.getElementById('ui-is-pro').checked;
   const artboard = document.getElementById('ui-artboard').value.trim();
-  const statemachine = document.getElementById('ui-statemachine').value.trim();
-  const file = uiRivFile.files[0];
-  const tagsJson = JSON.stringify({ artboard, statemachine });
+  const file    = uiRivFile.files[0];
+
+  // Seçili SM'leri al
+  const selectedSMs = getSelectedSMs();
+  const tagsJson = JSON.stringify({ artboard, stateMachines: selectedSMs });
 
   if (!title) { uiStatus('Başlık zorunlu!', true); return; }
   if (!editingUiId && !file) { uiStatus('.riv dosyası zorunlu!', true); return; }
@@ -1660,23 +1801,16 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
   document.getElementById('ui-save-btn').disabled = true;
 
   try {
-    let rivUrl = editingUiCurrentRivUrl; // editing modda mevcut URL koru
-    if (file) {
-      rivUrl = await uploadFile(file, 'file');
-    }
+    let rivUrl = editingUiCurrentRivUrl;
+    if (file) rivUrl = await uploadFile(file, 'file');
 
     const payload = {
-      title,
-      category: 'uilib',
-      description: code,
-      tags: tagsJson,
-      image_url: rivUrl,
-      is_featured: isPro
+      title, category: 'uilib', description: code,
+      tags: tagsJson, image_url: rivUrl, is_featured: isPro
     };
 
     const endpoint = editingUiId ? `${API}/api/projects/${editingUiId}` : `${API}/api/projects`;
     const method   = editingUiId ? 'PUT' : 'POST';
-
     const r = await fetch(endpoint, {
       method,
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
@@ -1684,7 +1818,6 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
     });
 
     if (!r.ok) throw new Error('Kayıt hatası: ' + r.status);
-
     uiStatus(editingUiId ? 'Güncellendi ✓' : 'Bileşen eklendi ✓', false);
     uiResetForm();
     loadUiComponents();
@@ -1695,6 +1828,9 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
     document.getElementById('ui-save-btn').disabled = false;
   }
 });
+
+
+
 
 </script>
 

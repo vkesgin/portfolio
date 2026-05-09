@@ -96,13 +96,14 @@ export default function ComponentGrid() {
               {comp.image_url ? (
                 <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-500">
                   {(() => {
-                    let config = { artboard: "", statemachine: "" };
-                    try { if (comp.tags) config = JSON.parse(comp.tags); } catch(e){}
+                    let cfg: { artboard?: string; stateMachines?: string[]; statemachine?: string } = {};
+                    try { if (comp.tags) cfg = JSON.parse(comp.tags); } catch(e){}
+                    const sms = cfg.stateMachines ?? (cfg.statemachine ? [cfg.statemachine] : []);
                     return (
-                      <RiveDemo 
-                        src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} 
-                        artboard={config.artboard}
-                        stateMachine={config.statemachine}
+                      <RiveDemo
+                        src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`}
+                        artboard={cfg.artboard}
+                        stateMachines={sms}
                       />
                     );
                   })()}
@@ -169,17 +170,15 @@ export default function ComponentGrid() {
                 <div className="relative group">
                   <div className="flex-1 w-full flex items-center justify-center p-6 lg:p-12">
                         {(() => {
-                          let config = { artboard: "", statemachine: "" };
-                          try {
-                            if (selectedComp.tags) config = JSON.parse(selectedComp.tags);
-                          } catch (e) {}
-                          
+                          let cfg: { artboard?: string; stateMachines?: string[]; statemachine?: string } = {};
+                          try { if (selectedComp.tags) cfg = JSON.parse(selectedComp.tags); } catch(e){}
+                          const sms = cfg.stateMachines ?? (cfg.statemachine ? [cfg.statemachine] : []);
                           return (
                             <div className="w-full h-full max-h-[500px] border border-white/10 rounded-xl overflow-hidden bg-black/40">
-                              <RiveDemo 
-                                src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`} 
-                                artboard={config.artboard}
-                                stateMachine={config.statemachine}
+                              <RiveDemo
+                                src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
+                                artboard={cfg.artboard}
+                                stateMachines={sms}
                               />
                             </div>
                           );

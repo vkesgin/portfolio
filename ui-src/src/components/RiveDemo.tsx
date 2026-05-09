@@ -6,131 +6,127 @@ import { useEffect, useRef } from "react";
 interface RiveDemoProps {
   src: string;
   artboard?: string;
-  stateMachine?: string;
+  stateMachines?: string[];
 }
 
-export default function RiveDemo({ src, artboard, stateMachine }: RiveDemoProps) {
+export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // === ViewModel (Data Binding) props — for cat-style xPos/yPos cursor tracking ===
-  const vmXProp = useRef<any>(null);
-  const vmYProp = useRef<any>(null);
+  // Data Binding / ViewModel refs (cat-style xPos/yPos)
+  const vmX = useRef<any>(null);
+  const vmY = useRef<any>(null);
 
-  // === Old State Machine Input refs — for hover booleans ===
-  const hoverInputs = useRef<any[]>([]);
+  // State Machine Input collections
+  const clickTriggers = useRef<any[]>([]);
+  const hoverBooleans = useRef<any[]>([]);
+  const xNumbers = useRef<any[]>([]);
+  const yNumbers = useRef<any[]>([]);
 
-  const riveConfig: any = {
-    src,
-    autoplay: true,
-    autoBind: true, // Enables new Data Binding / ViewModel API automatically
-  };
-  if (artboard)     riveConfig.artboard      = artboard;
-  if (stateMachine) riveConfig.stateMachines = stateMachine;
+  const riveConfig: any = { src, autoplay: true, autoBind: true };
+  if (artboard) riveConfig.artboard = artboard;
+  if (stateMachines && stateMachines.length > 0) riveConfig.stateMachines = stateMachines;
 
   const { rive, RiveComponent } = useRive({
     ...riveConfig,
     onLoad: () => {
       if (!rive) return;
 
-      // ── APPROACH 1: New Data Binding / ViewModel API (cat, eyes, etc.) ──────
-      // Checks for xPos / yPos ViewModel properties and maps cursor to them.
+      // Reset
+      vmX.current = null; vmY.current = null;
+      clickTriggers.current = []; hoverBooleans.current = [];
+      xNumbers.current = []; yNumbers.current = [];
+
+      // === API 1: ViewModel / Data Binding (cat: xPos, yPos) ===
       try {
         const vmi = (rive as any).viewModelInstance;
         if (vmi) {
-          const xProp = vmi.number("xPos");
-          const yProp = vmi.number("yPos");
-          if (xProp) { xProp.value = 50; vmXProp.current = xProp; }
-          if (yProp) { yProp.value = 50; vmYProp.current = yProp; }
-          console.log("[RiveDemo] ViewModel found. xPos/yPos bound:", !!xProp, !!yProp);
+          const xp = vmi.number("xPos");
+          const yp = vmi.number("yPos");
+          if (xp) { xp.value = 50; vmX.current = xp; }
+          if (yp) { yp.value = 50; vmY.current = yp; }
         }
-      } catch (e) {
-        // File may not use Data Binding — that's fine
-      }
+      } catch (_) {}
 
-      // ── APPROACH 2: Old State Machine Inputs API (hover booleans) ────────────
-      // NOTE: Trigger/click inputs are NOT bound here intentionally.
-      // Rive's own internal listeners (e.g. bumpy/vehicles "on click" listeners)
-      // handle pointer events directly on the canvas. We must NOT set
-      // pointer-events-none on RiveComponent for these to work.
+      // === API 2: State Machine Inputs (triggers, booleans, numbers) ===
       try {
-        const smNames = rive.stateMachineNames;
-        if (smNames && smNames.length > 0) {
-          smNames.forEach(sm => {
-            const inputs = rive.stateMachineInputs(sm);
-            if (inputs) {
-              inputs.forEach(input => {
-                const name = input.name.toLowerCase();
-                if (
-                  input.type === StateMachineInputType.Boolean &&
-                  name.includes("hover")
-                ) {
-                  hoverInputs.current.push(input);
-                }
-              });
+        const smsToScan = (stateMachines && stateMachines.length > 0)
+          ? stateMachines
+          : (rive.stateMachineNames ?? []);
+
+        for (const sm of smsToScan) {
+          const inputs = rive.stateMachineInputs(sm) ?? [];
+          for (const inp of inputs) {
+            const n = inp.name.toLowerCase();
+            if (inp.type === StateMachineInputType.Trigger) {
+              // All triggers → fire on click
+              clickTriggers.current.push(inp);
+            } else if (inp.type === StateMachineInputType.Boolean) {
+              if (n.includes("hover") || n.includes("over") || n.includes("mouse")) {
+                hoverBooleans.current.push(inp);
+              } else if (n.includes("press") || n.includes("click") || n.includes("tap") || n.includes("down")) {
+                clickTriggers.current.push(inp);
+              }
+            } else if (inp.type === StateMachineInputType.Number) {
+              const isX = n === "x" || n === "xpos" || n.endsWith("_x") || n.startsWith("x_");
+              const isY = n === "y" || n === "ypos" || n.endsWith("_y") || n.startsWith("y_");
+              if (isX) xNumbers.current.push(inp);
+              if (isY) yNumbers.current.push(inp);
             }
-          });
-          console.log("[RiveDemo] State machines found:", smNames);
+          }
         }
-      } catch (e) {
-        // File may not have State Machine inputs
-      }
+      } catch (_) {}
     },
   });
 
-  // ── Window-level mouse tracking for ViewModel (cat-style) ──────────────────
-  // We listen on the window so the character follows the cursor even when
-  // the mouse is outside the canvas element.
+  // Global mouse tracking — works window-wide for cat-style animations
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const onMove = (e: MouseEvent) => {
+      const hasVM = vmX.current || vmY.current;
+      const hasSM = xNumbers.current.length || yNumbers.current.length;
+      if (!hasVM && !hasSM) return;
       if (!containerRef.current) return;
-      if (!vmXProp.current && !vmYProp.current) return;
 
       const rect = containerRef.current.getBoundingClientRect();
-      const clampedX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-      const clampedY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
-      const xVal = (clampedX / rect.width) * 100;
-      const yVal = (clampedY / rect.height) * 100;
+      const xVal = (Math.max(0, Math.min(e.clientX - rect.left, rect.width)) / rect.width) * 100;
+      const yVal = (Math.max(0, Math.min(e.clientY - rect.top, rect.height)) / rect.height) * 100;
 
-      if (vmXProp.current) vmXProp.current.value = xVal;
-      if (vmYProp.current) vmYProp.current.value = yVal;
+      if (vmX.current) vmX.current.value = xVal;
+      if (vmY.current) vmY.current.value = yVal;
+      xNumbers.current.forEach(i => { i.value = xVal; });
+      yNumbers.current.forEach(i => { i.value = yVal; });
     };
 
-    const handleMouseLeave = () => {
-      // Reset to center when cursor leaves the page
-      if (vmXProp.current) vmXProp.current.value = 50;
-      if (vmYProp.current) vmYProp.current.value = 50;
+    const onLeave = () => {
+      if (vmX.current) vmX.current.value = 50;
+      if (vmY.current) vmY.current.value = 50;
+      xNumbers.current.forEach(i => { i.value = 50; });
+      yNumbers.current.forEach(i => { i.value = 50; });
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseleave", handleMouseLeave);
-
+    window.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseleave", onLeave);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseleave", handleMouseLeave);
+      window.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseleave", onLeave);
     };
   }, [rive]);
 
-  // ── Hover state machine inputs (old API) ───────────────────────────────────
-  const handleMouseEnter = () => {
-    hoverInputs.current.forEach(input => { input.value = true; });
-  };
-
-  const handleMouseLeave = () => {
-    hoverInputs.current.forEach(input => { input.value = false; });
+  const handleClick = () => {
+    clickTriggers.current.forEach(t => {
+      if (typeof t.fire === "function") t.fire();
+      else t.value = true;
+    });
   };
 
   return (
     <div
       ref={containerRef}
       className="w-full h-full flex items-center justify-center"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onClick={handleClick}
+      onMouseEnter={() => hoverBooleans.current.forEach(i => { i.value = true; })}
+      onMouseLeave={() => hoverBooleans.current.forEach(i => { i.value = false; })}
     >
-      {/*
-        CRITICAL: No pointer-events-none here!
-        Rive files with internal "On Press / On Click" listeners (like vehicles/bumpy)
-        need raw pointer events to reach the canvas. If we block them, clicks do nothing.
-      */}
+      {/* NO pointer-events-none: Rive's internal On Pointer Down listeners (vehicles/bumpy) need raw events */}
       <RiveComponent className="w-full h-full cursor-pointer" />
     </div>
   );

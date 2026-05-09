@@ -20,7 +20,7 @@ interface RiveCfg {
   inputs?: { name: string; type: number }[];
 }
 
-// ─── Kod Üretici (4 framework) ──────────────────────────────────────────────
+// ─── Multi-Framework Kod Üretici ──────────────────────────────────────────────
 function generateCode(
   framework: "react" | "js" | "rn" | "flutter",
   cfg: RiveCfg,
@@ -31,7 +31,6 @@ function generateCode(
   const sm = (cfg.stateMachines ?? (cfg.statemachine ? [cfg.statemachine] : []))[0] ?? "";
   const inputs = cfg.inputs ?? [];
   const triggers = inputs.filter((i) => i.type === 0);
-  const booleans = inputs.filter((i) => i.type === 1 && /hover|over|active/i.test(i.name));
   const isNative = sm && inputs.length === 0;
   const fnName = title.replace(/[^a-zA-Z0-9]/g, "") || "RiveComponent";
   const rivFile = fileName || "animation.riv";
@@ -45,7 +44,7 @@ function generateCode(
     if (sm) c += `    stateMachines: STATE_MACHINE,\n`;
     c += `    autoplay: true,\n    shouldResizeCanvasToContainer: true,\n  });\n`;
 
-    if (sm) {
+    if (sm && triggers.length > 0) {
       c += `\n  const smInputs = useMemo(\n    () => rive?.stateMachineInputs(STATE_MACHINE) ?? [],\n    [rive],\n  );\n`;
       triggers.forEach((t) => {
         const v = t.name.replace(/\W/g, "_").toLowerCase() + "Input";
@@ -53,12 +52,11 @@ function generateCode(
         const fn = "fire" + t.name[0].toUpperCase() + t.name.slice(1);
         c += `  const ${fn} = () => { if (${v}) ${v}.fire(); };\n`;
       });
-      if (isNative) {
-        c += `\n  // Native hover/click — Rive canvas otomatik yönetir, ek kod gerekmez.\n`;
-      }
+    } else if (isNative) {
+      c += `\n  // Bu animasyon Rive Editor'de tanımlanmış built-in pointer listener'ları kullanıyor.\n  // Hover/click olayları canvas'a native olarak iletilir — ek React kodu gerekmez.\n`;
     }
 
-    c += `\n  return (\n    <div className="w-full h-[420px]">\n      <RiveComponent className="w-full h-full" />\n    </div>\n`;
+    c += `\n  return (\n    <div className="w-full h-[420px]">\n      <RiveComponent className="w-full h-full" style={{ display: "block" }} />\n    </div>\n`;
     if (triggers.length) {
       c += `    <div className="flex gap-3 mt-4">\n`;
       triggers.forEach((t) => {
@@ -73,77 +71,53 @@ function generateCode(
 
   if (framework === "js") {
     let c = `import { Rive, Layout, Fit, Alignment } from "@rive-app/canvas";\n\n`;
-    c += `// .riv dosyasını /public/rive/ klasörüne koy\nconst canvas = document.getElementById("rive-canvas");\n\n`;
+    c += `const canvas = document.getElementById("rive-canvas");\n\n`;
     c += `const r = new Rive({\n  src: "/rive/${rivFile}",\n  canvas,\n`;
     if (ab) c += `  artboard: "${ab}",\n`;
     if (sm) c += `  stateMachines: "${sm}",\n`;
     c += `  autoplay: true,\n  layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),\n`;
     c += `  onLoad: () => {\n    r.resizeDrawingSurfaceToCanvas();\n`;
-    if (sm && triggers.length) {
+    if (triggers.length) {
       c += `    const inputs = r.stateMachineInputs("${sm}");\n`;
       triggers.forEach((t) => {
-        c += `    const ${t.name.replace(/\W/g, "_")}Input = inputs.find(i => i.name === "${t.name}");\n`;
-      });
-      c += `    // Trigger'ı ateşlemek için:\n`;
-      triggers.forEach((t) => {
-        c += `    // ${t.name.replace(/\W/g, "_")}Input.fire();\n`;
+        c += `    // const ${t.name.replace(/\W/g, "_")}Input = inputs.find(i => i.name === "${t.name}");\n`;
+        c += `    // ${t.name.replace(/\W/g, "_")}Input?.fire();\n`;
       });
     } else if (isNative) {
-      c += `    // Native hover/click — canvas pointer events otomatik çalışır\n`;
+      c += `    // Native hover/click — canvas pointer events Rive tarafından otomatik işlenir\n`;
     }
-    c += `  }\n});\n\n`;
-    c += `/* HTML:\n<canvas id="rive-canvas" width="400" height="300"></canvas>\n*/\n`;
+    c += `  }\n});\n\n/* HTML:\n<canvas id="rive-canvas" width="400" height="300"></canvas>\n*/\n`;
     return c;
   }
 
   if (framework === "rn") {
-    let c = `import Rive, { Fit, Alignment } from "@rive-app/react-native";\n`;
-    if (sm && triggers.length) c += `import { useRef } from "react";\n`;
-    c += `\nexport default function ${fnName}() {\n`;
-    if (sm && triggers.length) {
-      c += `  const riveRef = useRef(null);\n\n`;
-      c += `  const fireBump = () => {\n    riveRef.current?.fireState("${sm}", "${triggers[0].name}");\n  };\n\n`;
-    }
-    c += `  return (\n    <Rive\n`;
-    if (sm && triggers.length) c += `      ref={riveRef}\n`;
+    let c = `import Rive, { Fit } from "@rive-app/react-native";\n\nexport default function ${fnName}() {\n  return (\n    <Rive\n`;
     c += `      resourceName="${rivFile.replace(".riv", "")}"\n`;
     if (ab) c += `      artboardName="${ab}"\n`;
     if (sm) c += `      stateMachineName="${sm}"\n`;
-    c += `      fit={Fit.Contain}\n      alignment={Alignment.Center}\n      autoplay\n    />\n  );\n}\n\n`;
-    c += `/* package.json'a ekle:\n"@rive-app/react-native": "latest"\n\n`;
-    c += `assets/animations/${rivFile} klasörüne .riv dosyasını koy */\n`;
+    c += `      fit={Fit.Contain}\n      autoplay\n    />\n  );\n}\n\n/* Kurulum:\nnpm install @rive-app/react-native react-native-nitro-modules\n.riv dosyasını assets/ klasörüne koy */\n`;
     return c;
   }
 
   if (framework === "flutter") {
-    let c = `import 'package:flutter/material.dart';\nimport 'package:rive/rive.dart';\n\n`;
-    c += `class ${fnName} extends StatefulWidget {\n  const ${fnName}({super.key});\n  @override\n  State<${fnName}> createState() => _${fnName}State();\n}\n\n`;
-    c += `class _${fnName}State extends State<${fnName}> {\n`;
-    if (sm && triggers.length) {
-      c += `  SMITrigger? _${triggers[0].name.replace(/\W/g, "_")};\n\n`;
-      c += `  void _onRiveInit(Artboard artboard) {\n    final ctrl = StateMachineController.fromArtboard(artboard, '${sm}');\n    artboard.addController(ctrl!);\n    _${triggers[0].name.replace(/\W/g, "_")} = ctrl.findInput<bool>('${triggers[0].name}') as SMITrigger?;\n  }\n\n`;
-    }
-    c += `  @override\n  Widget build(BuildContext context) {\n    return SizedBox(\n      width: 400, height: 300,\n      child: RiveAnimation.asset(\n        'assets/${rivFile}',\n`;
+    let c = `import 'package:flutter/material.dart';\nimport 'package:rive/rive.dart';\n\nclass ${fnName} extends StatelessWidget {\n  const ${fnName}({super.key});\n\n  @override\n  Widget build(BuildContext context) {\n    return SizedBox(\n      width: 400, height: 300,\n      child: RiveAnimation.asset(\n        'assets/${rivFile}',\n`;
     if (ab) c += `        artboard: '${ab}',\n`;
     if (sm) c += `        stateMachines: ['${sm}'],\n`;
-    if (sm && triggers.length) c += `        onInit: _onRiveInit,\n`;
-    c += `      ),\n    );\n  }\n}\n\n`;
-    c += `/* pubspec.yaml'a ekle:\ndependencies:\n  rive: ^0.12.0\n\nflutter:\n  assets:\n    - assets/${rivFile}\n*/\n`;
+    c += `        fit: BoxFit.contain,\n      ),\n    );\n  }\n}\n\n/* pubspec.yaml:\ndependencies:\n  rive: ^0.12.0\nflutter:\n  assets:\n    - assets/${rivFile}\n*/\n`;
     return c;
   }
 
   return "";
 }
 
-// ─── Framework Sekme Konfigürasyonu ─────────────────────────────────────────
 const FRAMEWORKS = [
-  { id: "react" as const, label: "React", icon: "⚛", note: "Next.js / Vite / CRA" },
-  { id: "js" as const, label: "JavaScript", icon: "🌐", note: "Vanilla JS / HTML" },
+  { id: "react" as const, label: "React", icon: "⚛", note: "Next.js / Vite" },
+  { id: "js" as const, label: "JavaScript", icon: "🌐", note: "Vanilla / HTML" },
   { id: "rn" as const, label: "React Native", icon: "📱", note: "iOS & Android" },
-  { id: "flutter" as const, label: "Flutter", icon: "🐦", note: "Dart / Cross-platform" },
+  { id: "flutter" as const, label: "Flutter", icon: "🐦", note: "Dart / Multi" },
 ];
 
-// ─── Ana Bileşen ─────────────────────────────────────────────────────────────
+// ─── Ana Bileşen ───────────────────────────────────────────────────────────────
 export default function ComponentGrid() {
   const [components, setComponents] = useState<UIComponent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -177,9 +151,10 @@ export default function ComponentGrid() {
     try { return selectedComp?.tags ? JSON.parse(selectedComp.tags) : {}; } catch { return {}; }
   }, [selectedComp]);
 
-  const selectedFileName = useMemo(() => {
-    return selectedComp?.image_url?.split("/").pop() ?? "animation.riv";
-  }, [selectedComp]);
+  const selectedFileName = useMemo(
+    () => selectedComp?.image_url?.split("/").pop() ?? "animation.riv",
+    [selectedComp]
+  );
 
   const generatedCode = useMemo(() => {
     if (!selectedComp) return "";
@@ -202,10 +177,11 @@ export default function ComponentGrid() {
 
   return (
     <>
-      {/* GRID */}
       <div className="mb-12">
         <div className="text-sm text-white/40 text-right">{components.length} bileşen</div>
       </div>
+
+      {/* GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {components.map((comp) => {
           let cfg: RiveCfg = {};
@@ -213,20 +189,29 @@ export default function ComponentGrid() {
           const sms = cfg.stateMachines ?? (cfg.statemachine ? [cfg.statemachine] : []);
 
           return (
-            <div key={comp.id} className="group flex flex-col bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden hover:border-white/10 transition-colors">
-              {/* PREVIEW */}
-              <div className="relative w-full bg-black/40" style={{ aspectRatio: "4/3" }}>
-                <div className="absolute top-3 right-3 z-10 flex gap-2">
+            <div key={comp.id} className="flex flex-col bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden hover:border-white/10 transition-colors">
+
+              {/* PREVIEW — sabit yükseklik, transform YOK */}
+              <div className="relative w-full bg-black/40" style={{ height: "240px" }}>
+                {/* Badges */}
+                <div className="absolute top-3 right-3 z-10 flex gap-2 pointer-events-none">
                   {comp.is_featured ? (
                     <span className="px-2 py-1 text-[10px] font-bold tracking-wider rounded bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white">PRO</span>
                   ) : (
                     <span className="px-2 py-1 text-[10px] font-bold tracking-wider rounded bg-white/10 text-white">FREE</span>
                   )}
                 </div>
+
                 {comp.image_url ? (
-                  // ÖNEMLİ: transform/scale KULLANMA — Rive'ın pointer koordinatlarını bozar
-                  // absolute inset-0 → RiveDemo'nun h-full düzgün çalışması için
-                  <div className="absolute inset-0 flex items-center justify-center p-8">
+                  /*
+                   * HOVER FIX: padding ile buton etrafında boş alan.
+                   * pointer-events: none olmayan, transform/scale OLMAYAN temiz kapsayıcı.
+                   * RiveDemo kendi içinde canvas'ı yönetir.
+                   */
+                  <div
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{ padding: "32px" }}
+                  >
                     <RiveDemo
                       src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`}
                       artboard={cfg.artboard}
@@ -240,20 +225,25 @@ export default function ComponentGrid() {
 
               {/* INFO */}
               <div className="p-6 border-t border-white/5 flex-1 flex flex-col">
-                <h3 className="text-lg font-semibold mb-1 group-hover:text-[#ff2b73] transition-colors">{comp.title}</h3>
+                <h3 className="text-lg font-semibold mb-1 hover:text-[#ff2b73] transition-colors">{comp.title}</h3>
+                {/* Animasyon tipi göstergesi */}
                 {sms.length > 0 && (
-                  <p className="text-xs text-white/30 font-mono mb-2">
-                    {cfg.inputs?.length === 0 ? "✓ hover/click" :
-                      cfg.inputs?.some(i => i.type === 0) ? "🎯 tıklama trigger" :
-                        "⚙ animasyon"}
+                  <p className="text-[11px] font-mono mb-3">
+                    {(cfg.inputs?.length === 0) ? (
+                      <span className="text-cyan-400">✦ hover / native pointer</span>
+                    ) : (cfg.inputs ?? []).some(i => i.type === 0) ? (
+                      <span className="text-[#ff2b73]">✦ tıkla → ateşle</span>
+                    ) : (
+                      <span className="text-white/30">✦ animasyon</span>
+                    )}
                   </p>
                 )}
-                <div className="mt-auto pt-6 flex gap-2">
+                <div className="mt-auto pt-4">
                   <button
                     onClick={() => { setSelectedComp(comp); setActiveFramework("react"); }}
-                    className="flex-1 py-3 text-sm font-medium rounded-xl bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3 text-sm font-medium rounded-xl bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
                     Kodu Göster
                   </button>
                 </div>
@@ -269,7 +259,7 @@ export default function ComponentGrid() {
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setSelectedComp(null)} />
           <div className="relative w-full max-w-4xl bg-[#080808] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
 
-            {/* Modal Header */}
+            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/[0.02] shrink-0">
               <div className="flex items-center gap-3">
                 <h3 className="text-lg font-bold">{selectedComp.title}</h3>
@@ -277,38 +267,21 @@ export default function ComponentGrid() {
                   <span className="px-2 py-0.5 text-[10px] bg-[#ff2b73]/20 text-[#ff2b73] rounded-full border border-[#ff2b73]/30">PRO</span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                {/* .riv İndir */}
-                <a
-                  href={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
-                  download
-                  className="px-3 py-1.5 text-xs rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white border border-white/10"
-                >
-                  ↓ .riv
-                </a>
-                <button onClick={() => setSelectedComp(null)} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                </button>
-              </div>
+              <button onClick={() => setSelectedComp(null)} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
             </div>
 
             <div className="flex-1 overflow-auto">
               {selectedComp.is_featured ? (
-                /* PRO PAYWALL */
-                <div className="flex flex-col items-center justify-center h-64 text-center p-8">
-                  <div className="w-14 h-14 mb-4 rounded-2xl bg-gradient-to-tr from-[#ff2b73] to-[#ff7e5f] flex items-center justify-center shadow-[0_0_40px_rgba(255,43,115,0.4)]">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-                  </div>
-                  <h4 className="text-xl font-bold mb-2">Sadece PRO Üyeler</h4>
-                  <p className="text-sm text-white/50 mb-6">Bu bileşenin kaynak koduna erişmek için abonelik gereklidir.</p>
-                  <button className="px-6 py-3 rounded-xl bg-white text-black font-semibold hover:scale-105 transition-transform">Abonelik Planlarını Gör</button>
-                </div>
-              ) : (
-                <div className="flex flex-col lg:flex-row h-full">
-                  {/* Sol: Animasyon Preview */}
-                  <div className="lg:w-2/5 p-6 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20 gap-4">
-                    {/* relative container → RiveDemo absolute inset-0 için şart */}
-                    <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ aspectRatio: "1" }}>
+                /* ═══════════════════════════════════════════════════════
+                   PRO PAYWALL — Sadece önizleme, download/kod YOK
+                   .riv URL'sine de erişim engellendi (download butonu yok)
+                   ═══════════════════════════════════════════════════════ */
+                <div className="flex flex-col lg:flex-row" style={{ minHeight: "400px" }}>
+                  {/* Preview — erişilebilir */}
+                  <div className="lg:w-2/5 p-6 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20">
+                    <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
                       <div className="absolute inset-0 flex items-center justify-center p-6">
                         <RiveDemo
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
@@ -317,36 +290,66 @@ export default function ComponentGrid() {
                         />
                       </div>
                     </div>
-                    {/* Animasyon tipi badge */}
+                  </div>
+
+                  {/* Paywall — kod/download yok */}
+                  <div className="lg:w-3/5 flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-16 h-16 mb-5 rounded-2xl bg-gradient-to-tr from-[#ff2b73] to-[#ff7e5f] flex items-center justify-center shadow-[0_0_40px_rgba(255,43,115,0.4)]">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                    </div>
+                    <h4 className="text-2xl font-bold mb-3">PRO Üyelik Gerekli</h4>
+                    <p className="text-white/50 mb-2 max-w-sm">Bu animasyonun kaynak kodu ve <code className="text-[#ff2b73]">.riv</code> dosyası PRO üyelere özeldir.</p>
+                    <p className="text-white/30 text-sm mb-8">Önizlemeyi ücretsiz görebilirsiniz.</p>
+                    <button className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white font-semibold hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,43,115,0.3)]">
+                      Abonelik Planlarını Gör →
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* ═══════════════════
+                   FREE — Tam erişim
+                   ═══════════════════ */
+                <div className="flex flex-col lg:flex-row" style={{ minHeight: "400px" }}>
+                  {/* Sol: Preview */}
+                  <div className="lg:w-2/5 p-6 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20 gap-4">
+                    <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
+                      <div className="absolute inset-0 flex items-center justify-center p-6">
+                        <RiveDemo
+                          src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
+                          artboard={selectedCfg.artboard}
+                          stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+                        />
+                      </div>
+                    </div>
+                    {/* Tip badge */}
                     {selectedCfg.inputs?.length === 0 && (selectedCfg.stateMachines?.length ?? 0) > 0 && (
-                      <span className="text-[11px] text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1.5 rounded-full">
-                        ✦ üzerine gel — hover aktif
-                      </span>
+                      <span className="text-[11px] text-cyan-400 bg-cyan-400/10 border border-cyan-400/20 px-3 py-1.5 rounded-full">✦ üzerine gel — hover aktif</span>
                     )}
                     {(selectedCfg.inputs ?? []).some(i => i.type === 0) && (
-                      <span className="text-[11px] text-[#ff2b73] bg-[#ff2b73]/10 border border-[#ff2b73]/20 px-3 py-1.5 rounded-full">
-                        ✦ tıkla — animasyon ateşle
-                      </span>
+                      <span className="text-[11px] text-[#ff2b73] bg-[#ff2b73]/10 border border-[#ff2b73]/20 px-3 py-1.5 rounded-full">✦ tıkla — ateşle</span>
                     )}
-                    {(selectedCfg.inputs ?? []).some(i => i.type === 1) && (
-                      <span className="text-[11px] text-purple-400 bg-purple-400/10 border border-purple-400/20 px-3 py-1.5 rounded-full">
-                        ✦ hover boolean aktif
-                      </span>
-                    )}
+                    {/* .riv indir — sadece FREE */}
+                    <a
+                      href={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
+                      download
+                      className="w-full py-2 text-xs text-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 border border-white/10"
+                    >
+                      ↓ .riv dosyasını indir
+                    </a>
                   </div>
 
                   {/* Sağ: Kod */}
                   <div className="lg:w-3/5 flex flex-col">
                     {/* Framework Sekmeleri */}
-                    <div className="flex border-b border-white/5 shrink-0 overflow-x-auto">
+                    <div className="flex border-b border-white/5 shrink-0">
                       {FRAMEWORKS.map((fw) => (
                         <button
                           key={fw.id}
                           onClick={() => setActiveFramework(fw.id)}
-                          className={`flex-1 min-w-[80px] px-3 py-3 text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
+                          className={`flex-1 px-2 py-3 text-xs font-medium flex flex-col items-center gap-0.5 transition-colors ${
                             activeFramework === fw.id
                               ? "border-b-2 border-[#ff2b73] text-white bg-white/[0.03]"
-                              : "text-white/40 hover:text-white/70 hover:bg-white/[0.02]"
+                              : "text-white/40 hover:text-white/70"
                           }`}
                         >
                           <span className="text-base leading-none">{fw.icon}</span>
@@ -356,7 +359,7 @@ export default function ComponentGrid() {
                       ))}
                     </div>
 
-                    {/* Kod Alanı */}
+                    {/* Kod */}
                     <div className="relative flex-1">
                       <button
                         onClick={() => handleCopy(generatedCode)}
@@ -368,25 +371,19 @@ export default function ComponentGrid() {
                       >
                         {copied ? "✓ Kopyalandı" : "Kopyala"}
                       </button>
-                      <pre className="p-5 pt-12 h-full min-h-[300px] text-xs font-mono text-zinc-300 overflow-auto bg-[#050505] leading-relaxed">
+                      <pre className="p-5 pt-12 min-h-[280px] text-xs font-mono text-zinc-300 overflow-auto bg-[#050505] leading-relaxed">
                         <code>{generatedCode}</code>
                       </pre>
                     </div>
 
-                    {/* Install notu */}
-                    <div className="px-5 py-3 border-t border-white/5 bg-white/[0.01] shrink-0">
-                      {activeFramework === "react" && (
-                        <code className="text-[10px] text-white/30 font-mono">npm install @rive-app/react-canvas</code>
-                      )}
-                      {activeFramework === "js" && (
-                        <code className="text-[10px] text-white/30 font-mono">npm install @rive-app/canvas</code>
-                      )}
-                      {activeFramework === "rn" && (
-                        <code className="text-[10px] text-white/30 font-mono">npm install @rive-app/react-native</code>
-                      )}
-                      {activeFramework === "flutter" && (
-                        <code className="text-[10px] text-white/30 font-mono">flutter pub add rive</code>
-                      )}
+                    {/* Install komutu */}
+                    <div className="px-5 py-3 border-t border-white/5 bg-black/20 shrink-0">
+                      <span className="text-[10px] text-white/20 font-mono">
+                        {activeFramework === "react" && "npm install @rive-app/react-canvas"}
+                        {activeFramework === "js" && "npm install @rive-app/canvas"}
+                        {activeFramework === "rn" && "npm install @rive-app/react-native react-native-nitro-modules"}
+                        {activeFramework === "flutter" && "flutter pub add rive"}
+                      </span>
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import RiveDemo from "./RiveDemo";
 
 interface UIComponent {
@@ -12,9 +12,28 @@ interface UIComponent {
   is_featured: boolean;
 }
 
-export default function ComponentGrid({ components }: { components: UIComponent[] }) {
+export default function ComponentGrid() {
+  const [components, setComponents] = useState<UIComponent[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedComp, setSelectedComp] = useState<UIComponent | null>(null);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    async function fetchComponents() {
+      try {
+        const res = await fetch('https://vk-portfolio-api.vkesgin38.workers.dev/api/projects?category=uilib');
+        if (res.ok) {
+          const data = await res.json();
+          setComponents(data);
+        }
+      } catch (err) {
+        console.error("Veri çekilemedi:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchComponents();
+  }, []);
 
   const handleCopyCode = async (code: string) => {
     try {
@@ -26,8 +45,36 @@ export default function ComponentGrid({ components }: { components: UIComponent[
     }
   };
 
+  if (loading) {
+    return (
+      <div className="py-20 text-center">
+        <div className="w-8 h-8 mx-auto mb-4 border-4 border-[#ff2b73] border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-white/40">Bileşenler yükleniyor...</p>
+      </div>
+    );
+  }
+
+  if (components.length === 0) {
+    return (
+      <div className="py-20 text-center border border-white/5 rounded-3xl bg-white/[0.02]">
+        <div className="w-16 h-16 mx-auto mb-4 opacity-20">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <polyline points="21 15 16 10 5 21" />
+          </svg>
+        </div>
+        <p className="text-white/40">Henüz bileşen eklenmedi.</p>
+        <p className="text-white/20 text-sm mt-2">Admin panelinden ilk bileşenini ekleyebilirsin.</p>
+      </div>
+    );
+  }
+
   return (
     <>
+      <div className="mb-12">
+        <div className="text-sm text-white/40 text-right">{components.length} bileşen</div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {components.map((comp) => (
           <div key={comp.id} className="group flex flex-col bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden hover:border-white/10 transition-colors">

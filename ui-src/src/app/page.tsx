@@ -1,37 +1,7 @@
 import Link from 'next/link';
 import ComponentGrid from '@/components/ComponentGrid';
 
-// Component tipleri
-interface UIComponent {
-  id: string;
-  title: string;
-  category: string;
-  description: string; // React Kodu burada tutuluyor
-  image_url: string; // .riv animasyon url'si burada tutuluyor
-  is_featured: boolean; // PRO durumu
-}
-
-// Sunucudan (Cloudflare Worker'dan) bileşenleri çeken fonksiyon
-async function getComponents() {
-  try {
-    const res = await fetch('https://vk-portfolio-api.vkesgin38.workers.dev/api/projects?category=uilib', {
-      next: { revalidate: 60 } // Her 60 saniyede bir önbelleği yenile
-    });
-    
-    if (!res.ok) {
-      throw new Error('Veri çekilemedi');
-    }
-    
-    return await res.json() as UIComponent[];
-  } catch (error) {
-    console.error("Bileşenler çekilirken hata:", error);
-    return [];
-  }
-}
-
-export default async function Home() {
-  const components = await getComponents();
-
+export default function Home() {
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-[#ff2b73] selection:text-white pb-20">
       
@@ -81,26 +51,11 @@ export default async function Home() {
 
       {/* BİLEŞENLER LİSTESİ */}
       <section className="px-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-12">
+        <div className="flex items-center justify-between mb-8">
           <h2 className="text-2xl font-bold">En Yeni Bileşenler</h2>
-          <div className="text-sm text-white/40">{components.length} bileşen</div>
         </div>
 
-        {components.length === 0 ? (
-          <div className="py-20 text-center border border-white/5 rounded-3xl bg-white/[0.02]">
-            <div className="w-16 h-16 mx-auto mb-4 opacity-20">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <polyline points="21 15 16 10 5 21" />
-              </svg>
-            </div>
-            <p className="text-white/40">Henüz bileşen eklenmedi.</p>
-            <p className="text-white/20 text-sm mt-2">Admin panelinden ilk bileşenini ekleyebilirsin.</p>
-          </div>
-        ) : (
-          <ComponentGrid components={components} />
-        )}
+        <ComponentGrid />
       </section>
 
     </div>

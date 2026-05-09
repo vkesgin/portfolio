@@ -415,11 +415,11 @@
     <div class="threed-layout">
       <!-- FORM -->
       <div class="threed-form-wrap">
-        <p class="section-eyebrow" style="margin-bottom:16px">// yeni bileşen ekle</p>
+        <p class="section-eyebrow" id="ui-form-eyebrow" style="margin-bottom:16px">// yeni bileşen ekle</p>
         
         <div class="ct-field">
           <label class="ct-label">Bileşen Adı</label>
-          <input type="text" id="ui-title" class="ct-input" placeholder="Zıplayan Buton">
+          <input type="text" id="ui-title" class="ct-input" placeholder="Zıplayan Araba">
           <span class="ct-field-line"></span>
         </div>
         
@@ -429,24 +429,27 @@
             <span id="ui-riv-name" style="font-size:12px;color:var(--text-muted)">Dosya Seç (.riv)</span>
             <input type="file" id="ui-riv-file" accept=".riv" style="display:none">
           </div>
+          <p style="font-size:10px;color:var(--text-muted);margin-top:6px">// Düzenleme modunda boş bırakırsanız mevcut dosya korunur.</p>
         </div>
 
         <div style="margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
           <div class="ct-field">
-            <label class="ct-label">Artboard Adı (Opsiyonel)</label>
+            <label class="ct-label">Artboard Adı <span style="color:#555">(opsiyonel)</span></label>
             <input type="text" id="ui-artboard" class="ct-input" placeholder="Artboard 2">
             <span class="ct-field-line"></span>
+            <p style="font-size:10px;color:#555;margin-top:4px">// Kedi için: <b style="color:#aaa">Artboard 2</b></p>
           </div>
           <div class="ct-field">
-            <label class="ct-label">State Machine Adı (Opsiyonel)</label>
-            <input type="text" id="ui-statemachine" class="ct-input" placeholder="State Machine 1">
-            <span class="ct-field-line"></span>
+            <label class="ct-label" style="color:#ff2b73">★ State Machine Adı</label>
+            <input type="text" id="ui-statemachine" class="ct-input" placeholder="State Machine 1" style="border-color:rgba(255,43,115,0.4)">
+            <span class="ct-field-line" style="background:#ff2b73"></span>
+            <p style="font-size:10px;color:#777;margin-top:4px">Araç=<b style="color:#ff2b73">bumpy</b> &nbsp;|&nbsp; Kedi=<b style="color:#ff2b73">State Machine 1</b></p>
           </div>
         </div>
 
         <div class="ct-field" style="margin-top:24px">
-          <label class="ct-label">React Kaynak Kodu</label>
-          <textarea id="ui-code" class="admin-textarea" rows="8" placeholder="export default function Button() { ... }" style="font-family:monospace;font-size:11px"></textarea>
+          <label class="ct-label">React Kaynak Kodu <span style="color:#555">(opsiyonel)</span></label>
+          <textarea id="ui-code" class="admin-textarea" rows="5" placeholder="export default function MyComponent() { ... }" style="font-family:monospace;font-size:11px"></textarea>
           <span class="ct-field-line"></span>
         </div>
 
@@ -462,9 +465,14 @@
 
         <div id="ui-status" style="margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);min-height:16px"></div>
 
-        <button class="btn btn-primary" id="ui-save-btn" style="margin-top:20px;width:100%;justify-content:center;background:#ff2b73;color:#fff;border:none">
-          Kütüphaneye Ekle ↗
-        </button>
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" id="ui-save-btn" style="flex:1;justify-content:center;background:#ff2b73;color:#fff;border:none">
+            Kütüphaneye Ekle ↗
+          </button>
+          <button class="btn btn-outline" id="ui-cancel-btn" style="display:none;flex:1;justify-content:center">
+            İptal
+          </button>
+        </div>
       </div>
 
       <!-- LIST -->
@@ -477,6 +485,90 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script>
+// --- UI LIBRARY LOGIC ---
+let uiEditingId = null;
+
+async function loadUiComponents() {
+  const list = document.getElementById('ui-product-list');
+  try {
+    const r = await fetch(API+'/api/admin/uilib', { headers:{Authorization:`Bearer ${TOKEN}`} });
+    const data = await r.json();
+    list.innerHTML = data.map(u => `
+      <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="color:#fff; font-size:13px">${u.title}</div>
+          <div style="color:#777; font-size:10px">${u.artboard || '-'} / ${u.statemachine || '-'}</div>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:10px" onclick="editUi('${u.id}')">Düzenle</button>
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:10px; color:#ff4444; border-color:rgba(255,68,68,0.2)" onclick="deleteUi('${u.id}')">SİL</button>
+        </div>
+      </div>
+    `).join('') || '<div style="color:#888; font-size:13px">Henüz bileşen eklenmemiş.</div>';
+  } catch(e) { list.innerHTML = '<div style="color:#ff4444">Yükleme hatası.</div>'; }
+}
+
+function editUi(id) {
+  fetch(API+'/api/admin/uilib/'+id, { headers:{Authorization:`Bearer ${TOKEN}`} })
+    .then(r => r.json())
+    .then(u => {
+      uiEditingId = id;
+      document.getElementById('ui-title').value = u.title;
+      document.getElementById('ui-artboard').value = u.artboard || '';
+      document.getElementById('ui-statemachine').value = u.statemachine || '';
+      document.getElementById('ui-code').value = u.code || '';
+      document.getElementById('ui-is-pro').checked = u.is_pro;
+      document.getElementById('ui-riv-name').textContent = 'Dosya seçildi (Değiştirmek için tıkla)';
+      document.getElementById('ui-form-eyebrow').textContent = '// bileşeni düzenle';
+      document.getElementById('ui-save-btn').textContent = 'Güncelle';
+      document.getElementById('ui-cancel-btn').style.display = 'flex';
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    });
+}
+
+document.getElementById('ui-cancel-btn').addEventListener('click', () => {
+  uiEditingId = null;
+  document.getElementById('ui-title').value = '';
+  document.getElementById('ui-riv-name').textContent = 'Dosya Seç (.riv)';
+  document.getElementById('ui-form-eyebrow').textContent = '// yeni bileşen ekle';
+  document.getElementById('ui-save-btn').textContent = 'Kütüphaneye Ekle';
+  document.getElementById('ui-cancel-btn').style.display = 'none';
+});
+
+document.getElementById('ui-save-btn').addEventListener('click', async () => {
+  const status = document.getElementById('ui-status');
+  const file = document.getElementById('ui-riv-file').files[0];
+  const title = document.getElementById('ui-title').value;
+  if (!title) return alert('İsim gerekli');
+  
+  status.textContent = 'İşleniyor...';
+  const fd = new FormData();
+  fd.append('title', title);
+  fd.append('artboard', document.getElementById('ui-artboard').value);
+  fd.append('statemachine', document.getElementById('ui-statemachine').value);
+  fd.append('code', document.getElementById('ui-code').value);
+  fd.append('is_pro', document.getElementById('ui-is-pro').checked);
+  if (file) fd.append('file', file);
+  
+  try {
+    const url = uiEditingId ? API+'/api/admin/uilib/'+uiEditingId : API+'/api/admin/uilib';
+    const r = await fetch(url, {
+      method: uiEditingId ? 'PUT' : 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}` },
+      body: fd
+    });
+    if(!r.ok) throw new Error('Kaydedilemedi');
+    status.textContent = 'Başarılı!';
+    loadUiComponents();
+  } catch(e) { status.textContent = e.message; }
+});
+
+async function deleteUi(id) {
+  if(!confirm('Silinsin mi?')) return;
+  await fetch(API+'/api/admin/uilib/'+id, { method:'DELETE', headers:{Authorization:`Bearer ${TOKEN}`} });
+  loadUiComponents();
+}
+
 // --- INSPIRE ---
 async function loadInspireUsers() {
   const list = document.getElementById('inspireUsersList');
@@ -1447,6 +1539,8 @@ document.getElementById('cube-save-btn')?.addEventListener('click', async () => 
 const uiRivZone = document.getElementById('ui-riv-zone');
 const uiRivFile = document.getElementById('ui-riv-file');
 const uiRivName = document.getElementById('ui-riv-name');
+let editingUiId = null;
+let editingUiCurrentRivUrl = '';
 
 if (uiRivZone && uiRivFile) {
   uiRivZone.addEventListener('click', () => uiRivFile.click());
@@ -1465,6 +1559,45 @@ function uiStatus(msg, isError) {
   el.style.color = isError ? 'var(--danger)' : 'var(--accent)';
 }
 
+function uiResetForm() {
+  editingUiId = null;
+  editingUiCurrentRivUrl = '';
+  document.getElementById('ui-title').value = '';
+  document.getElementById('ui-artboard').value = '';
+  document.getElementById('ui-statemachine').value = '';
+  document.getElementById('ui-code').value = '';
+  document.getElementById('ui-is-pro').checked = false;
+  uiRivFile.value = '';
+  uiRivName.textContent = 'Dosya Seç (.riv)';
+  uiRivName.style.color = 'var(--text-muted)';
+  document.getElementById('ui-save-btn').textContent = 'Kütüphaneye Ekle ↗';
+  document.getElementById('ui-save-btn').style.background = '#ff2b73';
+  document.getElementById('ui-cancel-btn').style.display = 'none';
+  document.getElementById('ui-form-eyebrow').textContent = '// yeni bileşen ekle';
+  uiStatus('', false);
+}
+
+function uiStartEdit(p) {
+  editingUiId = p.id;
+  editingUiCurrentRivUrl = p.image_url || '';
+  document.getElementById('ui-title').value = p.title || '';
+  document.getElementById('ui-code').value = p.description || '';
+  document.getElementById('ui-is-pro').checked = !!p.is_featured;
+  let config = { artboard: '', statemachine: '' };
+  try { if (p.tags) config = JSON.parse(p.tags); } catch(e){}
+  document.getElementById('ui-artboard').value = config.artboard || '';
+  document.getElementById('ui-statemachine').value = config.statemachine || '';
+  uiRivName.textContent = p.image_url ? '📎 Mevcut dosya korunacak (değiştirmek için seç)' : 'Dosya Seç (.riv)';
+  uiRivName.style.color = p.image_url ? 'var(--accent)' : 'var(--text-muted)';
+  document.getElementById('ui-save-btn').textContent = 'Güncelle ↗';
+  document.getElementById('ui-save-btn').style.background = '#7c3aed';
+  document.getElementById('ui-cancel-btn').style.display = 'flex';
+  document.getElementById('ui-form-eyebrow').textContent = '// bileşeni düzenle → ' + p.title;
+  document.getElementById('tab-uilib').querySelector('.threed-form-wrap').scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('ui-cancel-btn')?.addEventListener('click', uiResetForm);
+
 async function loadUiComponents() {
   const list = document.getElementById('ui-product-list');
   if (!list) return;
@@ -1476,61 +1609,84 @@ async function loadUiComponents() {
       list.innerHTML = '<div class="admin-empty">Henüz bileşen eklenmedi.</div>';
       return;
     }
-    list.innerHTML = data.map(p => `
-      <div style="background:var(--bg-surface); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div class="admin-card-title">${p.title} ${p.is_featured ? '<span style="color:#ff2b73;font-size:10px;margin-left:4px;border:1px solid #ff2b73;padding:2px 4px;border-radius:4px">PRO</span>' : '<span style="color:#10b981;font-size:10px;margin-left:4px;border:1px solid #10b981;padding:2px 4px;border-radius:4px">ÜCRETSİZ</span>'}</div>
-          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:4px">${p.image_url ? p.image_url.split('/').pop() : ''}</div>
+    list.innerHTML = data.map(p => {
+      let cfg = { artboard: '', statemachine: '' };
+      try { if (p.tags) cfg = JSON.parse(p.tags); } catch(e){}
+      const smBadge = cfg.statemachine
+        ? `<span style="font-size:10px;color:#ff2b73;font-family:var(--font-mono);margin-left:6px">SM: ${cfg.statemachine}</span>`
+        : `<span style="font-size:10px;color:#ff4444;font-family:var(--font-mono);margin-left:6px">⚠ SM ayarlı değil</span>`;
+      return `
+      <div style="background:var(--bg-surface); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px;">
+        <div style="flex:1;min-width:0">
+          <div class="admin-card-title" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+            ${p.title}
+            ${p.is_featured ? '<span style="color:#ff2b73;font-size:10px;border:1px solid #ff2b73;padding:2px 4px;border-radius:4px">PRO</span>' : '<span style="color:#10b981;font-size:10px;border:1px solid #10b981;padding:2px 4px;border-radius:4px">FREE</span>'}
+            ${smBadge}
+          </div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${p.image_url ? '📎 ' + p.image_url.split('/').pop() : 'dosya yok'}
+            ${cfg.artboard ? ' | AB: ' + cfg.artboard : ''}
+          </div>
         </div>
-        <button class="admin-btn-del" onclick="deleteProject('${p.id}'); setTimeout(loadUiComponents, 500)">Sil</button>
-      </div>
-    `).join('');
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="admin-btn-edit" onclick="uiStartEdit(${JSON.stringify(JSON.stringify(p))})">Düzenle</button>
+          <button class="admin-btn-del" onclick="deleteProject('${p.id}'); setTimeout(loadUiComponents, 500)">Sil</button>
+        </div>
+      </div>`;
+    }).join('');
   } catch (e) {
     list.innerHTML = '<div class="admin-empty" style="color:var(--danger)">Hata oluştu</div>';
   }
 }
 
+// Global wrapper — onclick içinden JSON parse için
+window.uiStartEdit = function(jsonStr) {
+  try { uiStartEdit(JSON.parse(jsonStr)); } catch(e){}
+};
+
 document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
   const title = document.getElementById('ui-title').value.trim();
   const code = document.getElementById('ui-code').value.trim();
   const isPro = document.getElementById('ui-is-pro').checked;
+  const artboard = document.getElementById('ui-artboard').value.trim();
+  const statemachine = document.getElementById('ui-statemachine').value.trim();
   const file = uiRivFile.files[0];
+  const tagsJson = JSON.stringify({ artboard, statemachine });
 
   if (!title) { uiStatus('Başlık zorunlu!', true); return; }
-  if (!file) { uiStatus('.riv dosyası zorunlu!', true); return; }
+  if (!editingUiId && !file) { uiStatus('.riv dosyası zorunlu!', true); return; }
 
-  uiStatus('Dosya yükleniyor...', false);
+  uiStatus(file ? 'Dosya yükleniyor...' : 'Kaydediliyor...', false);
   document.getElementById('ui-save-btn').disabled = true;
 
   try {
-    const rivUrl = await uploadFile(file, 'file');
-    
-    uiStatus('Veritabanına kaydediliyor...', false);
+    let rivUrl = editingUiCurrentRivUrl; // editing modda mevcut URL koru
+    if (file) {
+      rivUrl = await uploadFile(file, 'file');
+    }
+
     const payload = {
       title,
       category: 'uilib',
       description: code,
+      tags: tagsJson,
       image_url: rivUrl,
       is_featured: isPro
     };
-    
-    const r = await fetch(`${API}/api/projects`, {
-      method: 'POST',
+
+    const endpoint = editingUiId ? `${API}/api/projects/${editingUiId}` : `${API}/api/projects`;
+    const method   = editingUiId ? 'PUT' : 'POST';
+
+    const r = await fetch(endpoint, {
+      method,
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
       body: JSON.stringify(payload)
     });
-    
-    if(!r.ok) throw new Error('Kayıt hatası');
-    
-    uiStatus('Bileşen başarıyla eklendi ✓', false);
-    
-    document.getElementById('ui-title').value = '';
-    document.getElementById('ui-code').value = '';
-    document.getElementById('ui-is-pro').checked = false;
-    uiRivFile.value = '';
-    uiRivName.textContent = 'Dosya Seç (.riv)';
-    uiRivName.style.color = 'var(--text-muted)';
-    
+
+    if (!r.ok) throw new Error('Kayıt hatası: ' + r.status);
+
+    uiStatus(editingUiId ? 'Güncellendi ✓' : 'Bileşen eklendi ✓', false);
+    uiResetForm();
     loadUiComponents();
     setTimeout(() => { uiStatus('', false); }, 3000);
   } catch(e) {

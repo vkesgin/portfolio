@@ -409,7 +409,7 @@
   <div class="admin-panel" id="tab-uilib">
     <div class="admin-panel-header">
       <h2 class="admin-panel-title">Bileşen Kütüphanesi</h2>
-      <p class="admin-panel-sub">Next.js vitrininde sergilenecek Rive animasyonlarını yönetin. <a href="http://localhost:3000" target="_blank" style="color:var(--accent)">Vitrini Gör ↗</a></p>
+      <p class="admin-panel-sub">Next.js vitrininde sergilenecek Rive animasyonlarını yönetin. <a href="https://velikesgin.com/ui" target="_blank" style="color:var(--accent)">Vitrini Gör ↗</a></p>
     </div>
 
     <div class="threed-layout">
@@ -1574,7 +1574,7 @@ async function inspectRivFile(file, artboardName) {
     return await new Promise(resolve => {
       const timeout = setTimeout(() => resolve({ stateMachines: [] }), 6000);
       const config = { buffer, canvas, autoplay: false };
-      if (artboardName) config.artboard = artboardName;
+      if (artboardName && artboardName.trim() !== '') config.artboard = artboardName.trim();
       
       const r = new rive.Rive({
         ...config,

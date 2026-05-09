@@ -111,7 +111,8 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
     };
   }, [rive]);
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    // We do NOT stop propagation here so Rive can still get the event
     clickTriggers.current.forEach(t => {
       if (typeof t.fire === "function") t.fire();
       else t.value = true;
@@ -122,11 +123,10 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
     <div
       ref={containerRef}
       className="w-full h-full flex items-center justify-center"
-      onClick={handleClick}
       onMouseEnter={() => hoverBooleans.current.forEach(i => { i.value = true; })}
       onMouseLeave={() => hoverBooleans.current.forEach(i => { i.value = false; })}
+      onClick={handleClick}
     >
-      {/* NO pointer-events-none: Rive's internal On Pointer Down listeners (vehicles/bumpy) need raw events */}
       <RiveComponent className="w-full h-full cursor-pointer" />
     </div>
   );

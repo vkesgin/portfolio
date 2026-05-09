@@ -491,90 +491,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script>
-// --- UI LIBRARY LOGIC ---
-let uiEditingId = null;
-
-async function loadUiComponents() {
-  const list = document.getElementById('ui-product-list');
-  try {
-    const r = await fetch(API+'/api/admin/uilib', { headers:{Authorization:`Bearer ${TOKEN}`} });
-    const data = await r.json();
-    list.innerHTML = data.map(u => `
-      <div style="background:rgba(255,255,255,0.03); padding:12px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <div style="color:#fff; font-size:13px">${u.title}</div>
-          <div style="color:#777; font-size:10px">${u.artboard || '-'} / ${u.statemachine || '-'}</div>
-        </div>
-        <div style="display:flex; gap:6px;">
-          <button class="btn btn-outline" style="padding:4px 8px; font-size:10px" onclick="editUi('${u.id}')">Düzenle</button>
-          <button class="btn btn-outline" style="padding:4px 8px; font-size:10px; color:#ff4444; border-color:rgba(255,68,68,0.2)" onclick="deleteUi('${u.id}')">SİL</button>
-        </div>
-      </div>
-    `).join('') || '<div style="color:#888; font-size:13px">Henüz bileşen eklenmemiş.</div>';
-  } catch(e) { list.innerHTML = '<div style="color:#ff4444">Yükleme hatası.</div>'; }
-}
-
-function editUi(id) {
-  fetch(API+'/api/admin/uilib/'+id, { headers:{Authorization:`Bearer ${TOKEN}`} })
-    .then(r => r.json())
-    .then(u => {
-      uiEditingId = id;
-      document.getElementById('ui-title').value = u.title;
-      document.getElementById('ui-artboard').value = u.artboard || '';
-      document.getElementById('ui-statemachine').value = u.statemachine || '';
-      document.getElementById('ui-code').value = u.code || '';
-      document.getElementById('ui-is-pro').checked = u.is_pro;
-      document.getElementById('ui-riv-name').textContent = 'Dosya seçildi (Değiştirmek için tıkla)';
-      document.getElementById('ui-form-eyebrow').textContent = '// bileşeni düzenle';
-      document.getElementById('ui-save-btn').textContent = 'Güncelle';
-      document.getElementById('ui-cancel-btn').style.display = 'flex';
-      window.scrollTo({top: 0, behavior: 'smooth'});
-    });
-}
-
-document.getElementById('ui-cancel-btn').addEventListener('click', () => {
-  uiEditingId = null;
-  document.getElementById('ui-title').value = '';
-  document.getElementById('ui-riv-name').textContent = 'Dosya Seç (.riv)';
-  document.getElementById('ui-form-eyebrow').textContent = '// yeni bileşen ekle';
-  document.getElementById('ui-save-btn').textContent = 'Kütüphaneye Ekle';
-  document.getElementById('ui-cancel-btn').style.display = 'none';
-});
-
-document.getElementById('ui-save-btn').addEventListener('click', async () => {
-  const status = document.getElementById('ui-status');
-  const file = document.getElementById('ui-riv-file').files[0];
-  const title = document.getElementById('ui-title').value;
-  if (!title) return alert('İsim gerekli');
-  
-  status.textContent = 'İşleniyor...';
-  const fd = new FormData();
-  fd.append('title', title);
-  fd.append('artboard', document.getElementById('ui-artboard').value);
-  fd.append('statemachine', document.getElementById('ui-statemachine').value);
-  fd.append('code', document.getElementById('ui-code').value);
-  fd.append('is_pro', document.getElementById('ui-is-pro').checked);
-  if (file) fd.append('file', file);
-  
-  try {
-    const url = uiEditingId ? API+'/api/admin/uilib/'+uiEditingId : API+'/api/admin/uilib';
-    const r = await fetch(url, {
-      method: uiEditingId ? 'PUT' : 'POST',
-      headers: { Authorization: `Bearer ${TOKEN}` },
-      body: fd
-    });
-    if(!r.ok) throw new Error('Kaydedilemedi');
-    status.textContent = 'Başarılı!';
-    loadUiComponents();
-  } catch(e) { status.textContent = e.message; }
-});
-
-async function deleteUi(id) {
-  if(!confirm('Silinsin mi?')) return;
-  await fetch(API+'/api/admin/uilib/'+id, { method:'DELETE', headers:{Authorization:`Bearer ${TOKEN}`} });
-  loadUiComponents();
-}
-
 // --- INSPIRE ---
 async function loadInspireUsers() {
   const list = document.getElementById('inspireUsersList');
@@ -1810,7 +1726,7 @@ function getSelectedSMs() {
   return [...document.querySelectorAll('[name="ui-sm-check"]:checked')].map(b => b.value);
 }
 
-// Dosya zone
+// Dosya zone — her zaman TÜM artboard'ları tara (edit modunda da)
 if (uiRivZone && uiRivFile) {
   uiRivZone.addEventListener('click', () => uiRivFile.click());
   uiRivFile.addEventListener('change', async () => {
@@ -1821,14 +1737,8 @@ if (uiRivZone && uiRivFile) {
     document.getElementById('ui-sm-panel').style.display = 'none';
     document.getElementById('ui-sm-scanning').style.display = 'block';
     document.getElementById('ui-sm-scanning').textContent = '⚙ Tüm artboard\'lar taranıyor...';
-    const artboardValue = document.getElementById('ui-artboard').value.trim();
-    let result;
-    if (artboardValue) {
-      const single = await inspectRivFile(file, artboardValue);
-      result = { artboards: [{ name: artboardValue, realName: artboardValue, stateMachines: single.stateMachines }] };
-    } else {
-      result = await inspectAllArtboards(file);
-    }
+    // Artboard field'ına bakmaksızın HER ZAMAN tüm artboard'ları tara
+    const result = await inspectAllArtboards(file);
     renderSmPanel(result);
   });
 }

@@ -10,6 +10,7 @@ interface UIComponent {
   description: string;
   image_url: string;
   is_featured: boolean;
+  tags?: string;
 }
 
 export default function ComponentGrid() {
@@ -94,7 +95,17 @@ export default function ComponentGrid() {
               
               {comp.image_url ? (
                 <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-500">
-                  <RiveDemo src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} />
+                  {(() => {
+                    let config = { artboard: "", statemachine: "" };
+                    try { if (comp.tags) config = JSON.parse(comp.tags); } catch(e){}
+                    return (
+                      <RiveDemo 
+                        src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} 
+                        artboard={config.artboard}
+                        stateMachine={config.statemachine}
+                      />
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-white/20 text-sm">Görsel Yok</div>
@@ -156,6 +167,24 @@ export default function ComponentGrid() {
               ) : (
                 /* FREE CODE VIEW */
                 <div className="relative group">
+                  <div className="flex-1 w-full flex items-center justify-center p-6 lg:p-12">
+                        {(() => {
+                          let config = { artboard: "", statemachine: "" };
+                          try {
+                            if (selectedComp.tags) config = JSON.parse(selectedComp.tags);
+                          } catch (e) {}
+                          
+                          return (
+                            <div className="w-full h-full max-h-[500px] border border-white/10 rounded-xl overflow-hidden bg-black/40">
+                              <RiveDemo 
+                                src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`} 
+                                artboard={config.artboard}
+                                stateMachine={config.statemachine}
+                              />
+                            </div>
+                          );
+                        })()}
+                      </div>
                   <div className="absolute top-4 right-4 z-10 flex gap-2">
                     <a 
                       href={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}

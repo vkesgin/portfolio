@@ -5,18 +5,27 @@ import { useEffect, useRef } from "react";
 
 interface RiveDemoProps {
   src: string;
+  artboard?: string;
+  stateMachine?: string;
 }
 
-export default function RiveDemo({ src }: RiveDemoProps) {
+export default function RiveDemo({ src, artboard, stateMachine }: RiveDemoProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clickTriggers = useRef<any[]>([]);
   const hoverInputs = useRef<any[]>([]);
   const xInputs = useRef<any[]>([]);
   const yInputs = useRef<any[]>([]);
 
-  const { rive, RiveComponent } = useRive({
+  const config: any = {
     src: src,
     autoplay: true,
+  };
+  
+  if (artboard) config.artboard = artboard;
+  if (stateMachine) config.stateMachines = stateMachine;
+
+  const { rive, RiveComponent } = useRive({
+    ...config,
     onLoad: () => {
       if (rive) {
         // Tüm State Machine'leri başlat ve Inputlarını (Girdileri) topla

@@ -1564,7 +1564,7 @@ async function inspectAllArtboards(file) {
           // Eğer runtime API çalışmadıysa, Rive file objesini dene
           if (!names.length) {
             try {
-              const f = (r as any).file || (r as any)._file || (r as any).riveFile;
+              const f = r.file || r._file || r.riveFile;
               if (f && typeof f.artboardCount === 'function') {
                 const count = f.artboardCount();
                 for (let i = 0; i < count; i++) {

@@ -185,7 +185,9 @@ export default {
       const baseHeaders = new Headers();
       obj.writeHttpMetadata(baseHeaders);
       baseHeaders.set('Cache-Control', 'public, max-age=31536000');
-      baseHeaders.set('Access-Control-Allow-Origin', origin);
+      // PUBLIC dosyalar — tüm originlere izin ver (CORS bloğunu önler)
+      baseHeaders.set('Access-Control-Allow-Origin', '*');
+      baseHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       baseHeaders.set('Accept-Ranges', 'bytes');
       if (obj.size != null) baseHeaders.set('Content-Length', String(obj.size));
 
@@ -754,7 +756,9 @@ if (path.startsWith('/api/kpss')) {
       if (!file) return json({ error: 'Dosya yok' }, 400, origin);
 
       const ext      = file.name.split('.').pop().toLowerCase();
-      const key      = `${fileType}s/${nanoid()}.${ext}`;
+      // 'file' türü için prefix ekleme — sadece images/videos için alt klasör
+      const prefix   = (fileType === 'image' || fileType === 'video') ? `${fileType}s/` : '';
+      const key      = `${prefix}${nanoid()}.${ext}`;
       const buffer   = await file.arrayBuffer();
 
       await env.STORAGE.put(key, buffer, {

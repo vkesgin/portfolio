@@ -114,7 +114,8 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
       onMouseLeave={() => hoverBooleans.current.forEach((i) => { i.value = false; })}
       onClick={handleClick}
     >
-      <RiveComponent style={{ width: "100%", height: "100%" }} />
+      {/* pointer-events:all — Rive'ın native hover/click listener'larının canvas'a ulaşmasını garantiler */}
+      <RiveComponent style={{ width: "100%", height: "100%", pointerEvents: "all" }} />
     </div>
   );
 }

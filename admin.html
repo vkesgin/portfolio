@@ -1650,14 +1650,15 @@ function smInputBadge(inp) {
 
 // SM otomatik etiket (cursor/click/hover tespiti)
 function smAutoLabel(sm) {
+  if (!sm.inputs.length) return '✓ Native hover/click — ek ayar gerekmez';
   const labels = [];
   sm.inputs.forEach(i => {
     const n = i.name.toLowerCase();
-    if (i.type === 0) labels.push('Tıklama');
-    if (i.type === 2 && (n.includes('x') || n.includes('y') || n.includes('pos'))) labels.push('Cursor Takibi');
-    if (i.type === 1 && (n.includes('hover') || n.includes('over'))) labels.push('Hover');
+    if (i.type === 0) labels.push('🎯 Tıklama Trigger');
+    if (i.type === 2 && (n.includes('x') || n.includes('y') || n.includes('pos'))) labels.push('🖱 Cursor Takibi');
+    if (i.type === 1 && (n.includes('hover') || n.includes('over'))) labels.push('🖐 Hover Boolean');
   });
-  return [...new Set(labels)].join(', ') || 'Dahili Animasyon';
+  return [...new Set(labels)].join(' · ') || '⚙ Dahili Animasyon';
 }
 
 // Artboard gruplu SM paneli render
@@ -1674,7 +1675,10 @@ function renderSmPanel(result) {
   const totalSMs = artboards.reduce((s, ab) => s + ab.stateMachines.length, 0);
 
   if (totalSMs === 0) {
-    list.innerHTML = '<div style="color:#666;font-size:11px;font-family:var(--font-mono)">// Bu dosyada State Machine bulunamadı — animasyon autoplay çalışır</div>';
+    list.innerHTML = `<div style="background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.2);border-radius:8px;padding:12px;font-family:var(--font-mono);font-size:11px;color:#00e5ff">
+      ℹ️ Bu dosyada tespit edilebilir State Machine bulunamadı.<br>
+      <span style="color:#666;font-size:10px">Bu normal olabilir — bazı Rive dosyaları sadece autoplay animasyonu içerir. Dosyayı yine de kaydedebilirsin.</span>
+    </div>`;
     return;
   }
 
@@ -1688,23 +1692,24 @@ function renderSmPanel(result) {
     </div>`;
     const rows = ab.stateMachines.map(sm => {
       const isChecked = firstChecked;
+      const isNative = sm.inputs.length === 0;
       if (firstChecked) {
         firstChecked = false;
         setTimeout(() => {
           if (ab.realName) document.getElementById('ui-artboard').value = ab.realName;
         }, 50);
       }
-      return `<label style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,43,115,0.12);border-radius:8px;padding:10px 12px;cursor:pointer;margin-bottom:4px">
+      return `<label style="display:flex;align-items:flex-start;gap:10px;background:${isNative ? 'rgba(0,229,255,0.04)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isNative ? 'rgba(0,229,255,0.2)' : 'rgba(255,43,115,0.12)'};border-radius:8px;padding:10px 12px;cursor:pointer;margin-bottom:4px">
         <input type="checkbox" name="ui-sm-check" value="${sm.name}" data-artboard="${safeRealName}" ${isChecked ? 'checked' : ''}
                onchange="if(this.checked){document.getElementById('ui-artboard').value=this.dataset.artboard||'';}"  
                style="margin-top:2px;accent-color:#ff2b73;cursor:pointer;flex-shrink:0">
         <div style="flex:1;min-width:0">
           <div style="color:#fff;font-size:12px;font-weight:500;font-family:var(--font-mono)">${sm.name}</div>
-          <div style="color:#666;font-size:10px;margin-top:2px">${smAutoLabel(sm)}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-            ${sm.inputs.map(smInputBadge).join('')}
-            ${!sm.inputs.length ? '<span style="color:#444;font-size:9px">// Rive dahili pointer event listener</span>' : ''}
-          </div>
+          <div style="color:${isNative ? '#00e5ff' : '#666'};font-size:10px;margin-top:2px">${smAutoLabel(sm)}</div>
+          ${isNative
+            ? `<div style="margin-top:6px;font-size:9px;color:#555;font-family:var(--font-mono)">// hover, click, proximity — Rive canvas otomatik yönetir. Seç ve kaydet.</div>`
+            : `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${sm.inputs.map(smInputBadge).join('')}</div>`
+          }
         </div>
       </label>`;
     }).join('');

@@ -1548,18 +1548,54 @@ const uiRivName = document.getElementById('ui-riv-name');
 let editingUiId = null;
 let editingUiCurrentRivUrl = '';
 
-// ── Rive CDN yükleyici (dosya inceleme için) ──────────────────────────────
+// ── Rive CDN yükleyici ────────────────────────────────────────────────────
 let _riveInspectReady = false;
 function loadRiveInspector() {
   return new Promise(resolve => {
     if (_riveInspectReady && window.rive) { resolve(); return; }
     if (window.rive) { _riveInspectReady = true; resolve(); return; }
     const s = document.createElement('script');
-    s.src = 'https://unpkg.com/@rive-app/canvas@2.21.6/rive.js';
+    // Güncel sürüm — artboardNames API'si dahil
+    s.src = 'https://unpkg.com/@rive-app/canvas@2.27.0/rive.js';
     s.onload  = () => { _riveInspectReady = true; resolve(); };
-    s.onerror = () => resolve(); // sessizce geç
+    s.onerror = () => {
+      // Fallback: daha eski sürüm dene
+      const s2 = document.createElement('script');
+      s2.src = 'https://unpkg.com/@rive-app/canvas@2.21.6/rive.js';
+      s2.onload = () => { _riveInspectReady = true; resolve(); };
+      s2.onerror = () => resolve();
+      document.head.appendChild(s2);
+    };
     document.head.appendChild(s);
   });
+}
+
+// Binary .riv dosyasından artboard isimlerini çıkar (fallback)
+function extractArtboardNamesFromBinary(buffer) {
+  try {
+    const view = new Uint8Array(buffer);
+    // Rive magic header: R I V E = 0x52 0x49 0x56 0x45
+    if (view[0] !== 0x52 || view[1] !== 0x49 || view[2] !== 0x56 || view[3] !== 0x45) return [];
+    // Dosyanın başında kısa stringleri tara — artboard isimleri genellikle başta
+    const candidates = new Set();
+    const scanLimit = Math.min(view.length, 4096);
+    for (let i = 8; i < scanLimit - 2; i++) {
+      const len = view[i];
+      if (len < 2 || len > 48 || i + len >= scanLimit) continue;
+      let str = '';
+      let valid = true;
+      for (let j = 1; j <= len; j++) {
+        const c = view[i + j];
+        if (c < 32 || c > 126) { valid = false; break; }
+        str += String.fromCharCode(c);
+      }
+      // İlk harfi büyük, gerisi alfanümerik/boşluk/tire olan Artboard ismi formatı
+      if (valid && /^[A-Z][a-zA-Z0-9 _-]{1,30}$/.test(str)) {
+        candidates.add(str);
+      }
+    }
+    return [...candidates];
+  } catch(_) { return []; }
 }
 
 // Tek artboard inspector
@@ -1603,23 +1639,46 @@ async function inspectAllArtboards(file) {
     // Adım 1: Varsayılan artboard yükle → artboardNames al
     const artboardNames = await new Promise(resolve => {
       const cv = document.createElement('canvas'); cv.width=100; cv.height=100;
-      const timeout = setTimeout(() => resolve(['__default__']), 8000);
+      const timeout = setTimeout(() => resolve([]), 8000);
       const r = new rive.Rive({
         buffer: buffer.slice(0), canvas: cv, autoplay: false,
         onLoad: () => {
           clearTimeout(timeout);
           let names = [];
+          // Önce runtime API'sini dene
           try { names = r.artboardNames || []; } catch(_) {}
+          // Eğer runtime API çalışmadıysa, Rive file objesini dene
+          if (!names.length) {
+            try {
+              const f = (r as any).file || (r as any)._file || (r as any).riveFile;
+              if (f && typeof f.artboardCount === 'function') {
+                const count = f.artboardCount();
+                for (let i = 0; i < count; i++) {
+                  try { names.push(f.artboardByIndex(i).name()); } catch(_) {}
+                }
+              }
+            } catch(_) {}
+          }
           try { r.cleanup(); } catch(_) {}
-          resolve(names.length > 0 ? names : ['__default__']);
+          resolve(names);
         },
-        onLoadError: () => { clearTimeout(timeout); resolve(['__default__']); }
+        onLoadError: () => { clearTimeout(timeout); resolve([]); }
       });
     });
 
+    // Binary parse ile ek adaylar bul (fallback)
+    const binaryCandidates = extractArtboardNamesFromBinary(buffer);
+    
+    // Runtime'dan gelen isimler varsa onları kullan, yoksa binary'den dene
+    let finalNames = artboardNames.length > 0 ? artboardNames : binaryCandidates.slice(0, 6);
+    // Hiç yoksa varsayılan
+    if (finalNames.length === 0) finalNames = ['__default__'];
+
+    console.log('[Rive Scanner] artboardNames runtime:', artboardNames, '| binary candidates:', binaryCandidates, '| final:', finalNames);
+
     // Adım 2: Her artboard için SM'leri sıralı tara
     const artboards = [];
-    for (const abName of artboardNames) {
+    for (const abName of finalNames) {
       await new Promise(resolve => {
         const cv = document.createElement('canvas'); cv.width=100; cv.height=100;
         const isDefault = abName === '__default__';

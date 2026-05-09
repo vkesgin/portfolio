@@ -204,14 +204,12 @@ export default function ComponentGrid() {
 
                 {comp.image_url ? (
                   /*
-                   * HOVER FIX: padding ile buton etrafında boş alan.
-                   * pointer-events: none olmayan, transform/scale OLMAYAN temiz kapsayıcı.
-                   * RiveDemo kendi içinde canvas'ı yönetir.
+                   * HOVER FIX: absolute inset-0 ile sabit boyutlu kapsayıcı.
+                   * Padding = buton etrafındaki nefes boşluğu.
+                   * flex items-center KULLANMA — h-full'ı 0'a düşürür.
+                   * RiveDemo ve canvas bu kutu içinde tam boyutlanır.
                    */
-                  <div
-                    className="absolute inset-0 flex items-center justify-center"
-                    style={{ padding: "32px" }}
-                  >
+                  <div className="absolute" style={{ inset: "24px" }}>
                     <RiveDemo
                       src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`}
                       artboard={cfg.artboard}
@@ -282,7 +280,7 @@ export default function ComponentGrid() {
                   {/* Preview — erişilebilir */}
                   <div className="lg:w-2/5 p-6 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20">
                     <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
-                      <div className="absolute inset-0 flex items-center justify-center p-6">
+                      <div className="absolute" style={{ inset: "20px" }}>
                         <RiveDemo
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
@@ -313,7 +311,7 @@ export default function ComponentGrid() {
                   {/* Sol: Preview */}
                   <div className="lg:w-2/5 p-6 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20 gap-4">
                     <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
-                      <div className="absolute inset-0 flex items-center justify-center p-6">
+                      <div className="absolute" style={{ inset: "20px" }}>
                         <RiveDemo
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}

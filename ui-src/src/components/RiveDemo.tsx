@@ -12,11 +12,11 @@ interface RiveDemoProps {
 export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Data Binding / ViewModel refs (cat-style xPos/yPos)
+  // ViewModel refs (cursor-follow / xPos/yPos)
   const vmX = useRef<any>(null);
   const vmY = useRef<any>(null);
 
-  // State Machine Input collections
+  // SM Input refs
   const clickTriggers = useRef<any[]>([]);
   const hoverBooleans = useRef<any[]>([]);
   const xNumbers = useRef<any[]>([]);
@@ -31,12 +31,12 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
     onLoad: () => {
       if (!rive) return;
 
-      // Reset
+      // Reset all
       vmX.current = null; vmY.current = null;
       clickTriggers.current = []; hoverBooleans.current = [];
       xNumbers.current = []; yNumbers.current = [];
 
-      // === API 1: ViewModel / Data Binding (cat: xPos, yPos) ===
+      // === API 1: ViewModel / Data Binding (xPos, yPos) ===
       try {
         const vmi = (rive as any).viewModelInstance;
         if (vmi) {
@@ -47,7 +47,7 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
         }
       } catch (_) {}
 
-      // === API 2: State Machine Inputs (triggers, booleans, numbers) ===
+      // === API 2: SM Inputs (triggers, booleans, numbers) ===
       try {
         const smsToScan = (stateMachines && stateMachines.length > 0)
           ? stateMachines
@@ -58,7 +58,6 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
           for (const inp of inputs) {
             const n = inp.name.toLowerCase();
             if (inp.type === StateMachineInputType.Trigger) {
-              // All triggers → fire on click
               clickTriggers.current.push(inp);
             } else if (inp.type === StateMachineInputType.Boolean) {
               if (n.includes("hover") || n.includes("over") || n.includes("mouse")) {
@@ -78,7 +77,7 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
     },
   });
 
-  // Global mouse tracking — works window-wide for cat-style animations
+  // Global mouse tracking for cursor-follow animations
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       const hasVM = vmX.current || vmY.current;
@@ -111,8 +110,8 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
     };
   }, [rive]);
 
-  const handleClick = (e: React.MouseEvent) => {
-    // We do NOT stop propagation here so Rive can still get the event
+  // Fire JS-side triggers (only for explicit trigger/boolean inputs)
+  const handleClick = () => {
     clickTriggers.current.forEach(t => {
       if (typeof t.fire === "function") t.fire();
       else t.value = true;
@@ -122,12 +121,14 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
   return (
     <div
       ref={containerRef}
-      className="w-full h-full flex items-center justify-center"
+      className="w-full h-full flex items-center justify-center cursor-pointer"
       onMouseEnter={() => hoverBooleans.current.forEach(i => { i.value = true; })}
       onMouseLeave={() => hoverBooleans.current.forEach(i => { i.value = false; })}
       onClick={handleClick}
     >
-      <RiveComponent className="w-full h-full cursor-pointer" />
+      {/* RiveComponent canvas receives pointer events directly for Rive's internal On Pointer Down listeners */}
+      <RiveComponent style={{ width: "100%", height: "100%" }} />
     </div>
   );
 }
+

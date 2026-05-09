@@ -1562,7 +1562,7 @@ function loadRiveInspector() {
   });
 }
 
-// Bir .riv dosyasının içindeki tüm State Machine'leri + input'ları döndürür
+// Tek artboard inspector
 async function inspectRivFile(file, artboardName) {
   try {
     await loadRiveInspector();
@@ -1570,12 +1570,10 @@ async function inspectRivFile(file, artboardName) {
     const buffer = await file.arrayBuffer();
     const canvas = document.createElement('canvas');
     canvas.width = 100; canvas.height = 100;
-
     return await new Promise(resolve => {
-      const timeout = setTimeout(() => resolve({ stateMachines: [] }), 6000);
+      const timeout = setTimeout(() => resolve({ stateMachines: [] }), 7000);
       const config = { buffer, canvas, autoplay: false };
       if (artboardName && artboardName.trim() !== '') config.artboard = artboardName.trim();
-      
       const r = new rive.Rive({
         ...config,
         onLoad: () => {
@@ -1592,9 +1590,72 @@ async function inspectRivFile(file, artboardName) {
         onLoadError: () => { clearTimeout(timeout); resolve({ stateMachines: [] }); }
       });
     });
-  } catch(e) {
-    return { stateMachines: [] };
-  }
+  } catch(e) { return { stateMachines: [] }; }
+}
+
+// TÜM artboard'ları sıralı tara ve SM'lerini döndür
+async function inspectAllArtboards(file) {
+  try {
+    await loadRiveInspector();
+    if (!window.rive) return { artboards: [] };
+    const buffer = await file.arrayBuffer();
+
+    // Adım 1: Varsayılan artboard yükle → artboardNames al
+    const artboardNames = await new Promise(resolve => {
+      const cv = document.createElement('canvas'); cv.width=100; cv.height=100;
+      const timeout = setTimeout(() => resolve(['__default__']), 8000);
+      const r = new rive.Rive({
+        buffer: buffer.slice(0), canvas: cv, autoplay: false,
+        onLoad: () => {
+          clearTimeout(timeout);
+          let names = [];
+          try { names = r.artboardNames || []; } catch(_) {}
+          try { r.cleanup(); } catch(_) {}
+          resolve(names.length > 0 ? names : ['__default__']);
+        },
+        onLoadError: () => { clearTimeout(timeout); resolve(['__default__']); }
+      });
+    });
+
+    // Adım 2: Her artboard için SM'leri sıralı tara
+    const artboards = [];
+    for (const abName of artboardNames) {
+      await new Promise(resolve => {
+        const cv = document.createElement('canvas'); cv.width=100; cv.height=100;
+        const isDefault = abName === '__default__';
+        const timeout = setTimeout(() => {
+          artboards.push({ name: isDefault ? '(Varsayılan)' : abName, realName: isDefault ? '' : abName, stateMachines: [] });
+          resolve();
+        }, 8000);
+        const config = { buffer: buffer.slice(0), canvas: cv, autoplay: false };
+        if (!isDefault) config.artboard = abName;
+        const r = new rive.Rive({
+          ...config,
+          onLoad: () => {
+            clearTimeout(timeout);
+            const smNames = r.stateMachineNames || [];
+            artboards.push({
+              name: isDefault ? '(Varsayılan)' : abName,
+              realName: isDefault ? '' : abName,
+              stateMachines: smNames.map(sm => {
+                let inputs = [];
+                try { inputs = (r.stateMachineInputs(sm) || []).map(i => ({ name: i.name, type: i.type })); } catch(_) {}
+                return { name: sm, inputs };
+              })
+            });
+            try { r.cleanup(); } catch(_) {}
+            resolve();
+          },
+          onLoadError: () => {
+            clearTimeout(timeout);
+            artboards.push({ name: isDefault ? '(Varsayılan)' : abName, realName: isDefault ? '' : abName, stateMachines: [] });
+            resolve();
+          }
+        });
+      });
+    }
+    return { artboards };
+  } catch(e) { return { artboards: [] }; }
 }
 
 // SM input type badge metinleri
@@ -1626,33 +1687,56 @@ function smAutoLabel(sm) {
   return [...new Set(labels)].join(', ') || 'Dahili Animasyon';
 }
 
-// Tespit edilen SM'leri panelde göster
+// Artboard gruplu SM paneli render
 function renderSmPanel(result) {
   const panel = document.getElementById('ui-sm-panel');
   const list  = document.getElementById('ui-sm-list');
   const scanning = document.getElementById('ui-sm-scanning');
   scanning.style.display = 'none';
+  panel.style.display = 'block';
 
-  if (!result.stateMachines.length) {
-    panel.style.display = 'block';
+  // Geriye dönük uyumluluk: eski format { stateMachines: [] } veya yeni { artboards: [] }
+  const artboards = result.artboards
+    || [{ name: '(Varsayılan)', realName: '', stateMachines: result.stateMachines || [] }];
+  const totalSMs = artboards.reduce((s, ab) => s + ab.stateMachines.length, 0);
+
+  if (totalSMs === 0) {
     list.innerHTML = '<div style="color:#666;font-size:11px;font-family:var(--font-mono)">// Bu dosyada State Machine bulunamadı — animasyon autoplay çalışır</div>';
     return;
   }
 
-  panel.style.display = 'block';
-  list.innerHTML = result.stateMachines.map((sm, i) => `
-    <label style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,43,115,0.15);border-radius:8px;padding:10px 12px;cursor:pointer">
-      <input type="checkbox" name="ui-sm-check" value="${sm.name}" ${i === 0 ? 'checked' : ''}
-             style="margin-top:2px;accent-color:#ff2b73;cursor:pointer;flex-shrink:0">
-      <div style="flex:1;min-width:0">
-        <div style="color:#fff;font-size:12px;font-weight:500;font-family:var(--font-mono)">${sm.name}</div>
-        <div style="color:#666;font-size:10px;margin-top:2px">${smAutoLabel(sm)}</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-          ${sm.inputs.map(smInputBadge).join('')}
-          ${!sm.inputs.length ? '<span style="color:#444;font-size:9px">// input yok — Rive dahili listener</span>' : ''}
+  let firstChecked = true;
+  list.innerHTML = artboards.map(ab => {
+    if (!ab.stateMachines.length) return '';
+    const safeRealName = (ab.realName || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    const abHeader = `<div style="font-size:10px;color:#7c3aed;font-family:var(--font-mono);margin-bottom:6px;padding:5px 10px;background:rgba(124,58,237,0.1);border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span>📐 <strong style="color:#a78bfa">${ab.name}</strong></span>
+      ${ab.realName ? `<button onclick="document.getElementById('ui-artboard').value='${safeRealName}'" style="font-size:9px;color:#7c3aed;border:1px solid rgba(124,58,237,0.4);padding:2px 8px;border-radius:4px;cursor:pointer;background:transparent">Bu artboard'ı seç</button>` : ''}
+    </div>`;
+    const rows = ab.stateMachines.map(sm => {
+      const isChecked = firstChecked;
+      if (firstChecked) {
+        firstChecked = false;
+        setTimeout(() => {
+          if (ab.realName) document.getElementById('ui-artboard').value = ab.realName;
+        }, 50);
+      }
+      return `<label style="display:flex;align-items:flex-start;gap:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,43,115,0.12);border-radius:8px;padding:10px 12px;cursor:pointer;margin-bottom:4px">
+        <input type="checkbox" name="ui-sm-check" value="${sm.name}" data-artboard="${safeRealName}" ${isChecked ? 'checked' : ''}
+               onchange="if(this.checked){document.getElementById('ui-artboard').value=this.dataset.artboard||'';}"  
+               style="margin-top:2px;accent-color:#ff2b73;cursor:pointer;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="color:#fff;font-size:12px;font-weight:500;font-family:var(--font-mono)">${sm.name}</div>
+          <div style="color:#666;font-size:10px;margin-top:2px">${smAutoLabel(sm)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+            ${sm.inputs.map(smInputBadge).join('')}
+            ${!sm.inputs.length ? '<span style="color:#444;font-size:9px">// Rive dahili pointer event listener</span>' : ''}
+          </div>
         </div>
-      </div>
-    </label>`).join('');
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:14px">${abHeader}${rows}</div>`;
+  }).join('');
 }
 
 // Tümünü seç/kaldır
@@ -1675,12 +1759,17 @@ if (uiRivZone && uiRivFile) {
     if (!file) return;
     uiRivName.textContent = '📎 ' + file.name;
     uiRivName.style.color = 'var(--accent)';
-    // Tarama başlat
     document.getElementById('ui-sm-panel').style.display = 'none';
     document.getElementById('ui-sm-scanning').style.display = 'block';
-    
+    document.getElementById('ui-sm-scanning').textContent = '⚙ Tüm artboard\'lar taranıyor...';
     const artboardValue = document.getElementById('ui-artboard').value.trim();
-    const result = await inspectRivFile(file, artboardValue);
+    let result;
+    if (artboardValue) {
+      const single = await inspectRivFile(file, artboardValue);
+      result = { artboards: [{ name: artboardValue, realName: artboardValue, stateMachines: single.stateMachines }] };
+    } else {
+      result = await inspectAllArtboards(file);
+    }
     renderSmPanel(result);
   });
 }

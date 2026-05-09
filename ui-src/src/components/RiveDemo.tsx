@@ -15,13 +15,19 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
   const xNumbers = useRef<any[]>([]);
   const yNumbers = useRef<any[]>([]);
 
-  const cfg: any = { src, autoplay: true };
+  const cfg: any = {
+    src,
+    autoplay: true,
+    // KRITIK: CSS ile scale'lenen canvas'ta Rive'ın hit-test koordinatlarını düzeltir
+    // Bu olmadan native hover (pointer events) çalışmaz
+    shouldResizeCanvasToContainer: true,
+  };
   if (artboard) cfg.artboard = artboard;
   if (stateMachines?.length) cfg.stateMachines = stateMachines;
 
   const { rive, RiveComponent } = useRive(cfg);
 
-  // useMemo ile SM inputlarını al — rive hazır olunca yeniden hesaplanır (RiveViewer pattern)
+  // useMemo: rive hazır olunca input'ları al (RiveViewer pattern)
   const allInputs = useMemo(() => {
     if (!rive) return [];
     const sms = (stateMachines?.length ? stateMachines : rive.stateMachineNames) ?? [];
@@ -35,71 +41,49 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
     return inputs;
   }, [rive]);
 
-  // Trigger inputları — tüm trigger'lar tıklamada ateşlenir (bump, fire, vb.)
+  // Trigger inputları — tıklamada ateşlenir
   const triggerInputs = useMemo(
     () => allInputs.filter((i) => i.type === StateMachineInputType.Trigger),
     [allInputs]
   );
 
-  // Hover ve number inputlar için ref senkronizasyonu
+  // Hover/number input'ları ref'e yaz
   useEffect(() => {
     hoverBooleans.current = allInputs.filter((i) => {
       const n = i.name.toLowerCase();
       return (
         i.type === StateMachineInputType.Boolean &&
-        (n.includes("hover") || n.includes("over"))
+        (n.includes("hover") || n.includes("over") || n.includes("active"))
       );
     });
     xNumbers.current = allInputs.filter((i) => {
       if (i.type !== StateMachineInputType.Number) return false;
       const n = i.name.toLowerCase();
-      return n === "x" || n === "xpos" || n.endsWith("_x");
+      return n === "x" || n === "xpos" || n.endsWith("_x") || n.includes("mousex");
     });
     yNumbers.current = allInputs.filter((i) => {
       if (i.type !== StateMachineInputType.Number) return false;
       const n = i.name.toLowerCase();
-      return n === "y" || n === "ypos" || n.endsWith("_y");
+      return n === "y" || n === "ypos" || n.endsWith("_y") || n.includes("mousey");
     });
   }, [allInputs]);
 
-  // ViewModel cursor takibi (xPos/yPos destekleyen animasyonlar için)
+  // Mouse koordinatı takibi (cursor-follow animasyonlar için)
   useEffect(() => {
-    if (!rive) return;
-    try {
-      const vmi = (rive as any).viewModelInstance;
-      if (vmi) {
-        const xp = vmi.number?.("xPos");
-        const yp = vmi.number?.("yPos");
-        if (xp) xp.value = 50;
-        if (yp) yp.value = 50;
-      }
-    } catch (_) {}
-  }, [rive]);
-
-  // Mouse hareketi (number input'lu cursor-follow animasyonları için)
-  useEffect(() => {
+    if (!xNumbers.current.length && !yNumbers.current.length) return;
     const onMove = (e: MouseEvent) => {
       if (!containerRef.current) return;
-      if (!xNumbers.current.length && !yNumbers.current.length) return;
       const rect = containerRef.current.getBoundingClientRect();
       const xVal = Math.max(0, Math.min((e.clientX - rect.left) / rect.width, 1)) * 100;
       const yVal = Math.max(0, Math.min((e.clientY - rect.top) / rect.height, 1)) * 100;
       xNumbers.current.forEach((i) => { i.value = xVal; });
       yNumbers.current.forEach((i) => { i.value = yVal; });
     };
-    const onLeave = () => {
-      xNumbers.current.forEach((i) => { i.value = 50; });
-      yNumbers.current.forEach((i) => { i.value = 50; });
-    };
     window.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseleave", onLeave);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseleave", onLeave);
-    };
+    return () => window.removeEventListener("mousemove", onMove);
   }, [rive]);
 
-  // Tıklamada tüm trigger inputları ateşle (bump → .fire())
+  // Tıklamada trigger'ları ateşle
   const handleClick = () => {
     triggerInputs.forEach((t) => {
       try { t.fire(); } catch (_) {}
@@ -109,12 +93,15 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
   return (
     <div
       ref={containerRef}
-      className="w-full h-full flex items-center justify-center cursor-pointer"
+      className="w-full h-full cursor-pointer"
       onMouseEnter={() => hoverBooleans.current.forEach((i) => { i.value = true; })}
       onMouseLeave={() => hoverBooleans.current.forEach((i) => { i.value = false; })}
       onClick={handleClick}
     >
-      {/* pointer-events:all — Rive'ın native hover/click listener'larının canvas'a ulaşmasını garantiler */}
+      {/*
+        pointerEvents:all → Rive'ın native hover/click listener'larının canvas'a ulaşmasını garantiler.
+        shouldResizeCanvasToContainer ile birlikte native hover tam çalışır.
+      */}
       <RiveComponent style={{ width: "100%", height: "100%", pointerEvents: "all" }} />
     </div>
   );

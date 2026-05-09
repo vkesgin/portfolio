@@ -2030,7 +2030,21 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
 
   // Seçili SM'leri al
   const selectedSMs = getSelectedSMs();
-  const tagsJson = JSON.stringify({ artboard, stateMachines: selectedSMs });
+
+  // Input metadata'yı DOM'dan topla (badge'lerden)
+  const inputsMeta = [];
+  document.querySelectorAll('[name="ui-sm-check"]:checked').forEach(box => {
+    const label = box.closest('label');
+    if (!label) return;
+    label.querySelectorAll('span[style*="border"]').forEach(badge => {
+      const txt = badge.textContent.trim();
+      if (txt.startsWith('🎯')) inputsMeta.push({ name: txt.replace('🎯 ', ''), type: 0 });
+      else if (txt.startsWith('🖐')) inputsMeta.push({ name: txt.replace('🖐 ', ''), type: 1 });
+      else if (txt.startsWith('🖱') || txt.startsWith('#')) inputsMeta.push({ name: txt.replace(/^[🖱#] /, ''), type: 2 });
+    });
+  });
+
+  const tagsJson = JSON.stringify({ artboard, stateMachines: selectedSMs, inputs: inputsMeta });
 
   if (!title) { uiStatus('Başlık zorunlu!', true); return; }
   if (!editingUiId && !file) { uiStatus('.riv dosyası zorunlu!', true); return; }

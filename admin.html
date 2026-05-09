@@ -35,43 +35,6 @@
 
   <nav id="adminNav">
     <a class="admin-logo" href="/">VK<span>.</span></a>
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin — VK Portfolio</title>
-  <meta name="robots" content="noindex, nofollow">
-  <link rel="stylesheet" href="assets/css/reset.css">
-  <link rel="stylesheet" href="assets/css/variables.css">
-  <link rel="stylesheet" href="assets/css/global.css">
-  <link rel="stylesheet" href="assets/css/admin.css">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
-</head>
-<body>
-
-<!-- LOGIN -->
-<div id="loginScreen">
-  <div class="login-box">
-    <div class="login-logo">VK<span>.</span></div>
-    <p class="login-label">// admin panel</p>
-    <div class="ct-field">
-      <label class="ct-label">Şifre</label>
-      <input type="password" id="loginPass" class="ct-input" placeholder="••••••••" autocomplete="current-password">
-      <span class="ct-field-line"></span>
-    </div>
-    <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;margin-top:8px">
-      Giriş Yap ↗
-    </button>
-    <p class="login-error" id="loginError"></p>
-  </div>
-</div>
-
-<!-- DASHBOARD -->
-<div id="dashboard" style="display:none">
-
-  <nav id="adminNav">
-    <a class="admin-logo" href="/">VK<span>.</span></a>
     <div class="admin-nav-links">
       <button class="admin-tab active" data-tab="projects">Tüm İşler</button>
       <button class="admin-tab" data-tab="upload">Yeni İş Ekle</button>
@@ -387,6 +350,26 @@
     </div>
   </div>
 
+</div>
+
+<!-- CROP MODAL -->
+<div id="cropModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.9); align-items:center; justify-content:center; flex-direction:column; padding:20px;">
+  <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:100%; width:500px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="color:#fff; margin:0; font-family:var(--font-display); font-size:18px;">Görseli Ayarla (1:1)</h3>
+      <button id="cropRotateBtn" class="btn btn-outline" style="padding:6px 12px; font-size:11px;">Döndür ↻</button>
+    </div>
+    <div style="width:100%; height:350px; background:#000; border-radius:6px; overflow:hidden;">
+      <img id="cropImage" src="" style="max-width:100%; max-height:100%; display:block;">
+    </div>
+    <div style="display:flex; justify-content:space-between; margin-top:20px; gap:12px;">
+      <button class="btn btn-outline" id="cropCancelBtn" style="flex:1; justify-content:center;">İptal</button>
+      <button class="btn btn-primary" id="cropSaveBtn" style="flex:1; justify-content:center;">Onayla</button>
+    </div>
+  </div>
+</div>
+
+
   <!-- TAB: INSPIRE -->
   <div class="admin-panel" id="tab-inspire">
     <div class="admin-panel-header">
@@ -451,7 +434,7 @@
         <div class="ct-field" style="margin-top:24px">
           <label class="ct-label">React Kaynak Kodu</label>
           <textarea id="ui-code" class="admin-textarea" rows="8" placeholder="export default function Button() { ... }" style="font-family:monospace;font-size:11px"></textarea>
-          <span class="admin-field-line"></span>
+          <span class="ct-field-line"></span>
         </div>
 
         <div class="admin-toggle-row" style="margin-top:20px">
@@ -478,25 +461,6 @@
       </div>
     </div>
   </div>
-
-</div>
-
-<!-- CROP MODAL -->
-<div id="cropModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.9); align-items:center; justify-content:center; flex-direction:column; padding:20px;">
-  <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:100%; width:500px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-      <h3 style="color:#fff; margin:0; font-family:var(--font-display); font-size:18px;">Görseli Ayarla (1:1)</h3>
-      <button id="cropRotateBtn" class="btn btn-outline" style="padding:6px 12px; font-size:11px;">Döndür ↻</button>
-    </div>
-    <div style="width:100%; height:350px; background:#000; border-radius:6px; overflow:hidden;">
-      <img id="cropImage" src="" style="max-width:100%; max-height:100%; display:block;">
-    </div>
-    <div style="display:flex; justify-content:space-between; margin-top:20px; gap:12px;">
-      <button class="btn btn-outline" id="cropCancelBtn" style="flex:1; justify-content:center;">İptal</button>
-      <button class="btn btn-primary" id="cropSaveBtn" style="flex:1; justify-content:center;">Onayla</button>
-    </div>
-  </div>
-</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script>
@@ -1303,6 +1267,13 @@ window.tdDelete = async function(id) {
   tdStatus('// silindi');
 };
 
+// Sekme değişiminde yükle
+document.querySelectorAll('.admin-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.tab === 'threed') tdLoadProducts();
+  });
+});
+
 // ═══════════════════════════════════════
 // KÜP VİTRİN YÖNETİMİ
 // ═══════════════════════════════════════
@@ -1519,16 +1490,15 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
   document.getElementById('ui-save-btn').disabled = true;
 
   try {
-    // Upload .riv file
     const rivUrl = await uploadFile(file, 'file');
     
     uiStatus('Veritabanına kaydediliyor...', false);
     const payload = {
       title,
       category: 'uilib',
-      description: code, // React code
-      image_url: rivUrl, // .riv file URL
-      is_featured: isPro // is_featured to mark it as PRO
+      description: code,
+      image_url: rivUrl,
+      is_featured: isPro
     };
     
     const r = await fetch(`${API}/api/projects`, {
@@ -1556,6 +1526,7 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
     document.getElementById('ui-save-btn').disabled = false;
   }
 });
+
 </script>
 
 </body>

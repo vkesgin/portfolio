@@ -1,102 +1,152 @@
-import Link from "next/link";
-import Image from "next/image";
-import RiveDemo from "@/components/RiveDemo";
+import RiveDemo from '@/components/RiveDemo';
+import Link from 'next/link';
 
-export default function Home() {
+// Component tipleri
+interface UIComponent {
+  id: string;
+  title: string;
+  category: string;
+  description: string; // React Kodu burada tutuluyor
+  image_url: string; // .riv animasyon url'si burada tutuluyor
+  is_featured: boolean; // PRO durumu
+}
+
+// Sunucudan (Cloudflare Worker'dan) bileşenleri çeken fonksiyon
+async function getComponents() {
+  try {
+    const res = await fetch('https://vk-portfolio-api.vkesgin38.workers.dev/api/projects?category=uilib', {
+      next: { revalidate: 60 } // Her 60 saniyede bir önbelleği yenile
+    });
+    
+    if (!res.ok) {
+      throw new Error('Veri çekilemedi');
+    }
+    
+    return await res.json() as UIComponent[];
+  } catch (error) {
+    console.error("Bileşenler çekilirken hata:", error);
+    return [];
+  }
+}
+
+export default async function Home() {
+  const components = await getComponents();
+
   return (
-    <main className="flex min-h-screen flex-col items-center overflow-hidden bg-black relative">
-      {/* Background glowing effects */}
-      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] rounded-full bg-primary/20 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-5%] w-[600px] h-[600px] rounded-full bg-blue-600/10 blur-[150px] pointer-events-none" />
-
-      {/* Navigation */}
-      <nav className="w-full max-w-7xl px-6 py-6 flex items-center justify-between z-10">
-        <div className="flex items-center gap-3">
-          <Image src="/logo.webp" alt="vkesgin logo" width={36} height={36} className="rounded-xl object-contain bg-white/5 p-1 border border-white/10" />
-          <span className="text-xl font-semibold tracking-tight text-white">vkesgin UI</span>
-        </div>
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-zinc-400">
-          <Link href="#components" className="hover:text-white transition-colors">Bileşenler</Link>
-          <Link href="#pricing" className="hover:text-white transition-colors">Fiyatlandırma</Link>
-          <Link href="#faq" className="hover:text-white transition-colors">SSS</Link>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link href="/login" className="text-sm font-medium text-zinc-300 hover:text-white transition-colors">
-            Giriş Yap
+    <div className="min-h-screen bg-[#050505] text-white selection:bg-[#ff2b73] selection:text-white pb-20">
+      
+      {/* HEADER */}
+      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/5 bg-[#050505]/80 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link href="/" className="font-bold text-xl tracking-tighter">
+            VK<span className="text-[#ff2b73]">UI</span>
           </Link>
-          <Link href="/pricing" className="text-sm font-medium bg-white text-black px-4 py-2 rounded-full hover:bg-zinc-200 transition-colors">
-            Pro'ya Geç
-          </Link>
+          <nav className="flex gap-6 text-sm font-medium text-white/60">
+            <Link href="#" className="hover:text-white transition-colors">Bileşenler</Link>
+            <Link href="#" className="hover:text-white transition-colors">Şablonlar</Link>
+            <Link href="#" className="hover:text-white transition-colors">Fiyatlandırma</Link>
+          </nav>
+          <a href="https://velikesgin.com" className="text-xs font-medium px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+            Portfolyoya Dön ↗
+          </a>
         </div>
-      </nav>
+      </header>
 
-      {/* Hero Section */}
-      <div className="flex-1 w-full max-w-7xl px-6 flex flex-col items-center justify-center text-center z-10 pt-20 pb-32">
-        
-        <div className="flex flex-col lg:flex-row items-center justify-between w-full gap-16 lg:text-left text-center">
-          
-          <div className="flex-1 flex flex-col items-center lg:items-start max-w-2xl">
-            <div className="glass px-4 py-1.5 rounded-full mb-8 inline-flex items-center gap-2 text-sm text-zinc-300 border border-white/10 shadow-lg shadow-black/50">
-              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              Yeni: Rive v2 Entegrasyonlu Butonlar Yayında
-            </div>
-            
-            <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-8 leading-tight">
-              Sıradan UI'lara veda et.<br />
-              <span className="text-gradient">Canlı ve Etkileşimli.</span>
-            </h1>
-            
-            <p className="text-lg md:text-xl text-zinc-400 mb-12 leading-relaxed">
-              Rive state-machine gücüyle donatılmış, kopyala-yapıştır yapabileceğin premium React bileşenleri. Mikroskobik animasyonlarla kullanıcılarını büyüle.
-            </p>
-
-            <div className="flex flex-col sm:flex-row items-center gap-4">
-              <Link href="/components" className="flex items-center justify-center h-14 px-8 rounded-full bg-primary text-white font-medium text-lg hover:bg-primary/90 transition-all shadow-[0_0_40px_-10px_#FF2B73]">
-                Bileşenleri Keşfet
-              </Link>
-              <Link href="/docs" className="flex items-center justify-center h-14 px-8 rounded-full glass hover:bg-white/5 transition-all text-white font-medium text-lg border border-white/10">
-                Dokümantasyonu Oku
-              </Link>
-            </div>
+      {/* HERO SECTION */}
+      <section className="pt-40 pb-20 px-6">
+        <div className="max-w-4xl mx-auto text-center">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ff2b73]/10 text-[#ff2b73] text-xs font-semibold tracking-wide uppercase mb-6 border border-[#ff2b73]/20">
+            <span className="w-2 h-2 rounded-full bg-[#ff2b73] animate-pulse"></span>
+            Erken Erişim
           </div>
-
-          <div className="flex-1 w-full flex justify-center lg:justify-end">
-             <RiveDemo />
-          </div>
-          
-        </div>
-
-        {/* Feature Teaser Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-32 w-full max-w-5xl text-left">
-          <div className="glass-card p-6 rounded-2xl">
-            <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center mb-4 border border-primary/30">
-              <svg className="w-6 h-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-2">Performans Odaklı</h3>
-            <p className="text-zinc-400">Rive sayesinde sıfır jank, maksimum 60 FPS akıcılık. Lottie'den %60 daha hafif.</p>
-          </div>
-          <div className="glass-card p-6 rounded-2xl">
-            <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center mb-4 border border-blue-500/30">
-              <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-2">React Uyumlu</h3>
-            <p className="text-zinc-400">Props ile yönetilebilen, Tailwind CSS ile stillendirilebilir hazır kod blokları.</p>
-          </div>
-          <div className="glass-card p-6 rounded-2xl">
-            <div className="w-12 h-12 rounded-xl bg-orange-500/20 flex items-center justify-center mb-4 border border-orange-500/30">
-              <svg className="w-6 h-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-white mb-2">Güvenli Erişim</h3>
-            <p className="text-zinc-400">Pro bileşen kaynak kodları ve orijinal .riv dosyaları sadece abonelere özeldir.</p>
+          <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-8">
+            Etkileşimli. Canlı. <br className="hidden md:block"/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f]">
+              Kusursuz.
+            </span>
+          </h1>
+          <p className="text-lg md:text-xl text-white/50 max-w-2xl mx-auto leading-relaxed mb-10">
+            Modern web için tasarlanmış, Rive animasyonlarıyla güçlendirilmiş, anında kopyala-yapıştır yapabileceğin React bileşen kütüphanesi.
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <button className="px-8 py-4 rounded-full bg-white text-black font-semibold hover:scale-105 transition-transform">
+              Bileşenleri Keşfet
+            </button>
+            <button className="px-8 py-4 rounded-full bg-white/5 font-semibold hover:bg-white/10 transition-colors">
+              Nasıl Kullanılır?
+            </button>
           </div>
         </div>
-      </div>
-    </main>
+      </section>
+
+      {/* BİLEŞENLER LİSTESİ */}
+      <section className="px-6 max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-12">
+          <h2 className="text-2xl font-bold">En Yeni Bileşenler</h2>
+          <div className="text-sm text-white/40">{components.length} bileşen</div>
+        </div>
+
+        {components.length === 0 ? (
+          <div className="py-20 text-center border border-white/5 rounded-3xl bg-white/[0.02]">
+            <div className="w-16 h-16 mx-auto mb-4 opacity-20">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </div>
+            <p className="text-white/40">Henüz bileşen eklenmedi.</p>
+            <p className="text-white/20 text-sm mt-2">Admin panelinden ilk bileşenini ekleyebilirsin.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {components.map((comp) => (
+              <div key={comp.id} className="group flex flex-col bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden hover:border-white/10 transition-colors">
+                
+                {/* PREVIEW KISMI */}
+                <div className="relative aspect-[4/3] w-full bg-black/40 flex items-center justify-center p-8 overflow-hidden">
+                  <div className="absolute top-4 right-4 z-10 flex gap-2">
+                    {comp.is_featured && (
+                      <span className="px-2 py-1 text-[10px] font-bold tracking-wider rounded bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white">PRO</span>
+                    )}
+                    {!comp.is_featured && (
+                      <span className="px-2 py-1 text-[10px] font-bold tracking-wider rounded bg-white/10 text-white">FREE</span>
+                    )}
+                  </div>
+                  
+                  {comp.image_url ? (
+                    <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-500">
+                      <RiveDemo 
+                        src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} 
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-white/20 text-sm">Görsel Yok</div>
+                  )}
+                </div>
+
+                {/* INFO KISMI */}
+                <div className="p-6 border-t border-white/5 flex-1 flex flex-col">
+                  <h3 className="text-lg font-semibold mb-2 group-hover:text-[#ff2b73] transition-colors">{comp.title}</h3>
+                  
+                  {/* React Kaynak Kodu (Sadece görsel, gerçekte detay sayfasına gider) */}
+                  <div className="mt-auto pt-6 flex gap-2">
+                    <button className="flex-1 py-3 text-sm font-medium rounded-xl bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                      Kodu Kopyala
+                    </button>
+                    <button className="w-12 h-12 flex items-center justify-center rounded-xl bg-white/5 hover:bg-[#ff2b73] hover:text-white transition-colors">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+    </div>
   );
 }

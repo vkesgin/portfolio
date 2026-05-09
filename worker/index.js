@@ -148,11 +148,22 @@ export default {
     if (path === '/api/projects' && method === 'GET') {
       const featured = url.searchParams.get('featured');
       const category = url.searchParams.get('category');
-      let query = 'SELECT * FROM projects WHERE 1=1';
       const params = [];
-      if (featured === '1') { query += ' AND is_featured=1 ORDER BY featured_order ASC'; }
-      else { query += ' ORDER BY created_at DESC'; }
-      if (category) { query = query.replace('WHERE 1=1', 'WHERE category=?'); params.push(category); }
+      let query;
+
+      if (category) {
+        // Belirli bir kategori isteniyorsa sadece onu döndür
+        query = 'SELECT * FROM projects WHERE category=?';
+        params.push(category);
+        if (featured === '1') query += ' AND is_featured=1 ORDER BY featured_order ASC';
+        else query += ' ORDER BY created_at DESC';
+      } else {
+        // Genel liste: uilib ve 3dcube özel kategorileri hariç tut
+        query = "SELECT * FROM projects WHERE category NOT IN ('uilib','3dcube')";
+        if (featured === '1') query += ' AND is_featured=1 ORDER BY featured_order ASC';
+        else query += ' ORDER BY created_at DESC';
+      }
+
       const { results } = await env.DB.prepare(query).bind(...params).all();
       return json(results, 200, origin);
     }

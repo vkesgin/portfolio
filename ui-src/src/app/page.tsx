@@ -1,5 +1,5 @@
-import RiveDemo from '@/components/RiveDemo';
 import Link from 'next/link';
+import ComponentGrid from '@/components/ComponentGrid';
 
 // Component tipleri
 interface UIComponent {
@@ -99,51 +99,7 @@ export default async function Home() {
             <p className="text-white/20 text-sm mt-2">Admin panelinden ilk bileşenini ekleyebilirsin.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {components.map((comp) => (
-              <div key={comp.id} className="group flex flex-col bg-white/[0.02] border border-white/5 rounded-3xl overflow-hidden hover:border-white/10 transition-colors">
-                
-                {/* PREVIEW KISMI */}
-                <div className="relative aspect-[4/3] w-full bg-black/40 flex items-center justify-center p-8 overflow-hidden">
-                  <div className="absolute top-4 right-4 z-10 flex gap-2">
-                    {comp.is_featured && (
-                      <span className="px-2 py-1 text-[10px] font-bold tracking-wider rounded bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white">PRO</span>
-                    )}
-                    {!comp.is_featured && (
-                      <span className="px-2 py-1 text-[10px] font-bold tracking-wider rounded bg-white/10 text-white">FREE</span>
-                    )}
-                  </div>
-                  
-                  {comp.image_url ? (
-                    <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-500">
-                      <RiveDemo 
-                        src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} 
-                      />
-                    </div>
-                  ) : (
-                    <div className="text-white/20 text-sm">Görsel Yok</div>
-                  )}
-                </div>
-
-                {/* INFO KISMI */}
-                <div className="p-6 border-t border-white/5 flex-1 flex flex-col">
-                  <h3 className="text-lg font-semibold mb-2 group-hover:text-[#ff2b73] transition-colors">{comp.title}</h3>
-                  
-                  {/* React Kaynak Kodu (Sadece görsel, gerçekte detay sayfasına gider) */}
-                  <div className="mt-auto pt-6 flex gap-2">
-                    <button className="flex-1 py-3 text-sm font-medium rounded-xl bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center gap-2">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                      Kodu Kopyala
-                    </button>
-                    <button className="w-12 h-12 flex items-center justify-center rounded-xl bg-white/5 hover:bg-[#ff2b73] hover:text-white transition-colors">
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            ))}
-          </div>
+          <ComponentGrid components={components} />
         )}
       </section>
 

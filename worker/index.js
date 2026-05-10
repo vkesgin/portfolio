@@ -731,6 +731,17 @@ if (path.startsWith('/api/kpss')) {
             created_at TEXT DEFAULT (datetime('now'))
           )
         `).run();
+
+        await env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS ui_downloads (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            component_id TEXT NOT NULL,
+            download_type TEXT DEFAULT 'riv', -- 'riv' or 'code'
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY(user_id) REFERENCES ui_users(id) ON DELETE CASCADE
+          )
+        `).run();
         
         try { await env.DB.prepare("ALTER TABLE ui_users ADD COLUMN is_email_verified INTEGER DEFAULT 1").run(); } catch(e){}
 
@@ -895,7 +906,65 @@ if (path.startsWith('/api/kpss')) {
       const uiUser = await env.DB.prepare("SELECT id, email, full_name, plan, subscription_end FROM ui_users WHERE id=?").bind(authData.userId).first();
       if (!uiUser) return json({ error: 'Kullanıcı bulunamadı' }, 404, origin);
       
-      return json({ user: uiUser }, 200, origin);
+      // Kalan indirme hakkını hesapla (FREE: 5/ay, PRO: sınırsız)
+      let remaining_downloads = -1; // -1 = sınırsız (PRO)
+      if (uiUser.plan !== 'PRO') {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const dlCount = await env.DB.prepare(
+          "SELECT COUNT(*) as cnt FROM ui_downloads WHERE user_id=? AND created_at >= ?"
+        ).bind(uiUser.id, monthStart).first();
+        remaining_downloads = Math.max(0, 5 - (dlCount?.cnt || 0));
+      }
+      
+      return json({ user: { ...uiUser, remaining_downloads } }, 200, origin);
+    }
+
+    // 4.5 Download endpoint — indirme hakkı kontrolü ve sayaç
+    if (path === '/api/ui/download' && method === 'POST') {
+      const authData = await uiAuth(request, env);
+      if (!authData) return json({ error: 'Bu içeriğe erişmek için giriş yapmalısınız' }, 401, origin);
+      
+      const { component_id, download_type } = await request.json().catch(() => ({}));
+      if (!component_id) return json({ error: 'component_id gerekli' }, 400, origin);
+      
+      const uiUser = await env.DB.prepare("SELECT id, plan FROM ui_users WHERE id=?").bind(authData.userId).first();
+      if (!uiUser) return json({ error: 'Kullanıcı bulunamadı' }, 404, origin);
+      
+      // PRO bileşen kontrolü
+      const comp = await env.DB.prepare("SELECT is_featured FROM projects WHERE id=?").bind(component_id).first();
+      if (comp && comp.is_featured && uiUser.plan !== 'PRO') {
+        return json({ error: 'Bu bileşen PRO üyelere özeldir' }, 403, origin);
+      }
+      
+      // FREE kullanıcı limit kontrolü
+      if (uiUser.plan !== 'PRO') {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const dlCount = await env.DB.prepare(
+          "SELECT COUNT(*) as cnt FROM ui_downloads WHERE user_id=? AND created_at >= ?"
+        ).bind(uiUser.id, monthStart).first();
+        const used = dlCount?.cnt || 0;
+        if (used >= 5) {
+          return json({ error: 'Aylık indirme limitiniz doldu (5/5). PRO pakete geçerek sınırsız indirme yapabilirsiniz.', limit_reached: true }, 403, origin);
+        }
+      }
+      
+      // İndirmeyi kaydet
+      await env.DB.prepare(
+        'INSERT INTO ui_downloads (user_id, component_id, download_type) VALUES (?, ?, ?)'
+      ).bind(uiUser.id, component_id, download_type || 'riv').run();
+      
+      // Güncel kalan hakkı döndür
+      let remaining = -1;
+      if (uiUser.plan !== 'PRO') {
+        const now2 = new Date();
+        const ms2 = new Date(now2.getFullYear(), now2.getMonth(), 1).toISOString();
+        const c2 = await env.DB.prepare("SELECT COUNT(*) as cnt FROM ui_downloads WHERE user_id=? AND created_at >= ?").bind(uiUser.id, ms2).first();
+        remaining = Math.max(0, 5 - (c2?.cnt || 0));
+      }
+      
+      return json({ ok: true, remaining_downloads: remaining }, 200, origin);
     }
 
     // 5. Lemon Squeezy Webhook

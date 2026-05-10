@@ -127,6 +127,9 @@ export default function ComponentGrid() {
   const [activeFilter, setActiveFilter] = useState<"all" | "free" | "pro" | "buttons">("all");
 
   const [user, setUser] = useState<any>(null);
+  const [remainingDownloads, setRemainingDownloads] = useState<number | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     async function fetchComponents() {
@@ -150,6 +153,9 @@ export default function ComponentGrid() {
           if (res.ok) {
             const data = await res.json();
             setUser(data.user);
+            if (data.user.remaining_downloads !== undefined) {
+              setRemainingDownloads(data.user.remaining_downloads);
+            }
           }
         } catch (err) {}
       }
@@ -162,7 +168,40 @@ export default function ComponentGrid() {
   const isPro = user?.plan === "PRO";
   const lsCheckoutUrl = user ? `https://velikesgin.lemonsqueezy.com/checkout/buy/4862289b-3640-4a46-aaee-151a0c52caad?checkout[custom][user_id]=${user.id}` : "/ui/login";
 
-  const handleCopy = async (code: string) => {
+  // İndirme hakkı kontrolü yaparak kodu kopyala veya .riv indir
+  const trackDownload = async (componentId: string, type: "code" | "riv"): Promise<boolean> => {
+    const token = localStorage.getItem("ui_token");
+    if (!token) return false;
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ component_id: componentId, download_type: type }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDownloadError(data.error || "İndirme başarısız");
+        return false;
+      }
+      if (data.remaining_downloads !== undefined) {
+        setRemainingDownloads(data.remaining_downloads);
+      }
+      return true;
+    } catch {
+      setDownloadError("Sunucu hatası");
+      return false;
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleCopy = async (code: string, componentId?: string) => {
+    if (componentId) {
+      const ok = await trackDownload(componentId, "code");
+      if (!ok) return;
+    }
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
@@ -417,14 +456,32 @@ export default function ComponentGrid() {
                     {(selectedCfg.inputs ?? []).some(i => i.type === 0) && (
                       <span className="text-[11px] text-[#ff2b73] bg-[#ff2b73]/10 border border-[#ff2b73]/20 px-3 py-1.5 rounded-full">✦ tıkla — ateşle</span>
                     )}
-                    {/* .riv indir — sadece FREE */}
-                    <a
-                      href={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
-                      download
-                      className="w-full py-2 text-xs text-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 border border-white/10"
-                    >
-                      ↓ .riv dosyasını indir {isPro ? "" : "(Aylık İndirme Limiti: 5)"}
-                    </a>
+                    {/* .riv indir */}
+                    {remainingDownloads !== null && remainingDownloads === 0 && !isPro ? (
+                      <div className="w-full py-3 text-xs text-center rounded-lg bg-red-500/10 border border-red-500/20 text-red-400">
+                        Aylık indirme limitiniz doldu (0/5)
+                        <a href="/ui/pricing" className="block mt-1 text-[#ff2b73] hover:underline">PRO'ya geç →</a>
+                      </div>
+                    ) : (
+                      <button
+                        disabled={downloading}
+                        onClick={async () => {
+                          const ok = await trackDownload(selectedComp.id, "riv");
+                          if (ok) {
+                            window.open(`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`, "_blank");
+                          }
+                        }}
+                        className="w-full py-2 text-xs text-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 border border-white/10 disabled:opacity-50"
+                      >
+                        {downloading ? "İşleniyor..." : `↓ .riv dosyasını indir ${isPro ? "" : `(Kalan: ${remainingDownloads ?? "?"}/5)`}`}
+                      </button>
+                    )}
+                    {/* İndirme hatası */}
+                    {downloadError && (
+                      <div className="w-full py-2 text-xs text-center rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 mt-2">
+                        {downloadError}
+                      </div>
+                    )}
                   </div>
 
                   {/* Sağ: Kod */}
@@ -451,14 +508,15 @@ export default function ComponentGrid() {
                     {/* Kod */}
                     <div className="relative flex-1">
                       <button
-                        onClick={() => handleCopy(generatedCode)}
+                        disabled={downloading}
+                        onClick={() => handleCopy(generatedCode, selectedComp?.id)}
                         className={`absolute top-3 right-3 z-10 px-3 py-1.5 text-xs rounded-lg font-medium transition-all ${
                           copied
                             ? "bg-green-500/20 text-green-400 border border-green-500/30"
                             : "bg-white text-black hover:bg-gray-200"
-                        }`}
+                        } disabled:opacity-50`}
                       >
-                        {copied ? "✓ Kopyalandı" : "Kopyala"}
+                        {downloading ? "..." : copied ? "✓ Kopyalandı" : "Kopyala"}
                       </button>
                       <pre className="p-5 pt-12 min-h-[280px] text-xs font-mono text-zinc-300 overflow-auto bg-[#050505] leading-relaxed">
                         <code>{generatedCode}</code>

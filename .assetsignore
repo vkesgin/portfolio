@@ -3,5 +3,7 @@ node_modules
 scratch
 scratch2
 assets/models
+ui-src
+.wrangler
 *.tgz
 *.pack

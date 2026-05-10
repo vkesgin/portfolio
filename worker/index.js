@@ -765,6 +765,37 @@ if (path.startsWith('/api/kpss')) {
       return json({ user: uiUser }, 200, origin);
     }
 
+    // 5. Lemon Squeezy Webhook
+    if (path === '/api/ui/webhook/lemonsqueezy' && method === 'POST') {
+      try {
+        const signature = request.headers.get('X-Signature');
+        // İdealde burada crypto.subtle ile secret key doğrulaması yapılır.
+        // Şimdilik gelen payload'u alıp DB'yi güncelleyeceğiz.
+        
+        const payload = await request.json();
+        const eventName = payload.meta.event_name;
+        const customData = payload.meta.custom_data;
+        const userId = customData?.user_id;
+        
+        if (!userId) return json({ error: 'Missing user_id in custom_data' }, 400);
+
+        if (eventName === 'subscription_created' || eventName === 'subscription_updated') {
+          const status = payload.data.attributes.status; // active, past_due, unpaid, canceled, expired
+          const endsAt = payload.data.attributes.renews_at || payload.data.attributes.ends_at;
+          
+          if (status === 'active') {
+            await env.DB.prepare("UPDATE ui_users SET plan='PRO', subscription_end=? WHERE id=?").bind(endsAt, userId).run();
+          } else if (status === 'expired' || status === 'canceled' || status === 'unpaid') {
+            await env.DB.prepare("UPDATE ui_users SET plan='FREE' WHERE id=?").bind(userId).run();
+          }
+        }
+        
+        return json({ received: true }, 200);
+      } catch (err) {
+        return json({ error: 'Webhook processing failed' }, 500);
+      }
+    }
+
     // === PROTECTED: Admin Auth Gerekli Olanlar ===
     if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
 

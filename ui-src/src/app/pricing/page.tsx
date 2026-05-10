@@ -1,4 +1,31 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
 export default function PricingPage() {
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    async function fetchUser() {
+      const token = localStorage.getItem("ui_token");
+      if (token) {
+        try {
+          const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/auth/me", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setUser(data.user);
+          }
+        } catch (err) {}
+      }
+    }
+    fetchUser();
+  }, []);
+
+  const isPro = user?.plan === "PRO";
+  const lsCheckoutUrl = user ? `https://store.lemonsqueezy.com/checkout/buy/123456?checkout[custom][user_id]=${user.id}` : "/login";
   return (
     <main className="min-h-screen bg-[#050505] text-white pt-32 pb-20 px-6">
       <div className="max-w-7xl mx-auto">
@@ -63,9 +90,15 @@ export default function PricingPage() {
               </li>
             </ul>
 
-            <button className="w-full py-4 rounded-full bg-[#ff2b73] hover:bg-[#ff2b73]/90 text-white font-semibold transition-colors shadow-[0_0_20px_rgba(255,43,115,0.4)]">
-              PRO'ya Geç
-            </button>
+            {isPro ? (
+              <button disabled className="w-full py-4 rounded-full bg-[#ff2b73]/50 text-white font-semibold cursor-not-allowed">
+                Şu Anda PRO Üyesiniz
+              </button>
+            ) : (
+              <a href={lsCheckoutUrl} className="block text-center w-full py-4 rounded-full bg-[#ff2b73] hover:bg-[#ff2b73]/90 text-white font-semibold transition-colors shadow-[0_0_20px_rgba(255,43,115,0.4)]">
+                PRO'ya Geç
+              </a>
+            )}
           </div>
         </div>
         

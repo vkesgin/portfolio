@@ -126,6 +126,8 @@ export default function ComponentGrid() {
   const [copied, setCopied] = useState(false);
   const [activeFilter, setActiveFilter] = useState<"all" | "free" | "pro" | "buttons">("all");
 
+  const [user, setUser] = useState<any>(null);
+
   useEffect(() => {
     async function fetchComponents() {
       try {
@@ -137,8 +139,28 @@ export default function ComponentGrid() {
         setLoading(false);
       }
     }
+    
+    async function fetchUser() {
+      const token = localStorage.getItem("ui_token");
+      if (token) {
+        try {
+          const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/auth/me", {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setUser(data.user);
+          }
+        } catch (err) {}
+      }
+    }
+
     fetchComponents();
+    fetchUser();
   }, []);
+
+  const isPro = user?.plan === "PRO";
+  const lsCheckoutUrl = user ? `https://store.lemonsqueezy.com/checkout/buy/123456?checkout[custom][user_id]=${user.id}` : "/login";
 
   const handleCopy = async (code: string) => {
     try {
@@ -304,7 +326,7 @@ export default function ComponentGrid() {
             </div>
 
             <div className="flex-1 overflow-auto">
-              {selectedComp.is_featured ? (
+              {selectedComp.is_featured && !isPro ? (
                 /* ═══════════════════════════════════════════════════════
                    PRO PAYWALL — Sadece önizleme, download/kod YOK
                    .riv URL'sine de erişim engellendi (download butonu yok)
@@ -331,9 +353,9 @@ export default function ComponentGrid() {
                     <h4 className="text-2xl font-bold mb-3">PRO Üyelik Gerekli</h4>
                     <p className="text-white/50 mb-2 max-w-sm">Bu animasyonun kaynak kodu ve <code className="text-[#ff2b73]">.riv</code> dosyası PRO üyelere özeldir.</p>
                     <p className="text-white/30 text-sm mb-8">Önizlemeyi ücretsiz görebilirsiniz.</p>
-                    <button className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white font-semibold hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,43,115,0.3)]">
-                      Abonelik Planlarını Gör →
-                    </button>
+                    <a href={lsCheckoutUrl} className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white font-semibold hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,43,115,0.3)]">
+                      PRO'ya Yükselt & Kilidi Aç →
+                    </a>
                   </div>
                 </div>
               ) : (

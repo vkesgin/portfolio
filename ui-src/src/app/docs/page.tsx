@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 
 const platforms = [
@@ -368,7 +368,7 @@ riveView.setNumberState(
   );
 }
 
-const guideMap: Record<string, () => JSX.Element> = {
+const guideMap: Record<string, () => React.ReactNode> = {
   react: ReactGuide,
   wordpress: WordPressGuide,
   webflow: WebflowGuide,

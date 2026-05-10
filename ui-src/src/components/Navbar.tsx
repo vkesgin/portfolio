@@ -53,7 +53,13 @@ export default function Navbar() {
           >
             Dokümantasyon
           </Link>
-          <div className="w-px h-4 bg-white/10 mx-2"></div>
+          <div className="w-px h-4 bg-white/10 mx-2 hidden sm:block"></div>
+          <a
+            href="https://velikesgin.com"
+            className="hidden sm:block text-xs font-medium px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 transition-colors"
+          >
+            Portfolyoya Dön ↗
+          </a>
           {isLoggedIn ? (
             <Link
               href="/dashboard"

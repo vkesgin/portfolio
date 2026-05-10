@@ -93,9 +93,9 @@ export default function PricingPage() {
               </li>
             </ul>
 
-            <button className="w-full py-4 rounded-full bg-white/10 hover:bg-white/20 font-semibold transition-colors">
+            <Link href="/" className="block text-center w-full py-4 rounded-full bg-white/10 hover:bg-white/20 font-semibold transition-colors">
               Hemen Başla
-            </button>
+            </Link>
           </div>
 
           {/* Pro Tier */}

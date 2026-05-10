@@ -114,6 +114,38 @@ async function inspireAuth(request, env) {
   return verifyInspireJWT(token, env.JWT_SECRET);
 }
 
+// UI JWT helpers
+async function signUiJWT(payload, secret) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(secret + '_ui'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body   = btoa(JSON.stringify({ ...payload, iat: Date.now() }));
+  const sig    = await crypto.subtle.sign('HMAC', key, enc.encode(`${header}.${body}`));
+  return `${header}.${body}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
+}
+async function verifyUiJWT(token, secret) {
+  try {
+    const [header, body, sig] = token.split('.');
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw', enc.encode(secret + '_ui'), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
+    );
+    const valid = await crypto.subtle.verify('HMAC', key,
+      Uint8Array.from(atob(sig), c => c.charCodeAt(0)),
+      enc.encode(`${header}.${body}`)
+    );
+    if (!valid) return null;
+    return JSON.parse(atob(body));
+  } catch { return null; }
+}
+async function uiAuth(request, env) {
+  const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
+  if (!token) return null;
+  return verifyUiJWT(token, env.JWT_SECRET);
+}
+
 export default {
   async fetch(request, env) {
     const url    = new URL(request.url);
@@ -671,6 +703,69 @@ if (path.startsWith('/api/kpss')) {
 
     // === PROTECTED: Auth gerekli ===
     const user = await authMiddleware(request, env);
+
+    // === UI ROUTES ===
+    // 1. Table Init
+    if (path === '/api/ui/init' && method === 'GET') {
+      try {
+        await env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS ui_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            full_name TEXT DEFAULT '',
+            plan TEXT DEFAULT 'FREE', -- FREE, PRO
+            subscription_end TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `).run();
+        return json({ ok: true }, 200, origin);
+      } catch (e) {
+        return json({ error: e.message }, 500, origin);
+      }
+    }
+
+    // 2. Register
+    if (path === '/api/ui/auth/register' && method === 'POST') {
+      const { email, password, full_name } = await request.json().catch(() => ({}));
+      if (!email || !password) return json({ error: 'E-posta ve şifre gereklidir' }, 400, origin);
+      
+      try {
+        const { meta } = await env.DB.prepare(
+          'INSERT INTO ui_users (email, password, full_name) VALUES (?, ?, ?)'
+        ).bind(email, password, full_name || '').run();
+        
+        const token = await signUiJWT({ userId: meta.last_row_id, email }, env.JWT_SECRET || 'secret');
+        return json({ token, user: { id: meta.last_row_id, email, full_name, plan: 'FREE' } }, 201, origin);
+      } catch (e) {
+        return json({ error: 'Bu e-posta adresi zaten kullanımda olabilir' }, 400, origin);
+      }
+    }
+
+    // 3. Login
+    if (path === '/api/ui/auth/login' && method === 'POST') {
+      const { email, password } = await request.json().catch(() => ({}));
+      if (!email || !password) return json({ error: 'E-posta ve şifre gereklidir' }, 400, origin);
+      
+      const uiUser = await env.DB.prepare("SELECT * FROM ui_users WHERE email=? AND password=?").bind(email, password).first();
+      if (!uiUser) return json({ error: 'Hatalı e-posta veya şifre' }, 401, origin);
+
+      const token = await signUiJWT({ userId: uiUser.id, email: uiUser.email }, env.JWT_SECRET || 'secret');
+      return json({ token, user: { id: uiUser.id, email: uiUser.email, full_name: uiUser.full_name, plan: uiUser.plan, subscription_end: uiUser.subscription_end } }, 200, origin);
+    }
+
+    // 4. Me (Get current user)
+    if (path === '/api/ui/auth/me' && method === 'GET') {
+      const authData = await uiAuth(request, env);
+      if (!authData) return json({ error: 'Yetkisiz' }, 401, origin);
+      
+      const uiUser = await env.DB.prepare("SELECT id, email, full_name, plan, subscription_end FROM ui_users WHERE id=?").bind(authData.userId).first();
+      if (!uiUser) return json({ error: 'Kullanıcı bulunamadı' }, 404, origin);
+      
+      return json({ user: uiUser }, 200, origin);
+    }
+
+    // === PROTECTED: Admin Auth Gerekli Olanlar ===
     if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
 
     // === FITNESS / SETTINGS API (POST/DELETE) ===

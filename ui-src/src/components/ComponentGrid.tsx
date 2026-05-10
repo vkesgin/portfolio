@@ -124,6 +124,7 @@ export default function ComponentGrid() {
   const [selectedComp, setSelectedComp] = useState<UIComponent | null>(null);
   const [activeFramework, setActiveFramework] = useState<"react" | "js" | "rn" | "flutter">("react");
   const [copied, setCopied] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<"all" | "free" | "pro" | "buttons">("all");
 
   useEffect(() => {
     async function fetchComponents() {
@@ -161,6 +162,18 @@ export default function ComponentGrid() {
     return generateCode(activeFramework, selectedCfg, selectedFileName, selectedComp.title);
   }, [selectedComp, activeFramework, selectedCfg, selectedFileName]);
 
+  const filteredComponents = useMemo(() => {
+    return components.filter(comp => {
+      if (activeFilter === "free" && comp.is_featured) return false;
+      if (activeFilter === "pro" && !comp.is_featured) return false;
+      if (activeFilter === "buttons") {
+        const text = (comp.title + " " + comp.description).toLowerCase();
+        if (!text.includes("buton") && !text.includes("button")) return false;
+      }
+      return true;
+    });
+  }, [components, activeFilter]);
+
   if (loading) return (
     <div className="py-20 text-center">
       <div className="w-8 h-8 mx-auto mb-4 border-4 border-[#ff2b73] border-t-transparent rounded-full animate-spin" />
@@ -177,13 +190,34 @@ export default function ComponentGrid() {
 
   return (
     <>
-      <div className="mb-12">
-        <div className="text-sm text-white/40 text-right">{components.length} bileşen</div>
+      {/* FILTER BAR */}
+      <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
+        <div className="flex flex-wrap items-center gap-2 p-1 rounded-2xl bg-white/5 border border-white/10 w-full md:w-auto overflow-x-auto">
+          {[
+            { id: "all", label: "Tümü" },
+            { id: "free", label: "Ücretsiz" },
+            { id: "pro", label: "PRO" },
+            { id: "buttons", label: "Butonlar" },
+          ].map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setActiveFilter(f.id as any)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                activeFilter === f.id
+                  ? "bg-[#ff2b73] text-white shadow-lg shadow-[#ff2b73]/20"
+                  : "text-white/50 hover:text-white hover:bg-white/5"
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="text-sm text-white/40">{filteredComponents.length} bileşen gösteriliyor</div>
       </div>
 
       {/* GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-        {components.map((comp) => {
+        {filteredComponents.map((comp) => {
           let cfg: RiveCfg = {};
           try { if (comp.tags) cfg = JSON.parse(comp.tags); } catch (_) {}
           const sms = cfg.stateMachines ?? (cfg.statemachine ? [cfg.statemachine] : []);

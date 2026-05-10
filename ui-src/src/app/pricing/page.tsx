@@ -7,7 +7,7 @@ export default function PricingPage() {
             Basit ve Şeffaf Fiyatlandırma
           </h1>
           <p className="text-lg text-white/50 max-w-2xl mx-auto">
-            Bir kez öde, hayat boyu kullan. Tüm Rive animasyonlarına, kaynak kodlarına ve gelecekteki güncellemelere sınırsız erişim sağla.
+            Abonelik tabanlı modelimizle tüm Rive animasyonlarına, kaynak kodlarına ve sürekli güncellenen kütüphanemize sınırsız erişim sağla. Tek seferlik ömür boyu paketimiz bulunmamaktadır.
           </p>
         </div>
 
@@ -45,8 +45,8 @@ export default function PricingPage() {
             </div>
             <h3 className="text-2xl font-bold mb-2">PRO Paket</h3>
             <div className="text-white/50 mb-6">Profesyoneller ve takımlar için.</div>
-            <div className="text-5xl font-bold mb-2">$49<span className="text-lg text-white/50 font-normal"> / ömür boyu</span></div>
-            <div className="text-sm text-white/40 mb-8">Tek seferlik ödeme</div>
+            <div className="text-5xl font-bold mb-2">$12<span className="text-lg text-white/50 font-normal"> / ay</span></div>
+            <div className="text-sm text-white/40 mb-8">veya Yıllık ödemede <span className="text-white font-bold">$8/ay</span></div>
             
             <ul className="space-y-4 mb-8 flex-1">
               <li className="flex items-center gap-3">
@@ -74,8 +74,8 @@ export default function PricingPage() {
           <h2 className="text-3xl font-bold text-center mb-12">Sıkça Sorulan Sorular</h2>
           <div className="space-y-8">
             <div>
-              <h4 className="text-lg font-bold mb-2">Tek seferlik ödeme ne anlama geliyor?</h4>
-              <p className="text-white/60">Abonelik modeli kullanmıyoruz. Bir kez ödeme yaptığınızda kütüphanedeki tüm mevcut ve gelecekte eklenecek bileşenlere ömür boyu sahip olursunuz.</p>
+              <h4 className="text-lg font-bold mb-2">Ömür boyu (Lifetime) paketiniz var mı?</h4>
+              <p className="text-white/60">Hayır, hizmetimiz sadece aylık ve yıllık abonelik modelleriyle sunulmaktadır. Böylece kütüphanemizi sürekli güncel ve taze tutabiliyoruz.</p>
             </div>
             <div>
               <h4 className="text-lg font-bold mb-2">İndirdiğim bileşenleri müşteri projelerinde kullanabilir miyim?</h4>

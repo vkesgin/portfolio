@@ -353,8 +353,8 @@ export default function ComponentGrid() {
                     <h4 className="text-2xl font-bold mb-3">PRO Üyelik Gerekli</h4>
                     <p className="text-white/50 mb-2 max-w-sm">Bu animasyonun kaynak kodu ve <code className="text-[#ff2b73]">.riv</code> dosyası PRO üyelere özeldir.</p>
                     <p className="text-white/30 text-sm mb-8">Önizlemeyi ücretsiz görebilirsiniz.</p>
-                    <a href={lsCheckoutUrl} className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white font-semibold hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,43,115,0.3)]">
-                      PRO'ya Yükselt & Kilidi Aç →
+                    <a href="/ui/pricing" className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white font-semibold hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,43,115,0.3)]">
+                      PRO'ya Yükselt &amp; Kilidi Aç →
                     </a>
                   </div>
                 </div>

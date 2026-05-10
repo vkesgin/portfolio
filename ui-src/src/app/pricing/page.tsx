@@ -5,6 +5,7 @@ import Link from "next/link";
 
 export default function PricingPage() {
   const [user, setUser] = useState<any>(null);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
 
   useEffect(() => {
     async function fetchUser() {
@@ -25,7 +26,14 @@ export default function PricingPage() {
   }, []);
 
   const isPro = user?.plan === "PRO";
-  const lsCheckoutUrl = user ? `https://store.lemonsqueezy.com/checkout/buy/123456?checkout[custom][user_id]=${user.id}` : "/login";
+  
+  // BURAYA AYLIK VE YILLIK LEMON SQUEEZY LİNKLERİNİ GİRECEKSİN (Sondaki parametreyi silmeden)
+  const monthlyLink = "https://velikesgin.lemonsqueezy.com/checkout/buy/4862289b-3640-4a46-aaee-151a0c52caad";
+  const yearlyLink = "https://velikesgin.lemonsqueezy.com/checkout/buy/4178f6ee-876c-41ca-8537-bc51e38a4e2f";
+  
+  const currentBaseUrl = billingCycle === "monthly" ? monthlyLink : yearlyLink;
+  const lsCheckoutUrl = user ? `${currentBaseUrl}?checkout[custom][user_id]=${user.id}` : "/login";
+
   return (
     <main className="min-h-screen bg-[#050505] text-white pt-32 pb-20 px-6">
       <div className="max-w-7xl mx-auto">
@@ -33,9 +41,34 @@ export default function PricingPage() {
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6">
             Basit ve Şeffaf Fiyatlandırma
           </h1>
-          <p className="text-lg text-white/50 max-w-2xl mx-auto">
+          <p className="text-lg text-white/50 max-w-2xl mx-auto mb-10">
             Abonelik tabanlı modelimizle tüm Rive animasyonlarına, kaynak kodlarına ve sürekli güncellenen kütüphanemize sınırsız erişim sağla. Tek seferlik ömür boyu paketimiz bulunmamaktadır.
           </p>
+
+          {/* Billing Toggle */}
+          <div className="inline-flex items-center p-1 bg-white/5 border border-white/10 rounded-full mx-auto">
+            <button
+              onClick={() => setBillingCycle("monthly")}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all ${
+                billingCycle === "monthly" ? "bg-[#ff2b73] text-white shadow-lg shadow-[#ff2b73]/20" : "text-white/50 hover:text-white"
+              }`}
+            >
+              Aylık Ödeme
+            </button>
+            <button
+              onClick={() => setBillingCycle("yearly")}
+              className={`px-6 py-2.5 rounded-full text-sm font-semibold transition-all flex items-center gap-2 ${
+                billingCycle === "yearly" ? "bg-[#ff2b73] text-white shadow-lg shadow-[#ff2b73]/20" : "text-white/50 hover:text-white"
+              }`}
+            >
+              Yıllık Ödeme
+              <span className={`px-2 py-0.5 text-[10px] rounded-full uppercase font-bold ${
+                billingCycle === "yearly" ? "bg-white/20 text-white" : "bg-[#ff2b73]/20 text-[#ff2b73]"
+              }`}>
+                %35 Kar
+              </span>
+            </button>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -72,8 +105,18 @@ export default function PricingPage() {
             </div>
             <h3 className="text-2xl font-bold mb-2">PRO Paket</h3>
             <div className="text-white/50 mb-6">Profesyoneller ve takımlar için.</div>
-            <div className="text-5xl font-bold mb-2">$12<span className="text-lg text-white/50 font-normal"> / ay</span></div>
-            <div className="text-sm text-white/40 mb-8">veya Yıllık ödemede <span className="text-white font-bold">$8/ay</span></div>
+            
+            {billingCycle === "monthly" ? (
+              <>
+                <div className="text-5xl font-bold mb-2">₺550<span className="text-lg text-white/50 font-normal"> / ay</span></div>
+                <div className="text-sm text-white/40 mb-8">Her ay faturalandırılır</div>
+              </>
+            ) : (
+              <>
+                <div className="text-5xl font-bold mb-2">₺350<span className="text-lg text-white/50 font-normal"> / ay</span></div>
+                <div className="text-sm text-white/40 mb-8">Yılda bir kez ₺4.200 olarak faturalandırılır</div>
+              </>
+            )}
             
             <ul className="space-y-4 mb-8 flex-1">
               <li className="flex items-center gap-3">

@@ -46,7 +46,16 @@ export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps
       }),
       onLoad: () => {
         r.resizeDrawingSurfaceToCanvas();
-        console.log("[Rive] Loaded:", src, "| SM:", sm, "| Inputs:", sm ? r.stateMachineInputs(sm)?.map((i: any) => i.name) : []);
+        const inputs = sm ? r.stateMachineInputs(sm) ?? [] : [];
+        console.log("[Rive] Loaded:", src.split("/").pop(), "| SM:", sm, "| Inputs:", inputs.map((i: any) => i.name));
+        
+        // Trigger input'ları için click handler (araba/bump gibi)
+        const triggers = inputs.filter((i: any) => i.type === 58); // StateMachineInputType.Trigger = 58
+        if (triggers.length > 0) {
+          canvas.addEventListener("pointerdown", () => {
+            triggers.forEach((t: any) => { try { t.fire(); } catch (_) {} });
+          });
+        }
       },
       onStateChange: (event: any) => {
         console.log("[Rive] State change:", event.data);

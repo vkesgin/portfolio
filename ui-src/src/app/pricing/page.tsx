@@ -45,8 +45,12 @@ export default function PricingPage() {
             Basit ve Şeffaf Fiyatlandırma
           </h1>
           <p className="text-lg text-white/50 max-w-2xl mx-auto mb-10">
-            Abonelik tabanlı modelimizle tüm Rive animasyonlarına, kaynak kodlarına ve sürekli güncellenen kütüphanemize sınırsız erişim sağla. Tek seferlik ömür boyu paketimiz bulunmamaktadır.
+            Abonelik tabanlı modelimizle tüm Rive animasyonlarına, kaynak kodlarına ve sürekli güncellenen kütüphanemize erişim sağlayın. Tek seferlik ömür boyu paketimiz bulunmamaktadır.
           </p>
+
+          <div className="p-4 mb-10 max-w-2xl mx-auto rounded-xl border border-yellow-500/20 bg-yellow-500/5 text-sm text-white/80">
+            <strong className="text-yellow-400">Önemli Not:</strong> Giriş yapmayan ziyaretçiler, bileşenlerin yalnızca önizlemelerini görebilirler. Kaynak kodlarına ve orijinal .riv dosyalarına erişebilmek için <strong>ücretsiz üye olmanız</strong> veya <strong>giriş yapmanız</strong> gerekmektedir.
+          </div>
 
           {/* Billing Toggle */}
           <div className="inline-flex items-center p-1 bg-white/5 border border-white/10 rounded-full mx-auto">
@@ -77,28 +81,41 @@ export default function PricingPage() {
         <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
           {/* Free Tier */}
           <div className="rounded-3xl border border-white/10 bg-white/5 p-8 flex flex-col relative overflow-hidden">
-            <h3 className="text-2xl font-bold mb-2">Başlangıç</h3>
-            <div className="text-white/50 mb-6">Temel bileşenler ile tanışın.</div>
-            <div className="text-5xl font-bold mb-8">Ücretsiz</div>
+            <h3 className="text-2xl font-bold mb-2">Ücretsiz Üyelik</h3>
+            <div className="text-white/50 mb-6">Temel bileşenler ile tanışın. Sadece giriş yapan kullanıcılar erişebilir.</div>
+            <div className="text-5xl font-bold mb-8">₺0<span className="text-lg text-white/50 font-normal"> / ay</span></div>
             
             <ul className="space-y-4 mb-8 flex-1">
               <li className="flex items-center gap-3">
-                <span className="text-green-500">✓</span> Ücretsiz bileşenlere erişim
+                <span className="text-green-500">✓</span> Ücretsiz bileşenlerin kodlarına erişim
               </li>
               <li className="flex items-center gap-3">
-                <span className="text-green-500">✓</span> React kaynak kodları
+                <span className="text-green-500">✓</span> Ücretsiz bileşenlerin orijinal <strong>.riv dosyalarını</strong> indirme
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-green-500">✓</span> <strong>Aylık 5 indirme hakkı</strong> (Her ay yenilenir)
               </li>
               <li className="flex items-center gap-3 text-white/30">
                 <span className="text-white/20">×</span> PRO bileşenlere erişim
               </li>
               <li className="flex items-center gap-3 text-white/30">
-                <span className="text-white/20">×</span> Orijinal .riv dosyaları
+                <span className="text-white/20">×</span> Hazır web şablonlarına erişim
               </li>
             </ul>
 
-            <Link href="/" className="block text-center w-full py-4 rounded-full bg-white/10 hover:bg-white/20 font-semibold transition-colors">
-              Hemen Başla
-            </Link>
+            {!user ? (
+              <Link href="/login" className="block text-center w-full py-4 rounded-full bg-white/10 hover:bg-white/20 font-semibold transition-colors">
+                Hemen Üye Ol
+              </Link>
+            ) : isPro ? (
+              <Link href="/dashboard" className="block text-center w-full py-4 rounded-full bg-white/10 hover:bg-white/20 font-semibold transition-colors">
+                Kütüphaneye Git
+              </Link>
+            ) : (
+              <button disabled className="w-full py-4 rounded-full bg-white/10 text-white/50 font-semibold cursor-not-allowed">
+                Mevcut Paketiniz
+              </button>
+            )}
           </div>
 
           {/* Pro Tier */}
@@ -107,7 +124,7 @@ export default function PricingPage() {
               En Popüler
             </div>
             <h3 className="text-2xl font-bold mb-2">PRO Paket</h3>
-            <div className="text-white/50 mb-6">Profesyoneller ve takımlar için.</div>
+            <div className="text-white/50 mb-6">Sınırsız erişim isteyen profesyoneller için.</div>
             
             {billingCycle === "monthly" ? (
               <>
@@ -123,16 +140,19 @@ export default function PricingPage() {
             
             <ul className="space-y-4 mb-8 flex-1">
               <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> <strong>Tüm</strong> UI bileşenlerine erişim
+                <span className="text-[#ff2b73]">✓</span> <strong>Tüm</strong> (Free + PRO) UI bileşenlerine erişim
               </li>
               <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> Orijinal <strong>.riv dosyalarını</strong> indirme
+                <span className="text-[#ff2b73]">✓</span> Tüm bileşenlerin orijinal <strong>.riv dosyalarını</strong> indirme
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-[#ff2b73]">✓</span> <strong>Sınırsız</strong> indirme hakkı
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="text-[#ff2b73]">✓</span> <strong>Hazır web şablonlarına</strong> erişim
               </li>
               <li className="flex items-center gap-3">
                 <span className="text-[#ff2b73]">✓</span> Ticari kullanım lisansı
-              </li>
-              <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> Hazır web şablonlarına erişim
               </li>
             </ul>
 
@@ -153,16 +173,20 @@ export default function PricingPage() {
           <h2 className="text-3xl font-bold text-center mb-12">Sıkça Sorulan Sorular</h2>
           <div className="space-y-8">
             <div>
-              <h4 className="text-lg font-bold mb-2">Ömür boyu (Lifetime) paketiniz var mı?</h4>
-              <p className="text-white/60">Hayır, hizmetimiz sadece aylık ve yıllık abonelik modelleriyle sunulmaktadır. Böylece kütüphanemizi sürekli güncel ve taze tutabiliyoruz.</p>
+              <h4 className="text-lg font-bold mb-2">Giriş yapmadan kodlara veya animasyonlara erişebilir miyim?</h4>
+              <p className="text-white/60">Hayır, giriş yapmayan ziyaretçilerimiz sadece kütüphanedeki bileşenlerin önizlemelerini görebilirler. Kaynak kodlarına ve animasyon dosyalarına erişmek için ücretsiz olarak üye olmanız gerekmektedir.</p>
+            </div>
+            <div>
+              <h4 className="text-lg font-bold mb-2">Ücretsiz üyelikte indirme sınırı var mı?</h4>
+              <p className="text-white/60">Evet, ücretsiz üyelikte her ay 5 indirme (kod görüntüleme veya .riv indirme) hakkınız bulunmaktadır. Bu haklarınız her ay yenilenir. Sınırsız erişim için PRO pakete geçebilirsiniz.</p>
             </div>
             <div>
               <h4 className="text-lg font-bold mb-2">İndirdiğim bileşenleri müşteri projelerinde kullanabilir miyim?</h4>
               <p className="text-white/60">Evet, PRO lisansı ticari kullanım hakkı sunar. İndirdiğiniz Rive dosyalarını ve React kodlarını hem kendi projelerinizde hem de müşteri projelerinde sınırsızca kullanabilirsiniz.</p>
             </div>
             <div>
-              <h4 className="text-lg font-bold mb-2">Rive (.riv) dosyalarını düzenleyebilir miyim?</h4>
-              <p className="text-white/60">Kesinlikle! PRO paketi ile animasyonların orijinal .riv dosyalarını indirip kendi Rive hesabınıza aktarabilir, renklerini ve tasarımlarını dilediğiniz gibi değiştirebilirsiniz.</p>
+              <h4 className="text-lg font-bold mb-2">Hazır web şablonları nedir?</h4>
+              <p className="text-white/60">PRO paketi, animasyonların sadece tek tek bileşenlerini değil, bir bütün olarak kullanıldığı kullanıma hazır Next.js / React web şablonlarına erişim imkanı sunar.</p>
             </div>
           </div>
         </div>

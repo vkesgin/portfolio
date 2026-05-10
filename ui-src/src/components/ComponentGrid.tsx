@@ -326,7 +326,43 @@ export default function ComponentGrid() {
             </div>
 
             <div className="flex-1 overflow-auto">
-              {selectedComp.is_featured && !isPro ? (
+              {!user ? (
+                /* ═══════════════════════════════════════════════════════
+                   GİRİŞ YAPMAMIŞ KULLANICI — Sadece önizleme, download/kod YOK
+                   ═══════════════════════════════════════════════════════ */
+                <div className="flex flex-col lg:flex-row" style={{ minHeight: "400px" }}>
+                  {/* Preview — erişilebilir */}
+                  <div className="lg:w-2/5 p-6 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20">
+                    <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
+                      <div className="absolute" style={{ inset: "20px", display: "flex" }}>
+                        <RiveDemo
+                          src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
+                          artboard={selectedCfg.artboard}
+                          stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Paywall — kod/download yok */}
+                  <div className="lg:w-3/5 flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-16 h-16 mb-5 rounded-2xl bg-white/5 flex items-center justify-center border border-white/10">
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                    </div>
+                    <h4 className="text-2xl font-bold mb-3">Giriş Yapmanız Gerekiyor</h4>
+                    <p className="text-white/50 mb-2 max-w-sm">Bu animasyonun kaynak koduna ve <code className="text-[#ff2b73]">.riv</code> dosyasına erişmek için ücretsiz üye olmalısınız.</p>
+                    <p className="text-white/30 text-sm mb-8">Önizlemeyi ücretsiz görebilirsiniz.</p>
+                    <div className="flex gap-4">
+                      <a href="/ui/login" className="px-6 py-3 rounded-xl bg-white text-black font-semibold hover:bg-gray-200 transition-colors">
+                        Giriş Yap
+                      </a>
+                      <a href="/ui/register" className="px-6 py-3 rounded-xl bg-white/10 font-semibold hover:bg-white/20 transition-colors border border-white/10">
+                        Kayıt Ol
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ) : selectedComp.is_featured && !isPro ? (
                 /* ═══════════════════════════════════════════════════════
                    PRO PAYWALL — Sadece önizleme, download/kod YOK
                    .riv URL'sine de erişim engellendi (download butonu yok)
@@ -387,7 +423,7 @@ export default function ComponentGrid() {
                       download
                       className="w-full py-2 text-xs text-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 border border-white/10"
                     >
-                      ↓ .riv dosyasını indir
+                      ↓ .riv dosyasını indir {isPro ? "" : "(Aylık İndirme Limiti: 5)"}
                     </a>
                   </div>
 

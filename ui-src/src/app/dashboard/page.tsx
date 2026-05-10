@@ -111,9 +111,14 @@ export default function DashboardPage() {
             ) : (
               <div>
                 <p className="text-white/60 mb-6 text-sm">Tüm premium bileşenlere ve kaynak kodlarına sınırsız erişiminiz var. Projelerinizde harikalar yaratın!</p>
-                <Link href="/" className="inline-block px-6 py-3 rounded-xl bg-white text-black hover:bg-white/90 font-bold transition-all text-sm">
-                  Bileşenleri Keşfet
-                </Link>
+                <div className="flex gap-4">
+                  <Link href="/" className="inline-block px-6 py-3 rounded-xl bg-white text-black hover:bg-white/90 font-bold transition-all text-sm">
+                    Bileşenleri Keşfet
+                  </Link>
+                  <a href="https://velikesgin.lemonsqueezy.com/billing" target="_blank" rel="noopener noreferrer" className="inline-block px-6 py-3 rounded-xl bg-white/10 text-white hover:bg-white/20 font-bold transition-all text-sm border border-white/10">
+                    Aboneliği Yönet
+                  </a>
+                </div>
               </div>
             )}
           </div>

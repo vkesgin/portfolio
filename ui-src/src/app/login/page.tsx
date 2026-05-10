@@ -25,6 +25,10 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
+        if (data.unverified) {
+          router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+          return;
+        }
         throw new Error(data.error || "Giriş başarısız");
       }
 

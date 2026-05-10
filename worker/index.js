@@ -716,13 +716,46 @@ if (path.startsWith('/api/kpss')) {
             full_name TEXT DEFAULT '',
             plan TEXT DEFAULT 'FREE', -- FREE, PRO
             subscription_end TEXT,
+            is_email_verified INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now'))
           )
         `).run();
+        
+        await env.DB.prepare(`
+          CREATE TABLE IF NOT EXISTS ui_auth_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL,
+            type TEXT NOT NULL, -- 'ACTIVATION' or 'RESET'
+            expires_at TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `).run();
+        
+        try { await env.DB.prepare("ALTER TABLE ui_users ADD COLUMN is_email_verified INTEGER DEFAULT 1").run(); } catch(e){}
+
         return json({ ok: true }, 200, origin);
       } catch (e) {
         return json({ error: e.message }, 500, origin);
       }
+    }
+
+    // -- EMAIL SENDER HELPER --
+    async function sendResendEmail(to, subject, html) {
+      if (!env.RESEND_API_KEY) return false;
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${env.RESEND_API_KEY}` },
+          body: JSON.stringify({
+            from: 'VK UI <noreply@velikesgin.com>',
+            to: [to],
+            subject: subject,
+            html: html
+          })
+        });
+        return res.ok;
+      } catch(e) { return false; }
     }
 
     // 2. Register
@@ -731,15 +764,59 @@ if (path.startsWith('/api/kpss')) {
       if (!email || !password) return json({ error: 'E-posta ve şifre gereklidir' }, 400, origin);
       
       try {
+        const isVerifiedDefault = env.RESEND_API_KEY ? 0 : 1; // If no API key, skip verification
         const { meta } = await env.DB.prepare(
-          'INSERT INTO ui_users (email, password, full_name) VALUES (?, ?, ?)'
-        ).bind(email, password, full_name || '').run();
+          'INSERT INTO ui_users (email, password, full_name, is_email_verified) VALUES (?, ?, ?, ?)'
+        ).bind(email, password, full_name || '', isVerifiedDefault).run();
         
-        const token = await signUiJWT({ userId: meta.last_row_id, email }, env.JWT_SECRET || 'secret');
-        return json({ token, user: { id: meta.last_row_id, email, full_name, plan: 'FREE' } }, 201, origin);
+        const userId = meta.last_row_id;
+
+        if (env.RESEND_API_KEY) {
+          const code = Math.floor(100000 + Math.random() * 900000).toString();
+          const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+          await env.DB.prepare('INSERT INTO ui_auth_tokens (user_id, token, type, expires_at) VALUES (?, ?, ?, ?)')
+                      .bind(userId, code, 'ACTIVATION', expiresAt).run();
+          
+          await sendResendEmail(email, 'Hesabınızı Aktive Edin', `
+            <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:20px;border:1px solid #eee;border-radius:10px;">
+              <h2 style="color:#ff2b73;">Hoş Geldiniz!</h2>
+              <p>Hesabınızı aktive etmek için aşağıdaki 6 haneli kodu kullanın:</p>
+              <div style="background:#f4f4f5;padding:15px;font-size:24px;font-weight:bold;letter-spacing:5px;text-align:center;border-radius:8px;margin:20px 0;">
+                ${code}
+              </div>
+              <p>Bu kod 1 saat geçerlidir.</p>
+            </div>
+          `);
+          return json({ needsVerification: true, email }, 201, origin);
+        } else {
+          // Fallback if no email provider configured
+          const token = await signUiJWT({ userId, email }, env.JWT_SECRET || 'secret');
+          return json({ token, user: { id: userId, email, full_name, plan: 'FREE' } }, 201, origin);
+        }
       } catch (e) {
         return json({ error: 'Bu e-posta adresi zaten kullanımda olabilir' }, 400, origin);
       }
+    }
+
+    // 2.5 Verify Email
+    if (path === '/api/ui/auth/verify' && method === 'POST') {
+      const { email, code } = await request.json().catch(() => ({}));
+      if (!email || !code) return json({ error: 'Eksik bilgi' }, 400, origin);
+      
+      const user = await env.DB.prepare("SELECT id FROM ui_users WHERE email=?").bind(email).first();
+      if (!user) return json({ error: 'Kullanıcı bulunamadı' }, 404, origin);
+      
+      const tokenRow = await env.DB.prepare("SELECT * FROM ui_auth_tokens WHERE user_id=? AND token=? AND type='ACTIVATION' ORDER BY id DESC").bind(user.id, code).first();
+      if (!tokenRow) return json({ error: 'Geçersiz doğrulama kodu' }, 400, origin);
+      
+      if (new Date(tokenRow.expires_at) < new Date()) {
+        return json({ error: 'Kodun süresi dolmuş' }, 400, origin);
+      }
+      
+      await env.DB.prepare("UPDATE ui_users SET is_email_verified=1 WHERE id=?").bind(user.id).run();
+      await env.DB.prepare("DELETE FROM ui_auth_tokens WHERE id=?").bind(tokenRow.id).run();
+      
+      return json({ ok: true }, 200, origin);
     }
 
     // 3. Login
@@ -749,9 +826,65 @@ if (path.startsWith('/api/kpss')) {
       
       const uiUser = await env.DB.prepare("SELECT * FROM ui_users WHERE email=? AND password=?").bind(email, password).first();
       if (!uiUser) return json({ error: 'Hatalı e-posta veya şifre' }, 401, origin);
+      
+      if (uiUser.is_email_verified === 0) {
+        return json({ error: 'Hesabınız onaylanmamış. Lütfen e-postanıza gelen kodu girin.', unverified: true, email }, 403, origin);
+      }
 
       const token = await signUiJWT({ userId: uiUser.id, email: uiUser.email }, env.JWT_SECRET || 'secret');
       return json({ token, user: { id: uiUser.id, email: uiUser.email, full_name: uiUser.full_name, plan: uiUser.plan, subscription_end: uiUser.subscription_end } }, 200, origin);
+    }
+
+    // 3.5 Forgot Password Request
+    if (path === '/api/ui/auth/forgot-password' && method === 'POST') {
+      const { email } = await request.json().catch(() => ({}));
+      if (!email) return json({ error: 'E-posta gereklidir' }, 400, origin);
+      
+      if (!env.RESEND_API_KEY) {
+        return json({ error: 'E-posta servisi şu an yapılandırılmamış. Lütfen yönetici ile iletişime geçin.' }, 500, origin);
+      }
+
+      const user = await env.DB.prepare("SELECT id FROM ui_users WHERE email=?").bind(email).first();
+      if (user) {
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+        await env.DB.prepare('INSERT INTO ui_auth_tokens (user_id, token, type, expires_at) VALUES (?, ?, ?, ?)')
+                    .bind(user.id, code, 'RESET', expiresAt).run();
+        
+        await sendResendEmail(email, 'Şifre Sıfırlama Kodu', `
+          <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:20px;border:1px solid #eee;border-radius:10px;">
+            <h2 style="color:#ff2b73;">Şifre Sıfırlama</h2>
+            <p>Şifrenizi sıfırlamak için aşağıdaki 6 haneli kodu kullanın:</p>
+            <div style="background:#f4f4f5;padding:15px;font-size:24px;font-weight:bold;letter-spacing:5px;text-align:center;border-radius:8px;margin:20px 0;">
+              ${code}
+            </div>
+            <p>Eğer bu işlemi siz talep etmediyseniz, bu mesajı yoksayabilirsiniz.</p>
+          </div>
+        `);
+      }
+      // Her halükarda başarılı dönüyoruz ki kullanıcı olup olmadığı anlaşılarak brute-force yapılmasın.
+      return json({ ok: true }, 200, origin);
+    }
+
+    // 3.6 Reset Password
+    if (path === '/api/ui/auth/reset-password' && method === 'POST') {
+      const { email, code, newPassword } = await request.json().catch(() => ({}));
+      if (!email || !code || !newPassword) return json({ error: 'Tüm alanları doldurun' }, 400, origin);
+      
+      const user = await env.DB.prepare("SELECT id FROM ui_users WHERE email=?").bind(email).first();
+      if (!user) return json({ error: 'Geçersiz kod veya e-posta' }, 400, origin);
+      
+      const tokenRow = await env.DB.prepare("SELECT * FROM ui_auth_tokens WHERE user_id=? AND token=? AND type='RESET' ORDER BY id DESC").bind(user.id, code).first();
+      if (!tokenRow) return json({ error: 'Geçersiz veya kullanılmış kod' }, 400, origin);
+      
+      if (new Date(tokenRow.expires_at) < new Date()) {
+        return json({ error: 'Kodun süresi dolmuş' }, 400, origin);
+      }
+      
+      await env.DB.prepare("UPDATE ui_users SET password=? WHERE id=?").bind(newPassword, user.id).run();
+      await env.DB.prepare("DELETE FROM ui_auth_tokens WHERE id=?").bind(tokenRow.id).run();
+      
+      return json({ ok: true }, 200, origin);
     }
 
     // 4. Me (Get current user)

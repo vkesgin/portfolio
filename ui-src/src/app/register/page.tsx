@@ -29,8 +29,12 @@ export default function RegisterPage() {
         throw new Error(data.error || "Kayıt başarısız");
       }
 
-      localStorage.setItem("ui_token", data.token);
-      router.push("/dashboard");
+      if (data.needsVerification) {
+        router.push(`/verify-email?email=${encodeURIComponent(data.email)}`);
+      } else {
+        localStorage.setItem("ui_token", data.token);
+        router.push("/dashboard");
+      }
     } catch (err: any) {
       setError(err.message);
     } finally {

@@ -1,0 +1,9 @@
+User-Agent: *
+Allow: /ui/
+Allow: /ui/docs
+Allow: /ui/pricing
+Allow: /ui/templates
+Disallow: /ui/dashboard
+Disallow: /ui/test
+
+Sitemap: https://velikesgin.com/ui/sitemap.xml

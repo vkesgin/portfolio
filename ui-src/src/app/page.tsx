@@ -13,13 +13,14 @@ export default function Home() {
             Erken Erişim
           </div>
           <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-8">
+            <span className="sr-only">Rive UI Component Library - React & Next.js Animasyonları. </span>
             Etkileşimli. Canlı. <br className="hidden md:block"/>
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f]">
               Kusursuz.
             </span>
           </h1>
           <p className="text-lg md:text-xl text-white/50 max-w-2xl mx-auto leading-relaxed mb-10">
-            Modern web için tasarlanmış, Rive animasyonlarıyla güçlendirilmiş, anında kopyala-yapıştır yapabileceğin React bileşen kütüphanesi.
+            Modern web için tasarlanmış, <strong>Rive animasyonlarıyla</strong> güçlendirilmiş, anında kopyala-yapıştır yapabileceğin premium <strong>React ve Flutter UI bileşen kütüphanesi</strong>. Hazır etkileşimli state machine dosyalarıyla projelerinizi canlandırın.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <Link href="#components" className="px-8 py-4 rounded-full bg-white text-black font-semibold hover:scale-105 transition-transform">

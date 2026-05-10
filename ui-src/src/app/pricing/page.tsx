@@ -32,7 +32,7 @@ export default function PricingPage() {
   const yearlyLink = "https://velikesgin.lemonsqueezy.com/checkout/buy/4178f6ee-876c-41ca-8537-bc51e38a4e2f";
   
   const currentBaseUrl = billingCycle === "monthly" ? monthlyLink : yearlyLink;
-  const lsCheckoutUrl = user ? `${currentBaseUrl}?checkout[custom][user_id]=${user.id}` : "/login";
+  const lsCheckoutUrl = user ? `${currentBaseUrl}?checkout[custom][user_id]=${user.id}` : "/ui/login";
 
   return (
     <main className="min-h-screen bg-[#050505] text-white pt-32 pb-20 px-6">

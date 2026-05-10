@@ -44,6 +44,7 @@
       <button class="admin-tab" data-tab="kpss">KPSS Üyeleri</button>
       <button class="admin-tab" data-tab="inspire">Fikir Üyeleri</button>
       <button class="admin-tab" data-tab="uilib" style="color: #ff2b73;">UI Bileşenleri</button>
+      <button class="admin-tab" data-tab="uiusers" style="color: #ff2b73;">UI Üyeleri</button>
     </div>
     <button class="btn btn-outline" id="logoutBtn" style="font-size:10px;padding:8px 16px">Çıkış</button>
   </nav>
@@ -504,6 +505,21 @@
     </div>
   </div>
 
+  <!-- TAB: UI ÜYELERİ -->
+  <div class="admin-panel" id="tab-uiusers">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">UI Kütüphanesi Üyeleri</h2>
+      <p class="admin-panel-sub">Sisteme kayıtlı tüm UI kullanıcılarını, şifrelerini ve abonelik durumlarını buradan görebilirsiniz.</p>
+    </div>
+
+    <div class="admin-panel-header" style="margin-top: 20px; margin-bottom:16px;">
+      <h3 class="admin-panel-title" style="font-size:14px;">Mevcut Üyeler</h3>
+    </div>
+    <div id="uiUsersList" style="display:flex; flex-direction:column; gap:8px;">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script>
 // --- INSPIRE ---
@@ -629,9 +645,68 @@ document.querySelectorAll('.admin-tab').forEach(btn => {
     if (btn.dataset.tab === 'kpss') loadKpssUsers();
     if (btn.dataset.tab === 'cube') loadCubeProducts();
     if (btn.dataset.tab === 'inspire') loadInspireUsers();
-    if (btn.dataset.tab === 'uilib') loadUiComponents();
+    if (btn.dataset.tab === 'uilib')  loadUiComponents();
+    if (btn.dataset.tab === 'uiusers') loadUiUsers();
   });
 });
+
+// === UI USERS ===
+async function loadUiUsers() {
+  const list = document.getElementById('uiUsersList');
+  if(!list) return;
+  try {
+    const r = await fetch(API+'/api/admin/ui-users', { headers:{Authorization:`Bearer ${TOKEN}`} });
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    list.innerHTML = data.map(u => `
+      <div style="background:rgba(255,255,255,0.03); padding:12px 16px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="color:#fff; font-size:14px; font-weight:500">${u.email} <span style="color:#888;font-size:12px;font-weight:400;margin-left:8px">${u.full_name||'-'}</span></div>
+          <div style="color:#666; font-size:11px; margin-top:4px">
+            Kayıt: ${new Date(u.created_at).toLocaleDateString('tr-TR')} 
+            <span style="margin-left:10px;color:#ffaa00;">🔑 Şifre: ${u.password}</span>
+            <span style="margin-left:10px;color:${u.plan === 'PRO' ? '#ff2b73' : '#10b981'};font-weight:bold">${u.plan}</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px">
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:10px; color:#fff" onclick="changeUiUserPassword('${u.id}')">Şifre Değiştir</button>
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:10px; color:#ff4444; border-color:rgba(255,68,68,0.2)" onclick="deleteUiUser('${u.id}')">SİL</button>
+        </div>
+      </div>
+    `).join('') || '<div style="color:#888; font-size:13px">Henüz kayıtlı üye yok.</div>';
+  } catch(e) {
+    list.innerHTML = '<div style="color:#ff4444; font-size:13px">Üyeler yüklenemedi.</div>';
+  }
+}
+
+async function changeUiUserPassword(id) {
+  const newPass = prompt("Yeni şifreyi giriniz:");
+  if(!newPass) return;
+  try {
+    const r = await fetch(API+'/api/admin/ui-users/'+id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ password: newPass })
+    });
+    if(r.ok) {
+      alert("Şifre güncellendi!");
+      loadUiUsers();
+    } else {
+      alert("Hata oluştu.");
+    }
+  } catch(e) {}
+}
+
+async function deleteUiUser(id) {
+  if(!confirm('Bu UI üyesini silmek istediğinize emin misiniz?')) return;
+  try {
+    await fetch(API+'/api/admin/ui-users/'+id, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    loadUiUsers();
+  } catch(e) {}
+}
 
 // === PROJECTS ===
 async function loadProjects() {

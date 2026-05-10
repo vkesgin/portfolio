@@ -799,6 +799,37 @@ if (path.startsWith('/api/kpss')) {
     // === PROTECTED: Admin Auth Gerekli Olanlar ===
     if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
 
+    // === UI USERS (ADMIN) ===
+    if (path === '/api/admin/ui-users' && method === 'GET') {
+      const { results } = await env.DB.prepare('SELECT id, email, full_name, plan, password, subscription_end, created_at FROM ui_users ORDER BY created_at DESC').all();
+      return json(results, 200, origin);
+    }
+    
+    if (path.match(/^\/api\/admin\/ui-users\/\d+$/) && method === 'DELETE') {
+      const id = path.split('/').pop();
+      await env.DB.prepare('DELETE FROM ui_users WHERE id=?').bind(id).run();
+      return json({ ok: true }, 200, origin);
+    }
+
+    if (path.match(/^\/api\/admin\/ui-users\/\d+$/) && method === 'PUT') {
+      const id = path.split('/').pop();
+      const { password, plan } = await request.json().catch(() => ({}));
+      
+      let query = 'UPDATE ui_users SET ';
+      const updates = [];
+      const params = [];
+      
+      if (password) { updates.push('password=?'); params.push(password); }
+      if (plan) { updates.push('plan=?'); params.push(plan); }
+      
+      if (updates.length > 0) {
+        query += updates.join(', ') + ' WHERE id=?';
+        params.push(id);
+        await env.DB.prepare(query).bind(...params).run();
+      }
+      return json({ ok: true }, 200, origin);
+    }
+
     // === FITNESS / SETTINGS API (POST/DELETE) ===
 
     if (path === '/api/fitness' && method === 'POST') {

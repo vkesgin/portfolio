@@ -77,6 +77,11 @@ export default function LoginPage() {
               className="w-full px-4 py-3 rounded-xl bg-black/50 border border-white/10 text-white focus:outline-none focus:border-[#ff2b73] transition-colors"
               placeholder="••••••••"
             />
+            <div className="flex justify-end mt-2">
+              <Link href="/forgot-password" className="text-xs text-white/40 hover:text-[#ff2b73] transition-colors">
+                Şifremi Unuttum
+              </Link>
+            </div>
           </div>
           
           <button

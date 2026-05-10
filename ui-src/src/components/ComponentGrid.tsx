@@ -160,7 +160,7 @@ export default function ComponentGrid() {
   }, []);
 
   const isPro = user?.plan === "PRO";
-  const lsCheckoutUrl = user ? `https://velikesgin.lemonsqueezy.com/checkout/buy/4862289b-3640-4a46-aaee-151a0c52caad?checkout[custom][user_id]=${user.id}` : "/login";
+  const lsCheckoutUrl = user ? `https://velikesgin.lemonsqueezy.com/checkout/buy/4862289b-3640-4a46-aaee-151a0c52caad?checkout[custom][user_id]=${user.id}` : "/ui/login";
 
   const handleCopy = async (code: string) => {
     try {

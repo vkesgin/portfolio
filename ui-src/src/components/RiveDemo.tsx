@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRive, Layout, Fit, Alignment, StateMachineInputType } from "@rive-app/react-canvas";
+import { useRive, Layout, Fit, Alignment } from "@rive-app/react-webgl2";
 
 interface RiveDemoProps {
   src: string;
@@ -10,47 +9,40 @@ interface RiveDemoProps {
 }
 
 /**
- * Resmi React Wrapper Pattern'i:
- * RiveComponent yerine setContainerRef ve setCanvasRef kullanarak,
- * hook'un canvas'ı ve event'leri doğru zamanlamayla (layout sonrasında)
- * başlatmasını sağlıyoruz. Bu sayede Rive'ın native hover (ViewModel Listener)
- * özellikleri engelsiz ve doğru boyutlarda çalışır.
+ * riveviewer.com ile aynı pattern:
+ * - @rive-app/react-webgl2 (WebGL2 renderer — tam ViewModel + Listener desteği)
+ * - RiveComponent (kendi canvas'ını oluşturur, pointer event routing'ini kendi yapar)
+ * - autoBind: true (ViewModel data binding otomatik)
+ *
+ * ÖNEMLİ:
+ * - RiveComponent kendi <canvas>'ını DOM'a ekler ve tüm pointer event'leri
+ *   (mousemove, mouseenter, mouseleave, pointerdown, pointerup)
+ *   DOĞRUDAN Rive runtime'ına yönlendirir.
+ * - Bu sayede .riv dosyasındaki Listener'lar (Pointer Enter, Pointer Exit, Click)
+ *   otomatik çalışır — EK KOD GEREKMİYOR.
+ * - setCanvasRef/setContainerRef kullanmıyoruz çünkü RiveComponent bunu
+ *   kendi iç yapısında zaten doğru zamanlamayla yapıyor.
  */
 export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps) {
   const sm = stateMachines?.[0];
 
-  const { rive, setCanvasRef, setContainerRef } = useRive({
+  const { RiveComponent } = useRive({
     src,
     artboard: artboard || undefined,
     stateMachines: sm || undefined,
     autoplay: true,
+    autoBind: true,
     layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
   });
 
-  // Trigger input'ları (Click ile ateşlenen animasyonlar)
-  const handlePointerDown = () => {
-    if (!rive || !sm) return;
-    try {
-      const inputs = rive.stateMachineInputs(sm) ?? [];
-      const triggers = inputs.filter((i: any) => i.type === StateMachineInputType.Trigger);
-      triggers.forEach((t: any) => { try { t.fire(); } catch (_) {} });
-    } catch (_) {}
-  };
-
   return (
-    <div
-      ref={setContainerRef}
-      style={{ width: "100%", height: "100%", position: "relative", display: "flex" }}
-    >
-      <canvas
-        ref={setCanvasRef}
-        onPointerDown={handlePointerDown}
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      <RiveComponent
         style={{
           width: "100%",
           height: "100%",
           display: "block",
-          pointerEvents: "auto",  // Overlay'lerin engellemesini önlemek için
-          touchAction: "none"     // Mobilde scroll çatışmasını engellemek için
+          touchAction: "none",
         }}
       />
     </div>

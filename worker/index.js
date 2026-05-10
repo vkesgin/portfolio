@@ -47,7 +47,7 @@ async function authMiddleware(request, env) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.replace('Bearer ', '');
   if (!token) return null;
-  return await verifyJWT(token, env.JWT_SECRET);
+  return await verifyJWT(token, env.JWT_SECRET || 'secret');
 }
 
 // KPSS JWT helpers
@@ -79,7 +79,7 @@ async function verifyKpssJWT(token, secret) {
 async function kpssAuth(request, env) {
   const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
   if (!token) return null;
-  return verifyKpssJWT(token, env.JWT_SECRET);
+  return verifyKpssJWT(token, env.JWT_SECRET || 'secret');
 }
 
 // Inspire JWT helpers
@@ -111,7 +111,7 @@ async function verifyInspireJWT(token, secret) {
 async function inspireAuth(request, env) {
   const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
   if (!token) return null;
-  return verifyInspireJWT(token, env.JWT_SECRET);
+  return verifyInspireJWT(token, env.JWT_SECRET || 'secret');
 }
 
 // UI JWT helpers
@@ -143,7 +143,7 @@ async function verifyUiJWT(token, secret) {
 async function uiAuth(request, env) {
   const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
   if (!token) return null;
-  return verifyUiJWT(token, env.JWT_SECRET);
+  return verifyUiJWT(token, env.JWT_SECRET || 'secret');
 }
 
 export default {

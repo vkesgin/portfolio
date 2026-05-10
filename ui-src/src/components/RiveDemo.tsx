@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import * as rive from "@rive-app/canvas";
+import { useRive, Layout, Fit, Alignment, StateMachineInputType } from "@rive-app/react-canvas";
 
 interface RiveDemoProps {
   src: string;
@@ -10,92 +10,76 @@ interface RiveDemoProps {
 }
 
 /**
- * Vanilla Rive API kullanır — React wrapper'ını tamamen atlar.
- * Bu sayede state machine initialization ve pointer events
- * doğrudan Rive runtime'ına bırakılır.
+ * @rive-app/react-canvas kullanır.
+ * useRive hook'u:
+ *   1. Canvas'ı doğru boyutta başlatır (layout paint sonrası)
+ *   2. ViewModel native pointer event'lerini otomatik yakalar
+ *      (hover/click için ek React kodu GEREKMİYOR)
+ *   3. Trigger input'ları olan animasyonlar için click handler'ı ekler
  */
 export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps) {
+  const sm = stateMachines?.[0];
   const containerRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const riveRef = useRef<any>(null);
 
+  const { rive, RiveComponent } = useRive({
+    src,
+    artboard: artboard || undefined,
+    stateMachines: sm || undefined,
+    autoplay: true,
+    layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
+  });
+
+  // Canvas'ı container boyutuna zorla (RiveComponent mount olduktan sonra)
   useEffect(() => {
-    const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!canvas || !container) return;
+    if (!rive) return;
+    // Kısa bir delay ile resize — RiveComponent'in canvas'ı DOM'a yazması için
+    const timer = setTimeout(() => {
+      try { rive.resizeDrawingSurfaceToCanvas(); } catch (_) {}
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [rive]);
 
-    // Canvas'ı container boyutuna ayarla
-    const { width, height } = container.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-
-    const sm = stateMachines?.[0];
-
-    const r = new rive.Rive({
-      src,
-      canvas,
-      artboard: artboard || undefined,
-      stateMachines: sm ? [sm] : undefined,
-      autoplay: true,
-      layout: new rive.Layout({
-        fit: rive.Fit.Contain,
-        alignment: rive.Alignment.Center,
-      }),
-      onLoad: () => {
-        r.resizeDrawingSurfaceToCanvas();
-        const inputs = sm ? r.stateMachineInputs(sm) ?? [] : [];
-        console.log("[Rive] Loaded:", src.split("/").pop(), "| SM:", sm, "| Inputs:", inputs.map((i: any) => i.name));
-        
-        // Trigger input'ları için click handler (araba/bump gibi)
-        const triggers = inputs.filter((i: any) => i.type === 58); // StateMachineInputType.Trigger = 58
-        if (triggers.length > 0) {
-          canvas.addEventListener("pointerdown", () => {
-            triggers.forEach((t: any) => { try { t.fire(); } catch (_) {} });
-          });
-        }
-      },
-      onStateChange: (event: any) => {
-        console.log("[Rive] State change:", event.data);
-      },
-    });
-
-    riveRef.current = r;
-
-    // ResizeObserver ile canvas boyutunu güncelle
+  // Container boyutu değişince Rive'ı güncelle
+  useEffect(() => {
+    if (!rive || !containerRef.current) return;
     const ro = new ResizeObserver(() => {
-      if (!container || !riveRef.current) return;
-      const { width: w, height: h } = container.getBoundingClientRect();
-      if (w > 0 && h > 0) {
-        canvas.style.width = `${w}px`;
-        canvas.style.height = `${h}px`;
-        riveRef.current.resizeDrawingSurfaceToCanvas();
-      }
+      try { rive.resizeDrawingSurfaceToCanvas(); } catch (_) {}
     });
-    ro.observe(container);
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [rive]);
 
-    return () => {
-      ro.disconnect();
-      try { riveRef.current?.cleanup(); } catch (_) {}
+  // Trigger input'ları için click handler (araba/bump gibi dosyalar için)
+  useEffect(() => {
+    if (!rive || !sm) return;
+    let inputs: any[] = [];
+    try { inputs = rive.stateMachineInputs(sm) ?? []; } catch (_) { return; }
+
+    // type === 2 = Trigger (@rive-app/react-canvas'ta)
+    const triggers = inputs.filter((i: any) => i.type === StateMachineInputType.Trigger);
+    if (triggers.length === 0) return;
+
+    // RiveComponent'in canvas'ını bul
+    const canvas = containerRef.current?.querySelector("canvas");
+    if (!canvas) return;
+
+    const handleClick = () => {
+      triggers.forEach((t: any) => { try { t.fire(); } catch (_) {} });
     };
-  }, [src, artboard, stateMachines?.join(",")]);
+    canvas.addEventListener("pointerdown", handleClick);
+    return () => canvas.removeEventListener("pointerdown", handleClick);
+  }, [rive, sm]);
 
   return (
     <div
       ref={containerRef}
       style={{ width: "100%", height: "100%", position: "relative" }}
     >
-      <canvas
-        ref={canvasRef}
+      <RiveComponent
         style={{
-          display: "block",
           width: "100%",
           height: "100%",
-          // KRITIK: canvas'ın native pointer events alması için
-          pointerEvents: "auto",
-          touchAction: "none",
+          display: "block",
         }}
       />
     </div>

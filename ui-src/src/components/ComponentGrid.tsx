@@ -208,7 +208,7 @@ export default function ComponentGrid() {
                    * ResizeObserver in RiveDemo reads this container's real px size.
                    * padding = breathing room around the animation.
                    */
-                  <div style={{ position: "absolute", inset: "20px" }}>
+                  <div style={{ position: "absolute", inset: "20px", display: "flex" }}>
                     <RiveDemo
                       src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`}
                       artboard={cfg.artboard}
@@ -279,7 +279,7 @@ export default function ComponentGrid() {
                   {/* Preview — erişilebilir */}
                   <div className="lg:w-2/5 p-6 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20">
                     <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
-                      <div className="absolute" style={{ inset: "20px" }}>
+                      <div className="absolute" style={{ inset: "20px", display: "flex" }}>
                         <RiveDemo
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
@@ -310,7 +310,7 @@ export default function ComponentGrid() {
                   {/* Sol: Preview */}
                   <div className="lg:w-2/5 p-6 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20 gap-4">
                     <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
-                      <div className="absolute" style={{ inset: "20px" }}>
+                      <div className="absolute" style={{ inset: "20px", display: "flex" }}>
                         <RiveDemo
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}

@@ -49,7 +49,9 @@ export default function Navbar() {
         <div className="flex gap-4 items-center">
           <Link
             href="/docs"
-            className="text-sm font-medium text-white/60 hover:text-white transition-colors"
+            className={`text-sm font-medium transition-colors ${
+              pathname === "/docs" ? "text-white" : "text-white/60 hover:text-white"
+            }`}
           >
             Dokümantasyon
           </Link>

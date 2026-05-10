@@ -422,6 +422,18 @@
           <input type="text" id="ui-title" class="ct-input" placeholder="Zıplayan Araba">
           <span class="ct-field-line"></span>
         </div>
+
+        <div class="ct-field" style="margin-top:16px">
+          <label class="ct-label">Kategori</label>
+          <div class="admin-select-wrap">
+            <select id="ui-category" class="admin-select">
+              <option value="uilib">Bileşen (Buton, Input, vs.)</option>
+              <option value="uitemplate">Şablon (Tam Ekran, Dashboard, vs.)</option>
+            </select>
+            <span class="admin-select-arrow">↓</span>
+          </div>
+          <span class="ct-field-line"></span>
+        </div>
         
         <!-- Artboard (optional) -->
         <div class="ct-field" style="margin-top:16px">
@@ -1877,6 +1889,7 @@ function uiResetForm() {
   editingUiId = null;
   editingUiCurrentRivUrl = '';
   document.getElementById('ui-title').value = '';
+  document.getElementById('ui-category').value = 'uilib';
   document.getElementById('ui-artboard').value = '';
   document.getElementById('ui-code').value = '';
   document.getElementById('ui-is-pro').checked = false;
@@ -1896,6 +1909,7 @@ function uiStartEdit(p) {
   editingUiId = p.id;
   editingUiCurrentRivUrl = p.image_url || '';
   document.getElementById('ui-title').value = p.title || '';
+  document.getElementById('ui-category').value = p.category || 'uilib';
   document.getElementById('ui-code').value = p.description || '';
   document.getElementById('ui-is-pro').checked = !!p.is_featured;
   let cfg = { artboard: '', stateMachines: [] };
@@ -1937,8 +1951,14 @@ async function loadUiComponents() {
   if (!list) return;
   list.innerHTML = '<div class="admin-loading">Yükleniyor...</div>';
   try {
-    const r = await fetch(`${API}/api/projects?category=uilib`);
-    const data = await r.json();
+    const [res1, res2] = await Promise.all([
+      fetch(`${API}/api/projects?category=uilib`),
+      fetch(`${API}/api/projects?category=uitemplate`)
+    ]);
+    const data1 = await res1.json();
+    const data2 = await res2.json();
+    const data = [...data1, ...data2].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    
     uiProjectsData = data; // Store globally
     if (!data.length) { list.innerHTML = '<div class="admin-empty">Henüz bileşen eklenmedi.</div>'; return; }
     list.innerHTML = data.map((p, index) => {
@@ -1953,6 +1973,7 @@ async function loadUiComponents() {
         <div style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px">
             <span class="admin-card-title" style="margin:0">${p.title}</span>
+            <span style="font-size:9px;color:#aaa;border:1px solid rgba(255,255,255,0.2);padding:1px 4px;border-radius:4px">${p.category === 'uitemplate' ? 'Şablon' : 'Bileşen'}</span>
             ${p.is_featured ? '<span style="color:#ff2b73;font-size:9px;border:1px solid #ff2b73;padding:1px 4px;border-radius:4px">PRO</span>' : '<span style="color:#10b981;font-size:9px;border:1px solid #10b981;padding:1px 4px;border-radius:4px">FREE</span>'}
             ${smBadges}
           </div>
@@ -1978,6 +1999,7 @@ window.uiStartEditById = function(id) {
 
 document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
   const title   = document.getElementById('ui-title').value.trim();
+  const categoryStr = document.getElementById('ui-category').value;
   const code    = document.getElementById('ui-code').value.trim();
   const isPro   = document.getElementById('ui-is-pro').checked;
   const artboard = document.getElementById('ui-artboard').value.trim();
@@ -2012,7 +2034,7 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
     if (file) rivUrl = await uploadFile(file, 'file');
 
     const payload = {
-      title, category: 'uilib', description: code,
+      title, category: categoryStr, description: code,
       tags: tagsJson, image_url: rivUrl, is_featured: isPro
     };
 

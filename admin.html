@@ -1775,148 +1775,103 @@ function uiGenerateCode() {
   const smName = checkedBoxes.length ? checkedBoxes[0].value : '';
   const fileName = file ? file.name : (editingUiCurrentRivUrl ? editingUiCurrentRivUrl.split('/').pop() : 'animation.riv');
 
-  // SM input bilgilerini topla — checked checkbox'ların data-* özelliklerinden
+  // SM input bilgilerini topla — badge'lerden
   const inputs = [];
-  const smList = document.querySelectorAll('[name="ui-sm-check"]:checked');
-  smList.forEach(box => {
-    // Gerçek input listesini SM'den al (yoksa boş)
+  checkedBoxes.forEach(box => {
     const label = box.closest('label');
-    if (label) {
-      label.querySelectorAll('span[style*="border"]').forEach(badge => {
-        const txt = badge.textContent.trim();
-        if (txt.startsWith('🎯')) inputs.push({ type: 'trigger', name: txt.replace('🎯 ', '') });
-        else if (txt.startsWith('🖐')) inputs.push({ type: 'boolean', name: txt.replace('🖐 ', '') });
-        else if (txt.startsWith('🖱') || txt.startsWith('#')) inputs.push({ type: 'number', name: txt.replace(/^[🖱#] /, '') });
-      });
-    }
+    if (!label) return;
+    label.querySelectorAll('span[style*="border"]').forEach(badge => {
+      const txt = badge.textContent.trim();
+      if (txt.startsWith('🎯')) inputs.push({ type: 'trigger', name: txt.replace('🎯 ', '') });
+      else if (txt.startsWith('🖐')) inputs.push({ type: 'boolean', name: txt.replace('🖐 ', '') });
+      else if (txt.startsWith('🖱') || txt.startsWith('#')) inputs.push({ type: 'number', name: txt.replace(/^[🖱#] /, '') });
+    });
   });
 
   const triggers = inputs.filter(i => i.type === 'trigger');
   const booleans = inputs.filter(i => i.type === 'boolean');
-  const numbers  = inputs.filter(i => i.type === 'number');
   const hasInputs = inputs.length > 0;
-  const isNative = smName && !hasInputs;
+  const isNative  = smName && !hasInputs; // SM var ama input yok → native hover/click
 
-  // Fonksiyon adı — başlıktan türet
   const fnName = title.replace(/[^a-zA-Z0-9]/g, '') || 'RiveComponent';
-  const smLine  = smName ? `  const STATE_MACHINE_NAME = "${smName}";
-` : '';
-  const abLine  = artboard ? `  const ARTBOARD_NAME = "${artboard}";
-` : '';
 
-  let code = `"use client";
+  // ─── Imports ───────────────────────────────────────────────────────────────
+  // Her zaman useEffect + useMemo import et (RiveViewer formatı)
+  let code = `// app/page.tsx\n"use client";\n\nimport { useEffect, useMemo } from "react";\nimport { useRive } from "@rive-app/react-canvas";\n\nexport default function ${fnName}() {\n`;
+  code += `  // Put your uploaded file in /public/rive and keep this file name.\n`;
+  code += `  const RIVE_FILE = "/rive/${fileName}";\n`;
+  if (artboard) code += `  const ARTBOARD_NAME = "${artboard}";\n`;
+  if (smName)   code += `  const STATE_MACHINE_NAME = "${smName}";\n`;
 
-import { useEffect, useMemo } from "react";
-import { useRive } from "@rive-app/react-canvas";
-
-export default function ${fnName}() {
-  const RIVE_FILE = "/rive/${fileName}";
-`;
-  if (artboard) code += `  const ARTBOARD_NAME = "${artboard}";
-`;
-  if (smName)   code += `  const STATE_MACHINE_NAME = "${smName}";
-`;
-
-  code += `
-  const { rive, RiveComponent } = useRive({
-    src: RIVE_FILE,
-`;
-  if (artboard) code += `    artboard: ARTBOARD_NAME,
-`;
-  if (smName)   code += `    stateMachines: STATE_MACHINE_NAME,
-`;
-  code += `    autoplay: true,
-  });
-`;
-
+  // Input var mı yok mu → yorum satırı
   if (smName) {
-    code += `
-  const smInputs = useMemo(
-    () => rive?.stateMachineInputs(STATE_MACHINE_NAME) ?? [],
-    [rive],
-  );
-`;
-    triggers.forEach(t => {
-      const varName = t.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
-      code += `
-  const ${varName} = smInputs.find((i) => i.name === "${t.name}");
-`;
-    });
-    booleans.forEach(b => {
-      const varName = b.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
-      code += `
-  const ${varName} = smInputs.find((i) => i.name === "${b.name}");
-`;
-    });
-
-    if (triggers.length || booleans.length) {
-      code += `
-  useEffect(() => {
-    // smInputs hazır olduğunda ek sync gerekirse buraya ekle
-  }, [smInputs]);
-`;
-      triggers.forEach(t => {
-        const varName = t.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
-        const fnFire  = 'fire' + t.name.charAt(0).toUpperCase() + t.name.slice(1);
-        code += `
-  const ${fnFire} = () => {
-    if (${varName}) ${varName}.fire();
-  };
-`;
-      });
-    } else if (isNative) {
-      code += `
-  // Bu animasyon Rive native pointer event'leri kullanır.
-  // Hover/click canvas'a doğrudan uygulanır — ek input sync gerekmez.
-  useEffect(() => {}, [smInputs]);
-`;
+    const numInputs  = inputs.filter(i => i.type === 'number');
+    const boolInputs = inputs.filter(i => i.type === 'boolean');
+    if (numInputs.length || boolInputs.length) {
+      code += `\n  // Number/boolean inputs: ${[...numInputs, ...boolInputs].map(i => i.name).join(', ')}\n`;
     } else {
-      code += `
-  useEffect(() => {
-    // Yazılabilir state machine input bulunamadı
-  }, [smInputs]);
-`;
+      code += `\n  // No number/boolean inputs found in this state machine.\n`;
     }
   }
 
-  code += `
-  return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <div className="h-[420px] w-full max-w-lg overflow-hidden rounded-xl border">
-        <RiveComponent className="h-full w-full" />
-      </div>
-`;
+  // ─── useRive ───────────────────────────────────────────────────────────────
+  code += `\n  const { rive, RiveComponent } = useRive({\n    src: RIVE_FILE,\n`;
+  if (artboard) code += `    artboard: ARTBOARD_NAME,\n`;
+  if (smName)   code += `    stateMachines: STATE_MACHINE_NAME,\n`;
+  code += `    autoplay: true,\n  });\n`;
 
-  if (triggers.length) {
-    code += `
-      <section className="mt-4 flex flex-wrap gap-3">
-`;
-    triggers.forEach(t => {
-      const fnFire = 'fire' + t.name.charAt(0).toUpperCase() + t.name.slice(1);
-      code += `        <button type="button" onClick={${fnFire}} className="rounded border px-3 py-1 text-sm">
-          Fire "${t.name}"
-        </button>
-`;
-    });
-    code += `      </section>
-`;
-  } else if (!smName) {
-    code += `      {/* autoplay animasyon — etkileşim gerekmez */}
-`;
-  } else if (isNative) {
-    code += `      {/* Native hover/click — canvas üzerinde fare ile etkileşim kur */}
-`;
+  // ─── smInputs ──────────────────────────────────────────────────────────────
+  if (smName) {
+    code += `\n  const smInputs = useMemo(\n    () => rive?.stateMachineInputs(STATE_MACHINE_NAME) ?? [],\n    [rive],\n  );\n`;
+
+    // Input değişkenleri
+    if (triggers.length || booleans.length) {
+      triggers.forEach(t => {
+        const v = t.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
+        code += `\n  const ${v} = smInputs.find((i) => i.name === "${t.name}");\n`;
+      });
+      booleans.forEach(b => {
+        const v = b.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
+        code += `\n  const ${v} = smInputs.find((i) => i.name === "${b.name}");\n`;
+      });
+
+      code += `\n  useEffect(() => {\n    // smInputs hazır — sync gerekirse buraya ekle\n  }, [smInputs]);\n`;
+
+      triggers.forEach(t => {
+        const v = t.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
+        const fn = 'fire' + t.name.charAt(0).toUpperCase() + t.name.slice(1);
+        code += `\n  const ${fn} = () => {\n    if (${v}) ${v}.fire();\n  };\n`;
+      });
+    } else if (isNative) {
+      code += `\n  useEffect(() => {\n    // No writable state-machine inputs to sync.\n  }, [smInputs]);\n\n  // No trigger inputs found.\n  // This animation uses Rive native pointer listeners (hover/click on canvas).\n`;
+    } else {
+      code += `\n  useEffect(() => {\n    // No writable state-machine inputs to sync.\n  }, [smInputs]);\n`;
+    }
   }
 
-  code += `    </main>
-  );
-}
-`;
+  // ─── JSX ───────────────────────────────────────────────────────────────────
+  code += `\n  return (\n    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 p-6">\n      <h1 className="text-2xl font-semibold">${title}</h1>\n\n      <div className="h-[420px] overflow-hidden rounded-xl border">\n        <RiveComponent className="h-full w-full" />\n      </div>\n\n      <section className="flex flex-wrap items-center gap-3">\n`;
+
+  if (triggers.length) {
+    triggers.forEach(t => {
+      const fn = 'fire' + t.name.charAt(0).toUpperCase() + t.name.slice(1);
+      code += `        <button type="button" onClick={${fn}} className="rounded border px-3 py-1 text-sm">Fire "${t.name}"</button>\n`;
+    });
+  } else if (!smName) {
+    code += `        {/* autoplay animasyon — etkileşim gerekmez */}\n`;
+  } else if (isNative) {
+    code += `        {/* This file has no state machine inputs in the selected machine. */}\n        {/* Native hover/click — interact with the canvas directly */}\n`;
+  } else {
+    code += `        {/* This file has no state machine inputs in the selected machine. */}\n`;
+  }
+
+  code += `      </section>\n    </main>\n  );\n}\n`;
 
   document.getElementById('ui-code').value = code;
   uiStatus('✓ React kodu oluşturuldu — düzenleyip kaydedebilirsin', false);
 }
 window.uiGenerateCode = uiGenerateCode;
+
 
 function uiResetForm() {
   editingUiId = null;

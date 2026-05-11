@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import Script from "next/script";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -97,6 +98,11 @@ export default function RootLayout({
         />
         <Navbar />
         {children}
+        <div className="gtranslate_wrapper" style={{ position: "fixed", bottom: "20px", left: "20px", zIndex: 999999 }}></div>
+        <Script id="gtranslate-settings" strategy="beforeInteractive">
+          {`window.gtranslateSettings = {"default_language":"tr","languages":["tr","en"],"wrapper_selector":".gtranslate_wrapper","flag_size":32}`}
+        </Script>
+        <Script src="https://cdn.gtranslate.net/widgets/latest/flags.js" strategy="lazyOnload" />
       </body>
     </html>
   );

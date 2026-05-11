@@ -83,7 +83,7 @@ export default function PricingPage() {
           <div className="rounded-3xl border border-white/10 bg-white/5 p-8 flex flex-col relative overflow-hidden">
             <h3 className="text-2xl font-bold mb-2">Ücretsiz Üyelik</h3>
             <div className="text-white/50 mb-6">Temel bileşenler ile tanışın. Sadece giriş yapan kullanıcılar erişebilir.</div>
-            <div className="text-5xl font-bold mb-8">₺0<span className="text-lg text-white/50 font-normal"> / ay</span></div>
+            <div className="text-5xl font-bold mb-8">$0<span className="text-lg text-white/50 font-normal"> / ay</span></div>
             
             <ul className="space-y-4 mb-8 flex-1">
               <li className="flex items-center gap-3">
@@ -128,13 +128,13 @@ export default function PricingPage() {
             
             {billingCycle === "monthly" ? (
               <>
-                <div className="text-5xl font-bold mb-2">₺550<span className="text-lg text-white/50 font-normal"> / ay</span></div>
+                <div className="text-5xl font-bold mb-2">$12<span className="text-lg text-white/50 font-normal"> / ay</span></div>
                 <div className="text-sm text-white/40 mb-8">Her ay faturalandırılır</div>
               </>
             ) : (
               <>
-                <div className="text-5xl font-bold mb-2">₺350<span className="text-lg text-white/50 font-normal"> / ay</span></div>
-                <div className="text-sm text-white/40 mb-8">Yılda bir kez ₺4.200 olarak faturalandırılır</div>
+                <div className="text-5xl font-bold mb-2">$7.49<span className="text-lg text-white/50 font-normal"> / ay</span></div>
+                <div className="text-sm text-white/40 mb-8">Yılda bir kez $89.99 olarak faturalandırılır</div>
               </>
             )}
             

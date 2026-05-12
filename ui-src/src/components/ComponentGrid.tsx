@@ -131,6 +131,7 @@ export default function ComponentGrid() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [customText, setCustomText] = useState("");
+  const [fullscreenPreview, setFullscreenPreview] = useState(false);
 
   useEffect(() => {
     async function fetchComponents() {
@@ -447,9 +448,24 @@ export default function ComponentGrid() {
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
-                          texts={customText ? { "ButtonText": customText, "Text": customText, "Label": customText, "Title": customText, "Text 1": customText } : undefined}
+                          texts={customText ? { 
+                            "ButtonText": customText, "Text": customText, "Label": customText, "Title": customText, 
+                            "Text 1": customText, "Yazi": customText, "Metin": customText, "Run": customText, 
+                            "TextRun": customText, "Text Run 1": customText, "Text Run": customText 
+                          } : undefined}
                         />
                       </div>
+                      
+                      {/* Tam Ekran İnceleme Butonu */}
+                      <button 
+                        onClick={() => setFullscreenPreview(true)}
+                        className="absolute bottom-3 right-3 p-2 bg-black/60 hover:bg-[#ff2b73] text-white rounded-xl backdrop-blur-md transition-all border border-white/10 group"
+                        title="Büyük Ekranda İncele"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform">
+                          <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+                        </svg>
+                      </button>
                     </div>
                     
                     {/* Dinamik Metin Değiştirici */}
@@ -550,6 +566,35 @@ export default function ComponentGrid() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {/* TAM EKRAN (BÜYÜTEÇ) MODU */}
+      {fullscreenPreview && selectedComp && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-xl">
+          <button 
+            onClick={() => setFullscreenPreview(false)}
+            className="absolute top-6 right-6 z-[210] flex items-center gap-2 px-5 py-2.5 bg-white/10 hover:bg-red-500/80 text-white rounded-full transition-all border border-white/20"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            Kapat
+          </button>
+          
+          <div className="w-full h-full max-w-[90vw] max-h-[85vh] flex items-center justify-center">
+            <RiveDemo
+              src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
+              artboard={selectedCfg.artboard}
+              stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+              texts={customText ? { 
+                "ButtonText": customText, "Text": customText, "Label": customText, "Title": customText, 
+                "Text 1": customText, "Yazi": customText, "Metin": customText, "Run": customText, 
+                "TextRun": customText, "Text Run 1": customText, "Text Run": customText 
+              } : undefined}
+            />
+          </div>
+
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 bg-black/50 border border-white/10 rounded-full text-white/50 text-sm backdrop-blur-md">
+            Fareyle üzerine gelin veya tıklayarak etkileşime girin.
           </div>
         </div>
       )}

@@ -569,6 +569,65 @@ export default function DocsPage() {
           </p>
         </div>
 
+        {/* Text Runs Section */}
+        <div className="mt-16 bg-white/[0.02] border border-white/10 rounded-3xl p-8 md:p-12">
+          <h2 className="text-3xl font-bold mb-6">Yazıları Dinamik Olarak Değiştirmek (Text Runs)</h2>
+          <p className="text-white/60 leading-relaxed mb-6">
+            Rive'ın en güçlü özelliklerinden biri, animasyon içindeki metinleri (örneğin buton üzerindeki "Tıkla" yazısını) kod ile anlık olarak değiştirebilmenizdir. Sitemizden indirdiğiniz şablonlardaki yazıları kendi projenize göre özelleştirmek için şu adımları izleyebilirsiniz:
+          </p>
+          
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-xl font-bold mb-3 flex items-center gap-2">
+                <span className="text-[#ff2b73]">1.</span> Rive Editöründe Metin Adını (Run Name) Belirleme
+              </h3>
+              <p className="text-white/60 mb-3">
+                İndirdiğiniz orijinal <code className="text-[#ff2b73]">.riv</code> dosyasını Rive editöründe (editor.rive.app) açın. Değiştirmek istediğiniz metni seçin ve sağ paneldeki "Text" bölümünden <strong>Run</strong> ismini bulun. Eğer bir isim yoksa, örneğin <code>ButtonText</code> olarak adlandırıp dosyayı tekrar dışa aktarın.
+              </p>
+            </div>
+            
+            <div>
+              <h3 className="text-xl font-bold mb-3 flex items-center gap-2">
+                <span className="text-[#ff2b73]">2.</span> React / Next.js İçinde Yazıyı Değiştirme
+              </h3>
+              <p className="text-white/60 mb-3">React bileşeninizde <code>setTextRunValue</code> fonksiyonunu kullanarak metni değiştirebilirsiniz:</p>
+              <CodeBlock lang="tsx" code={`import { useRive } from "@rive-app/react-webgl2";
+
+export default function CustomButton() {
+  const { RiveComponent, rive } = useRive({
+    src: "/button.riv",
+    stateMachines: "State Machine 1",
+    autoplay: true,
+    onLoad: () => {
+      // Dosya yüklendiğinde yazıyı değiştir
+      rive?.setTextRunValue("ButtonText", "Satın Al");
+    }
+  });
+
+  return <div style={{ width: 300, height: 100 }}><RiveComponent /></div>;
+}`} />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-bold mb-3 flex items-center gap-2">
+                <span className="text-[#ff2b73]">3.</span> HTML / JS / Wix İçinde Yazıyı Değiştirme
+              </h3>
+              <p className="text-white/60 mb-3">Rive örneğini oluşturduğunuzda dönen objeyi kullanarak aynı işlemi yapabilirsiniz:</p>
+              <CodeBlock lang="javascript" code={`const r = new rive.Rive({
+  src: "animasyon.riv",
+  canvas: document.getElementById("canvas"),
+  stateMachines: "State Machine 1",
+  onLoad: () => {
+    // Yazıyı dinamik olarak değiştir
+    r.setTextRunValue("ButtonText", "Gönder");
+  }
+});`} />
+            </div>
+          </div>
+          
+          <Tip>Hazırlayacağınız eğitim videolarında, Rive editöründeki <strong>Text Run</strong> alanına isim vermeyi ve ardından koddaki <code>setTextRunValue("Isim", "Yeni Deger")</code> kullanımını göstermeniz, kullanıcılarınızın işini çok kolaylaştıracaktır.</Tip>
+        </div>
+
         {/* Giriş yapmadan erişim notu */}
         <div className="mt-8 p-5 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 text-sm text-white/60">
           <strong className="text-yellow-400">Not:</strong> Giriş yapmadan bileşenlerin yalnızca önizlemelerini görebilirsiniz. Kaynak kodlara ve .riv dosyalarına erişebilmek için ücretsiz üyelik oluşturmanız gerekmektedir.

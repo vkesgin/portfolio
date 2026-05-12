@@ -90,7 +90,7 @@ export default function PricingPage() {
                 <span className="text-green-500">✓</span> Ücretsiz bileşenlerin kodlarına erişim
               </li>
               <li className="flex items-center gap-3">
-                <span className="text-green-500">✓</span> Ücretsiz bileşenlerin orijinal <strong>.riv dosyalarını</strong> indirme
+                <span className="text-green-500">✓</span> Ücretsiz <strong>.riv dosyalarını</strong> indirme
               </li>
               <li className="flex items-center gap-3">
                 <span className="text-green-500">✓</span> <strong>Aylık 5 indirme hakkı</strong> (Her ay yenilenir)
@@ -143,7 +143,7 @@ export default function PricingPage() {
                 <span className="text-[#ff2b73]">✓</span> <strong>Tüm</strong> (Free + PRO) UI bileşenlerine erişim
               </li>
               <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> Tüm bileşenlerin orijinal <strong>.riv dosyalarını</strong> indirme
+                <span className="text-[#ff2b73]">✓</span> Orijinal <strong>.riv dosyalarını</strong> indirme
               </li>
               <li className="flex items-center gap-3">
                 <span className="text-[#ff2b73]">✓</span> <strong>Sınırsız</strong> indirme hakkı

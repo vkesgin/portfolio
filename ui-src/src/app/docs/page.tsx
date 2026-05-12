@@ -5,6 +5,8 @@ import Link from "next/link";
 
 const platforms = [
   { id: "react", label: "React / Next.js" },
+  { id: "framer", label: "Framer" },
+  { id: "wix", label: "Wix Studio" },
   { id: "wordpress", label: "WordPress" },
   { id: "webflow", label: "Webflow" },
   { id: "html", label: "HTML / Vanilla JS" },
@@ -368,8 +370,98 @@ riveView.setNumberState(
   );
 }
 
+function FramerGuide() {
+  return (
+    <div className="space-y-10">
+      <section>
+        <SectionTitle step={1}>Framer Projenizi Açın</SectionTitle>
+        <p className="text-white/60 mb-4">Framer üzerinde çalıştığınız projenizde yeni bir <strong>Code Component</strong> oluşturmanız gerekecek. Framer'ın kod bileşenleri React tabanlı olduğu için entegrasyon oldukça basittir.</p>
+      </section>
+
+      <section>
+        <SectionTitle step={2}>Code Component Oluşturun</SectionTitle>
+        <p className="text-white/60 mb-4">Framer arayüzünde <strong>Assets {'>'} Code {'>'} Component</strong> yolunu izleyip yeni bir bileşen oluşturun (Örneğin: <code className="text-[#ff2b73]">RiveAnimation</code>).</p>
+      </section>
+
+      <section>
+        <SectionTitle step={3}>Bileşen Kodunu Ekleyin</SectionTitle>
+        <p className="text-white/60 mb-4">Oluşturduğunuz bileşenin içeriğine aşağıdaki React kodunu yapıştırın. Bu kod, Rive kütüphanesini dışarıdan yükleyerek çalıştırır:</p>
+        <CodeBlock lang="tsx" code={`import React from "react"
+import { useRive } from "@rive-app/react-webgl2"
+
+// URL kısmını kütüphanemizden indirdiğiniz veya sunucunuza yüklediğiniz .riv linki ile değiştirin
+export default function RiveAnimation(props) {
+  const { RiveComponent } = useRive({
+    src: "https://siteadresiniz.com/animasyon.riv",
+    stateMachines: "State Machine 1", // Rive dosyanızdaki State Machine adı
+    autoplay: true,
+  })
+
+  return (
+    <div style={{ width: props.width || "100%", height: props.height || "100%" }}>
+      <RiveComponent />
+    </div>
+  )
+}`} />
+        <Tip>Framer'da yerel bir <code>.riv</code> dosyasını doğrudan Asset olarak yüklemek her zaman desteklenmeyebilir. Dosyanızı bir CDN veya sunucuya yükleyip URL olarak vermek en garanti yöntemdir.</Tip>
+      </section>
+      
+      <section>
+        <SectionTitle step={4}>Ticari Projelerinizde Kullanın</SectionTitle>
+        <p className="text-white/60 mb-4">Bileşeni sayfaya sürükleyip bıraktığınızda, hover ve click gibi State Machine trigger'ları doğrudan Framer preview modunda çalışmaya başlayacaktır.</p>
+      </section>
+    </div>
+  );
+}
+
+function WixStudioGuide() {
+  return (
+    <div className="space-y-10">
+      <section>
+        <SectionTitle step={1}>Wix Studio Özel Öğe (Custom Element) Ekleme</SectionTitle>
+        <p className="text-white/60 mb-4">Wix Studio editöründe <strong>Ekle (+) {'>'} Göm ve Paylaş {'>'} Özel Öğe (Custom Element)</strong> sürükleyerek sayfanıza ekleyin.</p>
+      </section>
+
+      <section>
+        <SectionTitle step={2}>.riv Dosyasını Yükleyin</SectionTitle>
+        <p className="text-white/60 mb-4">Wix Medya Yöneticisine <code className="text-[#ff2b73]">.riv</code> dosyanızı yükleyin ve ardından dosyanın genel URL'sini (Public URL) kopyalayın.</p>
+      </section>
+
+      <section>
+        <SectionTitle step={3}>Kod Bağlantısını Yapın</SectionTitle>
+        <p className="text-white/60 mb-4">Özel öğeyi seçip "Kod Seç" alanına tıklayın. "Velo dosyası" veya "Sunucu dosyası" seçeneği ile aşağıdaki kodu içeren bir JavaScript dosyası bağlayın:</p>
+        <CodeBlock lang="javascript" code={`// Rive CDN üzerinden yüklenir
+import * as rive from 'https://unpkg.com/@rive-app/canvas@latest';
+
+class RiveElement extends HTMLElement {
+  connectedCallback() {
+    this.innerHTML = '<canvas id="rive-canvas" width="400" height="400" style="width: 100%; height: 100%;"></canvas>';
+    
+    const r = new rive.Rive({
+      src: "KOPYALADIGINIZ_RIV_DOSYASI_URLSI",
+      canvas: this.querySelector('#rive-canvas'),
+      stateMachines: "State Machine 1", // Dosyaya ait etkileşim adı
+      autoplay: true,
+      onLoad: () => r.resizeDrawingSurfaceToCanvas(),
+    });
+  }
+}
+customElements.define('rive-animation', RiveElement);`} />
+        <Warning>Wix Studio içerisinde <code>customElements.define</code> ile etiket ismini belirlerken Özel Öğe ayarlarındaki "Etiket Adı" ile birebir aynı olmasına dikkat edin.</Warning>
+      </section>
+
+      <section>
+        <SectionTitle step={4}>Yayınlayın ve Test Edin</SectionTitle>
+        <p className="text-white/60 mb-4">Wix sitenizi yayınladığınızda animasyonlarınız %100 sorunsuz şekilde etkileşimli olarak (hover, click vb.) çalışacaktır. Üstelik PRO pakette sunduğumuz %100 Ticari Kullanım İzni sayesinde müşteri sitelerinde özgürce satabilirsiniz.</p>
+      </section>
+    </div>
+  );
+}
+
 const guideMap: Record<string, () => React.ReactNode> = {
   react: ReactGuide,
+  framer: FramerGuide,
+  wix: WixStudioGuide,
   wordpress: WordPressGuide,
   webflow: WebflowGuide,
   html: HtmlGuide,
@@ -384,11 +476,21 @@ export default function DocsPage() {
   return (
     <main className="min-h-screen bg-[#050505] text-white pt-32 pb-20 px-6">
       <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">Entegrasyon Kılavuzu</h1>
-          <p className="text-xl text-white/50 leading-relaxed max-w-2xl">
-            VK UI Rive bileşenlerini herhangi bir platforma entegre edin. Platformunuzu seçin ve adım adım takip edin.
+        {/* Header - SEO Optimizasyonu ve Karşılama */}
+        <div className="mb-12 text-center md:text-left">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
+            Rive Dosyası Nasıl Çalıştırılır? & Entegrasyon Kılavuzu
+          </h1>
+          <p className="text-xl text-white/70 leading-relaxed max-w-3xl mb-6">
+            VK UI platformundan indirdiğiniz <strong>hazır web animasyonları</strong> ve <strong>ücretsiz / ücretli Rive (.riv) şablonlarını</strong> projelerinize nasıl dahil edeceğinizi öğrenin. React, Next.js, Framer, Wix Studio, Webflow ve WordPress gibi tüm modern arayüzleri destekliyoruz.
+          </p>
+          <div className="flex flex-wrap gap-3 mb-6 items-center md:justify-start justify-center">
+            <span className="px-3 py-1 bg-green-500/10 text-green-400 border border-green-500/20 rounded-full text-sm font-semibold">Tüm Şablonlar %100 Ticari Kullanıma Uygundur</span>
+            <span className="px-3 py-1 bg-[#ff2b73]/10 text-[#ff2b73] border border-[#ff2b73]/20 rounded-full text-sm font-semibold">Aylık Sınırsız İndirme (PRO)</span>
+            <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-full text-sm font-semibold text-white/70">Ücretsiz Rive Şablonları</span>
+          </div>
+          <p className="text-base text-white/50 leading-relaxed max-w-4xl">
+            İster yapay zeka destekli bir uygulama, ister kurumsal bir SaaS, isterseniz de bir e-ticaret arayüzü geliştiriyor olun. Rive dosyalarını entegre etmek saniyeler sürer. Müşteri projelerinizde (Ticari amaçla) güvenle kullanabilir, web sitelerinizin kullanıcı deneyimini (UI/UX) muazzam seviyede artırabilirsiniz. 
           </p>
         </div>
 

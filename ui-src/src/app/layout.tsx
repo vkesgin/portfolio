@@ -19,7 +19,9 @@ export const metadata: Metadata = {
     "rive animation", "rive animasyon", "ready animations", "hazır animasyon", 
     "rive ui components", "react rive", "interactive buttons", "nextjs animations", 
     "webflow rive", "flutter rive", "ui rive", "veli kesgin", "3d animations", 
-    "state machine animations", "animated ui library"
+    "state machine animations", "animated ui library", "framer rive entegrasyonu",
+    "wix studio rive", "ücretsiz rive şablonları", "ticari kullanıma uygun rive", 
+    ".riv dosyası indir", "ui animasyonları", "satılık rive şablonları"
   ],
   authors: [{ name: "Veli Kesgin", url: "https://velikesgin.com" }],
   creator: "Veli Kesgin",
@@ -69,10 +71,13 @@ const jsonLd = {
   "applicationCategory": "DeveloperApplication",
   "description": "Premium, interactive and ready-to-use Rive animation components for modern web and mobile applications.",
   "offers": {
-    "@type": "Offer",
-    "price": "15.00",
+    "@type": "AggregateOffer",
     "priceCurrency": "USD",
+    "lowPrice": "0",
+    "highPrice": "12",
+    "offerCount": "2"
   },
+  "permissions": "Ticari Kullanıma Uygundur (PRO)",
   "author": {
     "@type": "Person",
     "name": "Veli Kesgin",

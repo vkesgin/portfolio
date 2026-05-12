@@ -25,7 +25,8 @@ function generateCode(
   framework: "react" | "js" | "rn" | "flutter",
   cfg: RiveCfg,
   fileName: string,
-  title: string
+  title: string,
+  customText?: string
 ) {
   const ab = cfg.artboard || "";
   const sm = (cfg.stateMachines ?? (cfg.statemachine ? [cfg.statemachine] : []))[0] ?? "";
@@ -42,7 +43,24 @@ function generateCode(
     c += `\n  const { rive, RiveComponent } = useRive({\n    src: RIVE_FILE,\n`;
     if (ab) c += `    artboard: ARTBOARD,\n`;
     if (sm) c += `    stateMachines: STATE_MACHINE,\n`;
+    
+    if (customText) {
+      c += `    onLoad: () => {\n`;
+      c += `      try {\n`;
+      c += `        rive?.setTextRunValue("ButtonText", "${customText}");\n`;
+      c += `      } catch (e) {}\n`;
+      c += `    },\n`;
+    }
+    
     c += `    autoplay: true,\n    shouldResizeCanvasToContainer: true,\n  });\n`;
+    
+    if (customText) {
+      c += `\n  useEffect(() => {\n`;
+      c += `    if (rive) {\n`;
+      c += `      try { rive.setTextRunValue("ButtonText", "${customText}"); } catch (e) {}\n`;
+      c += `    }\n`;
+      c += `  }, [rive]);\n`;
+    }
 
     if (sm && triggers.length > 0) {
       c += `\n  const smInputs = useMemo(\n    () => rive?.stateMachineInputs(STATE_MACHINE) ?? [],\n    [rive],\n  );\n`;
@@ -77,6 +95,11 @@ function generateCode(
     if (sm) c += `  stateMachines: "${sm}",\n`;
     c += `  autoplay: true,\n  layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),\n`;
     c += `  onLoad: () => {\n    r.resizeDrawingSurfaceToCanvas();\n`;
+    
+    if (customText) {
+      c += `    try { r.setTextRunValue("ButtonText", "${customText}"); } catch (e) {}\n`;
+    }
+    
     if (triggers.length) {
       c += `    const inputs = r.stateMachineInputs("${sm}");\n`;
       triggers.forEach((t) => {
@@ -131,6 +154,7 @@ export default function ComponentGrid() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [customText, setCustomText] = useState("");
+  const [previewText, setPreviewText] = useState("");
   const [fullscreenPreview, setFullscreenPreview] = useState(false);
 
   useEffect(() => {
@@ -222,8 +246,8 @@ export default function ComponentGrid() {
 
   const generatedCode = useMemo(() => {
     if (!selectedComp) return "";
-    return generateCode(activeFramework, selectedCfg, selectedFileName, selectedComp.title);
-  }, [selectedComp, activeFramework, selectedCfg, selectedFileName]);
+    return generateCode(activeFramework, selectedCfg, selectedFileName, selectedComp.title, customText);
+  }, [selectedComp, activeFramework, selectedCfg, selectedFileName, customText]);
 
   const filteredComponents = useMemo(() => {
     return components.filter(comp => {
@@ -350,7 +374,7 @@ export default function ComponentGrid() {
       {/* CODE MODAL */}
       {selectedComp && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => { setSelectedComp(null); setCustomText(""); }} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => { setSelectedComp(null); setCustomText(""); setPreviewText(""); }} />
           <div className="relative w-full max-w-5xl bg-[#080808] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
 
             {/* Header */}
@@ -361,7 +385,7 @@ export default function ComponentGrid() {
                   <span className="px-2 py-0.5 text-[10px] bg-[#ff2b73]/20 text-[#ff2b73] rounded-full border border-[#ff2b73]/30">PRO</span>
                 )}
               </div>
-              <button onClick={() => { setSelectedComp(null); setCustomText(""); }} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+              <button onClick={() => { setSelectedComp(null); setCustomText(""); setPreviewText(""); }} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
@@ -448,10 +472,10 @@ export default function ComponentGrid() {
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
-                          texts={customText ? { 
-                            "ButtonText": customText, "Text": customText, "Label": customText, "Title": customText, 
-                            "Text 1": customText, "Yazi": customText, "Metin": customText, "Run": customText, 
-                            "TextRun": customText, "Text Run 1": customText, "Text Run": customText 
+                          texts={previewText ? { 
+                            "ButtonText": previewText, "Text": previewText, "Label": previewText, "Title": previewText, 
+                            "Text 1": previewText, "Yazi": previewText, "Metin": previewText, "Run": previewText, 
+                            "TextRun": previewText, "Text Run 1": previewText, "Text Run": previewText 
                           } : undefined}
                         />
                       </div>
@@ -470,14 +494,23 @@ export default function ComponentGrid() {
                     
                     {/* Dinamik Metin Değiştirici */}
                     <div className="w-full max-w-md bg-white/[0.02] border border-white/10 rounded-xl p-4 mt-2">
-                      <label className="block text-xs font-semibold text-white/50 mb-2">Buton/Animasyon Yazısı (Önizleme)</label>
-                      <input 
-                        type="text" 
-                        value={customText}
-                        onChange={(e) => setCustomText(e.target.value)}
-                        placeholder="Örn: Satın Al" 
-                        className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#ff2b73]/50 transition-colors"
-                      />
+                      <label className="block text-xs font-semibold text-white/50 mb-2">Buton/Animasyon Yazısı</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          value={customText}
+                          onChange={(e) => setCustomText(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && setPreviewText(customText)}
+                          placeholder="Örn: Satın Al" 
+                          className="flex-1 bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#ff2b73]/50 transition-colors"
+                        />
+                        <button 
+                          onClick={() => setPreviewText(customText)}
+                          className="px-4 py-2 bg-white/10 hover:bg-[#ff2b73] text-white text-sm font-medium rounded-lg transition-colors border border-white/10"
+                        >
+                          Önizle
+                        </button>
+                      </div>
                     </div>
                     {/* Tip badge */}
                     {selectedCfg.inputs?.length === 0 && (selectedCfg.stateMachines?.length ?? 0) > 0 && (
@@ -585,10 +618,10 @@ export default function ComponentGrid() {
               src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
               artboard={selectedCfg.artboard}
               stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
-              texts={customText ? { 
-                "ButtonText": customText, "Text": customText, "Label": customText, "Title": customText, 
-                "Text 1": customText, "Yazi": customText, "Metin": customText, "Run": customText, 
-                "TextRun": customText, "Text Run 1": customText, "Text Run": customText 
+              texts={previewText ? { 
+                "ButtonText": previewText, "Text": previewText, "Label": previewText, "Title": previewText, 
+                "Text 1": previewText, "Yazi": previewText, "Metin": previewText, "Run": previewText, 
+                "TextRun": previewText, "Text Run 1": previewText, "Text Run": previewText 
               } : undefined}
             />
           </div>

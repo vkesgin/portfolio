@@ -8,19 +8,20 @@ interface RiveDemoProps {
   src: string;
   artboard?: string;
   stateMachines?: string[];
+  texts?: Record<string, string>;
 }
 
-export default function RiveDemo({ src, artboard, stateMachines }: RiveDemoProps) {
+export default function RiveDemo({ src, artboard, stateMachines, texts }: RiveDemoProps) {
   const hasSM = stateMachines && stateMachines.length > 0 && !!stateMachines[0];
 
   if (hasSM) {
-    return <RivePlayer src={src} artboard={artboard} sm={stateMachines![0]} />;
+    return <RivePlayer src={src} artboard={artboard} sm={stateMachines![0]} texts={texts} />;
   }
 
-  return <ProbeAndPlay src={src} artboard={artboard} />;
+  return <ProbeAndPlay src={src} artboard={artboard} texts={texts} />;
 }
 
-function RivePlayer({ src, artboard, sm }: { src: string; artboard?: string; sm: string }) {
+function RivePlayer({ src, artboard, sm, texts }: { src: string; artboard?: string; sm: string; texts?: Record<string, string> }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clickTriggers = useRef<any[]>([]);
   const hoverInputs = useRef<any[]>([]);
@@ -64,8 +65,16 @@ function RivePlayer({ src, artboard, sm }: { src: string; artboard?: string; sm:
           }
         });
       }
+
+      if (texts) {
+        Object.entries(texts).forEach(([key, value]) => {
+          try {
+            rive.setTextRunValue(key, value);
+          } catch (_) {}
+        });
+      }
     }
-  }, [rive, sm]);
+  }, [rive, sm, texts]);
 
   const handleClick = () => {
     clickTriggers.current.forEach(trigger => {
@@ -111,7 +120,7 @@ function RivePlayer({ src, artboard, sm }: { src: string; artboard?: string; sm:
   );
 }
 
-function ProbeAndPlay({ src, artboard }: { src: string; artboard?: string }) {
+function ProbeAndPlay({ src, artboard, texts }: { src: string; artboard?: string; texts?: Record<string, string> }) {
   const [detected, setDetected] = useState<{ sm: string; ab: string } | null>(null);
   const [failed, setFailed] = useState(false);
   const probing = useRef(false);
@@ -156,24 +165,34 @@ function ProbeAndPlay({ src, artboard }: { src: string; artboard?: string }) {
   }, [src, artboard]);
 
   if (detected) {
-    return <RivePlayer src={src} artboard={detected.ab || undefined} sm={detected.sm} />;
+    return <RivePlayer src={src} artboard={detected.ab || undefined} sm={detected.sm} texts={texts} />;
   }
 
   if (failed) {
-    return <FallbackPlayer src={src} artboard={artboard} />;
+    return <FallbackPlayer src={src} artboard={artboard} texts={texts} />;
   }
 
   return <div style={{ width: "100%", height: "100%", background: "transparent" }} />;
 }
 
-function FallbackPlayer({ src, artboard }: { src: string; artboard?: string }) {
-  const { RiveComponent } = useRive({
+function FallbackPlayer({ src, artboard, texts }: { src: string; artboard?: string; texts?: Record<string, string> }) {
+  const { rive, RiveComponent } = useRive({
     src,
     artboard: artboard || undefined,
     autoplay: true,
     layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
     autoBind: true,
   });
+
+  useEffect(() => {
+    if (rive && texts) {
+      Object.entries(texts).forEach(([key, value]) => {
+        try {
+          rive.setTextRunValue(key, value);
+        } catch (_) {}
+      });
+    }
+  }, [rive, texts]);
 
   return (
     <RiveComponent

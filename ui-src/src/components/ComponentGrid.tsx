@@ -130,6 +130,7 @@ export default function ComponentGrid() {
   const [remainingDownloads, setRemainingDownloads] = useState<number | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [customText, setCustomText] = useState("");
 
   useEffect(() => {
     async function fetchComponents() {
@@ -348,8 +349,8 @@ export default function ComponentGrid() {
       {/* CODE MODAL */}
       {selectedComp && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setSelectedComp(null)} />
-          <div className="relative w-full max-w-4xl bg-[#080808] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => { setSelectedComp(null); setCustomText(""); }} />
+          <div className="relative w-full max-w-5xl bg-[#080808] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
 
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/[0.02] shrink-0">
@@ -359,7 +360,7 @@ export default function ComponentGrid() {
                   <span className="px-2 py-0.5 text-[10px] bg-[#ff2b73]/20 text-[#ff2b73] rounded-full border border-[#ff2b73]/30">PRO</span>
                 )}
               </div>
-              <button onClick={() => setSelectedComp(null)} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+              <button onClick={() => { setSelectedComp(null); setCustomText(""); }} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
@@ -437,17 +438,30 @@ export default function ComponentGrid() {
                 /* ═══════════════════
                    FREE — Tam erişim
                    ═══════════════════ */
-                <div className="flex flex-col lg:flex-row" style={{ minHeight: "400px" }}>
+                <div className="flex flex-col lg:flex-row" style={{ minHeight: "500px" }}>
                   {/* Sol: Preview */}
-                  <div className="lg:w-2/5 p-6 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20 gap-4">
-                    <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
+                  <div className="lg:w-1/2 p-6 flex flex-col items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20 gap-4">
+                    <div className="relative w-full max-w-md rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-[0_0_40px_rgba(255,43,115,0.05)]" style={{ height: "300px" }}>
                       <div className="absolute" style={{ inset: "20px", display: "flex" }}>
                         <RiveDemo
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+                          texts={customText ? { "ButtonText": customText, "Text": customText, "Label": customText, "Title": customText, "Text 1": customText } : undefined}
                         />
                       </div>
+                    </div>
+                    
+                    {/* Dinamik Metin Değiştirici */}
+                    <div className="w-full max-w-md bg-white/[0.02] border border-white/10 rounded-xl p-4 mt-2">
+                      <label className="block text-xs font-semibold text-white/50 mb-2">Buton/Animasyon Yazısı (Önizleme)</label>
+                      <input 
+                        type="text" 
+                        value={customText}
+                        onChange={(e) => setCustomText(e.target.value)}
+                        placeholder="Örn: Satın Al" 
+                        className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#ff2b73]/50 transition-colors"
+                      />
                     </div>
                     {/* Tip badge */}
                     {selectedCfg.inputs?.length === 0 && (selectedCfg.stateMachines?.length ?? 0) > 0 && (
@@ -485,7 +499,7 @@ export default function ComponentGrid() {
                   </div>
 
                   {/* Sağ: Kod */}
-                  <div className="lg:w-3/5 flex flex-col">
+                  <div className="lg:w-1/2 flex flex-col">
                     {/* Framework Sekmeleri */}
                     <div className="flex border-b border-white/5 shrink-0">
                       {FRAMEWORKS.map((fw) => (

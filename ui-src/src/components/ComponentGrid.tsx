@@ -475,7 +475,8 @@ export default function ComponentGrid() {
                           texts={previewText ? { 
                             "ButtonText": previewText, "Text": previewText, "Label": previewText, "Title": previewText, 
                             "Text 1": previewText, "Yazi": previewText, "Metin": previewText, "Run": previewText, 
-                            "TextRun": previewText, "Text Run 1": previewText, "Text Run": previewText 
+                            "TextRun": previewText, "Text Run 1": previewText, "Text Run": previewText,
+                            "ButtonMetni": previewText, "TestMest": previewText
                           } : undefined}
                         />
                       </div>
@@ -621,7 +622,8 @@ export default function ComponentGrid() {
               texts={previewText ? { 
                 "ButtonText": previewText, "Text": previewText, "Label": previewText, "Title": previewText, 
                 "Text 1": previewText, "Yazi": previewText, "Metin": previewText, "Run": previewText, 
-                "TextRun": previewText, "Text Run 1": previewText, "Text Run": previewText 
+                "TextRun": previewText, "Text Run 1": previewText, "Text Run": previewText,
+                "ButtonMetni": previewText, "TestMest": previewText
               } : undefined}
             />
           </div>

@@ -156,6 +156,7 @@ export default function ComponentGrid() {
   const [customText, setCustomText] = useState("");
   const [previewText, setPreviewText] = useState("");
   const [fullscreenPreview, setFullscreenPreview] = useState(false);
+  const [defaultLabel, setDefaultLabel] = useState("");
 
   useEffect(() => {
     async function fetchComponents() {
@@ -473,6 +474,7 @@ export default function ComponentGrid() {
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
                           label={previewText || undefined}
+                          onDefaultLabel={setDefaultLabel}
                         />
                       </div>
                       
@@ -536,8 +538,80 @@ export default function ComponentGrid() {
                         disabled={downloading}
                         onClick={async () => {
                           const ok = await trackDownload(selectedComp.id, "riv");
-                          if (ok) {
-                            window.open(`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`, "_blank");
+                          if (!ok) return;
+                          
+                          const rivUrl = `https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`;
+                          const fileName = selectedComp.image_url.split('/').pop() || 'component.riv';
+                          
+                          if (previewText && defaultLabel) {
+                            // Özel metin + bilinen orijinal label: .riv binary patch
+                            try {
+                              setDownloading(true);
+                              const resp = await fetch(rivUrl);
+                              const buf = await resp.arrayBuffer();
+                              const original = new Uint8Array(buf);
+
+                              const encoder = new TextEncoder();
+                              const oldBytes = encoder.encode(defaultLabel);
+                              const newBytes = encoder.encode(previewText);
+
+                              // Tüm eşleşmeleri bul ve değiştir
+                              const positions: number[] = [];
+                              for (let i = 0; i <= original.length - oldBytes.length; i++) {
+                                let match = true;
+                                for (let j = 0; j < oldBytes.length; j++) {
+                                  if (original[i + j] !== oldBytes[j]) { match = false; break; }
+                                }
+                                if (match) positions.push(i);
+                              }
+
+                              if (positions.length > 0) {
+                                // Her eşleşme için byte farkını hesapla
+                                const diff = newBytes.length - oldBytes.length;
+                                const totalDiff = diff * positions.length;
+                                const patched = new Uint8Array(original.length + totalDiff);
+                                
+                                let srcPos = 0;
+                                let dstPos = 0;
+                                
+                                for (const pos of positions) {
+                                  // Eşleşmeden önceki kısmı kopyala
+                                  patched.set(original.slice(srcPos, pos), dstPos);
+                                  dstPos += (pos - srcPos);
+                                  
+                                  // Uzunluk prefix'ini güncelle (eşleşmeden 1 byte önce)
+                                  if (pos > 0 && original[pos - 1] === oldBytes.length) {
+                                    patched[dstPos - 1] = newBytes.length;
+                                  }
+                                  
+                                  // Yeni metni yaz
+                                  patched.set(newBytes, dstPos);
+                                  dstPos += newBytes.length;
+                                  srcPos = pos + oldBytes.length;
+                                }
+                                
+                                // Kalan kısmı kopyala
+                                patched.set(original.slice(srcPos), dstPos);
+
+                                const blob = new Blob([patched], { type: 'application/octet-stream' });
+                                const a = document.createElement('a');
+                                a.href = URL.createObjectURL(blob);
+                                a.download = fileName;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(a.href);
+                              } else {
+                                window.open(rivUrl, "_blank");
+                              }
+                            } catch {
+                              window.open(rivUrl, "_blank");
+                            } finally {
+                              setDownloading(false);
+                            }
+                          } else {
+                            // Özel metin yok veya orijinal label bilinmiyor — orijinali indir
+                            window.open(rivUrl, "_blank");
                           }
                         }}
                         className="w-full py-2 text-xs text-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 border border-white/10 disabled:opacity-50"

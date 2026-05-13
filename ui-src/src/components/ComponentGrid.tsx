@@ -472,14 +472,18 @@ export default function ComponentGrid() {
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
-                          texts={previewText ? { 
-                            "ButtonText": previewText, "Text": previewText, "Label": previewText, "Title": previewText, 
-                            "Text 1": previewText, "Yazi": previewText, "Metin": previewText, "Run": previewText, 
-                            "TextRun": previewText, "Text Run 1": previewText, "Text Run": previewText,
-                            "ButtonMetni": previewText, "TestMest": previewText
-                          } : undefined}
                         />
                       </div>
+                      
+                      {/* Metin Önizleme Overlay */}
+                      {previewText && (
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                          <div className="bg-black/70 backdrop-blur-sm px-6 py-3 rounded-xl border border-[#ff2b73]/30 shadow-[0_0_30px_rgba(255,43,115,0.2)]">
+                            <p className="text-white font-bold text-lg text-center" style={{ textShadow: '0 0 10px rgba(255,43,115,0.5)' }}>{previewText}</p>
+                            <p className="text-[10px] text-white/40 text-center mt-1">Kodunuza otomatik eklenir</p>
+                          </div>
+                        </div>
+                      )}
                       
                       {/* Tam Ekran İnceleme Butonu */}
                       <button 
@@ -495,7 +499,7 @@ export default function ComponentGrid() {
                     
                     {/* Dinamik Metin Değiştirici */}
                     <div className="w-full max-w-md bg-white/[0.02] border border-white/10 rounded-xl p-4 mt-2">
-                      <label className="block text-xs font-semibold text-white/50 mb-2">Buton/Animasyon Yazısı</label>
+                      <label className="block text-xs font-semibold text-white/50 mb-2">Buton Yazısını Özelleştir</label>
                       <div className="flex gap-2">
                         <input 
                           type="text" 
@@ -511,7 +515,17 @@ export default function ComponentGrid() {
                         >
                           Önizle
                         </button>
+                        {previewText && (
+                          <button 
+                            onClick={() => { setPreviewText(""); setCustomText(""); }}
+                            className="px-3 py-2 bg-white/5 hover:bg-red-500/30 text-white/50 text-sm rounded-lg transition-colors border border-white/10"
+                            title="Sıfırla"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
+                      <p className="text-[10px] text-white/30 mt-2">Yazdığınız metin, kopyaladığınız koda <code className="text-[#ff2b73]">setTextRunValue()</code> olarak eklenir.</p>
                     </div>
                     {/* Tip badge */}
                     {selectedCfg.inputs?.length === 0 && (selectedCfg.stateMachines?.length ?? 0) > 0 && (
@@ -614,18 +628,20 @@ export default function ComponentGrid() {
             Kapat
           </button>
           
-          <div className="w-full h-full max-w-[90vw] max-h-[85vh] flex items-center justify-center">
+          <div className="relative w-full h-full max-w-[90vw] max-h-[85vh] flex items-center justify-center">
             <RiveDemo
               src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
               artboard={selectedCfg.artboard}
               stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
-              texts={previewText ? { 
-                "ButtonText": previewText, "Text": previewText, "Label": previewText, "Title": previewText, 
-                "Text 1": previewText, "Yazi": previewText, "Metin": previewText, "Run": previewText, 
-                "TextRun": previewText, "Text Run 1": previewText, "Text Run": previewText,
-                "ButtonMetni": previewText, "TestMest": previewText
-              } : undefined}
             />
+            {previewText && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                <div className="bg-black/70 backdrop-blur-sm px-10 py-5 rounded-2xl border border-[#ff2b73]/30 shadow-[0_0_40px_rgba(255,43,115,0.3)]">
+                  <p className="text-white font-bold text-3xl text-center" style={{ textShadow: '0 0 15px rgba(255,43,115,0.5)' }}>{previewText}</p>
+                  <p className="text-xs text-white/40 text-center mt-2">Bu metin kodunuza otomatik eklenir</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 bg-black/50 border border-white/10 rounded-full text-white/50 text-sm backdrop-blur-md">

@@ -537,86 +537,146 @@ export default function ComponentGrid() {
                       <button
                         disabled={downloading}
                         onClick={async () => {
-                          const ok = await trackDownload(selectedComp.id, "riv");
-                          if (!ok) return;
-                          
+                          setDownloading(true);
                           const rivUrl = `https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`;
                           const fileName = selectedComp.image_url.split('/').pop() || 'component.riv';
-                          
-                          if (previewText && defaultLabel) {
-                            // Özel metin + bilinen orijinal label: .riv binary patch
-                            try {
-                              setDownloading(true);
-                              const resp = await fetch(rivUrl);
-                              const buf = await resp.arrayBuffer();
-                              const original = new Uint8Array(buf);
-
-                              const encoder = new TextEncoder();
-                              const oldBytes = encoder.encode(defaultLabel);
-                              const newBytes = encoder.encode(previewText);
-
-                              // Tüm eşleşmeleri bul ve değiştir
+                          try {
+                            const ok = await trackDownload(selectedComp.id, "riv");
+                            if (!ok) { setDownloading(false); return; }
+                            
+                            if (!previewText) {
+                              window.open(rivUrl, "_blank");
+                              setDownloading(false);
+                              return;
+                            }
+                            
+                            // Özel metin var: .riv binary patch
+                            const resp = await fetch(rivUrl);
+                            const buf = await resp.arrayBuffer();
+                            const rivBytes = new Uint8Array(buf);
+                            
+                            // Binary'deki tüm length-prefixed stringleri tara
+                            const encoder = new TextEncoder();
+                            const newBytes = encoder.encode(previewText);
+                            const decoder = new TextDecoder('utf-8', { fatal: true });
+                            
+                            // Sistem stringleri (bunları DEĞİŞTİRME)
+                            const systemPatterns = [
+                              'State Machine', 'Artboard', 'Montserrat', 'RIVE', 'Inter',
+                              'Roboto', 'Arial', 'Helvetica', 'rive', 'artboard', 'state',
+                              'null', 'true', 'false', 'label', 'color', 'opacity',
+                              'width', 'height', 'fill', 'stroke', 'path', 'node',
+                              'bone', 'group', 'layer', 'Main', 'Scale', 'Position',
+                              'Rotation', 'Transform', 'Animation', 'Timeline',
+                              'Listener', 'Input', 'Trigger', 'Boolean', 'Number',
+                              'String', 'Color', 'Enum', 'List', 'Image', 'Shape',
+                              'Rectangle', 'Ellipse', 'Star', 'Polygon', 'Triangle',
+                              'Frog', 'Publish', 'soloStandard', 'starSM', 'Hover',
+                            ];
+                            
+                            // Binary'de okunabilir stringleri bul
+                            type FoundStr = { pos: number; len: number; text: string; score: number };
+                            const candidates: FoundStr[] = [];
+                            
+                            for (let i = 0; i < rivBytes.length - 3; i++) {
+                              const strLen = rivBytes[i];
+                              if (strLen < 2 || strLen > 120) continue;
+                              if (i + 1 + strLen > rivBytes.length) continue;
+                              
+                              // Okunabilir mi kontrol et
+                              let readable = true;
+                              for (let j = 0; j < strLen; j++) {
+                                const b = rivBytes[i + 1 + j];
+                                if (b < 32 && b !== 10 && b !== 13) { readable = false; break; }
+                              }
+                              if (!readable) continue;
+                              
+                              let text: string;
+                              try {
+                                text = decoder.decode(rivBytes.slice(i + 1, i + 1 + strLen));
+                              } catch { continue; }
+                              
+                              // Sistem stringi mi?
+                              const isSystem = systemPatterns.some(sp => 
+                                text === sp || text.startsWith(sp + ' ') || text.endsWith(' ' + sp)
+                              );
+                              if (isSystem) continue;
+                              
+                              // Skor: Uzun, boşluk içeren, büyük harfle başlayan = daha yüksek
+                              let score = text.length;
+                              if (/^[A-ZÇŞÜÖİĞ]/.test(text)) score += 10;
+                              if (text.includes(' ')) score += 5;
+                              if (/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(text)) score += 15;
+                              // Tek kelimelik kısa teknik isimler düşük skor
+                              if (text.length < 5 && !/\s/.test(text)) score -= 10;
+                              
+                              candidates.push({ pos: i, len: strLen, text, score });
+                            }
+                            
+                            // En yüksek skorlu aday = büyük ihtimalle label
+                            candidates.sort((a, b) => b.score - a.score);
+                            
+                            const downloadBlob = (data: Uint8Array) => {
+                              const blob = new Blob([data.buffer as ArrayBuffer], { type: "application/octet-stream" });
+                              const a = document.createElement("a");
+                              a.href = URL.createObjectURL(blob);
+                              a.download = fileName;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                              URL.revokeObjectURL(a.href);
+                            };
+                            
+                            if (candidates.length > 0) {
+                              const best = candidates[0];
+                              console.log("[Download] Replacing:", best.text, "→", previewText, "score:", best.score);
+                              
+                              const oldBytes = encoder.encode(best.text);
+                              
+                              // Binary'de TÜM eşleşmeleri bul
                               const positions: number[] = [];
-                              for (let i = 0; i <= original.length - oldBytes.length; i++) {
+                              for (let i = 0; i <= rivBytes.length - oldBytes.length; i++) {
                                 let match = true;
                                 for (let j = 0; j < oldBytes.length; j++) {
-                                  if (original[i + j] !== oldBytes[j]) { match = false; break; }
+                                  if (rivBytes[i + j] !== oldBytes[j]) { match = false; break; }
                                 }
                                 if (match) positions.push(i);
                               }
-
+                              
                               if (positions.length > 0) {
-                                // Her eşleşme için byte farkını hesapla
                                 const diff = newBytes.length - oldBytes.length;
                                 const totalDiff = diff * positions.length;
-                                const patched = new Uint8Array(original.length + totalDiff);
-                                
-                                let srcPos = 0;
-                                let dstPos = 0;
+                                const patched = new Uint8Array(rivBytes.length + totalDiff);
+                                let srcPos = 0, dstPos = 0;
                                 
                                 for (const pos of positions) {
-                                  // Eşleşmeden önceki kısmı kopyala
-                                  patched.set(original.slice(srcPos, pos), dstPos);
+                                  patched.set(rivBytes.slice(srcPos, pos), dstPos);
                                   dstPos += (pos - srcPos);
-                                  
-                                  // Uzunluk prefix'ini güncelle (eşleşmeden 1 byte önce)
-                                  if (pos > 0 && original[pos - 1] === oldBytes.length) {
+                                  if (pos > 0 && rivBytes[pos - 1] === oldBytes.length) {
                                     patched[dstPos - 1] = newBytes.length;
                                   }
-                                  
-                                  // Yeni metni yaz
                                   patched.set(newBytes, dstPos);
                                   dstPos += newBytes.length;
                                   srcPos = pos + oldBytes.length;
                                 }
-                                
-                                // Kalan kısmı kopyala
-                                patched.set(original.slice(srcPos), dstPos);
-
-                                const blob = new Blob([patched], { type: 'application/octet-stream' });
-                                const a = document.createElement('a');
-                                a.href = URL.createObjectURL(blob);
-                                a.download = fileName;
-                                document.body.appendChild(a);
-                                a.click();
-                                document.body.removeChild(a);
-                                URL.revokeObjectURL(a.href);
+                                patched.set(rivBytes.slice(srcPos), dstPos);
+                                downloadBlob(patched);
                               } else {
-                                window.open(rivUrl, "_blank");
+                                downloadBlob(rivBytes);
                               }
-                            } catch {
-                              window.open(rivUrl, "_blank");
-                            } finally {
-                              setDownloading(false);
+                            } else {
+                              downloadBlob(rivBytes);
                             }
-                          } else {
-                            // Özel metin yok veya orijinal label bilinmiyor — orijinali indir
+                          } catch (err) {
+                            console.error("[Download] Error:", err);
                             window.open(rivUrl, "_blank");
+                          } finally {
+                            setDownloading(false);
                           }
                         }}
                         className="w-full py-2 text-xs text-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 border border-white/10 disabled:opacity-50"
                       >
-                        {downloading ? "İşleniyor..." : `↓ .riv dosyasını indir ${isPro ? "" : `(Kalan: ${remainingDownloads ?? "?"}/5)`}`}
+                        {downloading ? "Metin değiştiriliyor..." : `↓ .riv dosyasını indir ${isPro ? "" : `(Kalan: ${remainingDownloads ?? "?"}/5)`}`}
                       </button>
                     )}
                     {/* İndirme hatası */}

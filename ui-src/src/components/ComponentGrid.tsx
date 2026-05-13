@@ -550,80 +550,96 @@ export default function ComponentGrid() {
                               return;
                             }
                             
-                            // Özel metin var: .riv binary patch (AYNI BOYUT - in-place)
+                            // .riv binary patch — "label" marker tabanlı hedefli değiştirme
                             const resp = await fetch(rivUrl);
                             const buf = await resp.arrayBuffer();
-                            const result = new Uint8Array(new Uint8Array(buf)); // kopyasını al
+                            const rivBytes = new Uint8Array(buf);
                             
                             const encoder = new TextEncoder();
                             const decoder = new TextDecoder('utf-8', { fatal: true });
                             const newRaw = encoder.encode(previewText);
+                            const labelNeedle = encoder.encode("label");
                             
-                            // Son %20'de metadata, VM, TextRun bilgileri bulunur
-                            const searchStart = Math.floor(result.length * 0.80);
+                            // "label" marker'larını bul, etrafındaki değiştirilebilir stringleri topla
+                            type Patch = { pos: number; oldLen: number; newContent: Uint8Array };
+                            const patches: Patch[] = [];
                             
-                            const blacklist = [
-                              'Montserrat', 'Inter', 'Roboto', 'Arial', 'Helvetica', 'Poppins',
-                              'State Machine', 'Artboard', 'Layer', 'Listener', 'Pointer',
-                              'Trigger', 'Hover', 'Instance', 'Effect', 'Glow', 'normal',
-                              'label', 'color', 'opacity', 'ButtonVM', 'ButtonMetni',
-                              'ciick', 'click', 'VM', '.sc', 'Enter', 'exit', 'Text',
+                            // Teknik/sistem stringleri (DEĞİŞTİRME)
+                            const systemNames = [
+                              'Artboard', 'Instance', 'State Machine', 'Layer', 'Listener',
+                              'Trigger', 'Hover', 'Pointer', 'ButtonVM', 'ButtonMetni',
+                              'label', 'Montserrat', 'normal', 'GlowEffect', 'ciick', 'click',
                             ];
                             
-                            let patchCount = 0;
+                            for (let i = 0; i < rivBytes.length - labelNeedle.length; i++) {
+                              // "label" string'ini bul (length-prefixed)
+                              let isLabel = true;
+                              for (let j = 0; j < labelNeedle.length; j++) {
+                                if (rivBytes[i + j] !== labelNeedle[j]) { isLabel = false; break; }
+                              }
+                              if (!isLabel) continue;
+                              // Önceki byte "label" uzunluğuyla uyumlu mu? (5, 6, 7... "label", "label ", "label 1")
+                              const prefix = i > 0 ? rivBytes[i - 1] : 0;
+                              if (prefix < 5 || prefix > 10) continue;
+                              
+                              console.log(`[Download] Found "label" marker at pos:${i}`);
+                              
+                              // label'dan sonraki 300 byte'da değiştirilebilir stringleri ara
+                              const searchEnd = Math.min(i + 300, rivBytes.length - 3);
+                              for (let k = i + prefix; k < searchEnd; k++) {
+                                const strLen = rivBytes[k];
+                                if (strLen < 3 || strLen > 80) continue;
+                                if (k + 1 + strLen > rivBytes.length) continue;
+                                
+                                let readable = true;
+                                for (let j = 0; j < strLen; j++) {
+                                  const b = rivBytes[k + 1 + j];
+                                  if (b < 32 && b !== 10 && b !== 13) { readable = false; break; }
+                                }
+                                if (!readable) continue;
+                                
+                                let text: string;
+                                try { text = decoder.decode(rivBytes.slice(k + 1, k + 1 + strLen)); } catch { continue; }
+                                
+                                const trimmed = text.replace(/[\n\r\s]+$/g, '').trim();
+                                if (trimmed.length < 2) continue;
+                                
+                                // Sistem stringi mi?
+                                if (systemNames.some(s => trimmed === s)) continue;
+                                
+                                // Doğal dil metni mi? (harf içermeli)
+                                if (!/[\p{L}]/u.test(trimmed)) continue;
+                                if (!/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(trimmed)) continue;
+                                
+                                // Bu bir label değeri! Duplicate kontrolü
+                                if (patches.some(p => p.pos === k)) continue;
+                                
+                                const hasNewline = text.endsWith('\n');
+                                const newContent = hasNewline
+                                  ? new Uint8Array([...newRaw, 0x0A])
+                                  : new Uint8Array(newRaw);
+                                
+                                patches.push({ pos: k, oldLen: strLen, newContent });
+                                console.log(`[Download] Target: "${trimmed}" (pos:${k}, len:${strLen}${hasNewline ? '+\\n' : ''})`);
+                              }
+                            }
                             
-                            for (let i = searchStart; i < result.length - 3; i++) {
-                              const strLen = result[i];
-                              if (strLen < 3 || strLen > 80) continue;
-                              if (i + 1 + strLen > result.length) continue;
+                            // Sondan başa uygula (pozisyon kayması önlenir)
+                            patches.sort((a, b) => b.pos - a.pos);
+                            
+                            let current = rivBytes;
+                            for (const patch of patches) {
+                              const before = current.slice(0, patch.pos);
+                              const after = current.slice(patch.pos + 1 + patch.oldLen);
+                              const newLen = patch.newContent.length;
                               
-                              let readable = true;
-                              for (let j = 0; j < strLen; j++) {
-                                const b = result[i + 1 + j];
-                                if (b < 32 && b !== 10 && b !== 13) { readable = false; break; }
-                              }
-                              if (!readable) continue;
+                              const result = new Uint8Array(before.length + 1 + newLen + after.length);
+                              result.set(before, 0);
+                              result[before.length] = newLen; // LEB128 length prefix
+                              result.set(patch.newContent, before.length + 1);
+                              result.set(after, before.length + 1 + newLen);
                               
-                              let text: string;
-                              try {
-                                text = decoder.decode(result.slice(i + 1, i + 1 + strLen));
-                              } catch { continue; }
-                              
-                              const trimmed = text.replace(/[\n\r\s]+$/g, '').trim();
-                              if (trimmed.length < 3) continue;
-                              if (trimmed.includes('.sc')) continue;
-                              if (blacklist.some(b => trimmed.includes(b))) continue;
-                              if (!/[\p{L}]/u.test(trimmed)) continue;
-                              
-                              // Skor
-                              let score = 0;
-                              if (/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(trimmed)) score += 30;
-                              if (/^[A-ZÇŞÜÖİĞa-zçşüöığ]/.test(trimmed)) score += 10;
-                              if (trimmed.includes(' ')) score += 20;
-                              if (trimmed.length >= 5 && trimmed.length <= 40) score += 10;
-                              if (/^[a-z]+[A-Z]/.test(trimmed)) score -= 20;
-                              if (/^[a-z]+$/.test(trimmed)) score -= 15;
-                              
-                              if (score < 25) continue;
-                              
-                              // ✓ Bu bir label/text — in-place değiştir (aynı byte uzunluğu!)
-                              const padded = new Uint8Array(strLen);
-                              padded.fill(0x20); // boşlukla doldur
-                              
-                              // Trailing newline var mı?
-                              const hasNewline = text.endsWith('\n');
-                              if (hasNewline) {
-                                // Yeni metin + boşluk padding + son byte newline
-                                padded.set(newRaw.subarray(0, Math.min(newRaw.length, strLen - 1)));
-                                padded[strLen - 1] = 0x0A; // newline koru
-                              } else {
-                                padded.set(newRaw.subarray(0, Math.min(newRaw.length, strLen)));
-                              }
-                              
-                              // Doğrudan üzerine yaz — boyut DEĞİŞMEZ
-                              result.set(padded, i + 1);
-                              patchCount++;
-                              console.log(`[Download] ✓ "${trimmed}" → "${previewText}" (pos:${i})`);
+                              current = result;
                             }
                             
                             const downloadBlob = (data: Uint8Array) => {
@@ -637,8 +653,8 @@ export default function ComponentGrid() {
                               URL.revokeObjectURL(a.href);
                             };
                             
-                            console.log(`[Download] ${patchCount} metin değiştirildi, boyut: ${result.length}`);
-                            downloadBlob(result);
+                            console.log(`[Download] ${patches.length} metin değiştirildi (${rivBytes.length}→${current.length} bytes)`);
+                            downloadBlob(current);
                           } catch (err) {
                             console.error("[Download] Error:", err);
                             window.open(rivUrl, "_blank");

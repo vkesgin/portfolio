@@ -555,35 +555,33 @@ export default function ComponentGrid() {
                             const buf = await resp.arrayBuffer();
                             const rivBytes = new Uint8Array(buf);
                             
-                            // Binary'deki tüm length-prefixed stringleri tara
+                            // Binary'den ViewModel / TextRun label'ını bul
                             const encoder = new TextEncoder();
                             const newBytes = encoder.encode(previewText);
                             const decoder = new TextDecoder('utf-8', { fatal: true });
                             
-                            // Sistem stringleri (bunları DEĞİŞTİRME)
-                            const systemPatterns = [
-                              'State Machine', 'Artboard', 'Montserrat', 'RIVE', 'Inter',
-                              'Roboto', 'Arial', 'Helvetica', 'rive', 'artboard', 'state',
-                              'null', 'true', 'false', 'label', 'color', 'opacity',
-                              'width', 'height', 'fill', 'stroke', 'path', 'node',
-                              'bone', 'group', 'layer', 'Main', 'Scale', 'Position',
-                              'Rotation', 'Transform', 'Animation', 'Timeline',
-                              'Listener', 'Input', 'Trigger', 'Boolean', 'Number',
-                              'String', 'Color', 'Enum', 'List', 'Image', 'Shape',
-                              'Rectangle', 'Ellipse', 'Star', 'Polygon', 'Triangle',
-                              'Frog', 'Publish', 'soloStandard', 'starSM', 'Hover',
+                            // Rive binary'nin son ~%15'inde metadata, VM, TextRun bilgileri bulunur
+                            // Font tabloları dosyanın ortasındadır - o kısımları atlıyoruz
+                            const searchStart = Math.floor(rivBytes.length * 0.85);
+                            
+                            // Bilinen teknik/sistem string parçaları
+                            const blacklist = [
+                              'Montserrat', 'Inter', 'Roboto', 'Arial', 'Helvetica', 'Poppins',
+                              'State Machine', 'Artboard', 'Layer', 'Listener', 'Pointer',
+                              'Trigger', 'Hover', 'Instance', 'Effect', 'Glow', 'normal',
+                              'label', 'color', 'opacity', 'ButtonVM', 'ButtonMetni',
+                              'ciick', 'click', 'VM', '.sc',
                             ];
                             
-                            // Binary'de okunabilir stringleri bul
                             type FoundStr = { pos: number; len: number; text: string; score: number };
                             const candidates: FoundStr[] = [];
                             
-                            for (let i = 0; i < rivBytes.length - 3; i++) {
+                            for (let i = searchStart; i < rivBytes.length - 3; i++) {
                               const strLen = rivBytes[i];
-                              if (strLen < 2 || strLen > 120) continue;
+                              if (strLen < 3 || strLen > 80) continue;
                               if (i + 1 + strLen > rivBytes.length) continue;
                               
-                              // Okunabilir mi kontrol et
+                              // Okunabilir karakter kontrolü
                               let readable = true;
                               for (let j = 0; j < strLen; j++) {
                                 const b = rivBytes[i + 1 + j];
@@ -596,25 +594,33 @@ export default function ComponentGrid() {
                                 text = decoder.decode(rivBytes.slice(i + 1, i + 1 + strLen));
                               } catch { continue; }
                               
-                              // Sistem stringi mi?
-                              const isSystem = systemPatterns.some(sp => 
-                                text === sp || text.startsWith(sp + ' ') || text.endsWith(' ' + sp)
-                              );
-                              if (isSystem) continue;
+                              // Newline, .sc, technical stringleri atla
+                              if (text.includes('\n') || text.includes('.sc')) continue;
                               
-                              // Skor: Uzun, boşluk içeren, büyük harfle başlayan = daha yüksek
-                              let score = text.length;
-                              if (/^[A-ZÇŞÜÖİĞ]/.test(text)) score += 10;
-                              if (text.includes(' ')) score += 5;
-                              if (/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(text)) score += 15;
-                              // Tek kelimelik kısa teknik isimler düşük skor
-                              if (text.length < 5 && !/\s/.test(text)) score -= 10;
+                              // Blacklist kontrolü - includes ile
+                              const isBlack = blacklist.some(b => text.includes(b));
+                              if (isBlack) continue;
+                              
+                              // Tamamen ASCII sembol/rasgele karakter mi?
+                              if (!/[\p{L}]/u.test(text)) continue; // En az 1 harf olmalı
+                              
+                              // Skor hesapla
+                              let score = 0;
+                              // Doğal dil metni mi? (harf + boşluk)
+                              if (/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(text)) score += 30;
+                              if (/^[A-ZÇŞÜÖİĞa-zçşüöığ]/.test(text)) score += 10;
+                              if (text.includes(' ')) score += 20; // "Button Text" gibi
+                              if (text.length >= 5 && text.length <= 40) score += 10;
+                              // camelCase = teknik isim (düşük skor)
+                              if (/^[a-z]+[A-Z]/.test(text)) score -= 20;
+                              // Tüm küçük harf = property/fonksiyon adı
+                              if (/^[a-z]+$/.test(text)) score -= 15;
                               
                               candidates.push({ pos: i, len: strLen, text, score });
                             }
                             
-                            // En yüksek skorlu aday = büyük ihtimalle label
                             candidates.sort((a, b) => b.score - a.score);
+                            console.log("[Download] Candidates:", candidates.map(c => `"${c.text}" (${c.score})`));
                             
                             const downloadBlob = (data: Uint8Array) => {
                               const blob = new Blob([data.buffer as ArrayBuffer], { type: "application/octet-stream" });
@@ -627,9 +633,9 @@ export default function ComponentGrid() {
                               URL.revokeObjectURL(a.href);
                             };
                             
-                            if (candidates.length > 0) {
+                            if (candidates.length > 0 && candidates[0].score > 0) {
                               const best = candidates[0];
-                              console.log("[Download] Replacing:", best.text, "→", previewText, "score:", best.score);
+                              console.log("[Download] ✓ Replacing:", best.text, "→", previewText);
                               
                               const oldBytes = encoder.encode(best.text);
                               
@@ -665,6 +671,7 @@ export default function ComponentGrid() {
                                 downloadBlob(rivBytes);
                               }
                             } else {
+                              console.log("[Download] No suitable label found, downloading original");
                               downloadBlob(rivBytes);
                             }
                           } catch (err) {

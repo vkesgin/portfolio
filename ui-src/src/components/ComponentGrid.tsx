@@ -555,14 +555,13 @@ export default function ComponentGrid() {
                             const buf = await resp.arrayBuffer();
                             const rivBytes = new Uint8Array(buf);
                             
-                            // Binary'den ViewModel / TextRun label'ını bul
+                            // Binary'den ViewModel default + TextRun değerlerini bul
                             const encoder = new TextEncoder();
                             const newBytes = encoder.encode(previewText);
                             const decoder = new TextDecoder('utf-8', { fatal: true });
                             
-                            // Rive binary'nin son ~%15'inde metadata, VM, TextRun bilgileri bulunur
-                            // Font tabloları dosyanın ortasındadır - o kısımları atlıyoruz
-                            const searchStart = Math.floor(rivBytes.length * 0.85);
+                            // Son %20'de metadata, VM, TextRun bilgileri bulunur
+                            const searchStart = Math.floor(rivBytes.length * 0.80);
                             
                             // Bilinen teknik/sistem string parçaları
                             const blacklist = [
@@ -570,18 +569,17 @@ export default function ComponentGrid() {
                               'State Machine', 'Artboard', 'Layer', 'Listener', 'Pointer',
                               'Trigger', 'Hover', 'Instance', 'Effect', 'Glow', 'normal',
                               'label', 'color', 'opacity', 'ButtonVM', 'ButtonMetni',
-                              'ciick', 'click', 'VM', '.sc',
+                              'ciick', 'click', 'VM', '.sc', 'Enter', 'exit',
                             ];
                             
-                            type FoundStr = { pos: number; len: number; text: string; score: number };
-                            const candidates: FoundStr[] = [];
+                            // Tüm metin adaylarını bul (>= score 25)
+                            const textsToReplace: string[] = [];
                             
                             for (let i = searchStart; i < rivBytes.length - 3; i++) {
                               const strLen = rivBytes[i];
                               if (strLen < 3 || strLen > 80) continue;
                               if (i + 1 + strLen > rivBytes.length) continue;
                               
-                              // Okunabilir karakter kontrolü
                               let readable = true;
                               for (let j = 0; j < strLen; j++) {
                                 const b = rivBytes[i + 1 + j];
@@ -594,33 +592,29 @@ export default function ComponentGrid() {
                                 text = decoder.decode(rivBytes.slice(i + 1, i + 1 + strLen));
                               } catch { continue; }
                               
-                              // Newline, .sc, technical stringleri atla
-                              if (text.includes('\n') || text.includes('.sc')) continue;
+                              // Trim whitespace/newline for scoring
+                              const trimmed = text.replace(/[\n\r\s]+$/g, '').trim();
+                              if (trimmed.includes('.sc')) continue;
+                              if (trimmed.length < 3) continue;
+                              if (blacklist.some(b => trimmed.includes(b))) continue;
+                              if (!/[\p{L}]/u.test(trimmed)) continue;
                               
-                              // Blacklist kontrolü - includes ile
-                              const isBlack = blacklist.some(b => text.includes(b));
-                              if (isBlack) continue;
-                              
-                              // Tamamen ASCII sembol/rasgele karakter mi?
-                              if (!/[\p{L}]/u.test(text)) continue; // En az 1 harf olmalı
-                              
-                              // Skor hesapla
+                              // Skor: doğal dil metni mi?
                               let score = 0;
-                              // Doğal dil metni mi? (harf + boşluk)
-                              if (/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(text)) score += 30;
-                              if (/^[A-ZÇŞÜÖİĞa-zçşüöığ]/.test(text)) score += 10;
-                              if (text.includes(' ')) score += 20; // "Button Text" gibi
-                              if (text.length >= 5 && text.length <= 40) score += 10;
-                              // camelCase = teknik isim (düşük skor)
-                              if (/^[a-z]+[A-Z]/.test(text)) score -= 20;
-                              // Tüm küçük harf = property/fonksiyon adı
-                              if (/^[a-z]+$/.test(text)) score -= 15;
+                              if (/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(trimmed)) score += 30;
+                              if (/^[A-ZÇŞÜÖİĞa-zçşüöığ]/.test(trimmed)) score += 10;
+                              if (trimmed.includes(' ')) score += 20;
+                              if (trimmed.length >= 5 && trimmed.length <= 40) score += 10;
+                              if (/^[a-z]+[A-Z]/.test(trimmed)) score -= 20;
+                              if (/^[a-z]+$/.test(trimmed)) score -= 15;
                               
-                              candidates.push({ pos: i, len: strLen, text, score });
+                              // score >= 25 olanları değiştir (hem VM default hem TextRun)
+                              if (score >= 25 && !textsToReplace.includes(text)) {
+                                textsToReplace.push(text);
+                              }
                             }
                             
-                            candidates.sort((a, b) => b.score - a.score);
-                            console.log("[Download] Candidates:", candidates.map(c => `"${c.text}" (${c.score})`));
+                            console.log("[Download] Texts to replace:", textsToReplace);
                             
                             const downloadBlob = (data: Uint8Array) => {
                               const blob = new Blob([data.buffer as ArrayBuffer], { type: "application/octet-stream" });
@@ -633,45 +627,53 @@ export default function ComponentGrid() {
                               URL.revokeObjectURL(a.href);
                             };
                             
-                            if (candidates.length > 0 && candidates[0].score > 0) {
-                              const best = candidates[0];
-                              console.log("[Download] ✓ Replacing:", best.text, "→", previewText);
+                            if (textsToReplace.length > 0) {
+                              // Her metin için sırayla binary patch uygula
+                              let currentBytes = rivBytes;
                               
-                              const oldBytes = encoder.encode(best.text);
-                              
-                              // Binary'de TÜM eşleşmeleri bul
-                              const positions: number[] = [];
-                              for (let i = 0; i <= rivBytes.length - oldBytes.length; i++) {
-                                let match = true;
-                                for (let j = 0; j < oldBytes.length; j++) {
-                                  if (rivBytes[i + j] !== oldBytes[j]) { match = false; break; }
-                                }
-                                if (match) positions.push(i);
-                              }
-                              
-                              if (positions.length > 0) {
-                                const diff = newBytes.length - oldBytes.length;
-                                const totalDiff = diff * positions.length;
-                                const patched = new Uint8Array(rivBytes.length + totalDiff);
-                                let srcPos = 0, dstPos = 0;
+                              for (const oldText of textsToReplace) {
+                                const oldBytes = encoder.encode(oldText);
+                                // Orijinal metin \n ile bitiyorsa, yenisine de \n ekle
+                                const hasTrailingNewline = oldText.endsWith('\n');
+                                const replaceText = hasTrailingNewline ? previewText + '\n' : previewText;
+                                const replaceBytes = encoder.encode(replaceText);
                                 
-                                for (const pos of positions) {
-                                  patched.set(rivBytes.slice(srcPos, pos), dstPos);
-                                  dstPos += (pos - srcPos);
-                                  if (pos > 0 && rivBytes[pos - 1] === oldBytes.length) {
-                                    patched[dstPos - 1] = newBytes.length;
+                                const positions: number[] = [];
+                                for (let i = 0; i <= currentBytes.length - oldBytes.length; i++) {
+                                  let match = true;
+                                  for (let j = 0; j < oldBytes.length; j++) {
+                                    if (currentBytes[i + j] !== oldBytes[j]) { match = false; break; }
                                   }
-                                  patched.set(newBytes, dstPos);
-                                  dstPos += newBytes.length;
-                                  srcPos = pos + oldBytes.length;
+                                  if (match) positions.push(i);
                                 }
-                                patched.set(rivBytes.slice(srcPos), dstPos);
-                                downloadBlob(patched);
-                              } else {
-                                downloadBlob(rivBytes);
+                                
+                                if (positions.length > 0) {
+                                  const trimmedOld = oldText.replace(/[\n\r]+$/g, '');
+                                  console.log(`[Download] ✓ "${trimmedOld}" → "${previewText}" (${positions.length} eşleşme)`);
+                                  const diff = replaceBytes.length - oldBytes.length;
+                                  const totalDiff = diff * positions.length;
+                                  const patched = new Uint8Array(currentBytes.length + totalDiff);
+                                  let srcPos = 0, dstPos = 0;
+                                  
+                                  for (const pos of positions) {
+                                    patched.set(currentBytes.slice(srcPos, pos), dstPos);
+                                    dstPos += (pos - srcPos);
+                                    // Uzunluk prefix güncelle
+                                    if (pos > 0 && currentBytes[pos - 1] === oldBytes.length) {
+                                      patched[dstPos - 1] = replaceBytes.length;
+                                    }
+                                    patched.set(replaceBytes, dstPos);
+                                    dstPos += replaceBytes.length;
+                                    srcPos = pos + oldBytes.length;
+                                  }
+                                  patched.set(currentBytes.slice(srcPos), dstPos);
+                                  currentBytes = patched;
+                                }
                               }
+                              
+                              downloadBlob(currentBytes);
                             } else {
-                              console.log("[Download] No suitable label found, downloading original");
+                              console.log("[Download] No text found, downloading original");
                               downloadBlob(rivBytes);
                             }
                           } catch (err) {

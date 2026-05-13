@@ -550,56 +550,52 @@ export default function ComponentGrid() {
                               return;
                             }
                             
-                            // Özel metin var: .riv binary patch
+                            // Özel metin var: .riv binary patch (AYNI BOYUT - in-place)
                             const resp = await fetch(rivUrl);
                             const buf = await resp.arrayBuffer();
-                            const rivBytes = new Uint8Array(buf);
+                            const result = new Uint8Array(new Uint8Array(buf)); // kopyasını al
                             
-                            // Binary'den ViewModel default + TextRun değerlerini bul
                             const encoder = new TextEncoder();
-                            const newBytes = encoder.encode(previewText);
                             const decoder = new TextDecoder('utf-8', { fatal: true });
+                            const newRaw = encoder.encode(previewText);
                             
                             // Son %20'de metadata, VM, TextRun bilgileri bulunur
-                            const searchStart = Math.floor(rivBytes.length * 0.80);
+                            const searchStart = Math.floor(result.length * 0.80);
                             
-                            // Bilinen teknik/sistem string parçaları
                             const blacklist = [
                               'Montserrat', 'Inter', 'Roboto', 'Arial', 'Helvetica', 'Poppins',
                               'State Machine', 'Artboard', 'Layer', 'Listener', 'Pointer',
                               'Trigger', 'Hover', 'Instance', 'Effect', 'Glow', 'normal',
                               'label', 'color', 'opacity', 'ButtonVM', 'ButtonMetni',
-                              'ciick', 'click', 'VM', '.sc', 'Enter', 'exit',
+                              'ciick', 'click', 'VM', '.sc', 'Enter', 'exit', 'Text',
                             ];
                             
-                            // Tüm metin adaylarını bul (>= score 25)
-                            const textsToReplace: string[] = [];
+                            let patchCount = 0;
                             
-                            for (let i = searchStart; i < rivBytes.length - 3; i++) {
-                              const strLen = rivBytes[i];
+                            for (let i = searchStart; i < result.length - 3; i++) {
+                              const strLen = result[i];
                               if (strLen < 3 || strLen > 80) continue;
-                              if (i + 1 + strLen > rivBytes.length) continue;
+                              if (i + 1 + strLen > result.length) continue;
                               
                               let readable = true;
                               for (let j = 0; j < strLen; j++) {
-                                const b = rivBytes[i + 1 + j];
+                                const b = result[i + 1 + j];
                                 if (b < 32 && b !== 10 && b !== 13) { readable = false; break; }
                               }
                               if (!readable) continue;
                               
                               let text: string;
                               try {
-                                text = decoder.decode(rivBytes.slice(i + 1, i + 1 + strLen));
+                                text = decoder.decode(result.slice(i + 1, i + 1 + strLen));
                               } catch { continue; }
                               
-                              // Trim whitespace/newline for scoring
                               const trimmed = text.replace(/[\n\r\s]+$/g, '').trim();
-                              if (trimmed.includes('.sc')) continue;
                               if (trimmed.length < 3) continue;
+                              if (trimmed.includes('.sc')) continue;
                               if (blacklist.some(b => trimmed.includes(b))) continue;
                               if (!/[\p{L}]/u.test(trimmed)) continue;
                               
-                              // Skor: doğal dil metni mi?
+                              // Skor
                               let score = 0;
                               if (/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(trimmed)) score += 30;
                               if (/^[A-ZÇŞÜÖİĞa-zçşüöığ]/.test(trimmed)) score += 10;
@@ -608,13 +604,27 @@ export default function ComponentGrid() {
                               if (/^[a-z]+[A-Z]/.test(trimmed)) score -= 20;
                               if (/^[a-z]+$/.test(trimmed)) score -= 15;
                               
-                              // score >= 25 olanları değiştir (hem VM default hem TextRun)
-                              if (score >= 25 && !textsToReplace.includes(text)) {
-                                textsToReplace.push(text);
+                              if (score < 25) continue;
+                              
+                              // ✓ Bu bir label/text — in-place değiştir (aynı byte uzunluğu!)
+                              const padded = new Uint8Array(strLen);
+                              padded.fill(0x20); // boşlukla doldur
+                              
+                              // Trailing newline var mı?
+                              const hasNewline = text.endsWith('\n');
+                              if (hasNewline) {
+                                // Yeni metin + boşluk padding + son byte newline
+                                padded.set(newRaw.subarray(0, Math.min(newRaw.length, strLen - 1)));
+                                padded[strLen - 1] = 0x0A; // newline koru
+                              } else {
+                                padded.set(newRaw.subarray(0, Math.min(newRaw.length, strLen)));
                               }
+                              
+                              // Doğrudan üzerine yaz — boyut DEĞİŞMEZ
+                              result.set(padded, i + 1);
+                              patchCount++;
+                              console.log(`[Download] ✓ "${trimmed}" → "${previewText}" (pos:${i})`);
                             }
-                            
-                            console.log("[Download] Texts to replace:", textsToReplace);
                             
                             const downloadBlob = (data: Uint8Array) => {
                               const blob = new Blob([data.buffer as ArrayBuffer], { type: "application/octet-stream" });
@@ -627,55 +637,8 @@ export default function ComponentGrid() {
                               URL.revokeObjectURL(a.href);
                             };
                             
-                            if (textsToReplace.length > 0) {
-                              // Her metin için sırayla binary patch uygula
-                              let currentBytes = rivBytes;
-                              
-                              for (const oldText of textsToReplace) {
-                                const oldBytes = encoder.encode(oldText);
-                                // Orijinal metin \n ile bitiyorsa, yenisine de \n ekle
-                                const hasTrailingNewline = oldText.endsWith('\n');
-                                const replaceText = hasTrailingNewline ? previewText + '\n' : previewText;
-                                const replaceBytes = encoder.encode(replaceText);
-                                
-                                const positions: number[] = [];
-                                for (let i = 0; i <= currentBytes.length - oldBytes.length; i++) {
-                                  let match = true;
-                                  for (let j = 0; j < oldBytes.length; j++) {
-                                    if (currentBytes[i + j] !== oldBytes[j]) { match = false; break; }
-                                  }
-                                  if (match) positions.push(i);
-                                }
-                                
-                                if (positions.length > 0) {
-                                  const trimmedOld = oldText.replace(/[\n\r]+$/g, '');
-                                  console.log(`[Download] ✓ "${trimmedOld}" → "${previewText}" (${positions.length} eşleşme)`);
-                                  const diff = replaceBytes.length - oldBytes.length;
-                                  const totalDiff = diff * positions.length;
-                                  const patched = new Uint8Array(currentBytes.length + totalDiff);
-                                  let srcPos = 0, dstPos = 0;
-                                  
-                                  for (const pos of positions) {
-                                    patched.set(currentBytes.slice(srcPos, pos), dstPos);
-                                    dstPos += (pos - srcPos);
-                                    // Uzunluk prefix güncelle
-                                    if (pos > 0 && currentBytes[pos - 1] === oldBytes.length) {
-                                      patched[dstPos - 1] = replaceBytes.length;
-                                    }
-                                    patched.set(replaceBytes, dstPos);
-                                    dstPos += replaceBytes.length;
-                                    srcPos = pos + oldBytes.length;
-                                  }
-                                  patched.set(currentBytes.slice(srcPos), dstPos);
-                                  currentBytes = patched;
-                                }
-                              }
-                              
-                              downloadBlob(currentBytes);
-                            } else {
-                              console.log("[Download] No text found, downloading original");
-                              downloadBlob(rivBytes);
-                            }
+                            console.log(`[Download] ${patchCount} metin değiştirildi, boyut: ${result.length}`);
+                            downloadBlob(result);
                           } catch (err) {
                             console.error("[Download] Error:", err);
                             window.open(rivUrl, "_blank");

@@ -560,31 +560,28 @@ export default function ComponentGrid() {
                             const newRaw = encoder.encode(previewText);
                             const labelNeedle = encoder.encode("label");
                             
-                            // "label" marker'larını bul, etrafındaki değiştirilebilir stringleri topla
-                            type Patch = { pos: number; oldLen: number; newContent: Uint8Array };
-                            const patches: Patch[] = [];
-                            
-                            // Teknik/sistem stringleri (DEĞİŞTİRME)
                             const systemNames = [
                               'Artboard', 'Instance', 'State Machine', 'Layer', 'Listener',
                               'Trigger', 'Hover', 'Pointer', 'ButtonVM', 'ButtonMetni',
                               'label', 'Montserrat', 'normal', 'GlowEffect', 'ciick', 'click',
                             ];
                             
+                            // "label" marker'ı etrafındaki hedef metni bul
+                            let originalText: string | null = null;
+                            let hasNewline = false;
+                            
                             for (let i = 0; i < rivBytes.length - labelNeedle.length; i++) {
-                              // "label" string'ini bul (length-prefixed)
                               let isLabel = true;
                               for (let j = 0; j < labelNeedle.length; j++) {
                                 if (rivBytes[i + j] !== labelNeedle[j]) { isLabel = false; break; }
                               }
                               if (!isLabel) continue;
-                              // Önceki byte "label" uzunluğuyla uyumlu mu? (5, 6, 7... "label", "label ", "label 1")
+                              
                               const prefix = i > 0 ? rivBytes[i - 1] : 0;
                               if (prefix < 5 || prefix > 10) continue;
                               
                               console.log(`[Download] Found "label" marker at pos:${i}`);
                               
-                              // label'dan sonraki 300 byte'da değiştirilebilir stringleri ara
                               const searchEnd = Math.min(i + 300, rivBytes.length - 3);
                               for (let k = i + prefix; k < searchEnd; k++) {
                                 const strLen = rivBytes[k];
@@ -604,24 +601,44 @@ export default function ComponentGrid() {
                                 const trimmed = text.replace(/[\n\r\s]+$/g, '').trim();
                                 if (trimmed.length < 2) continue;
                                 
-                                // Sistem stringi mi?
                                 if (systemNames.some(s => trimmed === s)) continue;
-                                
-                                // Doğal dil metni mi? (harf içermeli)
                                 if (!/[\p{L}]/u.test(trimmed)) continue;
                                 if (!/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(trimmed)) continue;
                                 
-                                // Bu bir label değeri! Duplicate kontrolü
-                                if (patches.some(p => p.pos === k)) continue;
-                                
-                                const hasNewline = text.endsWith('\n');
-                                const newContent = hasNewline
-                                  ? new Uint8Array([...newRaw, 0x0A])
-                                  : new Uint8Array(newRaw);
-                                
-                                patches.push({ pos: k, oldLen: strLen, newContent });
-                                console.log(`[Download] Target: "${trimmed}" (pos:${k}, len:${strLen}${hasNewline ? '+\\n' : ''})`);
+                                originalText = trimmed;
+                                hasNewline = text.endsWith('\n');
+                                break;
                               }
+                              if (originalText) break;
+                            }
+                            
+                            type Patch = { pos: number; oldLen: number; newContent: Uint8Array };
+                            const patches: Patch[] = [];
+                            
+                            if (originalText) {
+                              console.log(`[Download] Target identified: "${originalText}"`);
+                              const targetNeedle = encoder.encode(originalText + (hasNewline ? '\n' : ''));
+                              const newContent = hasNewline
+                                ? new Uint8Array([...newRaw, 0x0A])
+                                : new Uint8Array(newRaw);
+                                
+                              for (let i = 0; i < rivBytes.length - targetNeedle.length; i++) {
+                                let isMatch = true;
+                                for (let j = 0; j < targetNeedle.length; j++) {
+                                  if (rivBytes[i + j] !== targetNeedle[j]) { isMatch = false; break; }
+                                }
+                                if (!isMatch) continue;
+                                
+                                const prefix = i > 0 ? rivBytes[i - 1] : 0;
+                                if (prefix === targetNeedle.length) {
+                                  if (!patches.some(p => p.pos === i - 1)) {
+                                    patches.push({ pos: i - 1, oldLen: targetNeedle.length, newContent });
+                                    console.log(`[Download] Target globally replaced at pos:${i - 1}`);
+                                  }
+                                }
+                              }
+                            } else {
+                              console.warn(`[Download] Could not identify original text near label.`);
                             }
                             
                             // Sondan başa uygula (pozisyon kayması önlenir)

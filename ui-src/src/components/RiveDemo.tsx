@@ -1,27 +1,33 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRive, Layout, Fit, Alignment, StateMachineInputType } from "@rive-app/react-webgl2";
+import {
+  useRive,
+  useViewModel,
+  useViewModelInstance,
+  useViewModelInstanceString,
+  Layout, Fit, Alignment, StateMachineInputType
+} from "@rive-app/react-webgl2";
 import { Rive } from "@rive-app/canvas";
 
 interface RiveDemoProps {
   src: string;
   artboard?: string;
   stateMachines?: string[];
-  texts?: Record<string, string>;
+  label?: string; // ← ViewModel "label" property'si üzerinden metin değiştirir
 }
 
-export default function RiveDemo({ src, artboard, stateMachines, texts }: RiveDemoProps) {
+export default function RiveDemo({ src, artboard, stateMachines, label }: RiveDemoProps) {
   const hasSM = stateMachines && stateMachines.length > 0 && !!stateMachines[0];
 
   if (hasSM) {
-    return <RivePlayer src={src} artboard={artboard} sm={stateMachines![0]} texts={texts} />;
+    return <RivePlayer src={src} artboard={artboard} sm={stateMachines![0]} label={label} />;
   }
 
-  return <ProbeAndPlay src={src} artboard={artboard} texts={texts} />;
+  return <ProbeAndPlay src={src} artboard={artboard} label={label} />;
 }
 
-function RivePlayer({ src, artboard, sm, texts }: { src: string; artboard?: string; sm: string; texts?: Record<string, string> }) {
+function RivePlayer({ src, artboard, sm, label }: { src: string; artboard?: string; sm: string; label?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clickTriggers = useRef<any[]>([]);
   const hoverInputs = useRef<any[]>([]);
@@ -34,12 +40,19 @@ function RivePlayer({ src, artboard, sm, texts }: { src: string; artboard?: stri
     stateMachines: sm,
     autoplay: true,
     layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
-    autoBind: true, // WebGL2'de ViewModel Listeners (Bubble Button) için zorunlu!
-    onLoad: () => {
-      // "Zıplayan Araba" gibi State Machine Input'larıyla çalışanlar için eski 
-      // "ultra-smart" event bağlama sistemini geri getiriyoruz.
-    }
   });
+
+  // ─── ViewModel Data Binding (Profesyonel metin değiştirme) ────
+  const viewModel = useViewModel(rive);
+  const viewModelInstance = useViewModelInstance(viewModel, { rive });
+  const labelProp = useViewModelInstanceString("label", viewModelInstance);
+
+  // Label değişince ViewModel üzerinden güncelle
+  useEffect(() => {
+    if (label && labelProp?.setValue) {
+      labelProp.setValue(label);
+    }
+  }, [label, labelProp]);
 
   useEffect(() => {
     if (rive) {
@@ -66,15 +79,15 @@ function RivePlayer({ src, artboard, sm, texts }: { src: string; artboard?: stri
         });
       }
 
-      if (texts) {
-        Object.entries(texts).forEach(([key, value]) => {
-          try {
-            rive.setTextRunValue(key, value);
-          } catch (_) {}
+      // Eski yöntem fallback: Text Run ile de dene (ViewModel yoksa belki çalışır)
+      if (label) {
+        const runNames = ["ButtonText", "label", "Label", "Text", "Title", "ButtonMetni", "TestMest", "Run"];
+        runNames.forEach(name => {
+          try { rive.setTextRunValue(name, label); } catch (_) {}
         });
       }
     }
-  }, [rive, sm, texts]);
+  }, [rive, sm, label]);
 
   const handleClick = () => {
     clickTriggers.current.forEach(trigger => {
@@ -120,7 +133,7 @@ function RivePlayer({ src, artboard, sm, texts }: { src: string; artboard?: stri
   );
 }
 
-function ProbeAndPlay({ src, artboard, texts }: { src: string; artboard?: string; texts?: Record<string, string> }) {
+function ProbeAndPlay({ src, artboard, label }: { src: string; artboard?: string; label?: string }) {
   const [detected, setDetected] = useState<{ sm: string; ab: string } | null>(null);
   const [failed, setFailed] = useState(false);
   const probing = useRef(false);
@@ -165,34 +178,43 @@ function ProbeAndPlay({ src, artboard, texts }: { src: string; artboard?: string
   }, [src, artboard]);
 
   if (detected) {
-    return <RivePlayer src={src} artboard={detected.ab || undefined} sm={detected.sm} texts={texts} />;
+    return <RivePlayer src={src} artboard={detected.ab || undefined} sm={detected.sm} label={label} />;
   }
 
   if (failed) {
-    return <FallbackPlayer src={src} artboard={artboard} texts={texts} />;
+    return <FallbackPlayer src={src} artboard={artboard} label={label} />;
   }
 
   return <div style={{ width: "100%", height: "100%", background: "transparent" }} />;
 }
 
-function FallbackPlayer({ src, artboard, texts }: { src: string; artboard?: string; texts?: Record<string, string> }) {
+function FallbackPlayer({ src, artboard, label }: { src: string; artboard?: string; label?: string }) {
   const { rive, RiveComponent } = useRive({
     src,
     artboard: artboard || undefined,
     autoplay: true,
     layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
-    autoBind: true,
   });
 
+  // ViewModel Data Binding
+  const viewModel = useViewModel(rive);
+  const viewModelInstance = useViewModelInstance(viewModel, { rive });
+  const labelProp = useViewModelInstanceString("label", viewModelInstance);
+
   useEffect(() => {
-    if (rive && texts) {
-      Object.entries(texts).forEach(([key, value]) => {
-        try {
-          rive.setTextRunValue(key, value);
-        } catch (_) {}
+    if (label && labelProp?.setValue) {
+      labelProp.setValue(label);
+    }
+  }, [label, labelProp]);
+
+  useEffect(() => {
+    if (rive && label) {
+      const runNames = ["ButtonText", "label", "Label", "Text", "Title", "ButtonMetni", "TestMest", "Run"];
+      runNames.forEach(name => {
+        try { rive.setTextRunValue(name, label); } catch (_) {}
       });
     }
-  }, [rive, texts]);
+  }, [rive, label]);
 
   return (
     <RiveComponent

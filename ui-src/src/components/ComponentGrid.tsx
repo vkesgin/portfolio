@@ -472,18 +472,9 @@ export default function ComponentGrid() {
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+                          label={previewText || undefined}
                         />
                       </div>
-                      
-                      {/* Metin Önizleme Overlay */}
-                      {previewText && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                          <div className="bg-black/70 backdrop-blur-sm px-6 py-3 rounded-xl border border-[#ff2b73]/30 shadow-[0_0_30px_rgba(255,43,115,0.2)]">
-                            <p className="text-white font-bold text-lg text-center" style={{ textShadow: '0 0 10px rgba(255,43,115,0.5)' }}>{previewText}</p>
-                            <p className="text-[10px] text-white/40 text-center mt-1">Kodunuza otomatik eklenir</p>
-                          </div>
-                        </div>
-                      )}
                       
                       {/* Tam Ekran İnceleme Butonu */}
                       <button 
@@ -628,20 +619,13 @@ export default function ComponentGrid() {
             Kapat
           </button>
           
-          <div className="relative w-full h-full max-w-[90vw] max-h-[85vh] flex items-center justify-center">
+          <div className="w-full h-full max-w-[90vw] max-h-[85vh] flex items-center justify-center">
             <RiveDemo
               src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
               artboard={selectedCfg.artboard}
               stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+              label={previewText || undefined}
             />
-            {previewText && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                <div className="bg-black/70 backdrop-blur-sm px-10 py-5 rounded-2xl border border-[#ff2b73]/30 shadow-[0_0_40px_rgba(255,43,115,0.3)]">
-                  <p className="text-white font-bold text-3xl text-center" style={{ textShadow: '0 0 15px rgba(255,43,115,0.5)' }}>{previewText}</p>
-                  <p className="text-xs text-white/40 text-center mt-2">Bu metin kodunuza otomatik eklenir</p>
-                </div>
-              </div>
-            )}
           </div>
 
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 bg-black/50 border border-white/10 rounded-full text-white/50 text-sm backdrop-blur-md">

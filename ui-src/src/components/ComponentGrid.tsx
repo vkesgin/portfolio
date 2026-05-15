@@ -163,6 +163,48 @@ export default function ComponentGrid() {
   const [fullscreenPreview, setFullscreenPreview] = useState(false);
   const [defaultLabel, setDefaultLabel] = useState("");
   const [defaultLabels, setDefaultLabels] = useState<Record<string, string>>({});
+  const [comments, setComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState("");
+  const [postingComment, setPostingComment] = useState(false);
+
+  useEffect(() => {
+    if (selectedComp) {
+      fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/comments?component_id=${selectedComp.id}`)
+        .then(res => res.json())
+        .then(data => setComments(Array.isArray(data) ? data : []))
+        .catch(() => setComments([]));
+    } else {
+      setComments([]);
+      setNewComment("");
+    }
+  }, [selectedComp]);
+
+  const handlePostComment = async () => {
+    if (!newComment.trim() || !user || !selectedComp) return;
+    setPostingComment(true);
+    try {
+      const token = localStorage.getItem("ui_token");
+      const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ component_id: selectedComp.id, content: newComment.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setNewComment("");
+        alert(data.message || "Yorum gönderildi.");
+        const r = await fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/comments?component_id=${selectedComp.id}`);
+        const c = await r.json();
+        setComments(Array.isArray(c) ? c : []);
+      } else {
+        alert(data.error || "Hata oluştu");
+      }
+    } catch {
+      alert("Hata oluştu");
+    } finally {
+      setPostingComment(false);
+    }
+  };
 
   useEffect(() => {
     async function fetchComponents() {
@@ -383,7 +425,7 @@ export default function ComponentGrid() {
                     className="w-full py-3 text-sm font-medium rounded-xl bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center gap-2"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                    Kodu Göster
+                    Projende Dene & Kodu Al
                   </button>
                 </div>
               </div>
@@ -413,9 +455,7 @@ export default function ComponentGrid() {
 
             <div className="flex-1 overflow-auto">
               {!user ? (
-                /* ═══════════════════════════════════════════════════════
-                   GİRİŞ YAPMAMIŞ KULLANICI — Sadece önizleme, download/kod YOK
-                   ═══════════════════════════════════════════════════════ */
+                /* ... (Rest remains unchanged) ... */
                 <div className="flex flex-col lg:flex-row" style={{ minHeight: "400px" }}>
                   {/* Preview — erişilebilir */}
                   <div className="lg:w-2/5 p-6 flex items-center justify-center border-b lg:border-b-0 lg:border-r border-white/5 bg-black/20">
@@ -482,7 +522,7 @@ export default function ComponentGrid() {
                     <p className="text-white/50 mb-2 max-w-sm">Bu animasyonun kaynak kodu ve <code className="text-[#ff2b73]">.riv</code> dosyası PRO üyelere özeldir.</p>
                     <p className="text-white/30 text-sm mb-8">Önizlemeyi ücretsiz görebilirsiniz.</p>
                     <a href="/ui/pricing" className="px-8 py-3 rounded-xl bg-gradient-to-r from-[#ff2b73] to-[#ff7e5f] text-white font-semibold hover:scale-105 transition-transform shadow-[0_0_20px_rgba(255,43,115,0.3)]">
-                      PRO'ya Yükselt &amp; Kilidi Aç →
+                      Sınırları Kaldır & PRO'ya Geç →
                     </a>
                   </div>
                 </div>
@@ -661,7 +701,7 @@ export default function ComponentGrid() {
                         }}
                         className="w-full py-2 text-xs text-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 border border-white/10 disabled:opacity-50"
                       >
-                        {downloading ? "Metin değiştiriliyor..." : `↓ .riv dosyasını indir ${isPro ? "" : `(Kalan: ${remainingDownloads ?? "?"}/5)`}`}
+                        {downloading ? "Dosya Hazırlanıyor..." : `↓ Ücretsiz İndir (.riv) ${isPro ? "" : `(Kalan: ${remainingDownloads ?? "?"}/5)`}`}
                       </button>
                     )}
                     {/* İndirme hatası */}
@@ -723,6 +763,73 @@ export default function ComponentGrid() {
                   </div>
                 </div>
               )}
+              {/* Yorumlar Bölümü */}
+              <div className="border-t border-white/5 bg-[#0a0a0a] p-8 shrink-0 w-full overflow-hidden">
+              <div className="max-w-4xl mx-auto">
+                <h4 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                  Geliştirici Yorumları ({comments.length})
+                </h4>
+                
+                {/* Yorum Listesi */}
+                <div className="space-y-4 mb-8">
+                  {comments.length === 0 ? (
+                    <p className="text-white/40 text-sm italic">Henüz yorum yapılmamış. İlk yorumu sen yap!</p>
+                  ) : (
+                    comments.map(c => (
+                      <div key={c.id} className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#ff2b73] to-[#ff7e5f] flex items-center justify-center text-white font-bold shrink-0">
+                          {c.full_name?.charAt(0) || '?'}
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-sm">{c.full_name}</span>
+                            {c.plan === 'PRO' && (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#ff2b73]/20 text-[#ff2b73] rounded border border-[#ff2b73]/30">PRO</span>
+                            )}
+                            <span className="text-white/30 text-xs ml-auto">
+                              {new Date(c.created_at).toLocaleDateString('tr-TR')}
+                            </span>
+                          </div>
+                          <p className="text-white/70 text-sm whitespace-pre-wrap">{c.content}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Yorum Yapma */}
+                {user ? (
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <textarea
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Bu animasyon hakkında ne düşünüyorsun? (Örn: React Native'de harika çalışıyor!)"
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#ff2b73]/50 transition-colors resize-none h-24"
+                      ></textarea>
+                      <div className="flex justify-between items-center mt-2">
+                        <p className="text-[11px] text-white/30">Yorumunuz yönetici onayından sonra yayınlanacaktır.</p>
+                        <button
+                          onClick={handlePostComment}
+                          disabled={postingComment || !newComment.trim()}
+                          className="px-6 py-2 bg-white text-black font-semibold rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+                        >
+                          {postingComment ? "Gönderiliyor..." : "Yorum Yap"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-6 rounded-xl border border-white/10 bg-black/40 text-center">
+                    <p className="text-white/60 text-sm mb-3">Yorum yapabilmek için ücretsiz üye olmalısınız.</p>
+                    <a href="/ui/login" className="px-5 py-2 inline-block bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg transition-colors border border-white/10">
+                      Giriş Yap / Kayıt Ol
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
             </div>
           </div>
         </div>

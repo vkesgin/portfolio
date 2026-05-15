@@ -185,7 +185,7 @@ export default function TemplateGrid() {
                   <h4 className="text-xl font-bold text-white mb-2">Bu Şablon PRO Üyelere Özel</h4>
                   <p className="text-white/60 text-sm mb-6 max-w-xs">Tüm premium şablonlara ve kaynak kodlarına erişmek için hesabınızı yükseltin.</p>
                   <Link href="/pricing" className="px-6 py-3 rounded-xl bg-white text-black font-bold text-sm hover:bg-white/90 transition-all hover:scale-105 active:scale-95">
-                    PRO'ya Geç
+                    Sınırları Kaldır & PRO'ya Geç
                   </Link>
                 </div>
               )}
@@ -213,7 +213,7 @@ export default function TemplateGrid() {
                       onClick={() => handleDownloadRiv(tpl.id, tpl.image_url)}
                       className="w-full py-3 text-sm font-bold rounded-xl bg-white/5 hover:bg-white/10 transition-colors flex items-center justify-center gap-2 border border-white/10 text-white/80 disabled:opacity-50"
                     >
-                      {downloadingId === tpl.id ? "İşleniyor..." : "↓ .riv Dosyasını İndir"}
+                      {downloadingId === tpl.id ? "Hazırlanıyor..." : "Ücretsiz İndir (.riv)"}
                     </button>
                     <button
                       onClick={() => handleCopy(tpl.id, tpl.description)}

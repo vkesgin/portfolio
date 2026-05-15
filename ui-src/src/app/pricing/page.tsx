@@ -26,6 +26,15 @@ export default function PricingPage() {
   }, []);
 
   const isPro = user?.plan === "PRO";
+  let remainingDays = 0;
+  if (isPro && user?.subscription_end) {
+    const end = new Date(user.subscription_end);
+    const now = new Date();
+    const diff = end.getTime() - now.getTime();
+    if (diff > 0) {
+      remainingDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    }
+  }
   
   // BURAYA AYLIK VE YILLIK LEMON SQUEEZY LİNKLERİNİ GİRECEKSİN (Sondaki parametreyi silmeden)
   const monthlyLink = "https://velikesgin.lemonsqueezy.com/checkout/buy/650e5f10-f6b0-42ed-a22d-53e3cf47cde9";
@@ -160,8 +169,15 @@ export default function PricingPage() {
 
             {isPro ? (
               <div className="space-y-3 w-full mt-auto">
-                <div className="w-full py-3 rounded-full bg-[#ff2b73]/10 text-[#ff2b73] font-semibold border border-[#ff2b73]/20 flex items-center justify-center gap-2 cursor-default">
-                  <span className="text-lg">👑</span> Şu Anda PRO Üyesiniz
+                <div className="w-full py-3 rounded-xl bg-[#ff2b73]/10 text-[#ff2b73] font-semibold border border-[#ff2b73]/20 flex flex-col items-center justify-center gap-1 cursor-default">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">👑</span> Şu Anda PRO Üyesiniz
+                  </div>
+                  {remainingDays > 0 && (
+                    <span className="text-xs font-medium text-[#ff2b73]/80">
+                      (Kalan süre: {remainingDays} gün)
+                    </span>
+                  )}
                 </div>
                 <a href={lsCheckoutUrl} className="block text-center w-full py-3 rounded-full bg-white/5 hover:bg-white/10 text-white font-medium transition-colors border border-white/10 text-sm">
                   {billingCycle === "monthly" ? "+ 1 Ay Uzat" : "+ 1 Yıl Uzat"}

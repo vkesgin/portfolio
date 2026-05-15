@@ -10,6 +10,7 @@ interface User {
   full_name: string;
   plan: string;
   subscription_end: string | null;
+  remaining_downloads?: number;
 }
 
 export default function DashboardPage() {
@@ -18,13 +19,18 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   // Profile Edit States
-  const [isEditing, setIsEditing] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [fullName, setFullName] = useState("");
+  const [profileMsg, setProfileMsg] = useState({ text: "", type: "" });
+  const [updatingProfile, setUpdatingProfile] = useState(false);
+
+  // Password Change States
+  const [isEditingPassword, setIsEditingPassword] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [updateMsg, setUpdateMsg] = useState({ text: "", type: "" });
-  const [updating, setUpdating] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState({ text: "", type: "" });
+  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -67,39 +73,62 @@ export default function DashboardPage() {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    setUpdateMsg({ text: "", type: "" });
-    
-    if (newPassword && newPassword !== confirmNewPassword) {
-      setUpdateMsg({ text: "Yeni şifreler birbiriyle eşleşmiyor.", type: "error" });
-      return;
-    }
-    
-    setUpdating(true);
+    setProfileMsg({ text: "", type: "" });
+    setUpdatingProfile(true);
     try {
       const token = localStorage.getItem("ui_token");
       const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/auth/me", {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ 
-          full_name: fullName,
-          currentPassword: currentPassword || undefined,
-          newPassword: newPassword || undefined
-        })
+        body: JSON.stringify({ full_name: fullName })
       });
       
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Güncelleme başarısız");
       
       setUser({ ...user!, full_name: data.user.full_name });
-      setUpdateMsg({ text: "Profil başarıyla güncellendi.", type: "success" });
+      setProfileMsg({ text: "Profil başarıyla güncellendi.", type: "success" });
+      setTimeout(() => setIsEditingProfile(false), 2000);
+    } catch (err: any) {
+      setProfileMsg({ text: err.message, type: "error" });
+    } finally {
+      setUpdatingProfile(false);
+    }
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg({ text: "", type: "" });
+    
+    if (newPassword !== confirmNewPassword) {
+      setPasswordMsg({ text: "Yeni şifreler birbiriyle eşleşmiyor.", type: "error" });
+      return;
+    }
+    
+    setUpdatingPassword(true);
+    try {
+      const token = localStorage.getItem("ui_token");
+      const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/auth/me", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ 
+          currentPassword,
+          newPassword
+        })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Şifre değiştirme başarısız");
+      
+      setPasswordMsg({ text: "Şifreniz başarıyla değiştirildi.", type: "success" });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmNewPassword("");
-      setIsEditing(false);
+      setTimeout(() => setIsEditingPassword(false), 2000);
     } catch (err: any) {
-      setUpdateMsg({ text: err.message, type: "error" });
+      setPasswordMsg({ text: err.message, type: "error" });
     } finally {
-      setUpdating(false);
+      setUpdatingPassword(false);
     }
   };
 
@@ -175,21 +204,36 @@ export default function DashboardPage() {
           <div className="p-8 rounded-3xl border border-white/10 bg-white/5 flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-medium text-white/50">Hesap Bilgileri</h3>
-              <button 
-                onClick={() => setIsEditing(!isEditing)} 
-                className="text-xs px-3 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
-              >
-                {isEditing ? "İptal" : "Düzenle"}
-              </button>
+              {!isEditingProfile && !isEditingPassword && (
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setIsEditingProfile(true)} 
+                    className="text-xs px-3 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    Profili Düzenle
+                  </button>
+                  <button 
+                    onClick={() => setIsEditingPassword(true)} 
+                    className="text-xs px-3 py-1 rounded bg-white/10 hover:bg-white/20 transition-colors"
+                  >
+                    Şifre Değiştir
+                  </button>
+                </div>
+              )}
             </div>
             
-            {updateMsg.text && (
-              <div className={`mb-4 p-3 rounded-lg text-sm border ${updateMsg.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-green-500/10 border-green-500/20 text-green-400'}`}>
-                {updateMsg.text}
+            {profileMsg.text && isEditingProfile && (
+              <div className={`mb-4 p-3 rounded-lg text-sm border ${profileMsg.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-green-500/10 border-green-500/20 text-green-400'}`}>
+                {profileMsg.text}
+              </div>
+            )}
+            {passwordMsg.text && isEditingPassword && (
+              <div className={`mb-4 p-3 rounded-lg text-sm border ${passwordMsg.type === 'error' ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-green-500/10 border-green-500/20 text-green-400'}`}>
+                {passwordMsg.text}
               </div>
             )}
 
-            {!isEditing ? (
+            {!isEditingProfile && !isEditingPassword && (
               <div className="space-y-4">
                 <div>
                   <div className="text-xs text-white/40 mb-1">E-posta</div>
@@ -200,7 +244,9 @@ export default function DashboardPage() {
                   <div className="font-medium text-sm">{user.full_name || '-'}</div>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {isEditingProfile && (
               <form onSubmit={handleUpdateProfile} className="space-y-4">
                 <div>
                   <label className="text-xs text-white/40 mb-1 block">E-posta (Değiştirilemez)</label>
@@ -210,28 +256,39 @@ export default function DashboardPage() {
                   <label className="text-xs text-white/40 mb-1 block">Ad Soyad</label>
                   <input type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 focus:border-[#ff2b73] outline-none text-white text-sm" />
                 </div>
-                
-                <div className="pt-4 border-t border-white/10">
-                  <h4 className="text-xs font-bold text-white/70 mb-3">Şifre Değiştir (İsteğe Bağlı)</h4>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs text-white/40 mb-1 block">Mevcut Şifre</label>
-                      <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 focus:border-[#ff2b73] outline-none text-white text-sm" placeholder="••••••••" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-white/40 mb-1 block">Yeni Şifre</label>
-                      <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 focus:border-[#ff2b73] outline-none text-white text-sm" placeholder="••••••••" minLength={6} />
-                    </div>
-                    <div>
-                      <label className="text-xs text-white/40 mb-1 block">Yeni Şifre (Tekrar)</label>
-                      <input type="password" value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 focus:border-[#ff2b73] outline-none text-white text-sm" placeholder="••••••••" minLength={6} />
-                    </div>
-                  </div>
+                <div className="flex gap-2 mt-2">
+                  <button type="submit" disabled={updatingProfile} className="flex-1 py-2 rounded-lg bg-[#ff2b73] hover:bg-[#ff2b73]/90 text-white font-bold text-sm transition-colors disabled:opacity-50">
+                    {updatingProfile ? "Güncelleniyor..." : "Kaydet"}
+                  </button>
+                  <button type="button" onClick={() => { setIsEditingProfile(false); setProfileMsg({ text: "", type: "" }); setFullName(user.full_name || ""); }} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-colors">
+                    İptal
+                  </button>
                 </div>
+              </form>
+            )}
 
-                <button type="submit" disabled={updating} className="w-full mt-2 py-2 rounded-lg bg-[#ff2b73] hover:bg-[#ff2b73]/90 text-white font-bold text-sm transition-colors disabled:opacity-50">
-                  {updating ? "Güncelleniyor..." : "Kaydet"}
-                </button>
+            {isEditingPassword && (
+              <form onSubmit={handleUpdatePassword} className="space-y-4">
+                <div>
+                  <label className="text-xs text-white/40 mb-1 block">Mevcut Şifre</label>
+                  <input type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 focus:border-[#ff2b73] outline-none text-white text-sm" placeholder="••••••••" />
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 mb-1 block">Yeni Şifre</label>
+                  <input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 focus:border-[#ff2b73] outline-none text-white text-sm" placeholder="••••••••" minLength={6} />
+                </div>
+                <div>
+                  <label className="text-xs text-white/40 mb-1 block">Yeni Şifre (Tekrar)</label>
+                  <input type="password" required value={confirmNewPassword} onChange={(e) => setConfirmNewPassword(e.target.value)} className="w-full px-3 py-2 rounded-lg bg-black/50 border border-white/10 focus:border-[#ff2b73] outline-none text-white text-sm" placeholder="••••••••" minLength={6} />
+                </div>
+                <div className="flex gap-2 mt-2">
+                  <button type="submit" disabled={updatingPassword} className="flex-1 py-2 rounded-lg bg-[#ff2b73] hover:bg-[#ff2b73]/90 text-white font-bold text-sm transition-colors disabled:opacity-50">
+                    {updatingPassword ? "Şifreyi Değiştir..." : "Şifreyi Değiştir"}
+                  </button>
+                  <button type="button" onClick={() => { setIsEditingPassword(false); setPasswordMsg({ text: "", type: "" }); setCurrentPassword(""); setNewPassword(""); setConfirmNewPassword(""); }} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-sm transition-colors">
+                    İptal
+                  </button>
+                </div>
               </form>
             )}
           </div>

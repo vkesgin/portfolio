@@ -141,9 +141,15 @@ async function verifyUiJWT(token, secret) {
   } catch { return null; }
 }
 async function uiAuth(request, env) {
-  const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
+  const authHeader = request.headers.get('Authorization') || '';
+  if (!authHeader.toLowerCase().startsWith('bearer ')) return null;
+  const token = authHeader.split(' ')[1];
   if (!token) return null;
-  return verifyUiJWT(token, env.JWT_SECRET || 'secret');
+  try {
+    return await verifyUiJWT(token, env.JWT_SECRET || 'secret');
+  } catch (e) {
+    return null;
+  }
 }
 
 export default {
@@ -917,14 +923,14 @@ if (path.startsWith('/api/kpss')) {
 
     if (path === '/api/ui/comments' && method === 'POST') {
       const authData = await uiAuth(request, env);
-      if (!authData) return json({ error: 'Yetkisiz' }, 401, origin);
+      if (!authData) return json({ error: 'Yetkisiz (Lütfen tekrar giriş yapın)' }, 401, origin);
       
       const { component_id, content } = await request.json().catch(() => ({}));
       if (!component_id || !content) return json({ error: 'Eksik veri' }, 400, origin);
       
-      // Adminler otomatik onayli olabilir (vkesgin38@gmail.com)
-      const user = await env.DB.prepare("SELECT email FROM ui_users WHERE id=?").bind(authData.userId).first();
-      const is_approved = user?.email === 'vkesgin38@gmail.com' ? 1 : 0;
+      // Admin kontrolü: Sadece vkesgin38@gmail.com direkt yayınlar
+      const is_admin = authData.email === 'vkesgin38@gmail.com';
+      const is_approved = is_admin ? 1 : 0;
 
       await env.DB.prepare(
         "INSERT INTO ui_comments (component_id, user_id, content, is_approved) VALUES (?, ?, ?, ?)"
@@ -933,20 +939,23 @@ if (path.startsWith('/api/kpss')) {
       return json({ message: is_approved ? 'Yorum eklendi' : 'Yorum onay bekliyor' }, 200, origin);
     }
 
-    if (cleanPath.startsWith('/api/admin/comments') && method === 'GET') {
-      // Sadece admin
-      // Not: Admin kontrolü için user email kontrol edilebilir
+    if (cleanPath === '/api/admin/comments' && method === 'GET') {
+      const authData = await uiAuth(request, env);
+      if (!authData || authData.email !== 'vkesgin38@gmail.com') return json({ error: 'Yetkisiz' }, 401, origin);
+
       const { results } = await env.DB.prepare(`
-        SELECT c.id, c.content, c.is_approved, c.created_at, u.full_name, u.email, p.title as component_title
+        SELECT c.id, c.content, c.is_approved, c.created_at, u.full_name, u.email, c.component_id
         FROM ui_comments c
         JOIN ui_users u ON c.user_id = u.id
-        JOIN projects p ON c.component_id = p.id
-        ORDER BY c.created_at DESC
+        ORDER BY c.is_approved ASC, c.created_at DESC
       `).all();
       return json(results, 200, origin);
     }
 
     if (cleanPath.match(/^\/api\/admin\/comments\/\d+$/) && method === 'PUT') {
+      const authData = await uiAuth(request, env);
+      if (!authData || authData.email !== 'vkesgin38@gmail.com') return json({ error: 'Yetkisiz' }, 401, origin);
+
       const id = cleanPath.split('/').pop();
       const { is_approved } = await request.json().catch(() => ({}));
       await env.DB.prepare("UPDATE ui_comments SET is_approved = ? WHERE id = ?").bind(is_approved ? 1 : 0, id).run();
@@ -954,6 +963,9 @@ if (path.startsWith('/api/kpss')) {
     }
     
     if (cleanPath.match(/^\/api\/admin\/comments\/\d+$/) && method === 'DELETE') {
+      const authData = await uiAuth(request, env);
+      if (!authData || authData.email !== 'vkesgin38@gmail.com') return json({ error: 'Yetkisiz' }, 401, origin);
+
       const id = cleanPath.split('/').pop();
       await env.DB.prepare("DELETE FROM ui_comments WHERE id = ?").bind(id).run();
       return json({ message: 'Silindi' }, 200, origin);

@@ -311,7 +311,109 @@ export default function DashboardPage() {
             </Link>
           </div>
         )}
+
+        {/* ADMIN MODERATION PANEL */}
+        {user.email === 'vkesgin38@gmail.com' && <AdminModerationPanel />}
       </div>
     </main>
+  );
+}
+
+function AdminModerationPanel() {
+  const [comments, setComments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchComments = async () => {
+    const token = localStorage.getItem("ui_token");
+    try {
+      const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/api/admin/comments", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setComments(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchComments();
+  }, []);
+
+  const handleApprove = async (id: number) => {
+    const token = localStorage.getItem("ui_token");
+    try {
+      await fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/admin/comments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ is_approved: 1 })
+      });
+      fetchComments();
+    } catch (e) {}
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Bu yorumu silmek istediğine emin misin?')) return;
+    const token = localStorage.getItem("ui_token");
+    try {
+      await fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/admin/comments/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      fetchComments();
+    } catch (e) {}
+  };
+
+  return (
+    <div className="mt-12 p-8 rounded-3xl border border-blue-500/30 bg-blue-500/5">
+      <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+        Yorum Moderasyon Paneli (Sadece Sen Görüyorsun)
+      </h3>
+      
+      {loading ? (
+        <p className="text-white/40">Yükleniyor...</p>
+      ) : comments.length === 0 ? (
+        <p className="text-white/40 italic">Onay bekleyen veya mevcut yorum bulunmuyor.</p>
+      ) : (
+        <div className="space-y-4">
+          {comments.map((c: any) => (
+            <div key={c.id} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between gap-4 ${c.is_approved ? 'border-white/5 bg-white/[0.02]' : 'border-blue-500/20 bg-blue-500/10'}`}>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-bold text-sm text-white">{c.full_name}</span>
+                  <span className="text-xs text-white/40">({c.email})</span>
+                  {!c.is_approved && (
+                    <span className="px-2 py-0.5 rounded bg-blue-500 text-[10px] font-bold text-white">ONAY BEKLİYOR</span>
+                  )}
+                </div>
+                <p className="text-sm text-white/70 italic mb-2">"{c.content}"</p>
+                <div className="text-[10px] text-white/30">
+                  Bileşen ID: {c.component_id} • {new Date(c.created_at).toLocaleString('tr-TR')}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {!c.is_approved && (
+                  <button
+                    onClick={() => handleApprove(c.id)}
+                    className="px-4 py-2 rounded-lg bg-green-500/20 hover:bg-green-500/40 text-green-400 text-xs font-bold transition-colors border border-green-500/30"
+                  >
+                    Onayla
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(c.id)}
+                  className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-400 text-xs font-bold transition-colors border border-red-500/30"
+                >
+                  Sil
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

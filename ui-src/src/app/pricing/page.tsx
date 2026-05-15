@@ -28,8 +28,8 @@ export default function PricingPage() {
   const isPro = user?.plan === "PRO";
   
   // BURAYA AYLIK VE YILLIK LEMON SQUEEZY LİNKLERİNİ GİRECEKSİN (Sondaki parametreyi silmeden)
-  const monthlyLink = "https://velikesgin.lemonsqueezy.com/checkout/buy/4862289b-3640-4a46-aaee-151a0c52caad";
-  const yearlyLink = "https://velikesgin.lemonsqueezy.com/checkout/buy/4178f6ee-876c-41ca-8537-bc51e38a4e2f";
+  const monthlyLink = "https://velikesgin.lemonsqueezy.com/checkout/buy/650e5f10-f6b0-42ed-a22d-53e3cf47cde9";
+  const yearlyLink = "https://velikesgin.lemonsqueezy.com/checkout/buy/4b4d4456-0470-449e-9221-27fc3c79b13a";
   
   const currentBaseUrl = billingCycle === "monthly" ? monthlyLink : yearlyLink;
   const redirectUrl = encodeURIComponent("https://velikesgin.com/ui/dashboard");

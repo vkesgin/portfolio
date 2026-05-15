@@ -199,7 +199,7 @@ export default function ComponentGrid() {
   }, []);
 
   const isPro = user?.plan === "PRO";
-  const lsCheckoutUrl = user ? `https://velikesgin.lemonsqueezy.com/checkout/buy/4862289b-3640-4a46-aaee-151a0c52caad?checkout[custom][user_id]=${user.id}` : "/ui/login";
+  const lsCheckoutUrl = user ? `https://velikesgin.lemonsqueezy.com/checkout/buy/650e5f10-f6b0-42ed-a22d-53e3cf47cde9?checkout[custom][user_id]=${user.id}` : "/ui/login";
 
   // İndirme hakkı kontrolü yaparak kodu kopyala veya .riv indir
   const trackDownload = async (componentId: string, type: "code" | "riv"): Promise<boolean> => {

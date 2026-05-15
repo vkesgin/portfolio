@@ -159,9 +159,14 @@ export default function PricingPage() {
             </ul>
 
             {isPro ? (
-              <button disabled className="w-full py-4 rounded-full bg-[#ff2b73]/50 text-white font-semibold cursor-not-allowed">
-                Şu Anda PRO Üyesiniz
-              </button>
+              <div className="space-y-3 w-full mt-auto">
+                <div className="w-full py-3 rounded-full bg-[#ff2b73]/10 text-[#ff2b73] font-semibold border border-[#ff2b73]/20 flex items-center justify-center gap-2 cursor-default">
+                  <span className="text-lg">👑</span> Şu Anda PRO Üyesiniz
+                </div>
+                <a href={lsCheckoutUrl} className="block text-center w-full py-3 rounded-full bg-white/5 hover:bg-white/10 text-white font-medium transition-colors border border-white/10 text-sm">
+                  {billingCycle === "monthly" ? "+ 1 Ay Uzat" : "+ 1 Yıl Uzat"}
+                </a>
+              </div>
             ) : (
               <a href={lsCheckoutUrl} className="block text-center w-full py-4 rounded-full bg-[#ff2b73] hover:bg-[#ff2b73]/90 text-white font-semibold transition-colors shadow-[0_0_20px_rgba(255,43,115,0.4)]">
                 PRO'ya Geç

@@ -920,6 +920,41 @@ if (path.startsWith('/api/kpss')) {
       return json({ user: { ...uiUser, remaining_downloads } }, 200, origin);
     }
 
+    // 4.1 Update Me (Profile & Password)
+    if (path === '/api/ui/auth/me' && method === 'PUT') {
+      const authData = await uiAuth(request, env);
+      if (!authData) return json({ error: 'Yetkisiz' }, 401, origin);
+      
+      const { full_name, currentPassword, newPassword } = await request.json().catch(() => ({}));
+      
+      let query = 'UPDATE ui_users SET ';
+      const updates = [];
+      const params = [];
+      
+      if (full_name !== undefined) {
+        updates.push('full_name=?');
+        params.push(full_name);
+      }
+      
+      if (newPassword) {
+        const user = await env.DB.prepare("SELECT password FROM ui_users WHERE id=?").bind(authData.userId).first();
+        if (!user || user.password !== currentPassword) {
+           return json({ error: 'Mevcut şifreniz hatalı' }, 400, origin);
+        }
+        updates.push('password=?');
+        params.push(newPassword);
+      }
+      
+      if (updates.length > 0) {
+        query += updates.join(', ') + ' WHERE id=?';
+        params.push(authData.userId);
+        await env.DB.prepare(query).bind(...params).run();
+      }
+      
+      const updatedUser = await env.DB.prepare("SELECT id, email, full_name, plan, subscription_end FROM ui_users WHERE id=?").bind(authData.userId).first();
+      return json({ ok: true, user: updatedUser }, 200, origin);
+    }
+
     // 4.5 Download endpoint — indirme hakkı kontrolü ve sayaç
     if (path === '/api/ui/download' && method === 'POST') {
       const authData = await uiAuth(request, env);
@@ -986,7 +1021,24 @@ if (path.startsWith('/api/kpss')) {
           const endsAt = payload.data.attributes.renews_at || payload.data.attributes.ends_at;
           
           if (status === 'active') {
-            await env.DB.prepare("UPDATE ui_users SET plan='PRO', subscription_end=? WHERE id=?").bind(endsAt, userId).run();
+            const user = await env.DB.prepare("SELECT subscription_end FROM ui_users WHERE id=?").bind(userId).first();
+            let finalEndsAt = endsAt;
+
+            if (eventName === 'subscription_created' && user && user.subscription_end) {
+              const currentEnd = new Date(user.subscription_end);
+              const now = new Date();
+              if (currentEnd > now) {
+                const newEnd = new Date(endsAt);
+                const addedMs = newEnd.getTime() - payload.data.attributes.created_at ? new Date(payload.data.attributes.created_at).getTime() : now.getTime();
+                // To be safer, just calculate the difference between the given endsAt and now
+                const durationMs = newEnd.getTime() - now.getTime();
+                if (durationMs > 0) {
+                  finalEndsAt = new Date(currentEnd.getTime() + durationMs).toISOString();
+                }
+              }
+            }
+            
+            await env.DB.prepare("UPDATE ui_users SET plan='PRO', subscription_end=? WHERE id=?").bind(finalEndsAt, userId).run();
           } else if (status === 'expired' || status === 'canceled' || status === 'unpaid') {
             await env.DB.prepare("UPDATE ui_users SET plan='FREE' WHERE id=?").bind(userId).run();
           }

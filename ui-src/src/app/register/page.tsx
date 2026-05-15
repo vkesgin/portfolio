@@ -9,6 +9,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -16,6 +17,12 @@ export default function RegisterPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
+
+    if (password !== confirmPassword) {
+      setError("Şifreler birbiriyle eşleşmiyor.");
+      setLoading(false);
+      return;
+    }
 
     try {
       const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/auth/register", {
@@ -90,6 +97,18 @@ export default function RegisterPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl bg-black/50 border border-white/10 text-white focus:outline-none focus:border-[#ff2b73] transition-colors"
+              placeholder="••••••••"
+              minLength={6}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-white/70 mb-1">Şifreyi Tekrar Girin</label>
+            <input
+              type="password"
+              required
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-black/50 border border-white/10 text-white focus:outline-none focus:border-[#ff2b73] transition-colors"
               placeholder="••••••••"
               minLength={6}

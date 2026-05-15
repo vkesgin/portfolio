@@ -9,26 +9,129 @@ import {
   Layout, Fit, Alignment, StateMachineInputType
 } from "@rive-app/react-webgl2";
 import { Rive } from "@rive-app/canvas";
+import { applyTextPatch, findOrigTextInBinary } from "../utils/rivePatch";
+
+// ═══════════════════════════════════════════════════════════════════════
+// usePatchedRiveSrc — .riv dosyasını bellekte patch'ler
+// Returns { src, loading } — loading=true iken RivePlayer render edilmemeli
+// çünkü useRive sadece ilk src'yi yükler, sonradan değişen src'yi görmez.
+// ═══════════════════════════════════════════════════════════════════════
+function usePatchedRiveSrc(src: string, labels?: Record<string, string>, fallbackDefaults?: Record<string, string>) {
+  const hasLabels = labels && Object.keys(labels).length > 0;
+  const [state, setState] = useState<{ patchedSrc: string; loading: boolean }>({
+    patchedSrc: src,
+    loading: !!hasLabels, // labels varsa loading başla
+  });
+
+  const labelsStr = labels ? JSON.stringify(labels) : "";
+
+  useEffect(() => {
+    if (!labelsStr || labelsStr === "{}") {
+      setState({ patchedSrc: src, loading: false });
+      return;
+    }
+
+    // Labels var → loading=true, patch bitene kadar useRive başlatılmayacak
+    setState(prev => ({ ...prev, loading: true }));
+
+    const parsedLabels = JSON.parse(labelsStr);
+    let isMounted = true;
+    let urlToRevoke = "";
+
+    async function patchRive() {
+      try {
+        const resp = await fetch(src);
+        const buf = await resp.arrayBuffer();
+        let result: Uint8Array = new Uint8Array(buf);
+        let patchedCount = 0;
+
+        for (const [propName, value] of Object.entries(parsedLabels) as [string, string][]) {
+          if (!value) continue;
+
+          let origText = fallbackDefaults?.[propName];
+          if (!origText && (propName === 'label' || propName === 'label ')) {
+            origText = fallbackDefaults?.['label'] || fallbackDefaults?.['label '];
+          }
+          if (!origText) {
+            origText = findOrigTextInBinary(result, propName);
+          }
+
+
+
+          if (origText && origText !== value) {
+            result = applyTextPatch(result, origText, value);
+            patchedCount++;
+          } else if (!origText) {
+            console.warn(`[RiveDemo] Orig text not found for prop: ${propName}`);
+          }
+        }
+
+        if (patchedCount > 0 && isMounted) {
+          const blob = new Blob([result.buffer as ArrayBuffer], { type: "application/octet-stream" });
+          urlToRevoke = URL.createObjectURL(blob);
+          setState({ patchedSrc: urlToRevoke, loading: false });
+        } else if (isMounted) {
+          setState({ patchedSrc: src, loading: false });
+        }
+      } catch (err) {
+        console.error("Rive memory patching failed:", err);
+        if (isMounted) setState({ patchedSrc: src, loading: false });
+      }
+    }
+
+    patchRive();
+
+    return () => {
+      isMounted = false;
+      if (urlToRevoke) {
+        URL.revokeObjectURL(urlToRevoke);
+      }
+    };
+  }, [src, labelsStr]);
+
+  return state;
+}
 
 interface RiveDemoProps {
   src: string;
   artboard?: string;
   stateMachines?: string[];
-  label?: string;
-  onDefaultLabel?: (label: string) => void; // Orijinal label'ı raporla
+  label?: string;                                        // Geriye uyumlu tek label
+  labels?: Record<string, string>;                       // Çoklu label desteği
+  fallbackDefaults?: Record<string, string>;             // Patch icin orijinal text fallbackleri
+  onDefaultLabel?: (label: string) => void;
+  onDefaultLabels?: (labels: Record<string, string>) => void;  // Tüm default'ları raporla
+  viewModelName?: string;                                // Belirli bir ViewModel adı belirtmek için
 }
 
-export default function RiveDemo({ src, artboard, stateMachines, label, onDefaultLabel }: RiveDemoProps) {
+export default function RiveDemo({ src, artboard, stateMachines, label, labels, fallbackDefaults, onDefaultLabel, onDefaultLabels, viewModelName }: RiveDemoProps) {
   const hasSM = stateMachines && stateMachines.length > 0 && !!stateMachines[0];
 
+  // Geriye uyumlu: tek label'i labels'a merge et
+  const mergedLabels = { ...labels, ...(label ? { label: label } : {}) };
+
   if (hasSM) {
-    return <RivePlayer src={src} artboard={artboard} sm={stateMachines![0]} label={label} onDefaultLabel={onDefaultLabel} />;
+    return <RivePlayerWrapper src={src} artboard={artboard} sm={stateMachines![0]} labels={mergedLabels} fallbackDefaults={fallbackDefaults} onDefaultLabel={onDefaultLabel} onDefaultLabels={onDefaultLabels} viewModelName={viewModelName} />;
   }
 
-  return <ProbeAndPlay src={src} artboard={artboard} label={label} onDefaultLabel={onDefaultLabel} />;
+  return <ProbeAndPlay src={src} artboard={artboard} labels={mergedLabels} fallbackDefaults={fallbackDefaults} onDefaultLabel={onDefaultLabel} onDefaultLabels={onDefaultLabels} viewModelName={viewModelName} />;
 }
 
-function RivePlayer({ src, artboard, sm, label, onDefaultLabel }: { src: string; artboard?: string; sm: string; label?: string; onDefaultLabel?: (label: string) => void }) {
+// ═══════════════════════════════════════════════════════════════════════
+// RivePlayerWrapper — Patch bitene kadar bekler, sonra RivePlayerInner'ı mount eder
+// Bu sayede useRive HER ZAMAN doğru (patch'lenmiş) src ile başlar.
+// ═══════════════════════════════════════════════════════════════════════
+function RivePlayerWrapper(props: { src: string; artboard?: string; sm: string; labels?: Record<string, string>; fallbackDefaults?: Record<string, string>; onDefaultLabel?: (label: string) => void; onDefaultLabels?: (labels: Record<string, string>) => void; viewModelName?: string; }) {
+  const { patchedSrc, loading } = usePatchedRiveSrc(props.src, props.labels, props.fallbackDefaults);
+
+  if (loading) {
+    return <div style={{ width: "100%", height: "100%", background: "transparent" }} />;
+  }
+
+  return <RivePlayerInner {...props} resolvedSrc={patchedSrc} />;
+}
+
+function RivePlayerInner({ resolvedSrc, artboard, sm, labels, onDefaultLabel, onDefaultLabels, viewModelName }: { resolvedSrc: string; artboard?: string; sm: string; labels?: Record<string, string>; fallbackDefaults?: Record<string, string>; onDefaultLabel?: (label: string) => void; onDefaultLabels?: (labels: Record<string, string>) => void; viewModelName?: string; src?: string; }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const clickTriggers = useRef<any[]>([]);
   const hoverInputs = useRef<any[]>([]);
@@ -37,36 +140,48 @@ function RivePlayer({ src, artboard, sm, label, onDefaultLabel }: { src: string;
   const reportedDefault = useRef(false);
 
   const { rive, RiveComponent } = useRive({
-    src,
+    src: resolvedSrc,
     artboard: artboard || undefined,
     stateMachines: sm,
     autoplay: true,
     layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
   });
 
-  // ─── ViewModel Data Binding ────
-  const viewModel = useViewModel(rive);
+  // ─── ViewModel Data Binding (geriye uyumlu "label" + "label ") ────
+  const viewModel = useViewModel(rive, viewModelName ? { name: viewModelName } : undefined);
   const viewModelInstance = useViewModelInstance(viewModel, { rive });
   const labelProp = useViewModelInstanceString("label", viewModelInstance);
+  const labelPropAlt = useViewModelInstanceString("label ", viewModelInstance);
+  const activeLabelProp = labelProp?.value ? labelProp : labelPropAlt;
 
   // Orijinal label'ı raporla (bir kez)
   useEffect(() => {
-    if (labelProp?.value && !reportedDefault.current && onDefaultLabel) {
+    if (activeLabelProp?.value && !reportedDefault.current && onDefaultLabel) {
       reportedDefault.current = true;
-      onDefaultLabel(labelProp.value);
+      onDefaultLabel(activeLabelProp.value);
     }
-  }, [labelProp?.value, onDefaultLabel]);
+  }, [activeLabelProp?.value, onDefaultLabel]);
 
-  // Label değişince ViewModel üzerinden güncelle
+  // Default label'lari raporla
   useEffect(() => {
-    if (label && labelProp?.setValue) {
-      labelProp.setValue(label);
-    }
-  }, [label, labelProp]);
+    if (!viewModelInstance || !onDefaultLabels || reportedDefault.current) return;
+    try {
+      const inst = viewModelInstance as any;
+      const defaults: Record<string, string> = {};
+      for (const name of ['label', 'label ']) {
+        try {
+          const prop = inst?.string?.(name);
+          if (prop?.value) defaults[name] = prop.value;
+        } catch (_) {}
+      }
+      if (Object.keys(defaults).length > 0) {
+        onDefaultLabels(defaults);
+      }
+    } catch (_) {}
+  }, [viewModelInstance, onDefaultLabels]);
 
   useEffect(() => {
     if (rive) {
-      // Inputları topla
       const inputs = rive.stateMachineInputs(sm);
       if (inputs) {
         clickTriggers.current = [];
@@ -88,16 +203,8 @@ function RivePlayer({ src, artboard, sm, label, onDefaultLabel }: { src: string;
           }
         });
       }
-
-      // Eski yöntem fallback: Text Run ile de dene (ViewModel yoksa belki çalışır)
-      if (label) {
-        const runNames = ["ButtonText", "label", "Label", "Text", "Title", "ButtonMetni", "TestMest", "Run"];
-        runNames.forEach(name => {
-          try { rive.setTextRunValue(name, label); } catch (_) {}
-        });
-      }
     }
-  }, [rive, sm, label]);
+  }, [rive, sm]);
 
   const handleClick = () => {
     clickTriggers.current.forEach(trigger => {
@@ -143,7 +250,7 @@ function RivePlayer({ src, artboard, sm, label, onDefaultLabel }: { src: string;
   );
 }
 
-function ProbeAndPlay({ src, artboard, label, onDefaultLabel }: { src: string; artboard?: string; label?: string; onDefaultLabel?: (label: string) => void }) {
+function ProbeAndPlay({ src, artboard, labels, fallbackDefaults, onDefaultLabel, onDefaultLabels, viewModelName }: { src: string; artboard?: string; labels?: Record<string, string>; fallbackDefaults?: Record<string, string>; onDefaultLabel?: (label: string) => void; onDefaultLabels?: (labels: Record<string, string>) => void; viewModelName?: string; }) {
   const [detected, setDetected] = useState<{ sm: string; ab: string } | null>(null);
   const [failed, setFailed] = useState(false);
   const probing = useRef(false);
@@ -188,51 +295,50 @@ function ProbeAndPlay({ src, artboard, label, onDefaultLabel }: { src: string; a
   }, [src, artboard]);
 
   if (detected) {
-    return <RivePlayer src={src} artboard={detected.ab || undefined} sm={detected.sm} label={label} onDefaultLabel={onDefaultLabel} />;
+    return <RivePlayerWrapper src={src} artboard={detected.ab || undefined} sm={detected.sm} labels={labels} fallbackDefaults={fallbackDefaults} onDefaultLabel={onDefaultLabel} onDefaultLabels={onDefaultLabels} viewModelName={viewModelName} />;
   }
 
   if (failed) {
-    return <FallbackPlayer src={src} artboard={artboard} label={label} onDefaultLabel={onDefaultLabel} />;
+    return <FallbackPlayer src={src} artboard={artboard} labels={labels} fallbackDefaults={fallbackDefaults} onDefaultLabel={onDefaultLabel} onDefaultLabels={onDefaultLabels} viewModelName={viewModelName} />;
   }
 
   return <div style={{ width: "100%", height: "100%", background: "transparent" }} />;
 }
 
-function FallbackPlayer({ src, artboard, label, onDefaultLabel }: { src: string; artboard?: string; label?: string; onDefaultLabel?: (label: string) => void }) {
+function FallbackPlayer({ src, artboard, labels, fallbackDefaults, onDefaultLabel, onDefaultLabels, viewModelName }: { src: string; artboard?: string; labels?: Record<string, string>; fallbackDefaults?: Record<string, string>; onDefaultLabel?: (label: string) => void; onDefaultLabels?: (labels: Record<string, string>) => void; viewModelName?: string; }) {
   const reportedDefault = useRef(false);
+  const { patchedSrc, loading } = usePatchedRiveSrc(src, labels, fallbackDefaults);
+
+  if (loading) {
+    return <div style={{ width: "100%", height: "100%", background: "transparent" }} />;
+  }
+
+  return <FallbackPlayerInner resolvedSrc={patchedSrc} artboard={artboard} onDefaultLabel={onDefaultLabel} onDefaultLabels={onDefaultLabels} viewModelName={viewModelName} />;
+}
+
+function FallbackPlayerInner({ resolvedSrc, artboard, onDefaultLabel, onDefaultLabels, viewModelName }: { resolvedSrc: string; artboard?: string; onDefaultLabel?: (label: string) => void; onDefaultLabels?: (labels: Record<string, string>) => void; viewModelName?: string; }) {
+  const reportedDefault = useRef(false);
+
   const { rive, RiveComponent } = useRive({
-    src,
+    src: resolvedSrc,
     artboard: artboard || undefined,
     autoplay: true,
     layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
   });
 
   // ViewModel Data Binding
-  const viewModel = useViewModel(rive);
+  const viewModel = useViewModel(rive, viewModelName ? { name: viewModelName } : undefined);
   const viewModelInstance = useViewModelInstance(viewModel, { rive });
   const labelProp = useViewModelInstanceString("label", viewModelInstance);
+  const labelPropAlt = useViewModelInstanceString("label ", viewModelInstance);
+  const activeLabelProp = labelProp?.value ? labelProp : labelPropAlt;
 
   useEffect(() => {
-    if (labelProp?.value && !reportedDefault.current && onDefaultLabel) {
+    if (activeLabelProp?.value && !reportedDefault.current && onDefaultLabel) {
       reportedDefault.current = true;
-      onDefaultLabel(labelProp.value);
+      onDefaultLabel(activeLabelProp.value);
     }
-  }, [labelProp?.value, onDefaultLabel]);
-
-  useEffect(() => {
-    if (label && labelProp?.setValue) {
-      labelProp.setValue(label);
-    }
-  }, [label, labelProp]);
-
-  useEffect(() => {
-    if (rive && label) {
-      const runNames = ["ButtonText", "label", "Label", "Text", "Title", "ButtonMetni", "TestMest", "Run"];
-      runNames.forEach(name => {
-        try { rive.setTextRunValue(name, label); } catch (_) {}
-      });
-    }
-  }, [rive, label]);
+  }, [activeLabelProp?.value, onDefaultLabel]);
 
   return (
     <RiveComponent

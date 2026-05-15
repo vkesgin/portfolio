@@ -437,19 +437,29 @@
         </div>
         
         <!-- Artboard (optional) -->
-        <div class="ct-field" style="margin-top:16px">
+        <div class="ct-field" style="margin-top:16px; display:none;">
           <label class="ct-label">Artboard Adı <span style="color:#555">(opsiyonel — birden fazla artboard varsa belirt)</span></label>
           <input type="text" id="ui-artboard" class="ct-input" placeholder="Örn: Artboard 2">
           <span class="ct-field-line"></span>
         </div>
 
-        <!-- .riv dosya seçici -->
-        <div style="margin-top:24px">
-          <label class="ct-label">.riv Animasyon Dosyası</label>
-          <div class="upload-zone" id="ui-riv-zone" style="margin-top:8px;padding:16px;display:flex;align-items:center;justify-content:center;border:1px dashed rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;flex-direction:column;gap:6px">
-            <span id="ui-riv-name" style="font-size:12px;color:var(--text-muted)">Dosya Seç (.riv)</span>
-            <span style="font-size:10px;color:#444">// Seçince içindeki State Machine'ler otomatik taranır</span>
-            <input type="file" id="ui-riv-file" accept=".riv" style="display:none">
+        <!-- Upload Zones -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+          <div>
+            <label class="ct-label">Kapak Görseli</label>
+            <div class="upload-zone" id="ui-thumb-zone" style="aspect-ratio:1;margin-top:8px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px dashed rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.02)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".4" style="margin-bottom:8px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span id="ui-thumb-name" style="font-size:11px;color:var(--text-muted);text-align:center">Görsel Seç</span>
+              <input type="file" id="ui-thumb-file" accept="image/*" style="display:none">
+            </div>
+          </div>
+          <div>
+            <label class="ct-label">.riv Dosyası</label>
+            <div class="upload-zone" id="ui-riv-zone" style="aspect-ratio:1;margin-top:8px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px dashed rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.02)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".4" style="margin-bottom:8px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <span id="ui-riv-name" style="font-size:11px;color:var(--text-muted);text-align:center">Dosya Seç</span>
+              <input type="file" id="ui-riv-file" accept=".riv" style="display:none">
+            </div>
           </div>
         </div>
 
@@ -460,6 +470,26 @@
             <button onclick="uiSelectAllSMs()" style="font-size:10px;color:#ff2b73;background:none;border:none;cursor:pointer;font-family:var(--font-mono)">Tümünü Seç</button>
           </div>
           <div id="ui-sm-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+
+        <div id="ui-vm-panel" style="margin-top:16px;display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <label class="ct-label" style="color:#7c3aed;margin:0">📊 ViewModel Data Property'leri</label>
+            <button onclick="uiSelectAllVMProps()" style="font-size:10px;color:#7c3aed;background:none;border:none;cursor:pointer;font-family:var(--font-mono)">Tümünü Seç</button>
+          </div>
+          <div id="ui-vm-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          
+          <!-- Manuel Property Ekleme Alanı -->
+          <div style="margin-top:12px;padding-top:12px;border-top:1px dashed rgba(124,58,237,0.3)">
+            <label class="ct-label" style="font-size:10px;color:#7c3aed;margin-bottom:4px;display:block">Manuel Property Ekle (Tarayıcı bulamazsa)</label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="ui-vm-manual-name" placeholder="Property Adı (örn: degisim)" style="flex:1;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:4px;padding:6px;font-size:11px">
+              <input type="text" id="ui-vm-manual-default" placeholder="Varsayılan Metin" style="flex:1;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:4px;padding:6px;font-size:11px">
+              <button onclick="uiAddManualVMProp()" type="button" style="background:#7c3aed;color:#fff;border:none;border-radius:4px;padding:6px 12px;font-size:11px;cursor:pointer">Ekle</button>
+            </div>
+          </div>
+          
+          <p style="font-size:10px;color:#555;margin-top:8px;font-family:var(--font-mono)">// Seçilen property'ler kullanıcıya özelleştirme imkanı sunar</p>
         </div>
 
         <div id="ui-sm-scanning" style="margin-top:12px;display:none;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">
@@ -1819,6 +1849,159 @@ function getSelectedSMs() {
   return [...document.querySelectorAll('[name="ui-sm-check"]:checked')].map(b => b.value);
 }
 
+// ── ViewModel Data Property Binary Scanner ───────────────────────────────────
+function scanViewModelProps(bytes) {
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const encoder = new TextEncoder();
+  const props = [];
+  const sysNames = new Set([
+    'Artboard','New Artboard','Instance','State Machine','Layer','Listener',
+    'Trigger','Hover','Pointer','ButtonVM','ButtonMetni','Montserrat','normal',
+    'GlowEffect','ciick','click','Button Text','ilk konum','hover',
+    'ustunde','tiklandi','ustundedegil','Boolean 1','Trigger 1','Layer 1',
+    'State Machine 1'
+  ]);
+
+  // LEB128 reader
+  function readULEB128(d, o) {
+    let v = 0, s = 0, n = 0, b;
+    do { b = d[o + n]; v |= (b & 0x7F) << s; s += 7; n++; } while (b & 0x80);
+    return { val: v, size: n };
+  }
+
+  // Adım 1: ViewModel isimlerini bul ("VM" ile biten stringler)
+  const vmPositions = [];
+  for (let i = 0; i < bytes.length - 4; i++) {
+    const { val: sLen, size: prefSz } = readULEB128(bytes, i);
+    if (sLen < 4 || sLen > 50 || i + prefSz + sLen > bytes.length) continue;
+    // Son 2 byte "VM" mi?
+    if (bytes[i + prefSz + sLen - 2] !== 0x56 || bytes[i + prefSz + sLen - 1] !== 0x4D) continue;
+    let text;
+    try { text = decoder.decode(bytes.slice(i + prefSz, i + prefSz + sLen)); } catch { continue; }
+    if (/^[A-Za-z0-9_]+VM$/.test(text)) {
+      vmPositions.push({ pos: i, name: text, endPos: i + prefSz + sLen });
+      console.log('[VM Scanner] ViewModel found:', text, 'at pos:', i);
+    }
+  }
+
+  // Adım 2: Her ViewModel'den sonraki property isimlerini bul
+  for (const vm of vmPositions) {
+    const searchEnd = Math.min(vm.endPos + 200, bytes.length - 3);
+    for (let k = vm.endPos; k < searchEnd; k++) {
+      const { val: sLen, size: prefSz } = readULEB128(bytes, k);
+      if (sLen < 2 || sLen > 50 || k + prefSz + sLen > bytes.length) continue;
+      let readable = true;
+      for (let j = 0; j < sLen; j++) {
+        const b = bytes[k + prefSz + j];
+        if (b < 32 && b !== 10 && b !== 13 && b !== 0x20) { readable = false; break; }
+      }
+      if (!readable) continue;
+      let propName;
+      try { propName = decoder.decode(bytes.slice(k + prefSz, k + prefSz + sLen)); } catch { continue; }
+      propName = propName.trim();
+      if (propName.length < 1 || sysNames.has(propName)) continue;
+      if (/^[A-Za-z0-9_]+VM$/.test(propName)) continue; // başka VM ismi
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(propName)) continue; // Boşluk içeriyorsa muhtemelen TextRun adıdır, property değil.
+
+      // Bu property'nin default değerini bul (yakındaki text)
+      let defaultValue = '';
+      const valSearchEnd = Math.min(k + prefSz + sLen + 200, bytes.length - 3);
+      for (let m = k + prefSz + sLen; m < valSearchEnd; m++) {
+        const { val: vLen, size: vPrefSz } = readULEB128(bytes, m);
+        if (vLen < 1 || vLen > 100 || m + vPrefSz + vLen > bytes.length) continue;
+        let vReadable = true;
+        for (let j = 0; j < vLen; j++) {
+          const b = bytes[m + vPrefSz + j];
+          if (b < 32 && b !== 10 && b !== 13) { vReadable = false; break; }
+        }
+        if (!vReadable) continue;
+        let vText;
+        try { vText = decoder.decode(bytes.slice(m + vPrefSz, m + vPrefSz + vLen)); } catch { continue; }
+        vText = vText.replace(/[\n\r]+$/g, '').trim();
+        if (vText.length >= 1 && sysNames.has(vText)) continue;
+        if (/[\p{L}]/u.test(vText)) {
+          // Bozuk karakterleri temizle (z? gibi)
+          defaultValue = vText.replace(/[^\p{L}\p{N}\s!?.,'"\-:]/gu, '').trim();
+          break;
+        }
+      }
+
+      // Duplicate kontrolü
+      const rawName = decoder.decode(bytes.slice(k + prefSz, k + prefSz + sLen));
+      if (!props.some(p => p.name === rawName)) {
+        props.push({ name: rawName, displayName: propName, defaultValue, vmName: vm.name });
+        console.log('[VM Scanner] Property:', rawName, '=', defaultValue, '(in', vm.name + ')');
+      }
+    }
+  }
+  return props;
+}
+
+// ── ViewModel Props Panel Render ─────────────────────────────────────────────
+function renderVMPanel(vmProps) {
+  const panel = document.getElementById('ui-vm-panel');
+  const list = document.getElementById('ui-vm-list');
+  if (!panel || !list) return;
+  if (!vmProps || vmProps.length === 0) {
+    list.innerHTML = `<div style="font-size:11px;color:#7c3aed;background:rgba(124,58,237,0.05);padding:10px;border-radius:8px;border:1px solid rgba(124,58,237,0.2)">Otomatik tespit edilen property bulunamadı. Gerekirse aşağıdan manuel ekleyin.</div>`;
+    panel.style.display = 'block';
+    return;
+  }
+  panel.style.display = 'block';
+  list.innerHTML = vmProps.map((p, i) => `
+    <label style="display:flex;align-items:center;gap:10px;background:rgba(124,58,237,0.04);border:1px solid rgba(124,58,237,0.15);border-radius:8px;padding:10px 12px;cursor:pointer">
+      <input type="checkbox" name="ui-vm-check" value="${p.name}" data-default="${(p.defaultValue || '').replace(/"/g, '&quot;')}" data-vm="${p.vmName}" ${i === 0 ? 'checked' : ''}
+             style="accent-color:#7c3aed;cursor:pointer;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="color:#a78bfa;font-size:12px;font-weight:500;font-family:var(--font-mono)">${p.displayName}</div>
+        <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+          <span style="font-size:9px;color:#555;border:1px solid rgba(124,58,237,0.2);padding:1px 6px;border-radius:4px">📊 ${p.vmName}</span>
+          ${p.defaultValue ? `<span style="font-size:9px;color:#7c3aed;border:1px solid rgba(124,58,237,0.3);padding:1px 6px;border-radius:4px">Varsayılan: "${p.defaultValue}"</span>` : ''}
+        </div>
+      </div>
+    </label>
+  `).join('');
+}
+
+window.uiAddManualVMProp = function() {
+  const nameEl = document.getElementById('ui-vm-manual-name');
+  const defEl = document.getElementById('ui-vm-manual-default');
+  const name = nameEl.value.trim();
+  const def = defEl.value.trim();
+  if (!name) return;
+  const list = document.getElementById('ui-vm-list');
+  const html = `
+    <label style="display:flex;align-items:center;gap:10px;background:rgba(124,58,237,0.04);border:1px solid rgba(124,58,237,0.15);border-radius:8px;padding:10px 12px;cursor:pointer">
+      <input type="checkbox" name="ui-vm-check" value="${name}" data-default="${def.replace(/"/g, '&quot;')}" data-vm="Manual" checked
+             style="accent-color:#7c3aed;cursor:pointer;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="color:#a78bfa;font-size:12px;font-weight:500;font-family:var(--font-mono)">${name}</div>
+        <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+          <span style="font-size:9px;color:#555;border:1px solid rgba(124,58,237,0.2);padding:1px 6px;border-radius:4px">📊 Manual</span>
+          ${def ? `<span style="font-size:9px;color:#7c3aed;border:1px solid rgba(124,58,237,0.3);padding:1px 6px;border-radius:4px">Varsayılan: "${def}"</span>` : ''}
+        </div>
+      </div>
+    </label>
+  `;
+  list.insertAdjacentHTML('beforeend', html);
+  nameEl.value = '';
+  defEl.value = '';
+};
+
+window.uiSelectAllVMProps = function() {
+  const boxes = document.querySelectorAll('[name="ui-vm-check"]');
+  const allChecked = [...boxes].every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; });
+};
+
+function getSelectedVMProps() {
+  return [...document.querySelectorAll('[name="ui-vm-check"]:checked')].map(b => ({
+    name: b.value,
+    defaultValue: b.dataset.default || '',
+    vmName: b.dataset.vm || ''
+  }));
+}
+
 // Dosya zone — her zaman TÜM artboard'ları tara (edit modunda da)
 if (uiRivZone && uiRivFile) {
   uiRivZone.addEventListener('click', () => uiRivFile.click());
@@ -1833,6 +2016,10 @@ if (uiRivZone && uiRivFile) {
     // Artboard field'ına bakmaksızın HER ZAMAN tüm artboard'ları tara
     const result = await inspectAllArtboards(file);
     renderSmPanel(result);
+    // ViewModel Data Property'lerini tara
+    const fileBytes = new Uint8Array(await file.arrayBuffer());
+    const vmProps = scanViewModelProps(fileBytes);
+    renderVMPanel(vmProps);
     // Tarama bittikten hemen sonra React kodunu otomatik oluştur
     setTimeout(uiGenerateCode, 100);
   });
@@ -1963,14 +2150,22 @@ window.uiGenerateCode = uiGenerateCode;
 function uiResetForm() {
   editingUiId = null;
   editingUiCurrentRivUrl = '';
+  window.editingUiCurrentThumbUrl = '';
   document.getElementById('ui-title').value = '';
   document.getElementById('ui-category').value = 'uilib';
   document.getElementById('ui-artboard').value = '';
   document.getElementById('ui-code').value = '';
   document.getElementById('ui-is-pro').checked = false;
-  uiRivFile.value = '';
-  uiRivName.textContent = 'Dosya Seç (.riv)';
-  uiRivName.style.color = 'var(--text-muted)';
+  document.getElementById('ui-riv-file').value = '';
+  document.getElementById('ui-riv-name').textContent = 'Dosya Seç (.riv)';
+  document.getElementById('ui-riv-name').style.color = 'var(--text-muted)';
+  const thumbFileEl = document.getElementById('ui-thumb-file');
+  if(thumbFileEl) thumbFileEl.value = '';
+  const thumbNameEl = document.getElementById('ui-thumb-name');
+  if(thumbNameEl) {
+    thumbNameEl.textContent = 'Görsel Seç';
+    thumbNameEl.style.color = 'var(--text-muted)';
+  }
   document.getElementById('ui-sm-panel').style.display = 'none';
   document.getElementById('ui-sm-scanning').style.display = 'none';
   document.getElementById('ui-save-btn').textContent = 'Kütüphaneye Ekle ↗';
@@ -1983,6 +2178,7 @@ function uiResetForm() {
 function uiStartEdit(p) {
   editingUiId = p.id;
   editingUiCurrentRivUrl = p.image_url || '';
+  window.editingUiCurrentThumbUrl = p.thumbnail_url || '';
   document.getElementById('ui-title').value = p.title || '';
   document.getElementById('ui-category').value = p.category || 'uilib';
   document.getElementById('ui-code').value = p.description || '';
@@ -2007,8 +2203,13 @@ function uiStartEdit(p) {
       </label>`).join('') + `<p style="font-size:10px;color:#555;margin-top:8px">// Yeni .riv seçersen mevcut SM'ler güncellenir</p>`;
   }
 
-  uiRivName.textContent = p.image_url ? '📎 Mevcut dosya korunacak (değiştirmek için seç)' : 'Dosya Seç (.riv)';
-  uiRivName.style.color = p.image_url ? 'var(--accent)' : 'var(--text-muted)';
+  document.getElementById('ui-riv-name').textContent = p.image_url ? '📎 Mevcut dosya korunacak' : 'Dosya Seç (.riv)';
+  document.getElementById('ui-riv-name').style.color = p.image_url ? 'var(--accent)' : 'var(--text-muted)';
+  const thumbNameEl = document.getElementById('ui-thumb-name');
+  if(thumbNameEl) {
+    thumbNameEl.textContent = p.thumbnail_url ? '📎 Mevcut görsel korunacak' : 'Görsel Seç';
+    thumbNameEl.style.color = p.thumbnail_url ? 'var(--accent)' : 'var(--text-muted)';
+  }
   document.getElementById('ui-save-btn').textContent = 'Güncelle ↗';
   document.getElementById('ui-save-btn').style.background = '#7c3aed';
   document.getElementById('ui-cancel-btn').style.display = 'flex';
@@ -2019,6 +2220,17 @@ function uiStartEdit(p) {
 document.getElementById('ui-cancel-btn')?.addEventListener('click', uiResetForm);
 
 // Global data storage for Edit functionality
+document.getElementById('ui-thumb-zone')?.addEventListener('click', () => {
+  document.getElementById('ui-thumb-file').click();
+});
+document.getElementById('ui-thumb-file')?.addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if(f) {
+    document.getElementById('ui-thumb-name').textContent = '📎 ' + f.name;
+    document.getElementById('ui-thumb-name').style.color = 'var(--accent)';
+  }
+});
+
 let uiProjectsData = [];
 
 async function loadUiComponents() {
@@ -2078,7 +2290,8 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
   const code    = document.getElementById('ui-code').value.trim();
   const isPro   = document.getElementById('ui-is-pro').checked;
   const artboard = document.getElementById('ui-artboard').value.trim();
-  const file    = uiRivFile.files[0];
+  const file    = document.getElementById('ui-riv-file').files[0];
+  const thumbFile = document.getElementById('ui-thumb-file') ? document.getElementById('ui-thumb-file').files[0] : null;
 
   // Seçili SM'leri al
   const selectedSMs = getSelectedSMs();
@@ -2096,7 +2309,8 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
     });
   });
 
-  const tagsJson = JSON.stringify({ artboard, stateMachines: selectedSMs, inputs: inputsMeta });
+  const viewModelProps = getSelectedVMProps();
+  const tagsJson = JSON.stringify({ artboard, stateMachines: selectedSMs, inputs: inputsMeta, viewModelProps });
 
   if (!title) { uiStatus('Başlık zorunlu!', true); return; }
   if (!editingUiId && !file) { uiStatus('.riv dosyası zorunlu!', true); return; }
@@ -2108,9 +2322,12 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
     let rivUrl = editingUiCurrentRivUrl;
     if (file) rivUrl = await uploadFile(file, 'file');
 
+    let thumbUrl = window.editingUiCurrentThumbUrl || '';
+    if (thumbFile) thumbUrl = await uploadFile(thumbFile, 'image');
+
     const payload = {
       title, category: categoryStr, description: code,
-      tags: tagsJson, image_url: rivUrl, is_featured: isPro
+      tags: tagsJson, image_url: rivUrl, thumbnail_url: thumbUrl, is_featured: isPro
     };
 
     const endpoint = editingUiId ? `${API}/api/projects/${editingUiId}` : `${API}/api/projects`;

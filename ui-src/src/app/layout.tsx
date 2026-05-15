@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
+import ParticleBackground from "@/components/ParticleBackground";
+import CustomCursor from "@/components/CustomCursor";
 import Script from "next/script";
 
 const inter = Inter({
@@ -101,6 +103,8 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        <CustomCursor />
+        <ParticleBackground />
         <Navbar />
         {children}
         <div className="gtranslate_wrapper" style={{ position: "fixed", bottom: "20px", left: "20px", zIndex: 999999 }}></div>

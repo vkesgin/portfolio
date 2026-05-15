@@ -46,3 +46,47 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+
+/* Custom Cursor */
+@media (min-width: 769px) {
+  body {
+    cursor: none;
+  }
+  a, button, input, [role="button"], .interactive-element {
+    cursor: none !important;
+  }
+}
+
+#cursor, #cursor-ring {
+  position: fixed;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%, -50%);
+  will-change: left, top;
+}
+
+#cursor {
+  width: 8px; 
+  height: 8px;
+  background: #00e5ff;
+  transition: width .3s cubic-bezier(0.2, 0.8, 0.2, 1), height .3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+#cursor-ring {
+  width: 40px; 
+  height: 40px;
+  border: 1.5px solid rgba(0,229,255,.35);
+  transition: width .4s cubic-bezier(0.2, 0.8, 0.2, 1), height .4s cubic-bezier(0.2, 0.8, 0.2, 1), border-color .3s;
+}
+
+#cursor.hover { 
+  width: 0; 
+  height: 0; 
+}
+
+#cursor-ring.hover { 
+  width: 60px; 
+  height: 60px; 
+  border-color: #00e5ff; 
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { findOrigTextInBinary, applyTextPatch } from "../utils/rivePatch";
 import RiveDemo from "./RiveDemo";
 
 interface UIComponent {
@@ -11,6 +12,7 @@ interface UIComponent {
   image_url: string;
   is_featured: boolean;
   tags?: string;
+  thumbnail_url?: string;
 }
 
 interface RiveCfg {
@@ -18,6 +20,7 @@ interface RiveCfg {
   stateMachines?: string[];
   statemachine?: string;
   inputs?: { name: string; type: number }[];
+  viewModelProps?: { name: string; defaultValue: string; vmName?: string }[];
 }
 
 // ─── Multi-Framework Kod Üretici ──────────────────────────────────────────────
@@ -26,7 +29,8 @@ function generateCode(
   cfg: RiveCfg,
   fileName: string,
   title: string,
-  customText?: string
+  customText?: string,
+  customPropName?: string
 ) {
   const ab = cfg.artboard || "";
   const sm = (cfg.stateMachines ?? (cfg.statemachine ? [cfg.statemachine] : []))[0] ?? "";
@@ -35,6 +39,7 @@ function generateCode(
   const isNative = sm && inputs.length === 0;
   const fnName = title.replace(/[^a-zA-Z0-9]/g, "") || "RiveComponent";
   const rivFile = fileName || "animation.riv";
+  const propName = customPropName || "ButtonText";
 
   if (framework === "react") {
     let c = `"use client";\n\nimport { useEffect, useMemo } from "react";\nimport { useRive } from "@rive-app/react-canvas";\n\nexport default function ${fnName}() {\n  const RIVE_FILE = "/rive/${rivFile}";\n`;
@@ -47,7 +52,7 @@ function generateCode(
     if (customText) {
       c += `    onLoad: () => {\n`;
       c += `      try {\n`;
-      c += `        rive?.setTextRunValue("ButtonText", "${customText}");\n`;
+      c += `        rive?.setTextRunValue("${propName}", "${customText}");\n`;
       c += `      } catch (e) {}\n`;
       c += `    },\n`;
     }
@@ -57,7 +62,7 @@ function generateCode(
     if (customText) {
       c += `\n  useEffect(() => {\n`;
       c += `    if (rive) {\n`;
-      c += `      try { rive.setTextRunValue("ButtonText", "${customText}"); } catch (e) {}\n`;
+      c += `      try { rive.setTextRunValue("${propName}", "${customText}"); } catch (e) {}\n`;
       c += `    }\n`;
       c += `  }, [rive]);\n`;
     }
@@ -153,10 +158,11 @@ export default function ComponentGrid() {
   const [remainingDownloads, setRemainingDownloads] = useState<number | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [customText, setCustomText] = useState("");
-  const [previewText, setPreviewText] = useState("");
+  const [customTexts, setCustomTexts] = useState<Record<string, string>>({});
+  const [previewTexts, setPreviewTexts] = useState<Record<string, string>>({});
   const [fullscreenPreview, setFullscreenPreview] = useState(false);
   const [defaultLabel, setDefaultLabel] = useState("");
+  const [defaultLabels, setDefaultLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function fetchComponents() {
@@ -247,8 +253,15 @@ export default function ComponentGrid() {
 
   const generatedCode = useMemo(() => {
     if (!selectedComp) return "";
-    return generateCode(activeFramework, selectedCfg, selectedFileName, selectedComp.title, customText);
-  }, [selectedComp, activeFramework, selectedCfg, selectedFileName, customText]);
+    const firstCustom = Object.values(customTexts)[0] || "";
+    let customPropName = "";
+    if (selectedCfg.viewModelProps && selectedCfg.viewModelProps.length > 0) {
+      customPropName = selectedCfg.viewModelProps[0].name;
+    } else {
+      customPropName = Object.keys(customTexts)[0] || "";
+    }
+    return generateCode(activeFramework, selectedCfg, selectedFileName, selectedComp.title, firstCustom, customPropName);
+  }, [selectedComp, activeFramework, selectedCfg, selectedFileName, customTexts]);
 
   const filteredComponents = useMemo(() => {
     return components.filter(comp => {
@@ -331,6 +344,13 @@ export default function ComponentGrid() {
                    * padding = breathing room around the animation.
                    */
                   <div style={{ position: "absolute", inset: "20px", display: "flex" }}>
+                    {comp.thumbnail_url && (
+                      <img 
+                        src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.thumbnail_url}`} 
+                        alt={`${comp.title} - Rive UI Bileşeni`} 
+                        className="sr-only" 
+                      />
+                    )}
                     <RiveDemo
                       src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`}
                       artboard={cfg.artboard}
@@ -375,7 +395,7 @@ export default function ComponentGrid() {
       {/* CODE MODAL */}
       {selectedComp && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => { setSelectedComp(null); setCustomText(""); setPreviewText(""); }} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => { setSelectedComp(null); setCustomTexts({}); setPreviewTexts({}); }} />
           <div className="relative w-full max-w-5xl bg-[#080808] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
 
             {/* Header */}
@@ -386,7 +406,7 @@ export default function ComponentGrid() {
                   <span className="px-2 py-0.5 text-[10px] bg-[#ff2b73]/20 text-[#ff2b73] rounded-full border border-[#ff2b73]/30">PRO</span>
                 )}
               </div>
-              <button onClick={() => { setSelectedComp(null); setCustomText(""); setPreviewText(""); }} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
+              <button onClick={() => { setSelectedComp(null); setCustomTexts({}); setPreviewTexts({}); }} className="w-9 h-9 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 transition-colors">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </div>
@@ -402,9 +422,12 @@ export default function ComponentGrid() {
                     <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
                       <div className="absolute" style={{ inset: "20px", display: "flex" }}>
                         <RiveDemo
+                          key={JSON.stringify(previewTexts)}
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+                          viewModelName={selectedCfg.viewModelProps?.[0]?.vmName}
+                          fallbackDefaults={defaultLabels}
                         />
                       </div>
                     </div>
@@ -439,9 +462,12 @@ export default function ComponentGrid() {
                     <div className="relative w-full max-w-xs rounded-2xl overflow-hidden border border-white/10 bg-black/40" style={{ height: "240px" }}>
                       <div className="absolute" style={{ inset: "20px", display: "flex" }}>
                         <RiveDemo
+                          key={JSON.stringify(previewTexts)}
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
+                          viewModelName={selectedCfg.viewModelProps?.[0]?.vmName}
+                          fallbackDefaults={defaultLabels}
                         />
                       </div>
                     </div>
@@ -470,11 +496,15 @@ export default function ComponentGrid() {
                     <div className="relative w-full max-w-md rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-[0_0_40px_rgba(255,43,115,0.05)]" style={{ height: "300px" }}>
                       <div className="absolute" style={{ inset: "20px", display: "flex" }}>
                         <RiveDemo
+                          key={JSON.stringify(previewTexts)}
                           src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
                           artboard={selectedCfg.artboard}
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
-                          label={previewText || undefined}
+                          labels={Object.keys(previewTexts).length > 0 ? previewTexts : undefined}
                           onDefaultLabel={setDefaultLabel}
+                          onDefaultLabels={setDefaultLabels}
+                          viewModelName={selectedCfg.viewModelProps?.[0]?.vmName}
+                          fallbackDefaults={defaultLabels}
                         />
                       </div>
                       
@@ -490,33 +520,55 @@ export default function ComponentGrid() {
                       </button>
                     </div>
                     
-                    {/* Dinamik Metin Değiştirici */}
+                    {/* Dinamik Metin Değiştirici — Çoklu Label Desteği */}
                     <div className="w-full max-w-md bg-white/[0.02] border border-white/10 rounded-xl p-4 mt-2">
-                      <label className="block text-xs font-semibold text-white/50 mb-2">Buton Yazısını Özelleştir</label>
-                      <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          value={customText}
-                          onChange={(e) => setCustomText(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && setPreviewText(customText)}
-                          placeholder="Örn: Satın Al" 
-                          className="flex-1 bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#ff2b73]/50 transition-colors"
-                        />
-                        <button 
-                          onClick={() => setPreviewText(customText)}
-                          className="px-4 py-2 bg-white/10 hover:bg-[#ff2b73] text-white text-sm font-medium rounded-lg transition-colors border border-white/10"
-                        >
-                          Önizle
-                        </button>
-                        {previewText && (
+                      <label className="block text-xs font-semibold text-white/50 mb-2">
+                        {(selectedCfg.viewModelProps?.length ?? 0) > 1 ? 'Metinleri Özelleştir' : 'Buton Yazısını Özelleştir'}
+                      </label>
+                      <div className="flex flex-col gap-2">
+                        {(selectedCfg.viewModelProps && selectedCfg.viewModelProps.length > 0
+                          ? selectedCfg.viewModelProps
+                          : [{ name: 'label', defaultValue: defaultLabel || '', vmName: '' }]
+                        ).map((prop) => {
+                          const cleanDefault = prop.defaultValue ? prop.defaultValue.replace(/[^\p{L}\p{N}\s!?.,'"\-:]/gu, '').trim() : '';
+                          return (
+                          <div key={prop.name} className="flex gap-2">
+                            <div className="flex-1 flex flex-col gap-1">
+                              {(selectedCfg.viewModelProps?.length ?? 0) > 1 && (
+                                <span className="text-[10px] text-[#7c3aed] font-mono">{prop.name.trim()}</span>
+                              )}
+                              <input 
+                                type="text" 
+                                value={customTexts[prop.name] || ''}
+                                onChange={(e) => setCustomTexts(prev => ({ ...prev, [prop.name]: e.target.value }))}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    setPreviewTexts({ ...customTexts });
+                                  }
+                                }}
+                                placeholder={cleanDefault.length > 0 && cleanDefault.length < 30 ? `Varsayılan: ${cleanDefault}` : 'Örn: Satın Al'}
+                                className="w-full bg-black/50 border border-white/10 rounded-lg px-4 py-2 text-sm text-white focus:outline-none focus:border-[#ff2b73]/50 transition-colors"
+                              />
+                            </div>
+                          </div>
+                        )})}
+                        <div className="flex gap-2 mt-1">
                           <button 
-                            onClick={() => { setPreviewText(""); setCustomText(""); }}
-                            className="px-3 py-2 bg-white/5 hover:bg-red-500/30 text-white/50 text-sm rounded-lg transition-colors border border-white/10"
-                            title="Sıfırla"
+                            onClick={() => setPreviewTexts({ ...customTexts })}
+                            className="flex-1 px-4 py-2 bg-white/10 hover:bg-[#ff2b73] text-white text-sm font-medium rounded-lg transition-colors border border-white/10"
                           >
-                            ✕
+                            Önizle
                           </button>
-                        )}
+                          {Object.keys(previewTexts).length > 0 && (
+                            <button 
+                              onClick={() => { setPreviewTexts({}); setCustomTexts({}); }}
+                              className="px-3 py-2 bg-white/5 hover:bg-red-500/30 text-white/50 text-sm rounded-lg transition-colors border border-white/10"
+                              title="Sıfırla"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-[10px] text-white/30 mt-2">Yazdığınız metin, kopyaladığınız koda <code className="text-[#ff2b73]">setTextRunValue()</code> olarak eklenir.</p>
                     </div>
@@ -544,134 +596,62 @@ export default function ComponentGrid() {
                             const ok = await trackDownload(selectedComp.id, "riv");
                             if (!ok) { setDownloading(false); return; }
                             
-                            if (!previewText) {
+                            // Önizle basılmamışsa customTexts'i kullan (fallback)
+                            const textsToApply = Object.values(previewTexts).some(v => v.length > 0)
+                              ? previewTexts
+                              : customTexts;
+                            const hasAnyText = Object.values(textsToApply).some(v => v.length > 0);
+                            if (!hasAnyText) {
                               window.open(rivUrl, "_blank");
                               setDownloading(false);
                               return;
                             }
                             
-                            // .riv binary patch — "label" marker tabanlı hedefli değiştirme
+                            // ═══════════════════════════════════════════════════════
+                            // .riv Binary Patch — Çoklu Label + LEB128 Reconstruction
+                            // ═══════════════════════════════════════════════════════
                             const resp = await fetch(rivUrl);
                             const buf = await resp.arrayBuffer();
-                            const rivBytes = new Uint8Array(buf);
+                            let result = new Uint8Array(buf);
                             
-                            const encoder = new TextEncoder();
-                            const decoder = new TextDecoder('utf-8', { fatal: true });
-                            const newRaw = encoder.encode(previewText);
-                            const labelNeedle = encoder.encode("label");
+
                             
-                            const systemNames = [
-                              'Artboard', 'Instance', 'State Machine', 'Layer', 'Listener',
-                              'Trigger', 'Hover', 'Pointer', 'ButtonVM', 'ButtonMetni',
-                              'label', 'Montserrat', 'normal', 'GlowEffect', 'ciick', 'click',
-                            ];
-                            
-                            // "label" marker'ı etrafındaki hedef metni bul
-                            let originalText: string | null = null;
-                            let hasNewline = false;
-                            
-                            for (let i = 0; i < rivBytes.length - labelNeedle.length; i++) {
-                              let isLabel = true;
-                              for (let j = 0; j < labelNeedle.length; j++) {
-                                if (rivBytes[i + j] !== labelNeedle[j]) { isLabel = false; break; }
+                            // ── Her label için patch uygula ──
+                            let totalPatches = 0;
+                            for (const [propName, newText] of Object.entries(textsToApply)) {
+                              if (!newText) continue;
+                              
+                              // Orijinal metni tespit et: önce defaultLabels, sonra defaultLabel, sonra binary scan
+                              let origText = defaultLabels[propName] || '';
+                              if (!origText && (propName === 'label' || propName === 'label ')) {
+                                origText = defaultLabel || '';
                               }
-                              if (!isLabel) continue;
-                              
-                              const prefix = i > 0 ? rivBytes[i - 1] : 0;
-                              if (prefix < 5 || prefix > 10) continue;
-                              
-                              console.log(`[Download] Found "label" marker at pos:${i}`);
-                              
-                              const searchEnd = Math.min(i + 300, rivBytes.length - 3);
-                              for (let k = i + prefix; k < searchEnd; k++) {
-                                const strLen = rivBytes[k];
-                                if (strLen < 3 || strLen > 80) continue;
-                                if (k + 1 + strLen > rivBytes.length) continue;
-                                
-                                let readable = true;
-                                for (let j = 0; j < strLen; j++) {
-                                  const b = rivBytes[k + 1 + j];
-                                  if (b < 32 && b !== 10 && b !== 13) { readable = false; break; }
-                                }
-                                if (!readable) continue;
-                                
-                                let text: string;
-                                try { text = decoder.decode(rivBytes.slice(k + 1, k + 1 + strLen)); } catch { continue; }
-                                
-                                const trimmed = text.replace(/[\n\r\s]+$/g, '').trim();
-                                if (trimmed.length < 2) continue;
-                                
-                                if (systemNames.some(s => trimmed === s)) continue;
-                                if (!/[\p{L}]/u.test(trimmed)) continue;
-                                if (!/^[\p{L}\p{N}\s!?.,'"\-:]+$/u.test(trimmed)) continue;
-                                
-                                originalText = trimmed;
-                                hasNewline = text.endsWith('\n');
-                                break;
+                              if (!origText) {
+                                origText = findOrigTextInBinary(result, propName);
                               }
-                              if (originalText) break;
+                              
+                              if (!origText) {
+                                console.warn(`[Download] "${propName}" için orijinal metin bulunamadı, atlanıyor.`);
+                                continue;
+                              }
+                              
+                              if (origText === newText) continue; // Aynıysa patch'e gerek yok
+                              
+                              result = applyTextPatch(result, origText, newText) as Uint8Array<ArrayBuffer>;
+                              totalPatches++;
                             }
                             
-                            type Patch = { pos: number; oldLen: number; newContent: Uint8Array };
-                            const patches: Patch[] = [];
+                            console.log(`[Download] Toplam ${totalPatches} label yamalandı. (${buf.byteLength} → ${result.length} bytes)`);
                             
-                            if (originalText) {
-                              console.log(`[Download] Target identified: "${originalText}"`);
-                              const targetNeedle = encoder.encode(originalText + (hasNewline ? '\n' : ''));
-                              const newContent = hasNewline
-                                ? new Uint8Array([...newRaw, 0x0A])
-                                : new Uint8Array(newRaw);
-                                
-                              for (let i = 0; i < rivBytes.length - targetNeedle.length; i++) {
-                                let isMatch = true;
-                                for (let j = 0; j < targetNeedle.length; j++) {
-                                  if (rivBytes[i + j] !== targetNeedle[j]) { isMatch = false; break; }
-                                }
-                                if (!isMatch) continue;
-                                
-                                const prefix = i > 0 ? rivBytes[i - 1] : 0;
-                                if (prefix === targetNeedle.length) {
-                                  if (!patches.some(p => p.pos === i - 1)) {
-                                    patches.push({ pos: i - 1, oldLen: targetNeedle.length, newContent });
-                                    console.log(`[Download] Target globally replaced at pos:${i - 1}`);
-                                  }
-                                }
-                              }
-                            } else {
-                              console.warn(`[Download] Could not identify original text near label.`);
-                            }
-                            
-                            // Sondan başa uygula (pozisyon kayması önlenir)
-                            patches.sort((a, b) => b.pos - a.pos);
-                            
-                            let current = rivBytes;
-                            for (const patch of patches) {
-                              const before = current.slice(0, patch.pos);
-                              const after = current.slice(patch.pos + 1 + patch.oldLen);
-                              const newLen = patch.newContent.length;
-                              
-                              const result = new Uint8Array(before.length + 1 + newLen + after.length);
-                              result.set(before, 0);
-                              result[before.length] = newLen; // LEB128 length prefix
-                              result.set(patch.newContent, before.length + 1);
-                              result.set(after, before.length + 1 + newLen);
-                              
-                              current = result;
-                            }
-                            
-                            const downloadBlob = (data: Uint8Array) => {
-                              const blob = new Blob([data.buffer as ArrayBuffer], { type: "application/octet-stream" });
-                              const a = document.createElement("a");
-                              a.href = URL.createObjectURL(blob);
-                              a.download = fileName;
-                              document.body.appendChild(a);
-                              a.click();
-                              document.body.removeChild(a);
-                              URL.revokeObjectURL(a.href);
-                            };
-                            
-                            console.log(`[Download] ${patches.length} metin değiştirildi (${rivBytes.length}→${current.length} bytes)`);
-                            downloadBlob(current);
+                            // ── İndir ──
+                            const blob = new Blob([result.buffer as ArrayBuffer], { type: "application/octet-stream" });
+                            const dlLink = document.createElement("a");
+                            dlLink.href = URL.createObjectURL(blob);
+                            dlLink.download = fileName;
+                            document.body.appendChild(dlLink);
+                            dlLink.click();
+                            document.body.removeChild(dlLink);
+                            URL.revokeObjectURL(dlLink.href);
                           } catch (err) {
                             console.error("[Download] Error:", err);
                             window.open(rivUrl, "_blank");
@@ -760,10 +740,13 @@ export default function ComponentGrid() {
           
           <div className="w-full h-full max-w-[90vw] max-h-[85vh] flex items-center justify-center">
             <RiveDemo
+              key={JSON.stringify(previewTexts)}
               src={`https://vk-portfolio-api.vkesgin38.workers.dev${selectedComp.image_url}`}
               artboard={selectedCfg.artboard}
               stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
-              label={previewText || undefined}
+              labels={Object.keys(previewTexts).length > 0 ? previewTexts : undefined}
+              viewModelName={selectedCfg.viewModelProps?.[0]?.vmName}
+              fallbackDefaults={defaultLabels}
             />
           </div>
 

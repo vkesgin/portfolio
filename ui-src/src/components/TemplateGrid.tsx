@@ -12,6 +12,7 @@ interface UITemplate {
   image_url: string;
   is_featured: boolean;
   tags?: string;
+  thumbnail_url?: string;
 }
 
 interface RiveCfg {
@@ -158,6 +159,13 @@ export default function TemplateGrid() {
 
               {tpl.image_url ? (
                 <div style={{ position: "absolute", inset: "0", display: "flex", filter: isLocked ? "blur(8px) brightness(0.5)" : "none", transition: "filter 0.3s ease" }}>
+                  {tpl.thumbnail_url && (
+                    <img 
+                      src={`https://vk-portfolio-api.vkesgin38.workers.dev${tpl.thumbnail_url}`} 
+                      alt={`${tpl.title} - Ücretsiz Rive Şablonları`} 
+                      className="sr-only" 
+                    />
+                  )}
                   <RiveDemo
                     src={`https://vk-portfolio-api.vkesgin38.workers.dev${tpl.image_url}`}
                     artboard={cfg.artboard}

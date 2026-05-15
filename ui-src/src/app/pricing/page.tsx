@@ -86,20 +86,20 @@ export default function PricingPage() {
             <div className="text-5xl font-bold mb-8">$0<span className="text-lg text-white/50 font-normal"> / ay</span></div>
             
             <ul className="space-y-4 mb-8 flex-1">
-              <li className="flex items-center gap-3">
-                <span className="text-green-500">✓</span> Ücretsiz bileşenlerin kodlarına erişim
+              <li className="flex items-start gap-3">
+                <span className="text-green-500 shrink-0">✓</span> <span>Ücretsiz bileşenlerin kodlarına erişim</span>
               </li>
-              <li className="flex items-center gap-3">
-                <span className="text-green-500">✓</span> Ücretsiz <strong>.riv dosyalarını</strong> indirme
+              <li className="flex items-start gap-3">
+                <span className="text-green-500 shrink-0">✓</span> <span>Ücretsiz <strong>.riv dosyalarını</strong> indirme</span>
               </li>
-              <li className="flex items-center gap-3">
-                <span className="text-green-500">✓</span> <strong>Aylık 5 indirme hakkı</strong> (Her ay yenilenir)
+              <li className="flex items-start gap-3">
+                <span className="text-green-500 shrink-0">✓</span> <span><strong>Aylık 5 indirme hakkı</strong> <span className="text-white/50 text-sm whitespace-nowrap">(Her ay yenilenir)</span></span>
               </li>
-              <li className="flex items-center gap-3 text-white/30">
-                <span className="text-white/20">×</span> PRO bileşenlere erişim
+              <li className="flex items-start gap-3 text-white/30">
+                <span className="text-white/20 shrink-0">×</span> <span>PRO bileşenlere erişim</span>
               </li>
-              <li className="flex items-center gap-3 text-white/30">
-                <span className="text-white/20">×</span> Hazır web şablonlarına erişim
+              <li className="flex items-start gap-3 text-white/30">
+                <span className="text-white/20 shrink-0">×</span> <span>Hazır web şablonlarına erişim</span>
               </li>
             </ul>
 
@@ -126,33 +126,35 @@ export default function PricingPage() {
             <h3 className="text-2xl font-bold mb-2">PRO Paket</h3>
             <div className="text-white/50 mb-6">Sınırsız erişim isteyen profesyoneller için.</div>
             
-            {billingCycle === "monthly" ? (
-              <>
-                <div className="text-5xl font-bold mb-2">$12<span className="text-lg text-white/50 font-normal"> / ay</span></div>
-                <div className="text-sm text-white/40 mb-8">Her ay faturalandırılır</div>
-              </>
-            ) : (
-              <>
-                <div className="text-5xl font-bold mb-2">$7.49<span className="text-lg text-white/50 font-normal"> / ay</span></div>
-                <div className="text-sm text-white/40 mb-8">Yılda bir kez $89.99 olarak faturalandırılır</div>
-              </>
-            )}
+            <div key={billingCycle}>
+              {billingCycle === "monthly" ? (
+                <>
+                  <div className="text-5xl font-bold mb-2">$12<span className="text-lg text-white/50 font-normal"> / ay</span></div>
+                  <div className="text-sm text-white/40 mb-8">Her ay faturalandırılır</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-5xl font-bold mb-2">$7.49<span className="text-lg text-white/50 font-normal"> / ay</span></div>
+                  <div className="text-sm text-white/40 mb-8">Yılda bir kez $89.99 olarak faturalandırılır</div>
+                </>
+              )}
+            </div>
             
             <ul className="space-y-4 mb-8 flex-1">
-              <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> <strong>Tüm</strong> (Free + PRO) UI bileşenlerine erişim
+              <li className="flex items-start gap-3">
+                <span className="text-[#ff2b73] shrink-0">✓</span> <span><strong>Tüm</strong> (Free + PRO) UI bileşenlerine erişim</span>
               </li>
-              <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> Orijinal <strong>.riv dosyalarını</strong> indirme
+              <li className="flex items-start gap-3">
+                <span className="text-[#ff2b73] shrink-0">✓</span> <span>Orijinal <strong>.riv dosyalarını</strong> indirme</span>
               </li>
-              <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> <strong>Sınırsız</strong> indirme hakkı
+              <li className="flex items-start gap-3">
+                <span className="text-[#ff2b73] shrink-0">✓</span> <span><strong>Sınırsız</strong> indirme hakkı</span>
               </li>
-              <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> <strong>Hazır web şablonlarına</strong> erişim
+              <li className="flex items-start gap-3">
+                <span className="text-[#ff2b73] shrink-0">✓</span> <span><strong>Hazır web şablonlarına</strong> erişim</span>
               </li>
-              <li className="flex items-center gap-3">
-                <span className="text-[#ff2b73]">✓</span> Ticari kullanım lisansı
+              <li className="flex items-start gap-3">
+                <span className="text-[#ff2b73] shrink-0">✓</span> <span>Ticari kullanım lisansı</span>
               </li>
             </ul>
 

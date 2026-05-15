@@ -911,13 +911,17 @@ if (path.startsWith('/api/kpss')) {
       const compId = url.searchParams.get('component_id');
       if (!compId) return json({ error: 'component_id required' }, 400, origin);
       
+      const authData = await uiAuth(request, env);
+      const isAdmin = authData?.email === 'vkesgin38@gmail.com';
+      
+      // Herkese açık olanlar (approved=1) + Yapanın kendisi veya Admin ise diğerleri (0,2)
       const { results } = await env.DB.prepare(`
-        SELECT c.id, c.content, c.created_at, u.full_name, u.plan 
+        SELECT c.id, c.content, c.created_at, u.full_name, u.plan, c.is_approved, c.user_id
         FROM ui_comments c 
         JOIN ui_users u ON c.user_id = u.id 
-        WHERE c.component_id = ? AND c.is_approved = 1
+        WHERE c.component_id = ? AND (c.is_approved = 1 OR c.user_id = ? OR ?)
         ORDER BY c.created_at DESC
-      `).bind(compId).all();
+      `).bind(compId, authData?.userId || -1, isAdmin ? 1 : 0).all();
       return json(results, 200, origin);
     }
 
@@ -957,8 +961,8 @@ if (path.startsWith('/api/kpss')) {
       if (!authData || authData.email !== 'vkesgin38@gmail.com') return json({ error: 'Yetkisiz' }, 401, origin);
 
       const id = cleanPath.split('/').pop();
-      const { is_approved } = await request.json().catch(() => ({}));
-      await env.DB.prepare("UPDATE ui_comments SET is_approved = ? WHERE id = ?").bind(is_approved ? 1 : 0, id).run();
+      const { status } = await request.json().catch(() => ({})); // 0, 1, 2
+      await env.DB.prepare("UPDATE ui_comments SET is_approved = ? WHERE id = ?").bind(status, id).run();
       return json({ message: 'Güncellendi' }, 200, origin);
     }
     

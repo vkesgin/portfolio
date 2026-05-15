@@ -348,7 +348,19 @@ function AdminModerationPanel() {
       await fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/admin/comments/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ is_approved: 1 })
+        body: JSON.stringify({ status: 1 })
+      });
+      fetchComments();
+    } catch (e) {}
+  };
+
+  const handleReject = async (id: number) => {
+    const token = localStorage.getItem("ui_token");
+    try {
+      await fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/admin/comments/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status: 2 })
       });
       fetchComments();
     } catch (e) {}
@@ -380,22 +392,28 @@ function AdminModerationPanel() {
       ) : (
         <div className="space-y-4">
           {comments.map((c: any) => (
-            <div key={c.id} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between gap-4 ${c.is_approved ? 'border-white/5 bg-white/[0.02]' : 'border-blue-500/20 bg-blue-500/10'}`}>
+            <div key={c.id} className={`p-4 rounded-xl border flex flex-col md:flex-row justify-between gap-4 ${c.is_approved === 1 ? 'border-white/5 bg-white/[0.02]' : c.is_approved === 2 ? 'border-red-500/20 bg-red-500/10' : 'border-blue-500/20 bg-blue-500/10'}`}>
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="font-bold text-sm text-white">{c.full_name}</span>
                   <span className="text-xs text-white/40">({c.email})</span>
-                  {!c.is_approved && (
-                    <span className="px-2 py-0.5 rounded bg-blue-500 text-[10px] font-bold text-white">ONAY BEKLİYOR</span>
+                  {c.is_approved === 0 && (
+                    <span className="px-2 py-0.5 rounded bg-blue-500 text-[10px] font-bold text-white uppercase">ONAY BEKLİYOR</span>
+                  )}
+                  {c.is_approved === 1 && (
+                    <span className="px-2 py-0.5 rounded bg-green-500/20 text-[10px] font-bold text-green-500 uppercase border border-green-500/30">YAYINDA</span>
+                  )}
+                  {c.is_approved === 2 && (
+                    <span className="px-2 py-0.5 rounded bg-red-500/20 text-[10px] font-bold text-red-500 uppercase border border-red-500/30">REDDEDİLDİ</span>
                   )}
                 </div>
-                <p className="text-sm text-white/70 italic mb-2">"{c.content}"</p>
+                <p className={`text-sm italic mb-2 ${c.is_approved === 2 ? 'text-red-400/60 line-through' : 'text-white/70'}`}>"{c.content}"</p>
                 <div className="text-[10px] text-white/30">
                   Bileşen ID: {c.component_id} • {new Date(c.created_at).toLocaleString('tr-TR')}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {!c.is_approved && (
+                {c.is_approved !== 1 && (
                   <button
                     onClick={() => handleApprove(c.id)}
                     className="px-4 py-2 rounded-lg bg-green-500/20 hover:bg-green-500/40 text-green-400 text-xs font-bold transition-colors border border-green-500/30"
@@ -403,11 +421,19 @@ function AdminModerationPanel() {
                     Onayla
                   </button>
                 )}
+                {c.is_approved !== 2 && (
+                  <button
+                    onClick={() => handleReject(c.id)}
+                    className="px-4 py-2 rounded-lg bg-orange-500/20 hover:bg-orange-500/40 text-orange-400 text-xs font-bold transition-colors border border-orange-500/30"
+                  >
+                    Reddet
+                  </button>
+                )}
                 <button
                   onClick={() => handleDelete(c.id)}
                   className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/40 text-red-400 text-xs font-bold transition-colors border border-red-500/30"
                 >
-                  Sil
+                  Kalıcı Sil
                 </button>
               </div>
             </div>

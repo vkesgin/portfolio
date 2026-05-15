@@ -167,9 +167,26 @@ export default function ComponentGrid() {
   const [newComment, setNewComment] = useState("");
   const [postingComment, setPostingComment] = useState(false);
 
+  // ─── Toast System ──────────────────────────────────────────────────
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" | "info" } | null>(null);
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const showToast = (msg: string, type: "success" | "error" | "info" = "info") => {
+    setToast({ msg, type });
+  };
+
   useEffect(() => {
     if (selectedComp) {
-      fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/comments?component_id=${selectedComp.id}`)
+      const token = localStorage.getItem("ui_token");
+      const headers: any = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/comments?component_id=${selectedComp.id}`, { headers })
         .then(res => res.json())
         .then(data => setComments(Array.isArray(data) ? data : []))
         .catch(() => setComments([]));
@@ -192,15 +209,17 @@ export default function ComponentGrid() {
       const data = await res.json();
       if (res.ok) {
         setNewComment("");
-        alert(data.message || "Yorum gönderildi.");
-        const r = await fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/comments?component_id=${selectedComp.id}`);
+        showToast(data.message || "Yorum gönderildi.", "success");
+        const r = await fetch(`https://vk-portfolio-api.vkesgin38.workers.dev/api/ui/comments?component_id=${selectedComp.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         const c = await r.json();
         setComments(Array.isArray(c) ? c : []);
       } else {
-        alert(data.error || "Hata oluştu");
+        showToast(data.error || "Hata oluştu", "error");
       }
     } catch {
-      alert("Hata oluştu");
+      showToast("Bağlantı hatası oluştu", "error");
     } finally {
       setPostingComment(false);
     }
@@ -256,14 +275,14 @@ export default function ComponentGrid() {
         body: JSON.stringify({ component_id: componentId, download_type: type }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setDownloadError(data.error || "İndirme başarısız");
+      if (res.ok) {
+        setRemainingDownloads(data.remainingDownloads);
+        return true;
+      } else {
+        setDownloadError(data.error);
+        showToast(data.error, "error");
         return false;
       }
-      if (data.remaining_downloads !== undefined) {
-        setRemainingDownloads(data.remaining_downloads);
-      }
-      return true;
     } catch {
       setDownloadError("Sunucu hatası");
       return false;
@@ -281,6 +300,7 @@ export default function ComponentGrid() {
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      showToast("Kod kopyalandı!", "success");
     } catch (_) {}
   };
 
@@ -318,10 +338,28 @@ export default function ComponentGrid() {
   }, [components, activeFilter]);
 
   if (loading) return (
-    <div className="py-20 text-center">
-      <div className="w-8 h-8 mx-auto mb-4 border-4 border-[#ff2b73] border-t-transparent rounded-full animate-spin" />
-      <p className="text-white/40">Bileşenler yükleniyor...</p>
-    </div>
+    <section className="py-20 px-6" id="components">
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-8 right-8 z-[2000] px-6 py-4 rounded-2xl border shadow-2xl transition-all animate-in slide-in-from-bottom-5 duration-300 flex items-center gap-3 backdrop-blur-xl ${
+          toast.type === 'success' ? 'bg-[#050505]/90 border-green-500/50 text-green-400' : 
+          toast.type === 'error' ? 'bg-[#050505]/90 border-red-500/50 text-red-400' : 
+          'bg-[#050505]/90 border-blue-500/50 text-blue-400'
+        }`}>
+          <div className={`w-2 h-2 rounded-full ${
+            toast.type === 'success' ? 'bg-green-500' : 
+            toast.type === 'error' ? 'bg-red-500' : 
+            'bg-blue-500'
+          } animate-pulse`}></div>
+          <span className="font-bold text-xs tracking-wide uppercase">{toast.msg}</span>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto text-center">
+        <div className="w-8 h-8 mx-auto mb-4 border-4 border-[#ff2b73] border-t-transparent rounded-full animate-spin" />
+        <p className="text-white/40">Bileşenler yükleniyor...</p>
+      </div>
+    </section>
   );
 
   if (components.length === 0) return (
@@ -751,13 +789,11 @@ export default function ComponentGrid() {
                       </pre>
                     </div>
 
-                    {/* Install komutu */}
+{/* Install komutu */}
                     <div className="px-5 py-3 border-t border-white/5 bg-black/20 shrink-0">
                       <span className="text-[10px] text-white/20 font-mono">
                         {activeFramework === "react" && "npm install @rive-app/react-canvas"}
                         {activeFramework === "js" && "npm install @rive-app/canvas"}
-                        {activeFramework === "rn" && "npm install @rive-app/react-native react-native-nitro-modules"}
-                        {activeFramework === "flutter" && "flutter pub add rive"}
                       </span>
                     </div>
                   </div>
@@ -777,21 +813,25 @@ export default function ComponentGrid() {
                     <p className="text-white/40 text-sm italic">Henüz yorum yapılmamış. İlk yorumu sen yap!</p>
                   ) : (
                     comments.map(c => (
-                      <div key={c.id} className="p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#ff2b73] to-[#ff7e5f] flex items-center justify-center text-white font-bold shrink-0">
+                      <div key={c.id} className={`p-4 rounded-xl bg-white/[0.02] border border-white/5 flex gap-4 transition-all ${c.is_approved === 0 ? 'opacity-40 grayscale blur-[0.5px]' : c.is_approved === 2 ? 'opacity-50 border-red-500/20 bg-red-500/5' : ''}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shrink-0 ${c.is_approved === 2 ? 'bg-red-500/20' : 'bg-gradient-to-tr from-[#ff2b73] to-[#ff7e5f]'}`}>
                           {c.full_name?.charAt(0) || '?'}
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-sm">{c.full_name}</span>
+                            <span className={`font-semibold text-sm ${c.is_approved === 2 ? 'text-red-400' : 'text-white'}`}>{c.full_name}</span>
                             {c.plan === 'PRO' && (
                               <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#ff2b73]/20 text-[#ff2b73] rounded border border-[#ff2b73]/30">PRO</span>
                             )}
+                            {c.is_approved === 0 && <span className="text-[9px] text-white/30 font-medium tracking-wider bg-white/5 px-2 py-0.5 rounded italic">ONAY BEKLİYOR</span>}
+                            {c.is_approved === 2 && <span className="text-[9px] text-red-500 font-bold tracking-wider bg-red-500/10 px-2 py-0.5 rounded">REDDEDİLDİ</span>}
                             <span className="text-white/30 text-xs ml-auto">
                               {new Date(c.created_at).toLocaleDateString('tr-TR')}
                             </span>
                           </div>
-                          <p className="text-white/70 text-sm whitespace-pre-wrap">{c.content}</p>
+                          <p className={`text-sm whitespace-pre-wrap ${c.is_approved === 2 ? 'text-red-400/60 line-through decoration-red-500/50' : 'text-white/70'}`}>
+                            {c.content}
+                          </p>
                         </div>
                       </div>
                     ))

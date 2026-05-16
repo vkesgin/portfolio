@@ -27,6 +27,7 @@ export default function TemplateModal({ comp, user, isPro, onClose }: Props) {
   const cfg = useMemo<RiveCfg>(() => { try { return comp.tags ? JSON.parse(comp.tags) : {}; } catch { return {}; } }, [comp]);
   const fileName = useMemo(() => comp.image_url?.split("/").pop() ?? "template.riv", [comp]);
   const sms = cfg.stateMachines ?? (cfg.statemachine ? [cfg.statemachine] : []);
+  const vmPropNames = useMemo(() => cfg.viewModelProps?.map(p => p.name) ?? [], [cfg]);
 
   const generatedCode = useMemo(() => {
     const firstCustom = Object.values(customTexts)[0] || "";
@@ -87,7 +88,7 @@ export default function TemplateModal({ comp, user, isPro, onClose }: Props) {
   const previewPanel = (
     <div className="relative w-full max-w-md rounded-2xl overflow-hidden border border-white/10 bg-black/40 shadow-[0_0_40px_rgba(255,43,115,0.05)]" style={{ height: "300px" }}>
       <div className="absolute" style={{ inset: "20px", display: "flex" }}>
-        <RiveDemo key={JSON.stringify(previewTexts)} src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} artboard={cfg.artboard} stateMachines={sms} labels={Object.keys(previewTexts).length > 0 ? previewTexts : undefined} onDefaultLabel={setDefaultLabel} onDefaultLabels={setDefaultLabels} viewModelName={cfg.viewModelProps?.[0]?.vmName} fallbackDefaults={defaultLabels} />
+        <RiveDemo key={JSON.stringify(previewTexts)} src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} artboard={cfg.artboard} stateMachines={sms} labels={Object.keys(previewTexts).length > 0 ? previewTexts : undefined} onDefaultLabel={setDefaultLabel} onDefaultLabels={setDefaultLabels} viewModelName={cfg.viewModelProps?.[0]?.vmName} fallbackDefaults={defaultLabels} viewModelPropNames={vmPropNames} />
       </div>
       {!isLocked && <button onClick={() => setFullscreen(true)} className="absolute bottom-3 right-3 p-2 bg-black/60 hover:bg-[#ff2b73] text-white rounded-xl backdrop-blur-md transition-all border border-white/10 group" title="Büyük Ekranda İncele">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
@@ -222,7 +223,7 @@ export default function TemplateModal({ comp, user, isPro, onClose }: Props) {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>Kapat
           </button>
           <div className="w-full h-full max-w-[90vw] max-h-[85vh] flex items-center justify-center">
-            <RiveDemo key={JSON.stringify(previewTexts)} src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} artboard={cfg.artboard} stateMachines={sms} labels={Object.keys(previewTexts).length > 0 ? previewTexts : undefined} viewModelName={cfg.viewModelProps?.[0]?.vmName} fallbackDefaults={defaultLabels} />
+            <RiveDemo key={JSON.stringify(previewTexts)} src={`https://vk-portfolio-api.vkesgin38.workers.dev${comp.image_url}`} artboard={cfg.artboard} stateMachines={sms} labels={Object.keys(previewTexts).length > 0 ? previewTexts : undefined} viewModelName={cfg.viewModelProps?.[0]?.vmName} fallbackDefaults={defaultLabels} viewModelPropNames={vmPropNames} />
           </div>
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 px-6 py-3 bg-black/50 border border-white/10 rounded-full text-white/50 text-sm backdrop-blur-md">Fareyle üzerine gelin veya tıklayarak etkileşime girin.</div>
         </div>

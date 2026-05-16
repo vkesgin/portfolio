@@ -179,6 +179,8 @@ export default function ComponentGrid() {
     try { return selectedComp?.tags ? JSON.parse(selectedComp.tags) : {}; } catch { return {}; }
   }, [selectedComp]);
 
+  const vmPropNames = useMemo(() => selectedCfg.viewModelProps?.map(p => p.name) ?? [], [selectedCfg]);
+
   const selectedFileName = useMemo(
     () => selectedComp?.image_url?.split("/").pop() ?? "animation.riv",
     [selectedComp]
@@ -377,6 +379,7 @@ export default function ComponentGrid() {
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
                           viewModelName={selectedCfg.viewModelProps?.[0]?.vmName}
                           fallbackDefaults={defaultLabels}
+                          viewModelPropNames={vmPropNames}
                         />
                       </div>
                     </div>
@@ -417,6 +420,7 @@ export default function ComponentGrid() {
                           stateMachines={selectedCfg.stateMachines ?? (selectedCfg.statemachine ? [selectedCfg.statemachine] : [])}
                           viewModelName={selectedCfg.viewModelProps?.[0]?.vmName}
                           fallbackDefaults={defaultLabels}
+                          viewModelPropNames={vmPropNames}
                         />
                       </div>
                     </div>
@@ -454,6 +458,7 @@ export default function ComponentGrid() {
                           onDefaultLabels={setDefaultLabels}
                           viewModelName={selectedCfg.viewModelProps?.[0]?.vmName}
                           fallbackDefaults={defaultLabels}
+                          viewModelPropNames={vmPropNames}
                         />
                       </div>
                       
@@ -765,6 +770,7 @@ export default function ComponentGrid() {
               labels={Object.keys(previewTexts).length > 0 ? previewTexts : undefined}
               viewModelName={selectedCfg.viewModelProps?.[0]?.vmName}
               fallbackDefaults={defaultLabels}
+              viewModelPropNames={vmPropNames}
             />
           </div>
 

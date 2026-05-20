@@ -24,6 +24,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const startPageInput = document.getElementById('startPage');
   const endPageInput = document.getElementById('endPage');
 
+  const statsPanel = document.getElementById('statsPanel');
+  const origSizeStr = document.getElementById('origSizeStr');
+  const newSizeStr = document.getElementById('newSizeStr');
+
   if (typeof gsap !== 'undefined') {
     gsap.from('#tool-hero', { y: 30, opacity: 0, duration: 1, ease: 'power3.out' });
     gsap.from('.tool-tabs', { y: 20, opacity: 0, duration: 1, delay: 0.2, ease: 'power3.out' });
@@ -48,13 +52,23 @@ document.addEventListener('DOMContentLoaded', () => {
         splitSettings.style.display = 'none';
         step2Title.innerText = "Adım 2: Birleştir ve İndir";
         actionBtn.innerText = "Birleştirilmiş Belgeyi İndir ↓";
-      } else {
+        if(statsPanel) statsPanel.style.display = 'none';
+      } else if (currentMode === 'split') {
         pdfInput.multiple = false;
         step1Title.innerText = "Adım 1: Tek PDF Seç";
         step1Desc.innerText = "Sayfalarını parçalamak istediğiniz tek bir belgeyi yükleyin.";
         splitSettings.style.display = 'none'; // Sadece dosya gelince açılacak
         step2Title.innerText = "Adım 2: Parçaları İndir";
         actionBtn.innerText = "Kesilmiş Belgeyi İndir ↓";
+        if(statsPanel) statsPanel.style.display = 'none';
+      } else if (currentMode === 'compress') {
+        pdfInput.multiple = false;
+        step1Title.innerText = "Adım 1: PDF Seç";
+        step1Desc.innerText = "Dosya boyutunu yapısal olarak küçültmek istediğiniz belgeyi yükleyin.";
+        splitSettings.style.display = 'none';
+        step2Title.innerText = "Adım 2: Sıkıştır ve İndir";
+        actionBtn.innerText = "Belgeyi Sıkıştır ↓";
+        if(statsPanel) statsPanel.style.display = 'none';
       }
     });
   });
@@ -81,9 +95,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    if (currentMode === 'split') {
+    if (currentMode === 'split' || currentMode === 'compress') {
       uploadedFiles = [validFiles[0]]; // sadece ilk dosyayı al
-      analyzeSinglePDF(uploadedFiles[0]);
+      if (currentMode === 'split') {
+        analyzeSinglePDF(uploadedFiles[0]);
+      }
     } else {
       // merge modunda üstüne ekleyebilir
       uploadedFiles = uploadedFiles.concat(validFiles);
@@ -141,8 +157,14 @@ document.addEventListener('DOMContentLoaded', () => {
       reportBanner.style.display = 'block';
       actionBtn.style.display = 'none';
     }
-    else if (currentMode === 'split' && uploadedFiles.length === 1) {
+    else if ((currentMode === 'split' || currentMode === 'compress') && uploadedFiles.length === 1) {
       actionBtn.style.display = 'flex';
+      if (currentMode === 'compress') {
+        statsPanel.style.display = 'block';
+        origSizeStr.innerText = formatBytes(uploadedFiles[0].size);
+        newSizeStr.innerText = 'Bekleniyor...';
+        reportBanner.style.display = 'none';
+      }
     }
   }
 
@@ -181,8 +203,10 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       if (currentMode === 'merge') {
         await handleMerge();
-      } else {
+      } else if (currentMode === 'split') {
         await handleSplit();
+      } else if (currentMode === 'compress') {
+        await handleCompress();
       }
     } catch (err) {
       console.error(err);
@@ -238,6 +262,53 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadBlob(newPdfBytes, `ayrilmis-${start}-${end}.pdf`, 'application/pdf');
 
     reportBanner.innerText = `Başarı! ${indicesToCopy.length} sayfa söküldü ve yeni PDF oluşturuldu.`;
+  }
+
+  async function handleCompress() {
+    const file = uploadedFiles[0];
+    const origBytes = file.size;
+    const fileBuffer = await file.arrayBuffer();
+    const sourcePdf = await PDFDocument.load(fileBuffer);
+    
+    // Yapisal olarak yeniden olustur (Gereksiz objeleri ve metadataları atar)
+    const newPdf = await PDFDocument.create();
+    const copiedPages = await newPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
+    copiedPages.forEach((page) => newPdf.addPage(page));
+    
+    // Obje streamleri ile sikistirarak kaydet
+    const newPdfBytes = await newPdf.save({ useObjectStreams: true });
+    const newBytesLength = newPdfBytes.byteLength;
+    
+    newSizeStr.innerText = formatBytes(newBytesLength);
+    
+    let diff = origBytes - newBytesLength;
+    if (diff < 0) diff = 0;
+    
+    let percent = Math.round((diff / origBytes) * 100);
+    
+    reportBanner.style.display = 'block';
+    if (percent > 0) {
+      reportBanner.style.background = 'rgba(0,229,255,0.1)';
+      reportBanner.style.border = '1px solid rgba(0,229,255,0.3)';
+      reportBanner.style.color = 'var(--accent)';
+      reportBanner.innerText = `Tasarruf: %${percent} (↓${formatBytes(diff)})\nYapısal gereksiz veriler temizlendi.`;
+    } else {
+      reportBanner.style.background = 'rgba(255,255,255,0.05)';
+      reportBanner.style.border = '1px solid rgba(255,255,255,0.1)';
+      reportBanner.style.color = 'var(--text-muted)';
+      reportBanner.innerText = `Optimum Boyut (Sıkışma Yok).`;
+    }
+    
+    downloadBlob(newPdfBytes, `kucultulmus-belge.pdf`, 'application/pdf');
+  }
+
+  function formatBytes(bytes, decimals = 2) {
+    if (!+bytes) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
   }
 
   function downloadBlob(byteData, fileName, mimeType) {

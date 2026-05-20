@@ -139,6 +139,7 @@
         <div class="tool-tabs">
           <button class="tab-btn active" data-tab="merge">PDF Birleştir</button>
           <button class="tab-btn" data-tab="split">PDF Sayfa Ayır</button>
+          <button class="tab-btn" data-tab="compress">PDF Küçült</button>
         </div>
 
         <div class="tool-card">
@@ -184,8 +185,16 @@
               İşlem bekletiliyor...
             </div>
 
+            <!-- Sadece Compress modunda görünecek boyut istatistikleri -->
+            <div id="statsPanel" style="display:none; margin-top: 24px;">
+              <div style="display:flex; justify-content:space-between; margin-bottom: 12px; font-size: 14px; color: var(--text-muted);">
+                <span>Orjinal: <strong id="origSizeStr" style="color:var(--text-main);">0 KB</strong></span>
+                <span>Yeni: <strong id="newSizeStr" style="color:var(--text-main);">0 KB</strong></span>
+              </div>
+            </div>
+
             <!-- İşlem Rapor Banner -->
-            <div id="reportBanner" class="gain-banner" style="display:none; margin-top: 24px;">
+            <div id="reportBanner" class="gain-banner" style="display:none; margin-top: 12px;">
               İşlem Raporu Buraya Gelecek
             </div>
             

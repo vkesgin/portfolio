@@ -72,6 +72,11 @@
   <link rel="stylesheet" href="assets/css/tool.css">
   <!-- PDF-Lib -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
 <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-NRXJP6L8XZ"></script>
   <script>
@@ -172,6 +177,21 @@
               <div class="tool-info-box">
                 <span class="info-icon">💡</span>
                 <p>Mevcut PDF'in toplam sayfa sayısını sağdaki ekranda görüntüleyebilirsiniz.</p>
+              </div>
+            </div>
+            
+            <!-- Sadece Compress modunda görünecek ayarlar -->
+            <div id="compressSettings" style="display: none; margin-top: 24px;">
+              <div class="input-group">
+                <label for="qualitySlider" style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                  Görsel Sıkıştırma Kalitesi
+                  <span id="qualityVal" style="color:var(--accent);">Orta (60%)</span>
+                </label>
+                <input type="range" id="qualitySlider" min="0.1" max="1" step="0.1" value="0.6">
+              </div>
+              <div class="tool-info-box" style="margin-top: 12px;">
+                <span class="info-icon">💡</span>
+                <p>Uyarı: Sayfalar optimize edilmiş görsellere dönüştürülecektir. PDF boyutu ciddi oranda küçülür ancak metinler seçilemez.</p>
               </div>
             </div>
             

@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const step2Title = document.getElementById('step2Title');
   const step2Desc = document.getElementById('step2Desc');
   const splitSettings = document.getElementById('splitSettings');
+  const compressSettings = document.getElementById('compressSettings');
   
   const emptyState = document.getElementById('emptyState');
   const reportBanner = document.getElementById('reportBanner');
@@ -27,6 +28,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const statsPanel = document.getElementById('statsPanel');
   const origSizeStr = document.getElementById('origSizeStr');
   const newSizeStr = document.getElementById('newSizeStr');
+
+  const qualitySlider = document.getElementById('qualitySlider');
+  const qualityVal = document.getElementById('qualityVal');
+
+  if (qualitySlider) {
+    qualitySlider.addEventListener('input', (e) => {
+      let q = Math.round(e.target.value * 100);
+      let text = "Orta";
+      if (q <= 30) text = "Düşük";
+      else if (q >= 80) text = "Yüksek";
+      qualityVal.innerText = `${text} (${q}%)`;
+    });
+  }
 
   if (typeof gsap !== 'undefined') {
     gsap.from('#tool-hero', { y: 30, opacity: 0, duration: 1, ease: 'power3.out' });
@@ -53,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
         step2Title.innerText = "Adım 2: Birleştir ve İndir";
         actionBtn.innerText = "Birleştirilmiş Belgeyi İndir ↓";
         if(statsPanel) statsPanel.style.display = 'none';
+        if(compressSettings) compressSettings.style.display = 'none';
       } else if (currentMode === 'split') {
         pdfInput.multiple = false;
         step1Title.innerText = "Adım 1: Tek PDF Seç";
@@ -61,14 +76,16 @@ document.addEventListener('DOMContentLoaded', () => {
         step2Title.innerText = "Adım 2: Parçaları İndir";
         actionBtn.innerText = "Kesilmiş Belgeyi İndir ↓";
         if(statsPanel) statsPanel.style.display = 'none';
+        if(compressSettings) compressSettings.style.display = 'none';
       } else if (currentMode === 'compress') {
         pdfInput.multiple = false;
         step1Title.innerText = "Adım 1: PDF Seç";
-        step1Desc.innerText = "Dosya boyutunu yapısal olarak küçültmek istediğiniz belgeyi yükleyin.";
+        step1Desc.innerText = "Dosya boyutunu görsel olarak küçültmek istediğiniz belgeyi yükleyin.";
         splitSettings.style.display = 'none';
         step2Title.innerText = "Adım 2: Sıkıştır ve İndir";
         actionBtn.innerText = "Belgeyi Sıkıştır ↓";
         if(statsPanel) statsPanel.style.display = 'none';
+        if(compressSettings) compressSettings.style.display = 'none';
       }
     });
   });
@@ -161,6 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
       actionBtn.style.display = 'flex';
       if (currentMode === 'compress') {
         statsPanel.style.display = 'block';
+        if (compressSettings) compressSettings.style.display = 'block';
         origSizeStr.innerText = formatBytes(uploadedFiles[0].size);
         newSizeStr.innerText = 'Bekleniyor...';
         reportBanner.style.display = 'none';
@@ -268,15 +286,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const file = uploadedFiles[0];
     const origBytes = file.size;
     const fileBuffer = await file.arrayBuffer();
-    const sourcePdf = await PDFDocument.load(fileBuffer);
     
-    // Yapisal olarak yeniden olustur (Gereksiz objeleri ve metadataları atar)
+    // PDF.js ile PDF'i parse et
+    const pdf = await pdfjsLib.getDocument({ data: fileBuffer }).promise;
+    const numPages = pdf.numPages;
+    
     const newPdf = await PDFDocument.create();
-    const copiedPages = await newPdf.copyPages(sourcePdf, sourcePdf.getPageIndices());
-    copiedPages.forEach((page) => newPdf.addPage(page));
+    const quality = qualitySlider ? parseFloat(qualitySlider.value) : 0.6;
     
-    // Obje streamleri ile sikistirarak kaydet
-    const newPdfBytes = await newPdf.save({ useObjectStreams: true });
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    for (let i = 1; i <= numPages; i++) {
+      loadingStatus.innerText = `İşleniyor: Sayfa ${i} / ${numPages}...`;
+      const page = await pdf.getPage(i);
+      
+      // Çözünürlüğü makul bir seviyede tut (2.0 çok iyi kalite, 1.5 orta kalite sağlar)
+      const scale = 1.5; 
+      const viewport = page.getViewport({ scale });
+      
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      
+      // PDF'lerde arka plan varsayılan transparan dönebilir, beyaz yapalım
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Sayfayı canvas'a çiz
+      await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+      
+      // Belirlenen kalitede JPEG olarak sıkıştır
+      const imgDataUrl = canvas.toDataURL('image/jpeg', quality);
+      
+      // Oluşan Base64 verisini buffer'a çevir ve pdf-lib'e göm
+      const jpgImageBytes = await fetch(imgDataUrl).then(res => res.arrayBuffer());
+      const jpgImage = await newPdf.embedJpg(jpgImageBytes);
+      
+      // Orijinal sayfa boyutlarını koru
+      const unscaledViewport = page.getViewport({ scale: 1.0 });
+      const pdfPage = newPdf.addPage([unscaledViewport.width, unscaledViewport.height]);
+      
+      pdfPage.drawImage(jpgImage, {
+        x: 0,
+        y: 0,
+        width: unscaledViewport.width,
+        height: unscaledViewport.height,
+      });
+    }
+    
+    loadingStatus.innerText = `Dosya oluşturuluyor...`;
+    
+    const newPdfBytes = await newPdf.save();
     const newBytesLength = newPdfBytes.byteLength;
     
     newSizeStr.innerText = formatBytes(newBytesLength);
@@ -291,7 +351,7 @@ document.addEventListener('DOMContentLoaded', () => {
       reportBanner.style.background = 'rgba(0,229,255,0.1)';
       reportBanner.style.border = '1px solid rgba(0,229,255,0.3)';
       reportBanner.style.color = 'var(--accent)';
-      reportBanner.innerText = `Tasarruf: %${percent} (↓${formatBytes(diff)})\nYapısal gereksiz veriler temizlendi.`;
+      reportBanner.innerText = `Tasarruf: %${percent} Mükemmel! (↓${formatBytes(diff)})`;
     } else {
       reportBanner.style.background = 'rgba(255,255,255,0.05)';
       reportBanner.style.border = '1px solid rgba(255,255,255,0.1)';
@@ -300,6 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     downloadBlob(newPdfBytes, `kucultulmus-belge.pdf`, 'application/pdf');
+    loadingStatus.innerText = `İşleniyor, lütfen bekleyin...`;
   }
 
   function formatBytes(bytes, decimals = 2) {

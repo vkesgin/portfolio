@@ -313,7 +313,7 @@ export default function DashboardPage() {
         )}
 
         {/* ADMIN MODERATION PANEL */}
-        {user.email === 'vkesgin38@gmail.com' && <AdminModerationPanel />}
+        {user.email === 'veli@velikesgin.com' && <AdminModerationPanel />}
       </div>
     </main>
   );

@@ -912,7 +912,7 @@ if (path.startsWith('/api/kpss')) {
       if (!compId) return json({ error: 'component_id required' }, 400, origin);
       
       const authData = await uiAuth(request, env);
-      const isAdmin = authData?.email === 'vkesgin38@gmail.com';
+      const isAdmin = authData?.email === 'veli@velikesgin.com';
       
       // Herkese açık olanlar (approved=1) + Yapanın kendisi veya Admin ise diğerleri (0,2)
       const { results } = await env.DB.prepare(`
@@ -932,8 +932,8 @@ if (path.startsWith('/api/kpss')) {
       const { component_id, content } = await request.json().catch(() => ({}));
       if (!component_id || !content) return json({ error: 'Eksik veri' }, 400, origin);
       
-      // Admin kontrolü: Sadece vkesgin38@gmail.com direkt yayınlar
-      const is_admin = authData.email === 'vkesgin38@gmail.com';
+      // Admin kontrolü: Sadece veli@velikesgin.com direkt yayınlar
+      const is_admin = authData.email === 'veli@velikesgin.com';
       const is_approved = is_admin ? 1 : 0;
 
       await env.DB.prepare(
@@ -945,7 +945,7 @@ if (path.startsWith('/api/kpss')) {
 
     if (cleanPath === '/api/admin/comments' && method === 'GET') {
       const authData = await uiAuth(request, env);
-      if (!authData || authData.email !== 'vkesgin38@gmail.com') return json({ error: 'Yetkisiz' }, 401, origin);
+      if (!authData || authData.email !== 'veli@velikesgin.com') return json({ error: 'Yetkisiz' }, 401, origin);
 
       const { results } = await env.DB.prepare(`
         SELECT c.id, c.content, c.is_approved, c.created_at, u.full_name, u.email, c.component_id
@@ -958,7 +958,7 @@ if (path.startsWith('/api/kpss')) {
 
     if (cleanPath.match(/^\/api\/admin\/comments\/\d+$/) && method === 'PUT') {
       const authData = await uiAuth(request, env);
-      if (!authData || authData.email !== 'vkesgin38@gmail.com') return json({ error: 'Yetkisiz' }, 401, origin);
+      if (!authData || authData.email !== 'veli@velikesgin.com') return json({ error: 'Yetkisiz' }, 401, origin);
 
       const id = cleanPath.split('/').pop();
       const { status } = await request.json().catch(() => ({})); // 0, 1, 2
@@ -968,7 +968,7 @@ if (path.startsWith('/api/kpss')) {
     
     if (cleanPath.match(/^\/api\/admin\/comments\/\d+$/) && method === 'DELETE') {
       const authData = await uiAuth(request, env);
-      if (!authData || authData.email !== 'vkesgin38@gmail.com') return json({ error: 'Yetkisiz' }, 401, origin);
+      if (!authData || authData.email !== 'veli@velikesgin.com') return json({ error: 'Yetkisiz' }, 401, origin);
 
       const id = cleanPath.split('/').pop();
       await env.DB.prepare("DELETE FROM ui_comments WHERE id = ?").bind(id).run();

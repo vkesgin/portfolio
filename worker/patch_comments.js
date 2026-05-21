@@ -27,9 +27,9 @@ const commentRoutes = `
       const { component_id, content } = await request.json().catch(() => ({}));
       if (!component_id || !content) return json({ error: 'Eksik veri' }, 400, origin);
       
-      // Adminler otomatik onayli olabilir (vkesgin38@gmail.com)
+      // Adminler otomatik onayli olabilir (veli@velikesgin.com)
       const user = await env.DB.prepare("SELECT email FROM ui_users WHERE id=?").bind(authData.userId).first();
-      const is_approved = user?.email === 'vkesgin38@gmail.com' ? 1 : 0;
+      const is_approved = user?.email === 'veli@velikesgin.com' ? 1 : 0;
 
       await env.DB.prepare(
         "INSERT INTO ui_comments (component_id, user_id, content, is_approved) VALUES (?, ?, ?, ?)"

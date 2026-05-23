@@ -435,6 +435,10 @@ function initWorks() {
     grid.querySelectorAll('.port-card--video').forEach(card => {
       card.addEventListener('click', e => {
         e.stopPropagation();
+        if (card.dataset.uilink) {
+          window.open(card.dataset.uilink, '_blank');
+          return;
+        }
         const videoSrc = card.dataset.video;
         if (!videoSrc) return;
 
@@ -474,6 +478,10 @@ function initWorks() {
     // Görsel kartları
     grid.querySelectorAll('.port-card:not(.port-card--video)').forEach(card => {
       card.addEventListener('click', () => {
+        if (card.dataset.uilink) {
+          window.open(card.dataset.uilink, '_blank');
+          return;
+        }
         const imgSrc = card.dataset.img || card.querySelector('img')?.src;
         if (!imgSrc) return;
 

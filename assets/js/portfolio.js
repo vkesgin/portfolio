@@ -256,7 +256,13 @@
         card.replaceWith(card.cloneNode(true));
       });
       document.querySelectorAll('.port-card').forEach(card => {
-        card.addEventListener('click', () => openLightbox(card));
+        card.addEventListener('click', () => {
+          if (card.dataset.uilink) {
+            window.open(card.dataset.uilink, '_blank');
+          } else {
+            openLightbox(card);
+          }
+        });
       });
     }
     initPortfolioCards();

@@ -30,8 +30,13 @@ function buildPortfolioCard(p) {
   const videoSrc = getMediaUrl(p.video_url);
   const catLabel = {
     web: 'Web Design', '3d': '3D Animasyon', '2d': '2D Animasyon',
-    video: 'Videografi', graphic: 'Grafik Tasarım'
+    video: 'Videografi', graphic: 'Grafik Tasarım',
+    uilib: 'UI Animasyon', uitemplate: 'UI Şablonu'
   }[p.category] || p.category;
+
+  let uiLink = '';
+  if (p.category === 'uilib') uiLink = 'https://velikesgin.com/ui';
+  else if (p.category === 'uitemplate') uiLink = 'https://velikesgin.com/ui/templates';
 
   return `
     <div class="port-card ${isVideo ? 'port-card--video' : ''}"
@@ -41,6 +46,7 @@ function buildPortfolioCard(p) {
          data-tags="${p.tags || ''}"
          data-year="${p.year || ''}"
          data-img="${imgSrc}"
+         ${uiLink ? `data-uilink="${uiLink}"` : ''}
          ${isVideo ? `data-video="${videoSrc}"` : ''}>
       <div class="port-card-img">
         ${imgSrc

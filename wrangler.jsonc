@@ -6,10 +6,7 @@
     "enabled": true
   },
   "assets": {
-    "directory": "web-src/dist"
-  },
-  "build": {
-    "command": "npm run build --prefix web-src"
+    "directory": "."
   },
   "compatibility_flags": [
     "nodejs_compat"

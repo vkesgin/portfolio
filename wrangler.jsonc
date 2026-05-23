@@ -5,7 +5,9 @@
   "observability": {
     "enabled": true
   },
-  "pages_build_output_dir": "web-src/dist",
+  "assets": {
+    "directory": "web-src/dist"
+  },
   "build": {
     "command": "npm run build --prefix web-src"
   },

@@ -1,0 +1,123 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import { getLangFromUrl } from '../../i18n/utils';
+import { ui } from '../../i18n/ui';
+
+export function getStaticPaths() {
+  return Object.keys(ui).map(lang => ({ params: { lang } }));
+}
+
+const lang = getLangFromUrl(Astro.url);
+
+const c = {
+  tr: {
+    title: "Portfolyo — Veli Kesgin | Seçilmiş İşler",
+    eyebrow: "// portfolyo",
+    heroTitle1: "TÜME",
+    heroTitle2: "BAKIŞ",
+    heroSub: "7+ yılda üretilmiş seçilmiş işler. Web, animasyon, video ve grafik.",
+    filters: { all: "Tümü", web: "Web", d3: "3D", d2: "2D", video: "Video", graphic: "Grafik" },
+    empty: "Bu kategoride henüz iş yok."
+  },
+  en: {
+    title: "Portfolio — Veli Kesgin | Selected Works",
+    eyebrow: "// portfolio",
+    heroTitle1: "FULL",
+    heroTitle2: "OVERVIEW",
+    heroSub: "Selected works produced over 7+ years. Web, animation, video, and graphics.",
+    filters: { all: "All", web: "Web", d3: "3D", d2: "2D", video: "Video", graphic: "Graphic" },
+    empty: "No works in this category yet."
+  }
+}[lang];
+---
+<MainLayout title={c.title}>
+  <!-- LIGHTBOX -->
+  <div id="lightbox">
+    <button class="lb-close" id="lbClose">✕</button>
+    <button class="lb-prev" id="lbPrev">←</button>
+    <button class="lb-next" id="lbNext">→</button>
+    <div class="lb-inner">
+      <div class="lb-media-wrap" id="lbMediaWrap">
+        <div class="lb-img-wrap" id="lbImgWrap">
+          <img id="lbImg" src="" alt="">
+        </div>
+        <div class="lb-video-wrap" id="lbVideoWrap" style="display:none">
+          <video id="lbVideo" playsinline></video>
+          <div class="vp-big-play" id="vpBigPlay">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+          </div>
+          <div class="vp-controls">
+            <div class="vp-progress" id="vpProgress">
+              <div class="vp-progress-fill" id="vpFill"></div>
+            </div>
+            <div class="vp-bottom">
+              <button class="vp-btn" id="vpPlayBtn">
+                <svg id="vpPlayIcon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+              </button>
+              <span class="vp-time" id="vpTime">0:00 / 0:00</span>
+              <div class="vp-vol-wrap">
+                <button class="vp-btn" id="vpMuteBtn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  </svg>
+                </button>
+                <input type="range" class="vp-vol-slider" id="vpVol" min="0" max="1" step="0.05" value="1">
+              </div>
+              <button class="vp-btn" id="vpFullBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                  <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="lb-info">
+        <span class="lb-cat" id="lbCat"></span>
+        <h2 class="lb-title" id="lbTitle"></h2>
+        <p class="lb-desc" id="lbDesc"></p>
+        <div class="lb-tags" id="lbTags"></div>
+        <span class="lb-year" id="lbYear"></span>
+      </div>
+    </div>
+  </div>
+
+  <section id="port-hero">
+    <div class="port-hero-inner">
+      <p class="section-eyebrow port-eyebrow">{c.eyebrow}</p>
+      <h1 class="port-hero-title">
+        <span class="port-line">{c.heroTitle1}</span>
+        <span class="port-line port-line--outline">{c.heroTitle2}</span>
+      </h1>
+      <p class="port-hero-sub">{c.heroSub}</p>
+    </div>
+  </section>
+
+  <section id="port-gallery">
+    <div class="port-gallery-inner">
+      <div class="port-filters">
+        <button class="filter-btn active" data-filter="all">{c.filters.all} <span class="filter-count" id="fc-all">15</span></button>
+        <button class="filter-btn" data-filter="web">{c.filters.web} <span class="filter-count" id="fc-web">3</span></button>
+        <button class="filter-btn" data-filter="3d">{c.filters.d3} <span class="filter-count" id="fc-3d">3</span></button>
+        <button class="filter-btn" data-filter="2d">{c.filters.d2} <span class="filter-count" id="fc-2d">3</span></button>
+        <button class="filter-btn" data-filter="video">{c.filters.video} <span class="filter-count" id="fc-video">3</span></button>
+        <button class="filter-btn" data-filter="graphic">{c.filters.graphic} <span class="filter-count" id="fc-graphic">3</span></button>
+      </div>
+
+      <div class="port-grid" id="portGrid">
+        <!-- JS will populate this -->
+      </div>
+      <div class="port-empty" id="portEmpty" style="display:none">
+        <span>{c.empty}</span>
+      </div>
+    </div>
+  </section>
+
+  <Fragment slot="scripts">
+    <script src="/assets/js/portfolio-data.js?v=6" is:inline></script>
+    <script src="/assets/js/portfolio.js?v=5" is:inline></script>
+  </Fragment>
+</MainLayout>

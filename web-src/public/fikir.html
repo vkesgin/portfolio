@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fikir Havuzu — Veli Kesgin</title>
+  <link rel="stylesheet" href="assets/css/index.css">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card-bg: #141414;
+      --border: rgba(255, 255, 255, 0.05);
+      --text: #e0e0e0;
+      --accent: #00e5ff;
+      --accent-hover: #00b8cc;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    
+    /* Login Screen */
+    #login-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .auth-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 40px;
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .auth-box h1 {
+      margin: 0 0 10px 0;
+      font-size: 28px;
+      color: #fff;
+    }
+    .auth-box p {
+      color: #888;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+    .auth-input {
+      width: 100%;
+      padding: 14px;
+      margin-bottom: 15px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      transition: all 0.3s;
+      box-sizing: border-box;
+    }
+    .auth-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: rgba(0, 229, 255, 0.05);
+    }
+    .auth-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .auth-btn:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+    }
+    #login-error {
+      color: #ff4444;
+      font-size: 13px;
+      margin-top: 15px;
+      display: none;
+    }
+
+    /* Dashboard */
+    #dashboard {
+      display: none;
+      padding: 40px 5%;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .dash-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 40px;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    .dash-header h1 {
+      margin: 0;
+      font-size: 32px;
+      color: #fff;
+    }
+    .dash-header span {
+      color: #888;
+      font-size: 14px;
+    }
+    .header-actions {
+      display: flex;
+      gap: 15px;
+    }
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s;
+      border: 1px solid transparent;
+      font-size: 14px;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+    }
+    .btn-outline {
+      background: transparent;
+      border-color: var(--border);
+      color: #fff;
+    }
+    .btn-outline:hover {
+      background: rgba(255,255,255,0.05);
+    }
+
+    /* Masonry Grid */
+    .masonry-grid {
+      column-count: 4;
+      column-gap: 20px;
+    }
+    @media (max-width: 1200px) { .masonry-grid { column-count: 3; } }
+    @media (max-width: 900px) { .masonry-grid { column-count: 2; } }
+    @media (max-width: 600px) { .masonry-grid { column-count: 1; } }
+
+    .post-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      break-inside: avoid;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .post-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      border-color: rgba(255,255,255,0.1);
+    }
+    .post-media {
+      width: 100%;
+      background: #000;
+      position: relative;
+    }
+    .post-media iframe, .post-media video, .post-media img {
+      width: 100%;
+      display: block;
+      border: none;
+    }
+    .post-info {
+      padding: 15px;
+    }
+    .post-desc {
+      font-size: 14px;
+      color: #ddd;
+      margin: 0 0 10px 0;
+      line-height: 1.5;
+    }
+    .post-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #666;
+    }
+    .author-badge {
+      background: rgba(255,255,255,0.05);
+      padding: 4px 10px;
+      border-radius: 20px;
+      color: #aaa;
+    }
+    .delete-post {
+      background: transparent;
+      border: none;
+      color: #ff4444;
+      cursor: pointer;
+      opacity: 0.5;
+      transition: 0.3s;
+      font-size: 12px;
+    }
+    .delete-post:hover { opacity: 1; }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(5px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: 0.3s;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: all;
+    }
+    .modal-content {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 500px;
+      transform: translateY(20px);
+      transition: 0.3s;
+    }
+    .modal-overlay.active .modal-content {
+      transform: translateY(0);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .modal-header h2 { margin: 0; font-size: 20px; }
+    .close-modal {
+      background: transparent;
+      border: none;
+      color: #888;
+      font-size: 24px;
+      cursor: pointer;
+    }
+    .modal-input {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 15px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: #fff;
+      box-sizing: border-box;
+    }
+    textarea.modal-input {
+      resize: vertical;
+      min-height: 80px;
+    }
+    
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Admin Notice */
+    .admin-notice {
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      color: var(--accent);
+      padding: 15px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div id="login-screen">
+    <div class="auth-box">
+      <h1>Fikir Havuzu</h1>
+      <p>İlham veren içerikleri keşfet ve paylaş.</p>
+      
+      <form id="login-form">
+        <input type="text" id="username" class="auth-input" placeholder="Kullanıcı Adı" required>
+        <input type="password" id="password" class="auth-input" placeholder="Şifre" required>
+        <button type="submit" class="auth-btn" id="login-btn">Giriş Yap</button>
+        <div id="login-error"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard">
+    <div class="dash-header">
+      <div>
+        <h1>Fikir Havuzu</h1>
+        <span id="user-greeting">Hoş geldin!</span>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-primary" onclick="openModal()">+ Yeni Fikir Ekle</button>
+        <button class="btn btn-outline" onclick="logout()">Çıkış Yap</button>
+      </div>
+    </div>
+    
+    
+
+    <div class="masonry-grid" id="posts-grid">
+      <!-- Posts will be injected here -->
+    </div>
+  </div>
+
+  
+  <!-- Change Password Modal -->
+  <div class="modal-overlay" id="pwd-modal" style="z-index: 2000;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Şifrenizi Belirleyin</h2>
+      </div>
+      <p style="font-size:13px; color:#aaa; margin-bottom:20px;">Güvenliğiniz için sisteme ilk girişinizde varsayılan şifrenizi değiştirmeniz gerekmektedir.</p>
+      <form id="pwd-form">
+        <input type="password" id="new-pwd" class="modal-input" placeholder="Yeni Şifreniz" required minlength="4">
+        <input type="password" id="new-pwd-confirm" class="modal-input" placeholder="Yeni Şifrenizi Tekrar Girin" required minlength="4">
+        <div id="pwd-error" style="color:#ff4444; font-size:12px; margin-bottom:10px; display:none;">Şifreler eşleşmiyor</div>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="submit-pwd-btn">Şifremi Güncelle</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Post Modal -->
+  <div class="modal-overlay" id="add-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Yeni Fikir Ekle</h2>
+        <button class="close-modal" onclick="closeModal()">×</button>
+      </div>
+      <form id="add-form">
+        
+        <input type="url" id="post-url" class="modal-input" placeholder="Link (Örn: https://instagram.com/reel/...)" required>
+        <textarea id="post-desc" class="modal-input" placeholder="Bu fikir hakkında ne düşünüyorsun? (İsteğe bağlı)"></textarea>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="submit-post-btn">Paylaş</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'https://vk-portfolio-api.vkesgin38.workers.dev';
+    let currentUser = null;
+    let token = localStorage.getItem('inspire_token');
+
+    // Init App
+    async function init() {
+      // Sessizce tabloları kur (ilk açılışta veritabanı yoksa diye)
+      fetch(`${API_URL}/api/inspire/init`).catch(()=>{});
+      
+      if (token) {
+        const u = localStorage.getItem('inspire_user');
+        if (u) {
+          currentUser = JSON.parse(u);
+          showDashboard();
+          return;
+        }
+      }
+    }
+    init();
+
+    // Login
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const u = document.getElementById('username').value;
+      const p = document.getElementById('password').value;
+      const btn = document.getElementById('login-btn');
+      const err = document.getElementById('login-error');
+      
+      btn.innerHTML = '<div class="spinner"></div>';
+      err.style.display = 'none';
+
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        const data = await res.json();
+        
+        if (!res.ok) throw new Error(data.error || 'Giriş başarısız');
+        
+        token = data.token;
+        currentUser = data.user;
+        localStorage.setItem('inspire_token', token);
+        localStorage.setItem('inspire_user', JSON.stringify(currentUser));
+        
+        showDashboard();
+      } catch(error) {
+        err.textContent = error.message;
+        err.style.display = 'block';
+      } finally {
+        btn.innerHTML = 'Giriş Yap';
+      }
+    });
+
+    function logout() {
+      localStorage.removeItem('inspire_token');
+      localStorage.removeItem('inspire_user');
+      token = null;
+      currentUser = null;
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+    }
+
+    async function showDashboard() {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      
+      document.getElementById('user-greeting').textContent = `Hoş geldin, ${currentUser.full_name || currentUser.username}!`;
+      
+      if (currentUser.is_first_login) {
+        document.getElementById('pwd-modal').classList.add('active');
+        document.getElementById('pwd-modal').style.pointerEvents = 'all'; // prevent closing
+      }
+      
+      
+      
+      loadPosts();
+    }
+
+    
+    // Change Password
+    document.getElementById('pwd-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const p1 = document.getElementById('new-pwd').value;
+      const p2 = document.getElementById('new-pwd-confirm').value;
+      const err = document.getElementById('pwd-error');
+      
+      if (p1 !== p2) {
+        err.style.display = 'block';
+        return;
+      }
+      err.style.display = 'none';
+      
+      const btn = document.getElementById('submit-pwd-btn');
+      btn.innerHTML = '<div class="spinner"></div>';
+      
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/change-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ newPassword: p1 })
+        });
+        
+        if (!res.ok) throw new Error('Şifre güncellenemedi');
+        
+        currentUser.is_first_login = 0;
+        localStorage.setItem('inspire_user', JSON.stringify(currentUser));
+        document.getElementById('pwd-modal').classList.remove('active');
+      } catch(e) {
+        err.textContent = e.message;
+        err.style.display = 'block';
+      } finally {
+        btn.innerHTML = 'Şifremi Güncelle';
+      }
+    });
+
+    // Modal
+
+    function openModal() {
+      document.getElementById('add-modal').classList.add('active');
+    }
+    function closeModal() {
+      document.getElementById('add-modal').classList.remove('active');
+      document.getElementById('add-form').reset();
+    }
+
+    // Add Post
+    document.getElementById('add-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-post-btn');
+      btn.innerHTML = '<div class="spinner"></div>';
+      
+      
+      let url = document.getElementById('post-url').value;
+        let type = 'link';
+      if (url.includes('instagram.com')) type = 'reels';
+      else if (url.includes('pinterest.')) type = 'pinterest';
+      else if (url.includes('drive.google.com')) type = 'drive';
+        else if (url.includes('youtube.com') || url.includes('youtu.be')) type = 'youtube';
+      else if (url.match(/\.(mp4|webm|mov)(\?|$)/i)) type = 'video';
+        else if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?|$)/i)) type = 'image';
+
+      const desc = document.getElementById('post-desc').value;
+      
+      // Instagram link cleanup
+      if (type === 'pinterest') { url = url.split('?')[0]; }
+      if (type === 'reels' && url.includes('instagram.com')) {
+        url = url.split('?')[0]; // Query parametrelerini temizle
+        if (url.endsWith('/')) url = url.slice(0, -1);
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/posts`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ type, url, description: desc })
+        });
+        
+        if (!res.ok) throw new Error('Yüklenemedi');
+        
+        closeModal();
+        loadPosts();
+      } catch(error) {
+        alert('Hata: ' + error.message);
+      } finally {
+        btn.innerHTML = 'Paylaş';
+      }
+    });
+
+    // Load Posts
+    async function loadPosts() {
+      const grid = document.getElementById('posts-grid');
+      grid.innerHTML = '<div style="text-align:center;width:100%;padding:40px;"><div class="spinner"></div></div>';
+      
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/posts`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const posts = await res.json();
+        
+        grid.innerHTML = '';
+        if(posts.length === 0) {
+          grid.innerHTML = '<div style="text-align:center;width:100%;color:#888;">Henüz fikir eklenmemiş. İlk fikri sen ekle!</div>';
+          return;
+        }
+
+        posts.forEach(p => {
+          const card = document.createElement('div');
+          card.className = 'post-card';
+          
+          let mediaHtml = '';
+          if (p.type === 'reels') {
+            // Instagram Embed
+            mediaHtml = `
+              <iframe src="${p.url}/embed" width="100%" height="450" frameborder="0" scrolling="no" allowtransparency="true" allowfullscreen></iframe>
+            `;
+          } else if (p.type === 'video') {
+            mediaHtml = `
+              <video src="${p.url}" controls controlsList="nodownload" preload="metadata" loop style="max-height: 500px; width: 100%; background:#000;"></video>
+            `;
+          } else {
+            mediaHtml = `
+              <img src="${p.url}" alt="Fikir Görseli">
+            `;
+          }
+
+          const canDelete = currentUser.username === 'vkesgin38' || currentUser.id === p.user_id;
+          const deleteHtml = canDelete ? `<button class="delete-post" onclick="deletePost(${p.id})">Sil</button>` : '';
+
+          if (p.type === 'drive') {
+            const driveId = p.url.match(/\/d\/([^\/]+)/);
+            const iframeUrl = driveId ? `https://drive.google.com/file/d/${driveId[1]}/preview` : p.url;
+            mediaHtml = `<iframe src="${iframeUrl}" width="100%" height="450" frameborder="0" allowfullscreen></iframe>`;
+          } else if (p.type === 'pinterest') {
+            const pinMatch = p.url.match(/pin\/(\d+)/);
+            if (pinMatch) {
+              mediaHtml = `<div style="padding: 10px; display: flex; justify-content: center;"><iframe src="https://assets.pinterest.com/ext/embed.html?id=${pinMatch[1]}" height="450" width="100%" frameborder="0" scrolling="no" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe></div>`;
+            } else {
+              mediaHtml = `<div style="padding: 10px; display: flex; justify-content: center;"><a data-pin-do="embedPin" data-pin-width="medium" href="${p.url}"></a></div>`;
+            }
+          } else if (p.type === 'youtube') {
+            const ytMatch = p.url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+            if (ytMatch) {
+              const isShort = p.url.includes('shorts');
+              mediaHtml = `<iframe src="https://www.youtube.com/embed/${ytMatch[1]}" width="100%" height="${isShort ? '500' : '250'}" frameborder="0" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>`;
+            }
+          } else if (p.type === 'link') {
+            mediaHtml = `
+              <div id="link-preview-${p.id}" style="padding:40px 20px; text-align:center; background:rgba(255,255,255,0.03); border-radius:12px; margin:10px;">
+                <a href="${p.url}" target="_blank" style="color:var(--accent); font-weight:bold; text-decoration:none; display:block; padding:15px; border:1px solid rgba(0,229,255,0.2); border-radius:8px;">🔗 Dış Bağlantıyı Aç / Ziyaret Et</a>
+                <div class="microlink-spinner" style="margin-top:10px; font-size:11px; color:#888;">Önizleme Yükleniyor...</div>
+              </div>
+`;
+          }
+
+          let notesHtml = '';
+          if (p.notes && p.notes.length > 0) {
+            const visibleNotes = p.notes.filter(n => String(n.is_public) === '1' || n.is_public === true || n.user_id === currentUser.id);
+            if (visibleNotes.length > 0) {
+              notesHtml = '<div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;"><strong style="font-size:12px;color:#aaa">Notlar:</strong>';
+              visibleNotes.forEach(n => {
+                const lock = (String(n.is_public) === '1' || n.is_public === true) ? '' : ' <span style="font-size:10px;color:#666">(Sadece sana özel)</span>';
+                const canEditNote = currentUser.username === 'vkesgin38' || currentUser.id === n.user_id;
+                const noteActions = canEditNote ? `<div style="margin-top:5px; display:flex; gap:10px;">
+                  <span style="font-size:11px; color:#00e5ff; cursor:pointer;" onclick="editNote(${n.id}, '${n.content.replace(/'/g, "\\'")}')">Düzenle</span>
+                  <span style="font-size:11px; color:#ff4444; cursor:pointer;" onclick="deleteNote(${n.id})">Sil</span>
+                </div>` : '';
+                notesHtml += `<div style="font-size:13px; color:#ccc; margin-top:5px; padding:8px; background:rgba(0,0,0,0.2); border-radius:8px;">
+                  <b>@${n.author || 'Anonim'}</b>: ${n.content}${lock}
+                  ${noteActions}
+                </div>`;
+              });
+              notesHtml += '</div>';
+            }
+          }
+          
+          const addNoteForm = `
+            <div style="margin-top:10px; display:flex; flex-direction:column; gap:5px;">
+              <input type="text" id="note-input-${p.id}" placeholder="Bir not ekle..." style="width:100%; padding:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:6px; color:#fff; font-size:12px; box-sizing:border-box;">
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label style="font-size:11px; color:#888; display:flex; align-items:center; gap:4px;">
+                  <input type="checkbox" id="note-public-${p.id}"> Diğer kullanıcılar da görsün
+                </label>
+                <button onclick="addNote(${p.id})" style="background:var(--accent); color:#000; border:none; padding:4px 10px; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer;">Ekle</button>
+              </div>
+            </div>
+          `;
+
+          card.innerHTML = `
+            <div class="post-media">${mediaHtml}</div>
+            <div class="post-info">
+              ${p.description ? `<p class="post-desc">${p.description}</p>` : ''}
+              <div class="post-meta">
+                <span class="author-badge">@${p.author || 'Anonim'}</span>
+                ${deleteHtml}
+              </div>
+              ${notesHtml}
+              ${addNoteForm}
+            </div>
+          `;
+          grid.appendChild(card);
+          
+          if (p.type === 'link') {
+            fetch('https://api.microlink.io?url=' + encodeURIComponent(p.url))
+              .then(r => r.json())
+              .then(data => {
+                const el = document.getElementById('link-preview-' + p.id);
+                if(!el) return;
+                if(data.status === 'success' && data.data) {
+                  const img = data.data.image ? data.data.image.url : (data.data.logo ? data.data.logo.url : '');
+                  const title = data.data.title || p.url;
+                  const desc = data.data.description ? data.data.description.substring(0,80)+'...' : '';
+                  el.innerHTML = `<a href="${p.url}" target="_blank" style="text-decoration:none; color:inherit; display:block; text-align:left;">
+                    ${img ? `<img src="${img}" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; margin-bottom:10px;">` : ''}
+                    <h4 style="margin:0 0 5px 0; font-size:14px; color:#fff;">${title}</h4>
+                    <p style="margin:0; font-size:11px; color:#888;">${desc}</p>
+                  </a>`;
+                  el.style.padding = '15px';
+                } else {
+                  const spinner = el.querySelector('.microlink-spinner');
+                  if(spinner) spinner.style.display = 'none';
+                }
+              }).catch(() => {
+                const el = document.getElementById('link-preview-' + p.id);
+                if(el) {
+                  const spinner = el.querySelector('.microlink-spinner');
+                  if(spinner) spinner.style.display = 'none';
+                }
+              });
+          }
+        });
+        
+        // Instagram scriptini tetikle
+        if (window.instgrm) {
+          window.instgrm.Embeds.process();
+        }
+        if (window.PinUtils) {
+          window.PinUtils.build();
+        }
+      } catch(e) {
+        grid.innerHTML = '<div style="color:red;text-align:center;">Fikirler yüklenirken hata oluştu.</div>';
+      }
+    }
+
+    
+    async function addNote(postId) {
+      const input = document.getElementById('note-input-'+postId);
+      const pub = document.getElementById('note-public-'+postId);
+      const content = input.value.trim();
+      if (!content) return;
+      
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/posts/${postId}/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ content: content, is_public: pub.checked })
+        });
+        if (!res.ok) throw new Error();
+        loadPosts();
+      } catch(e) {
+        alert('Not eklenemedi');
+      }
+    }
+    
+    async function editNote(noteId, oldContent) {
+      const newContent = prompt('Notu düzenle:', oldContent);
+      if (!newContent || newContent.trim() === '' || newContent === oldContent) return;
+      
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/notes/${noteId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ content: newContent.trim() })
+        });
+        if (!res.ok) throw new Error();
+        loadPosts();
+      } catch(e) {
+        alert('Not düzenlenemedi');
+      }
+    }
+    
+    async function deleteNote(noteId) {
+      if (!confirm('Bu notu silmek istediğinize emin misiniz?')) return;
+      try {
+        const res = await fetch(`${API_URL}/api/inspire/notes/${noteId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error();
+        loadPosts();
+      } catch(e) {
+        alert('Not silinemedi');
+      }
+    }
+
+    async function deletePost(id) {
+      if(!confirm('Bu fikri silmek istediğine emin misin?')) return;
+      try {
+        await fetch(`${API_URL}/api/inspire/posts/${id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        loadPosts();
+      } catch(e) {
+        alert('Silinemedi');
+      }
+    }
+  </script>
+  <!-- Instagram Embed Script for processing embeds if needed -->
+  <script async src="https://www.instagram.com/embed.js"></script>
+<script async defer src="//assets.pinterest.com/js/pinit.js"></script>
+
+<!-- GTranslate: https://gtranslate.io/ -->
+<div class="gtranslate_wrapper" style="position: fixed; bottom: 20px; left: 20px; z-index: 999999;"></div>
+<script>window.gtranslateSettings = {"default_language":"tr","languages":["tr","en"],"wrapper_selector":".gtranslate_wrapper","flag_size":32}</script>
+<script src="https://cdn.gtranslate.net/widgets/latest/flags.js" defer></script>
+
+</body>
+</html>

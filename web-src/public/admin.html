@@ -1,0 +1,2365 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — VK Portfolio</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="assets/css/reset.css">
+  <link rel="stylesheet" href="assets/css/variables.css">
+  <link rel="stylesheet" href="assets/css/global.css">
+  <link rel="stylesheet" href="assets/css/admin.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">VK<span>.</span></div>
+    <p class="login-label">// admin panel</p>
+    <div class="ct-field">
+      <label class="ct-label">Şifre</label>
+      <input type="password" id="loginPass" class="ct-input" placeholder="••••••••" autocomplete="current-password">
+      <span class="ct-field-line"></span>
+    </div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;justify-content:center;margin-top:8px">
+      Giriş Yap ↗
+    </button>
+    <p class="login-error" id="loginError"></p>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" style="display:none">
+
+  <nav id="adminNav">
+    <a class="admin-logo" href="/">VK<span>.</span></a>
+    <div class="admin-nav-links">
+      <button class="admin-tab active" data-tab="projects">Tüm İşler</button>
+      <button class="admin-tab" data-tab="upload">Yeni İş Ekle</button>
+      <button class="admin-tab" data-tab="featured">Seçilmiş İşler</button>
+      <button class="admin-tab" data-tab="threed">3D Vitrin</button>
+      <button class="admin-tab" data-tab="cube">Küp Vitrin</button>
+      <button class="admin-tab" data-tab="kpss">KPSS Üyeleri</button>
+      <button class="admin-tab" data-tab="inspire">Fikir Üyeleri</button>
+      <button class="admin-tab" data-tab="uilib" style="color: #ff2b73;">UI Bileşenleri</button>
+      <button class="admin-tab" data-tab="uiusers" style="color: #ff2b73;">UI Üyeleri</button>
+    </div>
+    <button class="btn btn-outline" id="logoutBtn" style="font-size:10px;padding:8px 16px">Çıkış</button>
+  </nav>
+
+  <!-- TAB: TÜM İŞLER -->
+  <div class="admin-panel active" id="tab-projects">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">Tüm İşler</h2>
+      <div class="admin-filters">
+        <button class="filter-btn active" data-filter="all">Tümü</button>
+        <button class="filter-btn" data-filter="web">Web</button>
+        <button class="filter-btn" data-filter="3d">3D</button>
+        <button class="filter-btn" data-filter="2d">2D</button>
+        <button class="filter-btn" data-filter="video">Video</button>
+        <button class="filter-btn" data-filter="graphic">Grafik</button>
+      </div>
+    </div>
+    <div class="admin-grid" id="projectsGrid">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
+  <!-- TAB: YENİ İŞ EKLE -->
+  <div class="admin-panel" id="tab-upload">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title" id="uploadPanelTitle">Yeni İş Ekle</h2>
+    </div>
+    <div class="upload-form">
+
+      <div class="upload-media-row">
+        <div class="upload-zone" id="imgZone">
+          <div class="upload-zone-inner" id="imgPreview">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span>Görsel Seç</span>
+            <span class="upload-zone-sub">JPG · PNG · WebP</span>
+          </div>
+          <input type="file" id="imgFile" accept="image/*" style="display:none">
+        </div>
+
+        <div class="upload-zone" id="vidZone">
+          <div class="upload-zone-inner" id="vidPreview">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="2" y="6" width="15" height="12" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg>
+            <span>Video Seç</span>
+            <span class="upload-zone-sub">MP4 · MOV · WebM</span>
+          </div>
+          <input type="file" id="vidFile" accept="video/*" style="display:none">
+        </div>
+      </div>
+
+      <div class="upload-fields">
+        <div class="admin-field">
+          <label class="admin-label">Başlık</label>
+          <input type="text" id="fTitle" class="admin-input" placeholder="Proje başlığı">
+          <span class="admin-field-line"></span>
+        </div>
+
+        <div class="upload-fields-row">
+          <div class="admin-field">
+            <label class="admin-label">Kategori</label>
+            <div class="admin-select-wrap">
+              <select id="fCategory" class="admin-select">
+                <option value="web">Web Design</option>
+                <option value="3d">3D Animasyon</option>
+                <option value="2d">2D Animasyon</option>
+                <option value="video">Videografi</option>
+                <option value="graphic">Grafik Tasarım</option>
+              </select>
+              <span class="admin-select-arrow">↓</span>
+            </div>
+            <span class="admin-field-line"></span>
+          </div>
+          <div class="admin-field">
+            <label class="admin-label">Yıl</label>
+            <input type="text" id="fYear" class="admin-input" placeholder="2024">
+            <span class="admin-field-line"></span>
+          </div>
+        </div>
+
+        <div class="admin-field">
+          <label class="admin-label">Açıklama</label>
+          <textarea id="fDesc" class="admin-textarea" rows="3" placeholder="Proje hakkında kısa açıklama..."></textarea>
+          <span class="admin-field-line"></span>
+        </div>
+
+        <div class="admin-field">
+          <label class="admin-label">Etiketler (virgülle ayır)</label>
+          <input type="text" id="fTags" class="admin-input" placeholder="Blender, Cinema4D, Render">
+          <span class="admin-field-line"></span>
+        </div>
+
+        <div class="admin-toggle-row">
+          <label class="admin-toggle-label">
+            <span>Seçilmiş İşlere ekle</span>
+            <div class="toggle-track">
+              <input type="checkbox" id="fFeatured">
+              <span class="toggle-thumb"></span>
+            </div>
+          </label>
+        </div>
+
+        <div class="upload-actions">
+          <button class="btn btn-primary" id="saveBtn">
+            <span id="saveBtnText">Kaydet ↗</span>
+            <span id="saveBtnLoad" style="display:none">Yükleniyor...</span>
+          </button>
+          <button class="btn btn-outline" id="cancelEditBtn" style="display:none">İptal</button>
+          <div class="upload-progress" id="uploadProgress" style="display:none">
+            <div class="upload-progress-bar" id="uploadProgressBar"></div>
+            <span id="uploadProgressText">Görsel yükleniyor...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: SEÇİLMİŞ İŞLER -->
+  <div class="admin-panel" id="tab-featured">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">Seçilmiş İşler</h2>
+      <p class="admin-panel-sub">Ana sayfada gösterilecek işler. Sürükle-bırak ile sırala.</p>
+    </div>
+    <div class="featured-grid" id="featuredGrid">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
+
+
+  <!-- TAB: 3D VİTRİN -->
+  <div class="admin-panel" id="tab-threed">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">3D Vitrin</h2>
+      <p class="admin-panel-sub">Luma AI taramalarını 3D galeriye ekle. <a href="/gallery-3d" target="_blank" style="color:var(--accent)">Vitrini Görüntüle ↗</a></p>
+    </div>
+
+    <div class="threed-layout">
+      
+      <!-- FORM -->
+      <div class="threed-form-wrap">
+        <p class="section-eyebrow" style="margin-bottom:16px">// yeni 3d obje ekle</p>
+        
+        <div class="ct-field">
+          <label class="ct-label">Başlık (3D obje üzerinde görünür)</label>
+          <input type="text" id="td-title" class="ct-input" placeholder="Spider-Man Kupa">
+          <span class="ct-field-line"></span>
+        </div>
+        
+        <div class="ct-field" style="margin-top:24px">
+          <label class="ct-label">Luma AI Linki</label>
+          <input type="url" id="td-url" class="ct-input" placeholder="https://lumalabs.ai/capture/...">
+          <span class="ct-field-line"></span>
+        </div>
+        
+        <div style="margin-top:24px">
+          <label class="ct-label">Kapak Görseli</label>
+          <div class="upload-zone" id="td-img-zone" style="aspect-ratio:16/9;margin-top:8px">
+            <div class="upload-zone-inner" id="td-img-preview">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Kapak görseli seç</span>
+            </div>
+            <input type="file" id="td-img-file" accept="image/*" style="display:none">
+          </div>
+          <input type="hidden" id="td-img-b64">
+        </div>
+
+        <div id="td-status" style="margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);min-height:16px"></div>
+
+        <button class="btn btn-primary" id="td-save-btn" style="margin-top:20px;width:100%;justify-content:center">
+          Vitrine Ekle ↗
+        </button>
+      </div>
+
+      <!-- LİSTE -->
+      <div class="threed-list-wrap">
+        <p class="section-eyebrow" style="margin-bottom:16px">// eklenen objeler</p>
+        <div id="td-product-list" class="admin-grid"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAB: KÜP VİTRİN (3D KÜP) -->
+  <div class="admin-panel" id="tab-cube">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">Küp Vitrin (3D Ürün Gösterim)</h2>
+      <p class="admin-panel-sub">Ürünün 6 yüzü için görsel yükleyin. <a href="/urungosterim" target="_blank" style="color:var(--accent)">Vitrine Git ↗</a></p>
+    </div>
+
+    <div class="threed-layout">
+      <!-- FORM -->
+      <div class="threed-form-wrap">
+        <p class="section-eyebrow" style="margin-bottom:16px">// yeni küp obje ekle</p>
+        
+        <div class="ct-field">
+          <label class="ct-label">Başlık</label>
+          <input type="text" id="cube-title" class="ct-input" placeholder="Ürün Adı">
+          <span class="ct-field-line"></span>
+        </div>
+        
+        <div style="margin-top:24px; display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <!-- Front -->
+          <div>
+            <label class="ct-label">Ön Yüz (Front)</label>
+            <div class="upload-zone" id="cube-z-front" style="aspect-ratio:1;margin-top:8px;padding:10px">
+              <div class="upload-zone-inner" id="cube-p-front" style="font-size:10px">Seç</div>
+              <input type="file" id="cube-f-front" accept="image/*" style="display:none">
+            </div>
+            <input type="hidden" id="cube-u-front">
+          </div>
+          <!-- Right -->
+          <div>
+            <label class="ct-label">Sağ Yüz (Right)</label>
+            <div class="upload-zone" id="cube-z-right" style="aspect-ratio:1;margin-top:8px;padding:10px">
+              <div class="upload-zone-inner" id="cube-p-right" style="font-size:10px">Seç</div>
+              <input type="file" id="cube-f-right" accept="image/*" style="display:none">
+            </div>
+            <input type="hidden" id="cube-u-right">
+          </div>
+          <!-- Back -->
+          <div>
+            <label class="ct-label">Arka Yüz (Back)</label>
+            <div class="upload-zone" id="cube-z-back" style="aspect-ratio:1;margin-top:8px;padding:10px">
+              <div class="upload-zone-inner" id="cube-p-back" style="font-size:10px">Seç</div>
+              <input type="file" id="cube-f-back" accept="image/*" style="display:none">
+            </div>
+            <input type="hidden" id="cube-u-back">
+          </div>
+          <!-- Left -->
+          <div>
+            <label class="ct-label">Sol Yüz (Left)</label>
+            <div class="upload-zone" id="cube-z-left" style="aspect-ratio:1;margin-top:8px;padding:10px">
+              <div class="upload-zone-inner" id="cube-p-left" style="font-size:10px">Seç</div>
+              <input type="file" id="cube-f-left" accept="image/*" style="display:none">
+            </div>
+            <input type="hidden" id="cube-u-left">
+          </div>
+          <!-- Top -->
+          <div>
+            <label class="ct-label">Üst Yüz (Top)</label>
+            <div class="upload-zone" id="cube-z-top" style="aspect-ratio:1;margin-top:8px;padding:10px">
+              <div class="upload-zone-inner" id="cube-p-top" style="font-size:10px">Seç</div>
+              <input type="file" id="cube-f-top" accept="image/*" style="display:none">
+            </div>
+            <input type="hidden" id="cube-u-top">
+          </div>
+          <!-- Bottom -->
+          <div>
+            <label class="ct-label">Alt Yüz (Bottom)</label>
+            <div class="upload-zone" id="cube-z-bottom" style="aspect-ratio:1;margin-top:8px;padding:10px">
+              <div class="upload-zone-inner" id="cube-p-bottom" style="font-size:10px">Seç</div>
+              <input type="file" id="cube-f-bottom" accept="image/*" style="display:none">
+            </div>
+            <input type="hidden" id="cube-u-bottom">
+          </div>
+        </div>
+
+        <div id="cube-status" style="margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);min-height:16px"></div>
+
+        <button class="btn btn-primary" id="cube-save-btn" style="margin-top:20px;width:100%;justify-content:center">
+          Küp Vitrine Ekle ↗
+        </button>
+      </div>
+
+      <!-- LİSTE -->
+      <div class="threed-list-wrap">
+        <p class="section-eyebrow" style="margin-bottom:16px">// eklenen küpler</p>
+        <div id="cube-product-list" class="admin-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: KPSS YÖNETİMİ -->
+  <div class="admin-panel" id="tab-kpss">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">KPSS Üye Yönetimi</h2>
+      <p class="admin-panel-sub">Sadece admin yeni üye ekleyebilir. Sizin hesabınız ilk girişte vkesgin38 olarak otomatik güncellenecektir.</p>
+    </div>
+    
+    <div class="upload-form" style="max-width: 600px; margin-bottom: 30px;">
+      <div class="admin-field">
+        <label class="admin-label">Kullanıcı Adı</label>
+        <input type="text" id="kUsername" class="admin-input" placeholder="örn: vkesgin38">
+        <span class="admin-field-line"></span>
+      </div>
+      <div class="admin-field">
+        <label class="admin-label">Ad Soyad</label>
+        <input type="text" id="kFullName" class="admin-input" placeholder="örn: Veli Kesgin">
+        <span class="admin-field-line"></span>
+      </div>
+      <div class="admin-field">
+        <label class="admin-label">Şifre</label>
+        <input type="text" id="kPassword" class="admin-input" placeholder="Giriş şifresi">
+        <span class="admin-field-line"></span>
+      </div>
+      <button class="btn btn-primary" onclick="addKpssUser()" style="margin-top: 10px; width: 100%; justify-content: center;">Yeni Üye Oluştur ↗</button>
+      <p id="kpssStatus" style="font-size:12px; color:var(--accent); margin-top:10px; text-align:center; min-height:16px;"></p>
+    </div>
+
+    <div class="admin-panel-header" style="margin-top: 40px; margin-bottom:16px;">
+      <h3 class="admin-panel-title" style="font-size:14px;">Mevcut Üyeler</h3>
+    </div>
+    <div id="kpssUsersList" style="display:flex; flex-direction:column; gap:8px;">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- CROP MODAL -->
+<div id="cropModal" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.9); align-items:center; justify-content:center; flex-direction:column; padding:20px;">
+  <div style="background:#1a1a1a; padding:20px; border-radius:12px; max-width:100%; width:500px; box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 style="color:#fff; margin:0; font-family:var(--font-display); font-size:18px;">Görseli Ayarla (1:1)</h3>
+      <button id="cropRotateBtn" class="btn btn-outline" style="padding:6px 12px; font-size:11px;">Döndür ↻</button>
+    </div>
+    <div style="width:100%; height:350px; background:#000; border-radius:6px; overflow:hidden;">
+      <img id="cropImage" src="" style="max-width:100%; max-height:100%; display:block;">
+    </div>
+    <div style="display:flex; justify-content:space-between; margin-top:20px; gap:12px;">
+      <button class="btn btn-outline" id="cropCancelBtn" style="flex:1; justify-content:center;">İptal</button>
+      <button class="btn btn-primary" id="cropSaveBtn" style="flex:1; justify-content:center;">Onayla</button>
+    </div>
+  </div>
+</div>
+
+
+  <!-- TAB: INSPIRE -->
+  <div class="admin-panel" id="tab-inspire">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">Fikir Havuzu Üye Yönetimi</h2>
+      <p class="admin-panel-sub">Sadece admin yeni üye ekleyebilir. Fikir Havuzu sayfasına erişim için buradan üye tanımlayınız.</p>
+    </div>
+    
+    <div class="upload-form" style="max-width: 600px; margin-bottom: 30px;">
+      <div class="admin-field">
+        <label class="admin-label">Kullanıcı Adı</label>
+        <input type="text" id="iUsername" class="admin-input" placeholder="Örn: yenikullanici">
+        <span class="admin-field-line"></span>
+      </div>
+      <div class="admin-field">
+        <label class="admin-label">Ad Soyad</label>
+        <input type="text" id="iFullName" class="admin-input" placeholder="Örn: Ahmet Yılmaz">
+        <span class="admin-field-line"></span>
+      </div>
+      <div class="admin-field">
+        <label class="admin-label">Şifre</label>
+        <input type="password" id="iPassword" class="admin-input" placeholder="Giriş şifresi">
+        <span class="admin-field-line"></span>
+      </div>
+      <button class="btn btn-primary" onclick="addInspireUser()" style="margin-top: 10px; width: 100%; justify-content: center;">Yeni Üye Oluştur ↗</button>
+      <p id="inspireStatus" style="font-size:12px; color:var(--accent); margin-top:10px; text-align:center; min-height:16px;"></p>
+    </div>
+
+    <div class="admin-panel-header" style="margin-top: 40px; margin-bottom:16px;">
+      <h3 class="admin-panel-title" style="font-size:14px;">Mevcut Üyeler</h3>
+    </div>
+    <div id="inspireUsersList" style="display:flex; flex-direction:column; gap:8px;">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
+  <!-- TAB: UI BILEŞENLERI -->
+  <div class="admin-panel" id="tab-uilib">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">Bileşen Kütüphanesi</h2>
+      <p class="admin-panel-sub">Next.js vitrininde sergilenecek Rive animasyonlarını yönetin. <a href="https://velikesgin.com/ui" target="_blank" style="color:var(--accent)">Vitrini Gör ↗</a></p>
+    </div>
+
+    <div class="threed-layout">
+      <!-- FORM -->
+      <div class="threed-form-wrap">
+        <p class="section-eyebrow" id="ui-form-eyebrow" style="margin-bottom:16px">// yeni bileşen ekle</p>
+        
+        <div class="ct-field">
+          <label class="ct-label">Bileşen Adı</label>
+          <input type="text" id="ui-title" class="ct-input" placeholder="Zıplayan Araba">
+          <span class="ct-field-line"></span>
+        </div>
+
+        <div class="ct-field" style="margin-top:16px">
+          <label class="ct-label">Kategori</label>
+          <div class="admin-select-wrap">
+            <select id="ui-category" class="admin-select">
+              <option value="uilib">Bileşen (Buton, Input, vs.)</option>
+              <option value="uitemplate">Şablon (Tam Ekran, Dashboard, vs.)</option>
+            </select>
+            <span class="admin-select-arrow">↓</span>
+          </div>
+          <span class="ct-field-line"></span>
+        </div>
+        
+        <!-- Artboard (optional) -->
+        <div class="ct-field" style="margin-top:16px; display:none;">
+          <label class="ct-label">Artboard Adı <span style="color:#555">(opsiyonel — birden fazla artboard varsa belirt)</span></label>
+          <input type="text" id="ui-artboard" class="ct-input" placeholder="Örn: Artboard 2">
+          <span class="ct-field-line"></span>
+        </div>
+
+        <!-- Upload Zones -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+          <div>
+            <label class="ct-label">Kapak Görseli</label>
+            <div class="upload-zone" id="ui-thumb-zone" style="aspect-ratio:1;margin-top:8px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px dashed rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.02)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".4" style="margin-bottom:8px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span id="ui-thumb-name" style="font-size:11px;color:var(--text-muted);text-align:center">Görsel Seç</span>
+              <input type="file" id="ui-thumb-file" accept="image/*" style="display:none">
+            </div>
+          </div>
+          <div>
+            <label class="ct-label">.riv Dosyası</label>
+            <div class="upload-zone" id="ui-riv-zone" style="aspect-ratio:1;margin-top:8px;padding:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px dashed rgba(255,255,255,0.2);border-radius:8px;cursor:pointer;background:rgba(255,255,255,0.02)">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".4" style="margin-bottom:8px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              <span id="ui-riv-name" style="font-size:11px;color:var(--text-muted);text-align:center">Dosya Seç</span>
+              <input type="file" id="ui-riv-file" accept=".riv" style="display:none">
+            </div>
+          </div>
+        </div>
+
+        <!-- STATE MACHINE TARAMA SONUÇLARI -->
+        <div id="ui-sm-panel" style="margin-top:16px;display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <label class="ct-label" style="color:#ff2b73;margin:0">⚙ Tespit Edilen State Machine'ler</label>
+            <button onclick="uiSelectAllSMs()" style="font-size:10px;color:#ff2b73;background:none;border:none;cursor:pointer;font-family:var(--font-mono)">Tümünü Seç</button>
+          </div>
+          <div id="ui-sm-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
+
+        <div id="ui-vm-panel" style="margin-top:16px;display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <label class="ct-label" style="color:#7c3aed;margin:0">📊 ViewModel Data Property'leri</label>
+            <button onclick="uiSelectAllVMProps()" style="font-size:10px;color:#7c3aed;background:none;border:none;cursor:pointer;font-family:var(--font-mono)">Tümünü Seç</button>
+          </div>
+          <div id="ui-vm-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          
+          <!-- Manuel Property Ekleme Alanı -->
+          <div style="margin-top:12px;padding-top:12px;border-top:1px dashed rgba(124,58,237,0.3)">
+            <label class="ct-label" style="font-size:10px;color:#7c3aed;margin-bottom:4px;display:block">Manuel Property Ekle (Tarayıcı bulamazsa)</label>
+            <div style="display:flex;gap:8px">
+              <input type="text" id="ui-vm-manual-name" placeholder="Property Adı (örn: degisim)" style="flex:1;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:4px;padding:6px;font-size:11px">
+              <input type="text" id="ui-vm-manual-default" placeholder="Varsayılan Metin" style="flex:1;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:4px;padding:6px;font-size:11px">
+              <button onclick="uiAddManualVMProp()" type="button" style="background:#7c3aed;color:#fff;border:none;border-radius:4px;padding:6px 12px;font-size:11px;cursor:pointer">Ekle</button>
+            </div>
+          </div>
+          
+          <p style="font-size:10px;color:#555;margin-top:8px;font-family:var(--font-mono)">// Seçilen property'ler kullanıcıya özelleştirme imkanı sunar</p>
+        </div>
+
+        <div id="ui-sm-scanning" style="margin-top:12px;display:none;font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">
+          ⚙ Dosya analiz ediliyor...
+        </div>
+
+        <div class="ct-field" style="margin-top:24px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <label class="ct-label" style="margin:0">⚛ React Kaynak Kodu <span style="color:#555;font-size:10px">(alıcılara gösterilir)</span></label>
+            <button id="ui-gen-code-btn" onclick="uiGenerateCode()" style="font-size:10px;color:#ff2b73;background:rgba(255,43,115,0.1);border:1px solid rgba(255,43,115,0.3);padding:4px 10px;border-radius:6px;cursor:pointer;font-family:var(--font-mono)">🔨 Otomatik Oluştur</button>
+          </div>
+          <textarea id="ui-code" class="admin-textarea" rows="10" placeholder="// .riv dosyası seçilince buton aktif olur ve kodu otomatik oluşturabilirsin..." style="font-family:monospace;font-size:11px;background:#0a0a0a;border-color:rgba(255,255,255,0.08)"></textarea>
+          <span class="ct-field-line"></span>
+        </div>
+
+        <div class="admin-toggle-row" style="margin-top:20px">
+          <label class="admin-toggle-label">
+            <span>Sadece Pro (Ücretli) üyelere özel</span>
+            <div class="toggle-track">
+              <input type="checkbox" id="ui-is-pro">
+              <span class="toggle-thumb"></span>
+            </div>
+          </label>
+        </div>
+
+        <div id="ui-status" style="margin-top:16px;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);min-height:16px"></div>
+
+        <div style="display:flex;gap:10px;margin-top:20px">
+          <button class="btn btn-primary" id="ui-save-btn" style="flex:1;justify-content:center;background:#ff2b73;color:#fff;border:none">
+            Kütüphaneye Ekle ↗
+          </button>
+          <button class="btn btn-outline" id="ui-cancel-btn" style="display:none;flex:1;justify-content:center">
+            İptal
+          </button>
+        </div>
+      </div>
+
+      <!-- LIST -->
+      <div class="threed-list-wrap">
+        <p class="section-eyebrow" style="margin-bottom:16px">// mevcut bileşenler</p>
+        <div id="ui-product-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: UI ÜYELERİ -->
+  <div class="admin-panel" id="tab-uiusers">
+    <div class="admin-panel-header">
+      <h2 class="admin-panel-title">UI Kütüphanesi Üyeleri</h2>
+      <p class="admin-panel-sub">Sisteme kayıtlı tüm UI kullanıcılarını, şifrelerini ve abonelik durumlarını buradan görebilirsiniz.</p>
+    </div>
+
+    <div class="admin-panel-header" style="margin-top: 20px; margin-bottom:16px;">
+      <h3 class="admin-panel-title" style="font-size:14px;">Mevcut Üyeler</h3>
+    </div>
+    <div id="uiUsersList" style="display:flex; flex-direction:column; gap:8px;">
+      <div class="admin-loading">Yükleniyor...</div>
+    </div>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script>
+// --- INSPIRE ---
+async function loadInspireUsers() {
+  const list = document.getElementById('inspireUsersList');
+  try {
+    const r = await fetch(API+'/api/admin/inspire-users', { headers:{Authorization:`Bearer ${TOKEN}`} });
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    list.innerHTML = data.map(u => `
+      <div style="background:rgba(255,255,255,0.03); padding:12px 16px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="color:#fff; font-size:14px; font-weight:500">${u.username} <span style="color:#888;font-size:12px;font-weight:400;margin-left:8px">${u.full_name||''}</span></div>
+          <div style="color:#666; font-size:11px; margin-top:4px">${new Date(u.created_at).toLocaleDateString('tr-TR')} <span style="margin-left:10px;color:#ffaa00;">🔑 ${u.password}</span></div>
+        </div>
+        <button class="btn btn-outline" style="padding:4px 8px; font-size:10px; color:#ff4444; border-color:rgba(255,68,68,0.2)" onclick="deleteInspireUser('${u.id}')">SİL</button>
+      </div>
+    `).join('') || '<div style="color:#888; font-size:13px">Henüz kayıtlı üye yok.</div>';
+  } catch(e) {
+    list.innerHTML = '<div style="color:#ff4444; font-size:13px">Üyeler yüklenemedi.</div>';
+  }
+}
+
+async function addInspireUser() {
+  const status = document.getElementById('inspireStatus');
+  status.textContent = 'Ekleniyor...';
+  status.style.color = 'var(--text-muted)';
+  const username = document.getElementById('iUsername').value.trim();
+  const full_name = document.getElementById('iFullName').value.trim();
+  const password = document.getElementById('iPassword').value;
+  
+  if (!username || !password) {
+    status.textContent = 'Kullanıcı adı ve şifre zorunlu!';
+    status.style.color = 'var(--danger)';
+    return;
+  }
+  
+  try {
+    const r = await fetch(API+'/api/admin/inspire-users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ username, full_name, password })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Hata');
+    status.textContent = 'Üye başarıyla eklendi.';
+    status.style.color = 'var(--accent)';
+    document.getElementById('iUsername').value = '';
+    document.getElementById('iFullName').value = '';
+    document.getElementById('iPassword').value = '';
+    loadInspireUsers();
+  } catch(e) {
+    status.textContent = e.message;
+    status.style.color = 'var(--danger)';
+  }
+}
+
+async function deleteInspireUser(id) {
+  if(!confirm('Bu üyeyi silmek istediğinize emin misiniz? Fikirleri de silinebilir.')) return;
+  try {
+    await fetch(API+'/api/admin/inspire-users/'+id, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    loadInspireUsers();
+  } catch(e) {}
+}
+
+// ============================================================
+// API ENDPOINT
+const API = 'https://vk-portfolio-api.vkesgin38.workers.dev';
+// ============================================================
+
+let TOKEN = sessionStorage.getItem('vk_admin_token') || '';
+let editingId = null;
+let allProjects = [];
+
+// === AUTH ===
+document.getElementById('loginBtn').addEventListener('click', login);
+document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+async function login() {
+  const pass = document.getElementById('loginPass').value;
+  const err  = document.getElementById('loginError');
+  err.textContent = '';
+  try {
+    const r = await fetch(`${API}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pass })
+    });
+    const d = await r.json();
+    if (!r.ok) { err.textContent = d.error || 'Hata'; return; }
+    TOKEN = d.token;
+    sessionStorage.setItem('vk_admin_token', TOKEN);
+    showDashboard();
+  } catch { err.textContent = 'Bağlantı hatası'; }
+}
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  sessionStorage.removeItem('vk_admin_token');
+  TOKEN = '';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+});
+
+function showDashboard() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('dashboard').style.display   = 'block';
+  loadProjects();
+}
+
+if (TOKEN) showDashboard();
+
+// === TABS ===
+document.querySelectorAll('.admin-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'featured') renderFeatured();
+    if (btn.dataset.tab === 'kpss') loadKpssUsers();
+    if (btn.dataset.tab === 'cube') loadCubeProducts();
+    if (btn.dataset.tab === 'inspire') loadInspireUsers();
+    if (btn.dataset.tab === 'uilib')  loadUiComponents();
+    if (btn.dataset.tab === 'uiusers') loadUiUsers();
+  });
+});
+
+// === UI USERS ===
+async function loadUiUsers() {
+  const list = document.getElementById('uiUsersList');
+  if(!list) return;
+  try {
+    const r = await fetch(API+'/api/admin/ui-users', { headers:{Authorization:`Bearer ${TOKEN}`} });
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    list.innerHTML = data.map(u => `
+      <div style="background:rgba(255,255,255,0.03); padding:12px 16px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="color:#fff; font-size:14px; font-weight:500">${u.email} <span style="color:#888;font-size:12px;font-weight:400;margin-left:8px">${u.full_name||'-'}</span></div>
+          <div style="color:#666; font-size:11px; margin-top:4px">
+            Kayıt: ${new Date(u.created_at).toLocaleDateString('tr-TR')} 
+            <span style="margin-left:10px;color:#ffaa00;">🔑 Şifre: ${u.password}</span>
+            <span style="margin-left:10px;color:${u.plan === 'PRO' ? '#ff2b73' : '#10b981'};font-weight:bold">${u.plan}</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px">
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:10px; color:#fff" onclick="changeUiUserPassword('${u.id}')">Şifre Değiştir</button>
+          <button class="btn btn-outline" style="padding:4px 8px; font-size:10px; color:#ff4444; border-color:rgba(255,68,68,0.2)" onclick="deleteUiUser('${u.id}')">SİL</button>
+        </div>
+      </div>
+    `).join('') || '<div style="color:#888; font-size:13px">Henüz kayıtlı üye yok.</div>';
+  } catch(e) {
+    list.innerHTML = '<div style="color:#ff4444; font-size:13px">Üyeler yüklenemedi.</div>';
+  }
+}
+
+async function changeUiUserPassword(id) {
+  const newPass = prompt("Yeni şifreyi giriniz:");
+  if(!newPass) return;
+  try {
+    const r = await fetch(API+'/api/admin/ui-users/'+id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ password: newPass })
+    });
+    if(r.ok) {
+      alert("Şifre güncellendi!");
+      loadUiUsers();
+    } else {
+      alert("Hata oluştu.");
+    }
+  } catch(e) {}
+}
+
+async function deleteUiUser(id) {
+  if(!confirm('Bu UI üyesini silmek istediğinize emin misiniz?')) return;
+  try {
+    await fetch(API+'/api/admin/ui-users/'+id, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    loadUiUsers();
+  } catch(e) {}
+}
+
+// === PROJECTS ===
+async function loadProjects() {
+  const r = await fetch(`${API}/api/projects`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+  allProjects = await r.json();
+  renderProjects('all');
+}
+
+function renderProjects(filter) {
+  const grid = document.getElementById('projectsGrid');
+  const list = filter === 'all' ? allProjects : allProjects.filter(p => p.category === filter);
+  if (!list.length) { grid.innerHTML = '<div class="admin-empty">Henüz iş yok.</div>'; return; }
+
+  grid.innerHTML = list.map(p => `
+    <div class="admin-card" data-id="${p.id}">
+      <div class="admin-card-media">
+        ${p.video_url
+          ? `<video src="${API}${p.video_url}" muted loop></video>`
+          : p.image_url
+          ? `<img src="${API}${p.image_url}" alt="${p.title}" loading="lazy">`
+          : '<div class="admin-card-placeholder"></div>'
+        }
+        ${p.is_featured ? '<span class="featured-badge">★ Seçilmiş</span>' : ''}
+      </div>
+      <div class="admin-card-info">
+        <div class="admin-card-title">${p.title}</div>
+        <div class="admin-card-meta">
+          <span class="admin-cat-tag">${p.category}</span>
+          <span style="font-size:10px;color:#444">${p.year}</span>
+        </div>
+      </div>
+      <div class="admin-card-actions">
+        <button class="admin-btn-edit" onclick="editProject('${p.id}')">Düzenle</button>
+        <button class="admin-btn-feat ${p.is_featured ? 'active' : ''}" onclick="toggleFeatured('${p.id}', ${p.is_featured})">
+          ${p.is_featured ? '★ Seçilmiş' : '☆ Seç'}
+        </button>
+        <button class="admin-btn-del" onclick="deleteProject('${p.id}')">Sil</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Video hover
+  grid.querySelectorAll('video').forEach(v => {
+    v.closest('.admin-card-media').addEventListener('mouseenter', () => v.play());
+    v.closest('.admin-card-media').addEventListener('mouseleave', () => { v.pause(); v.currentTime = 0; });
+  });
+}
+
+// Filtre
+document.querySelectorAll('.admin-filters .filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.admin-filters .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderProjects(btn.dataset.filter);
+  });
+});
+
+// === EDIT ===
+function editProject(id) {
+  const p = allProjects.find(x => x.id === id);
+  if (!p) return;
+  editingId = id;
+
+  document.getElementById('fTitle').value    = p.title || '';
+  document.getElementById('fCategory').value = p.category || 'web';
+  document.getElementById('fYear').value     = p.year || '';
+  document.getElementById('fDesc').value     = p.description || '';
+  document.getElementById('fTags').value     = p.tags || '';
+  document.getElementById('fFeatured').checked = !!p.is_featured;
+
+  if (p.image_url) {
+    document.getElementById('imgPreview').innerHTML = `<img src="${API}${p.image_url}" style="width:100%;height:100%;object-fit:cover">`;
+  }
+  if (p.video_url) {
+    document.getElementById('vidPreview').innerHTML = `<video src="${API}${p.video_url}" style="width:100%;height:100%;object-fit:cover" muted></video>`;
+  }
+
+  document.getElementById('uploadPanelTitle').textContent = 'İş Düzenle';
+  document.getElementById('cancelEditBtn').style.display  = 'inline-flex';
+
+  // Upload tabına geç
+  document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-tab="upload"]').classList.add('active');
+  document.getElementById('tab-upload').classList.add('active');
+}
+
+document.getElementById('cancelEditBtn').addEventListener('click', resetForm);
+
+function resetForm() {
+  editingId = null;
+  document.getElementById('fTitle').value = '';
+  document.getElementById('fCategory').value = 'web';
+  document.getElementById('fYear').value = new Date().getFullYear();
+  document.getElementById('fDesc').value = '';
+  document.getElementById('fTags').value = '';
+  document.getElementById('fFeatured').checked = false;
+  document.getElementById('imgFile').value = '';
+  document.getElementById('vidFile').value = '';
+  resetZone('imgPreview', 'image');
+  resetZone('vidPreview', 'video');
+  document.getElementById('uploadPanelTitle').textContent = 'Yeni İş Ekle';
+  document.getElementById('cancelEditBtn').style.display  = 'none';
+}
+
+function resetZone(id, type) {
+  const icons = { image: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>', video: '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="2" y="6" width="15" height="12" rx="2"/><path d="M17 10l5-3v10l-5-3"/></svg>' };
+  const labels = { image: 'Görsel Seç', video: 'Video Seç' };
+  const subs   = { image: 'JPG · PNG · WebP', video: 'MP4 · MOV · WebM' };
+  document.getElementById(id).innerHTML = `${icons[type]}<span>${labels[type]}</span><span class="upload-zone-sub">${subs[type]}</span>`;
+}
+
+// === UPLOAD ZONE ===
+['img','vid'].forEach(prefix => {
+  const zone = document.getElementById(prefix + 'Zone');
+  const input = document.getElementById(prefix + 'File');
+  const preview = prefix === 'img' ? 'imgPreview' : 'vidPreview';
+
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) previewFile(file, preview);
+  });
+  input.addEventListener('change', () => {
+    if (input.files[0]) previewFile(input.files[0], preview);
+  });
+});
+
+function previewFile(file, previewId) {
+  // Format kontrolü — MOV uyarısı
+  if (file.type === 'video/quicktime' || file.name.toLowerCase().endsWith('.mov')) {
+    const warn = document.createElement('div');
+    warn.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;border:1px solid rgba(255,170,0,.4);color:#ffaa00;padding:14px 20px;border-radius:8px;font-family:var(--font-mono);font-size:12px;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.6)';
+    warn.innerHTML = '⚠️ .MOV formatı mobil tarayıcılarda çalışmayabilir.<br>Lütfen <strong>MP4</strong> formatına çevirip tekrar yükleyin.';
+    document.body.appendChild(warn);
+    setTimeout(() => warn.remove(), 5000);
+  }
+
+  const url = URL.createObjectURL(file);
+  const el  = document.getElementById(previewId);
+
+  if (file.type.startsWith('image/')) {
+    el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:contain;background:#000;border-radius:6px">`;
+    // Görsel boyutuna göre zone oranını ayarla
+    const img = new Image();
+    img.onload = () => {
+      const zone = previewId === 'imgPreview' ? document.getElementById('imgZone') : null;
+      if (zone) zone.style.aspectRatio = `${img.naturalWidth} / ${img.naturalHeight}`;
+    };
+    img.src = url;
+
+  } else if (file.type.startsWith('video/')) {
+    const sizeMB = (file.size / 1024 / 1024).toFixed(0);
+    const sizeWarning = file.size > 80 * 1024 * 1024
+      ? `<div style="background:rgba(255,100,0,.15);border-top:1px solid rgba(255,100,0,.3);color:#ff8844;padding:6px 10px;font-family:var(--font-mono);font-size:10px;flex-shrink:0;">⚠ ${sizeMB} MB — Yükleme uzun sürebilir</div>`
+      : '';
+    el.innerHTML = `
+      <div style="width:100%;height:100%;position:relative;display:flex;flex-direction:column;background:#000;border-radius:6px;overflow:hidden;">
+        <video id="vidPlayerPreview" src="${url}" style="width:100%;flex:1;min-height:0;object-fit:contain;" controls></video>
+        <button onclick="captureVideoFrame(event)" style="width:100%;height:32px;background:#00e5ff;color:#000;border:none;cursor:pointer;font-family:var(--font-mono);font-weight:700;font-size:10px;text-transform:uppercase;flex-shrink:0;">Kapak Yap</button>
+        ${sizeWarning}
+      </div>`;
+    // Video metadata yüklendikten sonra zone boyutunu ayarla
+    const zone = document.getElementById('vidZone');
+    const vid  = document.getElementById('vidPlayerPreview');
+    if (vid && zone) {
+      vid.addEventListener('loadedmetadata', () => {
+        if (vid.videoWidth && vid.videoHeight) {
+          zone.style.aspectRatio = `${vid.videoWidth} / ${vid.videoHeight}`;
+          zone.style.maxHeight = '480px';
+        }
+      }, { once: true });
+    }
+  }
+}
+
+window.captureVideoFrame = function(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const vid = document.getElementById('vidPlayerPreview');
+  if (!vid) return;
+
+  const canvas = document.createElement('canvas');
+  canvas.width  = vid.videoWidth  || 1920;
+  canvas.height = vid.videoHeight || 1080;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(blob => {
+    const file = new File([blob], "video-thumb.jpg", { type: "image/jpeg" });
+    window.extractedVideoThumb = file;
+    try {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      document.getElementById('imgFile').files = dataTransfer.files;
+    } catch(err) { console.warn('Input files sync failed'); }
+    // Kapak önizlemesini göster ve imgZone boyutunu ayarla
+    const imgZone = document.getElementById('imgZone');
+    if (imgZone && vid.videoWidth && vid.videoHeight) {
+      imgZone.style.aspectRatio = `${vid.videoWidth} / ${vid.videoHeight}`;
+      imgZone.style.maxHeight = '480px';
+    }
+    const imgEl = document.getElementById('imgPreview');
+    const url = URL.createObjectURL(file);
+    imgEl.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:contain;background:#000;border-radius:6px">`;
+  }, 'image/jpeg', 0.85);
+};
+
+// === SAVE ===
+async function uploadFile(file, type, onProgress) {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('type', type);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${API}/api/upload`);
+    xhr.setRequestHeader('Authorization', `Bearer ${TOKEN}`);
+    xhr.upload.addEventListener('progress', e => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
+    });
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(JSON.parse(xhr.responseText).url); }
+        catch { reject(new Error('Sunucu yanıtı okunamadı')); }
+      } else {
+        reject(new Error(`Yükleme hatası: ${xhr.status}`));
+      }
+    });
+    xhr.addEventListener('error', () => reject(new Error('Ağ bağlantı hatası')));
+    xhr.send(form);
+  });
+}
+
+function showProgress(text, pct) {
+  const prog = document.getElementById('uploadProgress');
+  prog.style.display = 'flex';
+  document.getElementById('uploadProgressText').textContent = text;
+  document.getElementById('uploadProgressBar').style.width = pct + '%';
+}
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const title = document.getElementById('fTitle').value.trim();
+  if (!title) { alert('Başlık gerekli'); return; }
+
+  const btnText = document.getElementById('saveBtnText');
+  const btnLoad = document.getElementById('saveBtnLoad');
+  btnText.style.display = 'none';
+  btnLoad.style.display = 'inline';
+
+  try {
+    let imgUrl = editingId ? allProjects.find(p=>p.id===editingId)?.image_url || '' : '';
+    let vidUrl = editingId ? allProjects.find(p=>p.id===editingId)?.video_url || '' : '';
+
+    const imgFile = document.getElementById('imgFile').files[0] || window.extractedVideoThumb;
+    const vidFile = document.getElementById('vidFile').files[0];
+
+    if (imgFile) {
+      showProgress('Görsel yükleniyor... 0%', 0);
+      imgUrl = await uploadFile(imgFile, 'image', pct => showProgress(`Görsel yükleniyor... ${pct}%`, pct));
+    }
+    if (vidFile) {
+      const sizeMB = (vidFile.size / 1024 / 1024).toFixed(0);
+      showProgress(`Video yükleniyor... 0% (${sizeMB} MB)`, 0);
+      vidUrl = await uploadFile(vidFile, 'video', pct => showProgress(`Video yükleniyor... ${pct}%`, pct));
+    }
+
+    showProgress('Kaydediliyor...', 90);
+
+    const payload = {
+      title,
+      category:    document.getElementById('fCategory').value,
+      year:        document.getElementById('fYear').value || String(new Date().getFullYear()),
+      description: document.getElementById('fDesc').value,
+      tags:        document.getElementById('fTags').value,
+      image_url:   imgUrl,
+      video_url:   vidUrl,
+      thumbnail_url: imgUrl,
+      is_featured: document.getElementById('fFeatured').checked,
+    };
+
+    const endpoint = editingId ? `${API}/api/projects/${editingId}` : `${API}/api/projects`;
+    const method   = editingId ? 'PUT' : 'POST';
+    const r = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify(payload)
+    });
+
+    if (!r.ok) throw new Error('Kayıt hatası');
+
+    showProgress('Tamamlandı!', 100);
+    setTimeout(() => { document.getElementById('uploadProgress').style.display = 'none'; }, 1500);
+
+    await loadProjects();
+    resetForm();
+  } catch(e) {
+    alert('Hata: ' + e.message);
+  } finally {
+    btnText.style.display = 'inline';
+    btnLoad.style.display = 'none';
+  }
+});
+
+// === TOGGLE FEATURED ===
+async function toggleFeatured(id, current) {
+  const p = allProjects.find(x => x.id === id);
+  if (!p) return;
+  await fetch(`${API}/api/projects/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+    body: JSON.stringify({ ...p, is_featured: current ? 0 : 1 })
+  });
+  await loadProjects();
+  renderProjects(document.querySelector('.admin-filters .filter-btn.active')?.dataset.filter || 'all');
+  // Featured tab aktifse orayı da güncelle
+  if (document.getElementById('tab-featured').classList.contains('active')) renderFeatured();
+}
+
+// === DELETE ===
+async function deleteProject(id) {
+  if (!confirm('Bu işi silmek istediğine emin misin?')) return;
+  await fetch(`${API}/api/projects/${id}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${TOKEN}` }
+  });
+  await loadProjects();
+  renderProjects(document.querySelector('.admin-filters .filter-btn.active')?.dataset.filter || 'all');
+}
+
+// === FEATURED SIRA ===
+function renderFeatured() {
+  const list = allProjects.filter(p => p.is_featured).sort((a,b) => a.featured_order - b.featured_order);
+  const grid = document.getElementById('featuredGrid');
+
+  if (!list.length) {
+    grid.innerHTML = '<div class="admin-empty">Seçilmiş iş yok. İşleri düzenlerken "Seçilmiş İşlere ekle" seçeneğini açın.</div>';
+    return;
+  }
+
+  // Mevcut görüntüleri koru — yeni HTML hazır olduğunda tek seferde göster
+  const newHtml = list.map((p,i) => `
+    <div class="featured-item" data-id="${p.id}" draggable="true">
+      <div class="featured-drag">⠿</div>
+      <div class="featured-thumb">
+        ${p.image_url
+          ? `<img src="${p.image_url.startsWith('http') ? p.image_url : API + p.image_url}" alt="${p.title}" loading="eager" decoding="async">`
+          : '<div class="admin-card-placeholder"></div>'}
+      </div>
+      <div class="featured-info">
+        <div class="featured-title">${p.title}</div>
+        <span class="admin-cat-tag">${p.category}</span>
+      </div>
+      <div class="featured-order">${i+1}</div>
+      <button class="admin-btn-del" onclick="toggleFeatured('${p.id}', 1)">Çıkar</button>
+    </div>
+  `).join('');
+  grid.innerHTML = newHtml;
+
+  // Drag & drop — sadece gerçek yer değişiminde kaydet
+  let dragSrc = null;
+  let orderChanged = false;
+
+  grid.querySelectorAll('.featured-item').forEach(item => {
+    item.addEventListener('dragstart', () => { dragSrc = item; item.style.opacity = '.4'; orderChanged = false; });
+    item.addEventListener('dragend',   () => {
+      item.style.opacity = '1';
+      if (orderChanged) saveFeaturedOrder();
+    });
+    item.addEventListener('dragover',  e => { e.preventDefault(); });
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrc && dragSrc !== item) {
+        const items = [...grid.querySelectorAll('.featured-item')];
+        const srcI  = items.indexOf(dragSrc);
+        const dstI  = items.indexOf(item);
+        if (srcI < dstI) item.after(dragSrc); else item.before(dragSrc);
+        orderChanged = true;
+      }
+    });
+  });
+}
+
+async function saveFeaturedOrder() {
+  const items = [...document.querySelectorAll('.featured-item')];
+  await Promise.all(items.map((item, i) => {
+    const p = allProjects.find(x => x.id === item.dataset.id);
+    if (!p) return;
+    return fetch(`${API}/api/projects/${p.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ ...p, featured_order: i })
+    });
+  }));
+  await loadProjects();
+  renderFeatured();
+}
+
+// ═══════════════════════════════════════
+// KPSS YÖNETİMİ
+// ═══════════════════════════════════════
+async function loadKpssUsers() {
+  const list = document.getElementById('kpssUsersList');
+  list.innerHTML = '<div class="admin-loading">Yükleniyor...</div>';
+  try {
+    const r = await fetch(`${API}/api/admin/kpss-users`, {
+      headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    if (!r.ok) throw new Error('Yüklenemedi');
+    const data = await r.json();
+    if (!data.length) {
+      list.innerHTML = '<div class="admin-empty">Henüz KPSS üyesi yok.</div>';
+      return;
+    }
+    list.innerHTML = data.map(u => `
+      <div class="featured-item" style="display:flex;align-items:center;gap:12px;background:var(--bg-surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;cursor:default">
+        <div style="flex:1;min-width:0">
+          <div class="admin-card-title" style="margin-bottom:4px">${u.full_name || 'İsimsiz'} (@${u.username})</div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);">${u.created_at}</div>
+        </div>
+        <button class="admin-btn-del" onclick="deleteKpssUser('${u.id}')">Sil</button>
+      </div>
+    `).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="admin-empty" style="color:var(--danger)">Hata: ${e.message}</div>`;
+  }
+}
+
+async function addKpssUser() {
+  const status = document.getElementById('kpssStatus');
+  status.textContent = 'Ekleniyor...';
+  status.style.color = 'var(--text-muted)';
+  const username = document.getElementById('kUsername').value.trim();
+  const full_name = document.getElementById('kFullName').value.trim();
+  const password = document.getElementById('kPassword').value;
+  
+  if (!username || !password) {
+    status.textContent = 'Kullanıcı adı ve şifre zorunlu!';
+    status.style.color = 'var(--danger)';
+    return;
+  }
+  
+  try {
+    const r = await fetch(`${API}/api/admin/kpss-users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ username, full_name, password })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || 'Hata');
+    
+    status.textContent = 'Kullanıcı başarıyla oluşturuldu ✓';
+    status.style.color = 'var(--accent)';
+    document.getElementById('kUsername').value = '';
+    document.getElementById('kFullName').value = '';
+    document.getElementById('kPassword').value = '';
+    
+    loadKpssUsers();
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch (e) {
+    status.textContent = e.message;
+    status.style.color = 'var(--danger)';
+  }
+}
+
+async function deleteKpssUser(id) {
+  if (!confirm('Kullanıcıyı ve ona ait tüm KPSS verilerini kalıcı olarak silmek istediğinize emin misiniz?')) return;
+  try {
+    const r = await fetch(`${API}/api/admin/kpss-users/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${TOKEN}` }
+    });
+    if (r.ok) {
+      loadKpssUsers();
+    } else {
+      alert('Silinemedi.');
+    }
+  } catch(e) {
+    alert('Bağlantı hatası');
+  }
+}
+
+// ═══════════════════════════════════════
+// 3D VİTRİN YÖNETİMİ
+// ═══════════════════════════════════════
+const API_3D = 'https://vk-portfolio-api.vkesgin38.workers.dev/api/fitness';
+let td_products = [];
+
+// Görsel zone tıklama
+const tdZone = document.getElementById('td-img-zone');
+const tdFile = document.getElementById('td-img-file');
+if (tdZone && tdFile) {
+  tdZone.addEventListener('click', () => tdFile.click());
+  tdFile.addEventListener('change', () => {
+    const file = tdFile.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      document.getElementById('td-img-b64').value = e.target.result;
+      document.getElementById('td-img-preview').innerHTML = 
+        `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Status mesajı
+function tdStatus(msg, isError) {
+  const el = document.getElementById('td-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--danger)' : 'var(--accent)';
+}
+
+// Ürünleri API'den yükle
+async function tdLoadProducts() {
+  tdStatus('// yükleniyor...');
+  try {
+    const res = await fetch(API_3D, {
+      headers: { 'Authorization': 'Bearer ' + TOKEN }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const row = Array.isArray(data) ? data.find(d => d.key === 'vk_3d_products') : null;
+    td_products = row && row.value ? JSON.parse(row.value) : [];
+    tdStatus('// ' + td_products.length + ' obje yüklendi');
+    tdRenderList();
+  } catch(e) {
+    tdStatus('// API hatası: ' + e.message, true);
+    // localStorage fallback
+    try {
+      const saved = localStorage.getItem('vk_3d_products');
+      if (saved) { td_products = JSON.parse(saved); tdRenderList(); }
+    } catch {}
+  }
+}
+
+// API'ye kaydet
+async function tdSaveProducts() {
+  const payload = JSON.stringify(td_products);
+  localStorage.setItem('vk_3d_products', payload);
+  
+  if (!TOKEN) {
+    tdStatus("// localStorage'a kaydedildi (token yok)", true);
+    return false;
+  }
+  
+  try {
+    const r = await fetch(API_3D, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + TOKEN
+      },
+      body: JSON.stringify({ key: 'vk_3d_products', value: payload })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + await r.text());
+    return true;
+  } catch(e) {
+    tdStatus('// Sunucu hatası: ' + e.message, true);
+    return false;
+  }
+}
+
+// Listeyi çiz (sürükle-bırak sıralama destekli)
+function tdRenderList() {
+  const list = document.getElementById('td-product-list');
+  if (!list) return;
+  if (!td_products.length) {
+    list.innerHTML = '<div class="admin-loading">Henüz 3D obje eklenmedi.</div>';
+    return;
+  }
+
+  list.style.display = 'flex';
+  list.style.flexDirection = 'column';
+  list.style.gap = '8px';
+
+  list.innerHTML = td_products.map((p, i) => `
+    <div class="featured-item" data-id="${p.id}" draggable="true" style="display:flex;align-items:center;gap:12px;background:var(--bg-surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;cursor:default">
+      <div class="featured-drag" title="Sıralamak için sürükle" style="cursor:grab;font-size:18px;color:var(--text-muted);flex-shrink:0">⠿</div>
+      <div style="width:56px;height:56px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#222">
+        <img src="${p.thumb || ''}" alt="${p.title}" style="width:100%;height:100%;object-fit:cover" loading="lazy">
+      </div>
+      <div style="flex:1;min-width:0">
+        <div class="admin-card-title" style="margin-bottom:4px">${p.title}</div>
+        <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.lumaUrl}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono)">#${i + 1}</span>
+        <button class="admin-btn-del" onclick="tdDelete('${p.id}')">Sil</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Drag & drop sıralama
+  let dragSrc = null;
+  let orderChanged = false;
+
+  list.querySelectorAll('.featured-item').forEach(item => {
+    item.addEventListener('dragstart', () => {
+      dragSrc = item;
+      item.style.opacity = '.4';
+      orderChanged = false;
+    });
+    item.addEventListener('dragend', async () => {
+      item.style.opacity = '1';
+      if (orderChanged) {
+        // Yeni sırayı td_products'a yansıt
+        const newOrder = [...list.querySelectorAll('.featured-item')].map(el => el.dataset.id);
+        td_products = newOrder.map(id => td_products.find(p => p.id === id)).filter(Boolean);
+        tdStatus('// sıralama kaydediliyor...');
+        const ok = await tdSaveProducts();
+        if (ok) tdStatus('// sıralama güncellendi ✓');
+        tdRenderList();
+      }
+    });
+    item.addEventListener('dragover', e => e.preventDefault());
+    item.addEventListener('drop', e => {
+      e.preventDefault();
+      if (dragSrc && dragSrc !== item) {
+        const items = [...list.querySelectorAll('.featured-item')];
+        const srcI = items.indexOf(dragSrc);
+        const dstI = items.indexOf(item);
+        if (srcI < dstI) item.after(dragSrc); else item.before(dragSrc);
+        orderChanged = true;
+      }
+    });
+  });
+}
+
+// Ekle
+document.getElementById('td-save-btn')?.addEventListener('click', async () => {
+  const title = document.getElementById('td-title')?.value.trim();
+  let url = document.getElementById('td-url')?.value.trim();
+  const thumb = document.getElementById('td-img-b64')?.value || '';
+
+  if (!title) { tdStatus('// Başlık gerekli', true); return; }
+  if (!url) { tdStatus('// Luma AI linki gerekli', true); return; }
+
+  // UUID'yi ayıkla
+  const match = url.match(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/);
+  if (match) url = 'https://lumalabs.ai/capture/' + match[0];
+
+  tdStatus('// kaydediliyor...');
+  document.getElementById('td-save-btn').disabled = true;
+
+  td_products.push({ id: 'p_' + Date.now(), title, lumaUrl: url, thumb });
+  
+  const ok = await tdSaveProducts();
+  tdRenderList();
+  
+  if (ok) {
+    tdStatus('// ' + title + ' eklendi ✓');
+    document.getElementById('td-title').value = '';
+    document.getElementById('td-url').value = '';
+    document.getElementById('td-img-b64').value = '';
+    document.getElementById('td-img-preview').innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>Kapak görseli seç</span>';
+    document.getElementById('td-img-file').value = '';
+  }
+  
+  document.getElementById('td-save-btn').disabled = false;
+});
+
+// Sil
+window.tdDelete = async function(id) {
+  if (!confirm('Bu objeyi vitrinden silmek istediğinize emin misiniz?')) return;
+  td_products = td_products.filter(p => p.id !== id);
+  tdStatus('// siliniyor...');
+  await tdSaveProducts();
+  tdRenderList();
+  tdStatus('// silindi');
+};
+
+// Sekme değişiminde yükle
+document.querySelectorAll('.admin-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.tab === 'threed') tdLoadProducts();
+  });
+});
+
+// ═══════════════════════════════════════
+// KÜP VİTRİN YÖNETİMİ
+// ═══════════════════════════════════════
+window.cubeCroppedFiles = {};
+let currentCropFace = null;
+let cropper = null;
+
+const cropModal = document.getElementById('cropModal');
+const cropImg = document.getElementById('cropImage');
+
+const cubeFaces = ['front', 'right', 'back', 'left', 'top', 'bottom'];
+cubeFaces.forEach(face => {
+  const zone = document.getElementById('cube-z-' + face);
+  const input = document.getElementById('cube-f-' + face);
+  
+  if (zone && input) {
+    zone.addEventListener('click', () => input.click());
+    input.addEventListener('change', () => {
+      if (input.files[0]) {
+        currentCropFace = face;
+        const url = URL.createObjectURL(input.files[0]);
+        cropImg.src = url;
+        cropModal.style.display = 'flex';
+        
+        if (cropper) cropper.destroy();
+        cropper = new Cropper(cropImg, {
+          aspectRatio: 1,
+          viewMode: 1,
+          dragMode: 'move',
+          autoCropArea: 1,
+          background: false
+        });
+        input.value = ''; // Reset input
+      }
+    });
+  }
+});
+
+document.getElementById('cropRotateBtn')?.addEventListener('click', () => {
+  if (cropper) cropper.rotate(90);
+});
+
+document.getElementById('cropCancelBtn')?.addEventListener('click', () => {
+  cropModal.style.display = 'none';
+  if (cropper) cropper.destroy();
+});
+
+document.getElementById('cropSaveBtn')?.addEventListener('click', () => {
+  if (!cropper) return;
+  const canvas = cropper.getCroppedCanvas({ width: 1024, height: 1024 });
+  canvas.toBlob(blob => {
+    const file = new File([blob], `cube_${currentCropFace}.jpg`, { type: 'image/jpeg' });
+    window.cubeCroppedFiles[currentCropFace] = file;
+    
+    // Preview update
+    const url = URL.createObjectURL(file);
+    document.getElementById('cube-p-' + currentCropFace).innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">`;
+    
+    cropModal.style.display = 'none';
+    cropper.destroy();
+  }, 'image/jpeg', 0.85);
+});
+
+async function loadCubeProducts() {
+  const list = document.getElementById('cube-product-list');
+  if (!list) return;
+  list.innerHTML = '<div class="admin-loading">Yükleniyor...</div>';
+  try {
+    const r = await fetch(`${API}/api/projects?category=3dcube`);
+    const data = await r.json();
+    if (!data.length) {
+      list.innerHTML = '<div class="admin-empty">Henüz eklenmiş küp yok.</div>';
+      return;
+    }
+    list.innerHTML = data.map(p => {
+      let faces = [];
+      try { faces = JSON.parse(p.description); } catch(e){}
+      const frontImg = faces[0] ? (faces[0].startsWith('http') ? faces[0] : API + faces[0]) : '';
+      return `
+      <div class="admin-card" style="aspect-ratio:auto; padding-bottom:12px">
+        <div class="admin-card-media" style="aspect-ratio:1">
+          ${frontImg ? `<img src="${frontImg}" style="object-fit:cover">` : '<div class="admin-card-placeholder"></div>'}
+        </div>
+        <div class="admin-card-info">
+          <div class="admin-card-title">${p.title}</div>
+        </div>
+        <div class="admin-card-actions">
+          <button class="admin-btn-del" onclick="deleteProject('${p.id}'); setTimeout(loadCubeProducts, 500)">Sil</button>
+        </div>
+      </div>
+      `
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="admin-empty" style="color:var(--danger)">Hata oluştu</div>';
+  }
+}
+
+document.getElementById('cube-save-btn')?.addEventListener('click', async () => {
+  const title = document.getElementById('cube-title').value.trim();
+  const status = document.getElementById('cube-status');
+  if (!title) { status.textContent = 'Başlık zorunlu'; status.style.color = 'var(--danger)'; return; }
+  
+  const files = cubeFaces.map(face => window.cubeCroppedFiles[face]);
+  if (files.some(f => !f)) {
+    status.textContent = 'Tüm 6 yüz için görsel seçmelisiniz!';
+    status.style.color = 'var(--danger)';
+    return;
+  }
+  
+  status.textContent = 'Görseller yükleniyor...';
+  status.style.color = 'var(--text-muted)';
+  
+  try {
+    const urls = [];
+    for(let i=0; i<6; i++) {
+      status.textContent = 'Yükleniyor (' + (i+1) + '/6)...';
+      const url = await uploadFile(files[i], 'image');
+      urls.push(url);
+    }
+    
+    status.textContent = 'Küp kaydediliyor...';
+    
+    const payload = {
+      title,
+      category: '3dcube',
+      description: JSON.stringify(urls),
+      image_url: urls[0]
+    };
+    
+    const r = await fetch(`${API}/api/projects`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+      body: JSON.stringify(payload)
+    });
+    
+    if(!r.ok) throw new Error('Kayıt hatası');
+    
+    status.textContent = 'Küp başarıyla eklendi ✓';
+    status.style.color = 'var(--accent)';
+    
+    document.getElementById('cube-title').value = '';
+    cubeFaces.forEach(face => {
+      window.cubeCroppedFiles[face] = null;
+      document.getElementById('cube-p-' + face).innerHTML = 'Seç';
+    });
+    
+    loadCubeProducts();
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch(e) {
+    status.textContent = e.message;
+    status.style.color = 'var(--danger)';
+  }
+});
+
+// ═══════════════════════════════════════
+// UI BİLEŞEN YÖNETİMİ
+// ═══════════════════════════════════════
+const uiRivZone = document.getElementById('ui-riv-zone');
+const uiRivFile = document.getElementById('ui-riv-file');
+const uiRivName = document.getElementById('ui-riv-name');
+let editingUiId = null;
+let editingUiCurrentRivUrl = '';
+
+// ── Rive CDN yükleyici ────────────────────────────────────────────────────
+let _riveInspectReady = false;
+function loadRiveInspector() {
+  return new Promise(resolve => {
+    if (_riveInspectReady && window.rive) { resolve(); return; }
+    if (window.rive) { _riveInspectReady = true; resolve(); return; }
+    const s = document.createElement('script');
+    // Güncel sürüm — artboardNames API'si dahil
+    s.src = 'https://unpkg.com/@rive-app/canvas@2.27.0/rive.js';
+    s.onload  = () => { _riveInspectReady = true; resolve(); };
+    s.onerror = () => {
+      // Fallback: daha eski sürüm dene
+      const s2 = document.createElement('script');
+      s2.src = 'https://unpkg.com/@rive-app/canvas@2.21.6/rive.js';
+      s2.onload = () => { _riveInspectReady = true; resolve(); };
+      s2.onerror = () => resolve();
+      document.head.appendChild(s2);
+    };
+    document.head.appendChild(s);
+  });
+}
+
+// Binary .riv dosyasından artboard isimlerini çıkar (fallback)
+function extractArtboardNamesFromBinary(buffer) {
+  try {
+    const view = new Uint8Array(buffer);
+    // Rive magic header: R I V E = 0x52 0x49 0x56 0x45
+    if (view[0] !== 0x52 || view[1] !== 0x49 || view[2] !== 0x56 || view[3] !== 0x45) return [];
+    // Dosyanın başında kısa stringleri tara — artboard isimleri genellikle başta
+    const candidates = new Set();
+    const scanLimit = Math.min(view.length, 4096);
+    for (let i = 8; i < scanLimit - 2; i++) {
+      const len = view[i];
+      if (len < 2 || len > 48 || i + len >= scanLimit) continue;
+      let str = '';
+      let valid = true;
+      for (let j = 1; j <= len; j++) {
+        const c = view[i + j];
+        if (c < 32 || c > 126) { valid = false; break; }
+        str += String.fromCharCode(c);
+      }
+      // İlk harfi büyük, gerisi alfanümerik/boşluk/tire olan Artboard ismi formatı
+      if (valid && /^[A-Z][a-zA-Z0-9 _-]{1,30}$/.test(str)) {
+        candidates.add(str);
+      }
+    }
+    return [...candidates];
+  } catch(_) { return []; }
+}
+
+// Tek artboard inspector
+async function inspectRivFile(file, artboardName) {
+  try {
+    await loadRiveInspector();
+    if (!window.rive) throw new Error('Rive yüklenemedi');
+    const buffer = await file.arrayBuffer();
+    const canvas = document.createElement('canvas');
+    canvas.width = 100; canvas.height = 100;
+    return await new Promise(resolve => {
+      const timeout = setTimeout(() => resolve({ stateMachines: [] }), 7000);
+      const config = { buffer, canvas, autoplay: false };
+      if (artboardName && artboardName.trim() !== '') config.artboard = artboardName.trim();
+      const r = new rive.Rive({
+        ...config,
+        onLoad: () => {
+          clearTimeout(timeout);
+          const smNames = r.stateMachineNames || [];
+          const result = { stateMachines: smNames.map(sm => {
+            let inputs = [];
+            try { inputs = (r.stateMachineInputs(sm) || []).map(i => ({ name: i.name, type: i.type })); } catch(_) {}
+            return { name: sm, inputs };
+          })};
+          try { r.cleanup(); } catch(_) {}
+          resolve(result);
+        },
+        onLoadError: () => { clearTimeout(timeout); resolve({ stateMachines: [] }); }
+      });
+    });
+  } catch(e) { return { stateMachines: [] }; }
+}
+
+// TÜM artboard'ları sıralı tara ve SM'lerini döndür
+async function inspectAllArtboards(file) {
+  try {
+    await loadRiveInspector();
+    if (!window.rive) return { artboards: [] };
+    const buffer = await file.arrayBuffer();
+
+    // Adım 1: Varsayılan artboard yükle → artboardNames al
+    const artboardNames = await new Promise(resolve => {
+      const cv = document.createElement('canvas'); cv.width=100; cv.height=100;
+      const timeout = setTimeout(() => resolve([]), 8000);
+      const r = new rive.Rive({
+        buffer: buffer.slice(0), canvas: cv, autoplay: false,
+        onLoad: () => {
+          clearTimeout(timeout);
+          let names = [];
+          // Önce runtime API'sini dene
+          try { names = r.artboardNames || []; } catch(_) {}
+          // Eğer runtime API çalışmadıysa, Rive file objesini dene
+          if (!names.length) {
+            try {
+              const f = r.file || r._file || r.riveFile;
+              if (f && typeof f.artboardCount === 'function') {
+                const count = f.artboardCount();
+                for (let i = 0; i < count; i++) {
+                  try { names.push(f.artboardByIndex(i).name()); } catch(_) {}
+                }
+              }
+            } catch(_) {}
+          }
+          try { r.cleanup(); } catch(_) {}
+          resolve(names);
+        },
+        onLoadError: () => { clearTimeout(timeout); resolve([]); }
+      });
+    });
+
+    // Binary parse ile ek adaylar bul (fallback)
+    const binaryCandidates = extractArtboardNamesFromBinary(buffer);
+    
+    // Runtime'dan gelen isimler varsa onları kullan, yoksa binary'den dene
+    let finalNames = artboardNames.length > 0 ? artboardNames : binaryCandidates.slice(0, 6);
+    // Hiç yoksa varsayılan
+    if (finalNames.length === 0) finalNames = ['__default__'];
+
+    console.log('[Rive Scanner] artboardNames runtime:', artboardNames, '| binary candidates:', binaryCandidates, '| final:', finalNames);
+
+    // Adım 2: Her artboard için SM'leri sıralı tara
+    const artboards = [];
+    for (const abName of finalNames) {
+      await new Promise(resolve => {
+        const cv = document.createElement('canvas'); cv.width=100; cv.height=100;
+        const isDefault = abName === '__default__';
+        const timeout = setTimeout(() => {
+          artboards.push({ name: isDefault ? '(Varsayılan)' : abName, realName: isDefault ? '' : abName, stateMachines: [] });
+          resolve();
+        }, 8000);
+        const config = { buffer: buffer.slice(0), canvas: cv, autoplay: false };
+        if (!isDefault) config.artboard = abName;
+        const r = new rive.Rive({
+          ...config,
+          onLoad: () => {
+            clearTimeout(timeout);
+            const smNames = r.stateMachineNames || [];
+            artboards.push({
+              name: isDefault ? '(Varsayılan)' : abName,
+              realName: isDefault ? '' : abName,
+              stateMachines: smNames.map(sm => {
+                let inputs = [];
+                try { inputs = (r.stateMachineInputs(sm) || []).map(i => ({ name: i.name, type: i.type })); } catch(_) {}
+                return { name: sm, inputs };
+              })
+            });
+            try { r.cleanup(); } catch(_) {}
+            resolve();
+          },
+          onLoadError: () => {
+            clearTimeout(timeout);
+            artboards.push({ name: isDefault ? '(Varsayılan)' : abName, realName: isDefault ? '' : abName, stateMachines: [] });
+            resolve();
+          }
+        });
+      });
+    }
+    return { artboards };
+  } catch(e) { return { artboards: [] }; }
+}
+
+// SM input type badge metinleri
+// type: 0=Trigger, 1=Boolean, 2=Number
+function smInputBadge(inp) {
+  if (inp.type === 0) return `<span style="color:#ff2b73;font-size:9px;border:1px solid rgba(255,43,115,0.4);padding:1px 4px;border-radius:4px">🎯 ${inp.name}</span>`;
+  if (inp.type === 2) {
+    const n = inp.name.toLowerCase();
+    const isCursor = n.includes('x') || n.includes('y') || n.includes('pos');
+    return `<span style="color:${isCursor?'#00e5ff':'#aaa'};font-size:9px;border:1px solid rgba(${isCursor?'0,229,255':'170,170,170'},0.3);padding:1px 4px;border-radius:4px">${isCursor?'🖱':'#'} ${inp.name}</span>`;
+  }
+  if (inp.type === 1) {
+    const n = inp.name.toLowerCase();
+    const isHover = n.includes('hover') || n.includes('over');
+    return `<span style="color:${isHover?'#34d399':'#888'};font-size:9px;border:1px solid rgba(${isHover?'52,211,153':'136,136,136'},0.3);padding:1px 4px;border-radius:4px">${isHover?'🖐':'⚪'} ${inp.name}</span>`;
+  }
+  return '';
+}
+
+// SM otomatik etiket (cursor/click/hover tespiti)
+function smAutoLabel(sm) {
+  if (!sm.inputs.length) return '✓ Native hover/click — ek ayar gerekmez';
+  const labels = [];
+  sm.inputs.forEach(i => {
+    const n = i.name.toLowerCase();
+    if (i.type === 0) labels.push('🎯 Tıklama Trigger');
+    if (i.type === 2 && (n.includes('x') || n.includes('y') || n.includes('pos'))) labels.push('🖱 Cursor Takibi');
+    if (i.type === 1 && (n.includes('hover') || n.includes('over'))) labels.push('🖐 Hover Boolean');
+  });
+  return [...new Set(labels)].join(' · ') || '⚙ Dahili Animasyon';
+}
+
+// Artboard gruplu SM paneli render
+function renderSmPanel(result) {
+  const panel = document.getElementById('ui-sm-panel');
+  const list  = document.getElementById('ui-sm-list');
+  const scanning = document.getElementById('ui-sm-scanning');
+  scanning.style.display = 'none';
+  panel.style.display = 'block';
+
+  // Geriye dönük uyumluluk: eski format { stateMachines: [] } veya yeni { artboards: [] }
+  const artboards = result.artboards
+    || [{ name: '(Varsayılan)', realName: '', stateMachines: result.stateMachines || [] }];
+  const totalSMs = artboards.reduce((s, ab) => s + ab.stateMachines.length, 0);
+
+  if (totalSMs === 0) {
+    list.innerHTML = `<div style="background:rgba(0,229,255,0.06);border:1px solid rgba(0,229,255,0.2);border-radius:8px;padding:12px;font-family:var(--font-mono);font-size:11px;color:#00e5ff">
+      ℹ️ Bu dosyada tespit edilebilir State Machine bulunamadı.<br>
+      <span style="color:#666;font-size:10px">Bu normal olabilir — bazı Rive dosyaları sadece autoplay animasyonu içerir. Dosyayı yine de kaydedebilirsin.</span>
+    </div>`;
+    return;
+  }
+
+  let firstChecked = true;
+  list.innerHTML = artboards.map(ab => {
+    if (!ab.stateMachines.length) return '';
+    const safeRealName = (ab.realName || '').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    const abHeader = `<div style="font-size:10px;color:#7c3aed;font-family:var(--font-mono);margin-bottom:6px;padding:5px 10px;background:rgba(124,58,237,0.1);border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span>📐 <strong style="color:#a78bfa">${ab.name}</strong></span>
+      ${ab.realName ? `<button onclick="document.getElementById('ui-artboard').value='${safeRealName}'" style="font-size:9px;color:#7c3aed;border:1px solid rgba(124,58,237,0.4);padding:2px 8px;border-radius:4px;cursor:pointer;background:transparent">Bu artboard'ı seç</button>` : ''}
+    </div>`;
+    const rows = ab.stateMachines.map(sm => {
+      const isChecked = firstChecked;
+      const isNative = sm.inputs.length === 0;
+      if (firstChecked) {
+        firstChecked = false;
+        setTimeout(() => {
+          if (ab.realName) document.getElementById('ui-artboard').value = ab.realName;
+        }, 50);
+      }
+      return `<label style="display:flex;align-items:flex-start;gap:10px;background:${isNative ? 'rgba(0,229,255,0.04)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isNative ? 'rgba(0,229,255,0.2)' : 'rgba(255,43,115,0.12)'};border-radius:8px;padding:10px 12px;cursor:pointer;margin-bottom:4px">
+        <input type="checkbox" name="ui-sm-check" value="${sm.name}" data-artboard="${safeRealName}" ${isChecked ? 'checked' : ''}
+               onchange="if(this.checked){document.getElementById('ui-artboard').value=this.dataset.artboard||'';}"  
+               style="margin-top:2px;accent-color:#ff2b73;cursor:pointer;flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div style="color:#fff;font-size:12px;font-weight:500;font-family:var(--font-mono)">${sm.name}</div>
+          <div style="color:${isNative ? '#00e5ff' : '#666'};font-size:10px;margin-top:2px">${smAutoLabel(sm)}</div>
+          ${isNative
+            ? `<div style="margin-top:6px;font-size:9px;color:#555;font-family:var(--font-mono)">// hover, click, proximity — Rive canvas otomatik yönetir. Seç ve kaydet.</div>`
+            : `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${sm.inputs.map(smInputBadge).join('')}</div>`
+          }
+        </div>
+      </label>`;
+    }).join('');
+    return `<div style="margin-bottom:14px">${abHeader}${rows}</div>`;
+  }).join('');
+}
+
+// Tümünü seç/kaldır
+window.uiSelectAllSMs = function() {
+  const boxes = document.querySelectorAll('[name="ui-sm-check"]');
+  const allChecked = [...boxes].every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; });
+};
+
+// Seçili SM'leri array olarak al
+function getSelectedSMs() {
+  return [...document.querySelectorAll('[name="ui-sm-check"]:checked')].map(b => b.value);
+}
+
+// ── ViewModel Data Property Binary Scanner ───────────────────────────────────
+function scanViewModelProps(bytes) {
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const encoder = new TextEncoder();
+  const props = [];
+  const sysNames = new Set([
+    'Artboard','New Artboard','Instance','State Machine','Layer','Listener',
+    'Trigger','Hover','Pointer','ButtonVM','ButtonMetni','Montserrat','normal',
+    'GlowEffect','ciick','click','Button Text','ilk konum','hover',
+    'ustunde','tiklandi','ustundedegil','Boolean 1','Trigger 1','Layer 1',
+    'State Machine 1'
+  ]);
+
+  // LEB128 reader
+  function readULEB128(d, o) {
+    let v = 0, s = 0, n = 0, b;
+    do { b = d[o + n]; v |= (b & 0x7F) << s; s += 7; n++; } while (b & 0x80);
+    return { val: v, size: n };
+  }
+
+  // Adım 1: ViewModel isimlerini bul ("VM" ile biten stringler)
+  const vmPositions = [];
+  for (let i = 0; i < bytes.length - 4; i++) {
+    const { val: sLen, size: prefSz } = readULEB128(bytes, i);
+    if (sLen < 4 || sLen > 50 || i + prefSz + sLen > bytes.length) continue;
+    // Son 2 byte "VM" mi?
+    if (bytes[i + prefSz + sLen - 2] !== 0x56 || bytes[i + prefSz + sLen - 1] !== 0x4D) continue;
+    let text;
+    try { text = decoder.decode(bytes.slice(i + prefSz, i + prefSz + sLen)); } catch { continue; }
+    if (/^[A-Za-z0-9_]+VM$/.test(text)) {
+      vmPositions.push({ pos: i, name: text, endPos: i + prefSz + sLen });
+      console.log('[VM Scanner] ViewModel found:', text, 'at pos:', i);
+    }
+  }
+
+  // Adım 2: Her ViewModel'den sonraki property isimlerini bul
+  for (const vm of vmPositions) {
+    const searchEnd = Math.min(vm.endPos + 200, bytes.length - 3);
+    for (let k = vm.endPos; k < searchEnd; k++) {
+      const { val: sLen, size: prefSz } = readULEB128(bytes, k);
+      if (sLen < 2 || sLen > 50 || k + prefSz + sLen > bytes.length) continue;
+      let readable = true;
+      for (let j = 0; j < sLen; j++) {
+        const b = bytes[k + prefSz + j];
+        if (b < 32 && b !== 10 && b !== 13 && b !== 0x20) { readable = false; break; }
+      }
+      if (!readable) continue;
+      let propName;
+      try { propName = decoder.decode(bytes.slice(k + prefSz, k + prefSz + sLen)); } catch { continue; }
+      propName = propName.trim();
+      if (propName.length < 1 || sysNames.has(propName)) continue;
+      if (/^[A-Za-z0-9_]+VM$/.test(propName)) continue; // başka VM ismi
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(propName)) continue; // Boşluk içeriyorsa muhtemelen TextRun adıdır, property değil.
+
+      // Bu property'nin default değerini bul (yakındaki text)
+      let defaultValue = '';
+      const valSearchEnd = Math.min(k + prefSz + sLen + 200, bytes.length - 3);
+      for (let m = k + prefSz + sLen; m < valSearchEnd; m++) {
+        const { val: vLen, size: vPrefSz } = readULEB128(bytes, m);
+        if (vLen < 1 || vLen > 100 || m + vPrefSz + vLen > bytes.length) continue;
+        let vReadable = true;
+        for (let j = 0; j < vLen; j++) {
+          const b = bytes[m + vPrefSz + j];
+          if (b < 32 && b !== 10 && b !== 13) { vReadable = false; break; }
+        }
+        if (!vReadable) continue;
+        let vText;
+        try { vText = decoder.decode(bytes.slice(m + vPrefSz, m + vPrefSz + vLen)); } catch { continue; }
+        vText = vText.replace(/[\n\r]+$/g, '').trim();
+        if (vText.length >= 1 && sysNames.has(vText)) continue;
+        if (/[\p{L}]/u.test(vText)) {
+          // Bozuk karakterleri temizle (z? gibi)
+          defaultValue = vText.replace(/[^\p{L}\p{N}\s!?.,'"\-:]/gu, '').trim();
+          break;
+        }
+      }
+
+      // Duplicate kontrolü
+      const rawName = decoder.decode(bytes.slice(k + prefSz, k + prefSz + sLen));
+      if (!props.some(p => p.name === rawName)) {
+        props.push({ name: rawName, displayName: propName, defaultValue, vmName: vm.name });
+        console.log('[VM Scanner] Property:', rawName, '=', defaultValue, '(in', vm.name + ')');
+      }
+    }
+  }
+  return props;
+}
+
+// ── ViewModel Props Panel Render ─────────────────────────────────────────────
+function renderVMPanel(vmProps) {
+  const panel = document.getElementById('ui-vm-panel');
+  const list = document.getElementById('ui-vm-list');
+  if (!panel || !list) return;
+  if (!vmProps || vmProps.length === 0) {
+    list.innerHTML = `<div style="font-size:11px;color:#7c3aed;background:rgba(124,58,237,0.05);padding:10px;border-radius:8px;border:1px solid rgba(124,58,237,0.2)">Otomatik tespit edilen property bulunamadı. Gerekirse aşağıdan manuel ekleyin.</div>`;
+    panel.style.display = 'block';
+    return;
+  }
+  panel.style.display = 'block';
+  list.innerHTML = vmProps.map((p, i) => `
+    <label style="display:flex;align-items:center;gap:10px;background:rgba(124,58,237,0.04);border:1px solid rgba(124,58,237,0.15);border-radius:8px;padding:10px 12px;cursor:pointer">
+      <input type="checkbox" name="ui-vm-check" value="${p.name}" data-default="${(p.defaultValue || '').replace(/"/g, '&quot;')}" data-vm="${p.vmName}" ${i === 0 ? 'checked' : ''}
+             style="accent-color:#7c3aed;cursor:pointer;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="color:#a78bfa;font-size:12px;font-weight:500;font-family:var(--font-mono)">${p.displayName}</div>
+        <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+          <span style="font-size:9px;color:#555;border:1px solid rgba(124,58,237,0.2);padding:1px 6px;border-radius:4px">📊 ${p.vmName}</span>
+          ${p.defaultValue ? `<span style="font-size:9px;color:#7c3aed;border:1px solid rgba(124,58,237,0.3);padding:1px 6px;border-radius:4px">Varsayılan: "${p.defaultValue}"</span>` : ''}
+        </div>
+      </div>
+    </label>
+  `).join('');
+}
+
+window.uiAddManualVMProp = function() {
+  const nameEl = document.getElementById('ui-vm-manual-name');
+  const defEl = document.getElementById('ui-vm-manual-default');
+  const name = nameEl.value.trim();
+  const def = defEl.value.trim();
+  if (!name) return;
+  const list = document.getElementById('ui-vm-list');
+  const html = `
+    <label style="display:flex;align-items:center;gap:10px;background:rgba(124,58,237,0.04);border:1px solid rgba(124,58,237,0.15);border-radius:8px;padding:10px 12px;cursor:pointer">
+      <input type="checkbox" name="ui-vm-check" value="${name}" data-default="${def.replace(/"/g, '&quot;')}" data-vm="Manual" checked
+             style="accent-color:#7c3aed;cursor:pointer;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="color:#a78bfa;font-size:12px;font-weight:500;font-family:var(--font-mono)">${name}</div>
+        <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+          <span style="font-size:9px;color:#555;border:1px solid rgba(124,58,237,0.2);padding:1px 6px;border-radius:4px">📊 Manual</span>
+          ${def ? `<span style="font-size:9px;color:#7c3aed;border:1px solid rgba(124,58,237,0.3);padding:1px 6px;border-radius:4px">Varsayılan: "${def}"</span>` : ''}
+        </div>
+      </div>
+    </label>
+  `;
+  list.insertAdjacentHTML('beforeend', html);
+  nameEl.value = '';
+  defEl.value = '';
+};
+
+window.uiSelectAllVMProps = function() {
+  const boxes = document.querySelectorAll('[name="ui-vm-check"]');
+  const allChecked = [...boxes].every(b => b.checked);
+  boxes.forEach(b => { b.checked = !allChecked; });
+};
+
+function getSelectedVMProps() {
+  return [...document.querySelectorAll('[name="ui-vm-check"]:checked')].map(b => ({
+    name: b.value,
+    defaultValue: b.dataset.default || '',
+    vmName: b.dataset.vm || ''
+  }));
+}
+
+// Dosya zone — her zaman TÜM artboard'ları tara (edit modunda da)
+if (uiRivZone && uiRivFile) {
+  uiRivZone.addEventListener('click', () => uiRivFile.click());
+  uiRivFile.addEventListener('change', async () => {
+    const file = uiRivFile.files[0];
+    if (!file) return;
+    uiRivName.textContent = '📎 ' + file.name;
+    uiRivName.style.color = 'var(--accent)';
+    document.getElementById('ui-sm-panel').style.display = 'none';
+    document.getElementById('ui-sm-scanning').style.display = 'block';
+    document.getElementById('ui-sm-scanning').textContent = '⚙ Tüm artboard\'lar taranıyor...';
+    // Artboard field'ına bakmaksızın HER ZAMAN tüm artboard'ları tara
+    const result = await inspectAllArtboards(file);
+    renderSmPanel(result);
+    // ViewModel Data Property'lerini tara
+    const fileBytes = new Uint8Array(await file.arrayBuffer());
+    const vmProps = scanViewModelProps(fileBytes);
+    renderVMPanel(vmProps);
+    // Tarama bittikten hemen sonra React kodunu otomatik oluştur
+    setTimeout(uiGenerateCode, 100);
+  });
+}
+
+function uiStatus(msg, isError) {
+  const el = document.getElementById('ui-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--danger)' : 'var(--accent)';
+}
+
+// ── React Kodu Otomatik Üretici ─────────────────────────────────────────────
+// RiveViewer'ın ürettiği formatla birebir uyumlu kod üretir
+function uiGenerateCode() {
+  const file = uiRivFile.files[0];
+  const artboard = document.getElementById('ui-artboard').value.trim();
+  const title = document.getElementById('ui-title').value.trim() || 'MyRiveComponent';
+
+  // Seçili SM'leri al
+  const checkedBoxes = [...document.querySelectorAll('[name="ui-sm-check"]:checked')];
+  if (!checkedBoxes.length && !file) {
+    uiStatus('⚠ Önce .riv dosyası seç!', true);
+    return;
+  }
+
+  const smName = checkedBoxes.length ? checkedBoxes[0].value : '';
+  const fileName = file ? file.name : (editingUiCurrentRivUrl ? editingUiCurrentRivUrl.split('/').pop() : 'animation.riv');
+
+  // SM input bilgilerini topla — badge'lerden
+  const inputs = [];
+  checkedBoxes.forEach(box => {
+    const label = box.closest('label');
+    if (!label) return;
+    label.querySelectorAll('span[style*="border"]').forEach(badge => {
+      const txt = badge.textContent.trim();
+      if (txt.startsWith('🎯')) inputs.push({ type: 'trigger', name: txt.replace('🎯 ', '') });
+      else if (txt.startsWith('🖐')) inputs.push({ type: 'boolean', name: txt.replace('🖐 ', '') });
+      else if (txt.startsWith('🖱') || txt.startsWith('#')) inputs.push({ type: 'number', name: txt.replace(/^[🖱#] /, '') });
+    });
+  });
+
+  const triggers = inputs.filter(i => i.type === 'trigger');
+  const booleans = inputs.filter(i => i.type === 'boolean');
+  const hasInputs = inputs.length > 0;
+  const isNative  = smName && !hasInputs; // SM var ama input yok → native hover/click
+
+  const fnName = title.replace(/[^a-zA-Z0-9]/g, '') || 'RiveComponent';
+
+  // ─── Imports ───────────────────────────────────────────────────────────────
+  // Her zaman useEffect + useMemo import et (RiveViewer formatı)
+  let code = `// app/page.tsx\n"use client";\n\nimport { useEffect, useMemo } from "react";\nimport { useRive } from "@rive-app/react-canvas";\n\nexport default function ${fnName}() {\n`;
+  code += `  // Put your uploaded file in /public/rive and keep this file name.\n`;
+  code += `  const RIVE_FILE = "/rive/${fileName}";\n`;
+  if (artboard) code += `  const ARTBOARD_NAME = "${artboard}";\n`;
+  if (smName)   code += `  const STATE_MACHINE_NAME = "${smName}";\n`;
+
+  // Input var mı yok mu → yorum satırı
+  if (smName) {
+    const numInputs  = inputs.filter(i => i.type === 'number');
+    const boolInputs = inputs.filter(i => i.type === 'boolean');
+    if (numInputs.length || boolInputs.length) {
+      code += `\n  // Number/boolean inputs: ${[...numInputs, ...boolInputs].map(i => i.name).join(', ')}\n`;
+    } else {
+      code += `\n  // No number/boolean inputs found in this state machine.\n`;
+    }
+  }
+
+  // ─── useRive ───────────────────────────────────────────────────────────────
+  code += `\n  const { rive, RiveComponent } = useRive({\n    src: RIVE_FILE,\n`;
+  if (artboard) code += `    artboard: ARTBOARD_NAME,\n`;
+  if (smName)   code += `    stateMachines: STATE_MACHINE_NAME,\n`;
+  code += `    autoplay: true,\n  });\n`;
+
+  // ─── smInputs ──────────────────────────────────────────────────────────────
+  if (smName) {
+    code += `\n  const smInputs = useMemo(\n    () => rive?.stateMachineInputs(STATE_MACHINE_NAME) ?? [],\n    [rive],\n  );\n`;
+
+    // Input değişkenleri
+    if (triggers.length || booleans.length) {
+      triggers.forEach(t => {
+        const v = t.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
+        code += `\n  const ${v} = smInputs.find((i) => i.name === "${t.name}");\n`;
+      });
+      booleans.forEach(b => {
+        const v = b.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
+        code += `\n  const ${v} = smInputs.find((i) => i.name === "${b.name}");\n`;
+      });
+
+      code += `\n  useEffect(() => {\n    // smInputs hazır — sync gerekirse buraya ekle\n  }, [smInputs]);\n`;
+
+      triggers.forEach(t => {
+        const v = t.name.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() + 'Input';
+        const fn = 'fire' + t.name.charAt(0).toUpperCase() + t.name.slice(1);
+        code += `\n  const ${fn} = () => {\n    if (${v}) ${v}.fire();\n  };\n`;
+      });
+    } else if (isNative) {
+      code += `\n  useEffect(() => {\n    // No writable state-machine inputs to sync.\n  }, [smInputs]);\n\n  // No trigger inputs found.\n  // This animation uses Rive native pointer listeners (hover/click on canvas).\n`;
+    } else {
+      code += `\n  useEffect(() => {\n    // No writable state-machine inputs to sync.\n  }, [smInputs]);\n`;
+    }
+  }
+
+  // ─── JSX ───────────────────────────────────────────────────────────────────
+  code += `\n  return (\n    <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-4 p-6">\n      <h1 className="text-2xl font-semibold">${title}</h1>\n\n      <div className="h-[420px] overflow-hidden rounded-xl border">\n        <RiveComponent className="h-full w-full" />\n      </div>\n\n      <section className="flex flex-wrap items-center gap-3">\n`;
+
+  if (triggers.length) {
+    triggers.forEach(t => {
+      const fn = 'fire' + t.name.charAt(0).toUpperCase() + t.name.slice(1);
+      code += `        <button type="button" onClick={${fn}} className="rounded border px-3 py-1 text-sm">Fire "${t.name}"</button>\n`;
+    });
+  } else if (!smName) {
+    code += `        {/* autoplay animasyon — etkileşim gerekmez */}\n`;
+  } else if (isNative) {
+    code += `        {/* This file has no state machine inputs in the selected machine. */}\n        {/* Native hover/click — interact with the canvas directly */}\n`;
+  } else {
+    code += `        {/* This file has no state machine inputs in the selected machine. */}\n`;
+  }
+
+  code += `      </section>\n    </main>\n  );\n}\n`;
+
+  document.getElementById('ui-code').value = code;
+  uiStatus('✓ React kodu oluşturuldu — düzenleyip kaydedebilirsin', false);
+}
+window.uiGenerateCode = uiGenerateCode;
+
+
+function uiResetForm() {
+  editingUiId = null;
+  editingUiCurrentRivUrl = '';
+  window.editingUiCurrentThumbUrl = '';
+  document.getElementById('ui-title').value = '';
+  document.getElementById('ui-category').value = 'uilib';
+  document.getElementById('ui-artboard').value = '';
+  document.getElementById('ui-code').value = '';
+  document.getElementById('ui-is-pro').checked = false;
+  document.getElementById('ui-riv-file').value = '';
+  document.getElementById('ui-riv-name').textContent = 'Dosya Seç (.riv)';
+  document.getElementById('ui-riv-name').style.color = 'var(--text-muted)';
+  const thumbFileEl = document.getElementById('ui-thumb-file');
+  if(thumbFileEl) thumbFileEl.value = '';
+  const thumbNameEl = document.getElementById('ui-thumb-name');
+  if(thumbNameEl) {
+    thumbNameEl.textContent = 'Görsel Seç';
+    thumbNameEl.style.color = 'var(--text-muted)';
+  }
+  document.getElementById('ui-sm-panel').style.display = 'none';
+  document.getElementById('ui-sm-scanning').style.display = 'none';
+  document.getElementById('ui-save-btn').textContent = 'Kütüphaneye Ekle ↗';
+  document.getElementById('ui-save-btn').style.background = '#ff2b73';
+  document.getElementById('ui-cancel-btn').style.display = 'none';
+  document.getElementById('ui-form-eyebrow').textContent = '// yeni bileşen ekle';
+  uiStatus('', false);
+}
+
+function uiStartEdit(p) {
+  editingUiId = p.id;
+  editingUiCurrentRivUrl = p.image_url || '';
+  window.editingUiCurrentThumbUrl = p.thumbnail_url || '';
+  document.getElementById('ui-title').value = p.title || '';
+  document.getElementById('ui-category').value = p.category || 'uilib';
+  document.getElementById('ui-code').value = p.description || '';
+  document.getElementById('ui-is-pro').checked = !!p.is_featured;
+  let cfg = { artboard: '', stateMachines: [] };
+  try { if (p.tags) cfg = JSON.parse(p.tags); } catch(e){}
+  document.getElementById('ui-artboard').value = cfg.artboard || '';
+
+  // Mevcut SM'leri göster (düzenleme modunda)
+  const existingSMs = cfg.stateMachines || (cfg.statemachine ? [cfg.statemachine] : []);
+  if (existingSMs.length) {
+    const panel = document.getElementById('ui-sm-panel');
+    const list  = document.getElementById('ui-sm-list');
+    panel.style.display = 'block';
+    list.innerHTML = existingSMs.map(sm => `
+      <label style="display:flex;align-items:center;gap:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(124,58,237,0.3);border-radius:8px;padding:10px 12px;cursor:pointer">
+        <input type="checkbox" name="ui-sm-check" value="${sm}" checked style="accent-color:#7c3aed;cursor:pointer">
+        <div>
+          <div style="color:#fff;font-size:12px;font-family:var(--font-mono)">${sm}</div>
+          <div style="color:#7c3aed;font-size:10px">// kayıtlı</div>
+        </div>
+      </label>`).join('') + `<p style="font-size:10px;color:#555;margin-top:8px">// Yeni .riv seçersen mevcut SM'ler güncellenir</p>`;
+  }
+
+  document.getElementById('ui-riv-name').textContent = p.image_url ? '📎 Mevcut dosya korunacak' : 'Dosya Seç (.riv)';
+  document.getElementById('ui-riv-name').style.color = p.image_url ? 'var(--accent)' : 'var(--text-muted)';
+  const thumbNameEl = document.getElementById('ui-thumb-name');
+  if(thumbNameEl) {
+    thumbNameEl.textContent = p.thumbnail_url ? '📎 Mevcut görsel korunacak' : 'Görsel Seç';
+    thumbNameEl.style.color = p.thumbnail_url ? 'var(--accent)' : 'var(--text-muted)';
+  }
+  document.getElementById('ui-save-btn').textContent = 'Güncelle ↗';
+  document.getElementById('ui-save-btn').style.background = '#7c3aed';
+  document.getElementById('ui-cancel-btn').style.display = 'flex';
+  document.getElementById('ui-form-eyebrow').textContent = '// düzenle → ' + p.title;
+  document.getElementById('tab-uilib').querySelector('.threed-form-wrap').scrollIntoView({ behavior: 'smooth' });
+}
+
+document.getElementById('ui-cancel-btn')?.addEventListener('click', uiResetForm);
+
+// Global data storage for Edit functionality
+document.getElementById('ui-thumb-zone')?.addEventListener('click', () => {
+  document.getElementById('ui-thumb-file').click();
+});
+document.getElementById('ui-thumb-file')?.addEventListener('change', (e) => {
+  const f = e.target.files[0];
+  if(f) {
+    document.getElementById('ui-thumb-name').textContent = '📎 ' + f.name;
+    document.getElementById('ui-thumb-name').style.color = 'var(--accent)';
+  }
+});
+
+let uiProjectsData = [];
+
+async function loadUiComponents() {
+  const list = document.getElementById('ui-product-list');
+  if (!list) return;
+  list.innerHTML = '<div class="admin-loading">Yükleniyor...</div>';
+  try {
+    const [res1, res2] = await Promise.all([
+      fetch(`${API}/api/projects?category=uilib`),
+      fetch(`${API}/api/projects?category=uitemplate`)
+    ]);
+    const data1 = await res1.json();
+    const data2 = await res2.json();
+    const data = [...data1, ...data2].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    
+    uiProjectsData = data; // Store globally
+    if (!data.length) { list.innerHTML = '<div class="admin-empty">Henüz bileşen eklenmedi.</div>'; return; }
+    list.innerHTML = data.map((p, index) => {
+      let cfg = { artboard: '', stateMachines: [] };
+      try { if (p.tags) cfg = JSON.parse(p.tags); } catch(e){}
+      const sms = cfg.stateMachines || (cfg.statemachine ? [cfg.statemachine] : []);
+      const smBadges = sms.length
+        ? sms.map(s => `<span style="font-size:9px;color:#ff2b73;border:1px solid rgba(255,43,115,0.4);padding:1px 5px;border-radius:4px;font-family:var(--font-mono)">${s}</span>`).join(' ')
+        : `<span style="font-size:9px;color:#ff4444;border:1px solid rgba(255,68,68,0.3);padding:1px 5px;border-radius:4px">⚠ SM yok</span>`;
+      return `
+      <div style="background:var(--bg-surface);border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+            <span class="admin-card-title" style="margin:0">${p.title}</span>
+            <span style="font-size:9px;color:#aaa;border:1px solid rgba(255,255,255,0.2);padding:1px 4px;border-radius:4px">${p.category === 'uitemplate' ? 'Şablon' : 'Bileşen'}</span>
+            ${p.is_featured ? '<span style="color:#ff2b73;font-size:9px;border:1px solid #ff2b73;padding:1px 4px;border-radius:4px">PRO</span>' : '<span style="color:#10b981;font-size:9px;border:1px solid #10b981;padding:1px 4px;border-radius:4px">FREE</span>'}
+            ${smBadges}
+          </div>
+          <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${p.image_url ? '📎 ' + p.image_url.split('/').pop() : 'dosya yok'}${cfg.artboard ? ' · AB: '+cfg.artboard : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="admin-btn-edit" onclick="uiStartEditById('${p.id}')">Düzenle</button>
+          <button class="admin-btn-del" onclick="deleteProject('${p.id}');setTimeout(loadUiComponents,500)">Sil</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = '<div class="admin-empty" style="color:var(--danger)">Hata oluştu</div>';
+  }
+}
+
+window.uiStartEditById = function(id) {
+  const p = uiProjectsData.find(item => item.id === id);
+  if (p) uiStartEdit(p);
+};
+
+document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
+  const title   = document.getElementById('ui-title').value.trim();
+  const categoryStr = document.getElementById('ui-category').value;
+  const code    = document.getElementById('ui-code').value.trim();
+  const isPro   = document.getElementById('ui-is-pro').checked;
+  const artboard = document.getElementById('ui-artboard').value.trim();
+  const file    = document.getElementById('ui-riv-file').files[0];
+  const thumbFile = document.getElementById('ui-thumb-file') ? document.getElementById('ui-thumb-file').files[0] : null;
+
+  // Seçili SM'leri al
+  const selectedSMs = getSelectedSMs();
+
+  // Input metadata'yı DOM'dan topla (badge'lerden)
+  const inputsMeta = [];
+  document.querySelectorAll('[name="ui-sm-check"]:checked').forEach(box => {
+    const label = box.closest('label');
+    if (!label) return;
+    label.querySelectorAll('span[style*="border"]').forEach(badge => {
+      const txt = badge.textContent.trim();
+      if (txt.startsWith('🎯')) inputsMeta.push({ name: txt.replace('🎯 ', ''), type: 0 });
+      else if (txt.startsWith('🖐')) inputsMeta.push({ name: txt.replace('🖐 ', ''), type: 1 });
+      else if (txt.startsWith('🖱') || txt.startsWith('#')) inputsMeta.push({ name: txt.replace(/^[🖱#] /, ''), type: 2 });
+    });
+  });
+
+  const viewModelProps = getSelectedVMProps();
+  const tagsJson = JSON.stringify({ artboard, stateMachines: selectedSMs, inputs: inputsMeta, viewModelProps });
+
+  if (!title) { uiStatus('Başlık zorunlu!', true); return; }
+  if (!editingUiId && !file) { uiStatus('.riv dosyası zorunlu!', true); return; }
+
+  uiStatus(file ? 'Dosya yükleniyor...' : 'Kaydediliyor...', false);
+  document.getElementById('ui-save-btn').disabled = true;
+
+  try {
+    let rivUrl = editingUiCurrentRivUrl;
+    if (file) rivUrl = await uploadFile(file, 'file');
+
+    let thumbUrl = window.editingUiCurrentThumbUrl || '';
+    if (thumbFile) thumbUrl = await uploadFile(thumbFile, 'image');
+
+    const payload = {
+      title, category: categoryStr, description: code,
+      tags: tagsJson, image_url: rivUrl, thumbnail_url: thumbUrl, is_featured: isPro
+    };
+
+    const endpoint = editingUiId ? `${API}/api/projects/${editingUiId}` : `${API}/api/projects`;
+    const method   = editingUiId ? 'PUT' : 'POST';
+    const r = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+      body: JSON.stringify(payload)
+    });
+
+    if (!r.ok) throw new Error('Kayıt hatası: ' + r.status);
+    uiStatus(editingUiId ? 'Güncellendi ✓' : 'Bileşen eklendi ✓', false);
+    uiResetForm();
+    loadUiComponents();
+    setTimeout(() => { uiStatus('', false); }, 3000);
+  } catch(e) {
+    uiStatus(e.message, true);
+  } finally {
+    document.getElementById('ui-save-btn').disabled = false;
+  }
+});
+
+
+
+
+</script>
+
+
+<!-- GTranslate: https://gtranslate.io/ -->
+<div class="gtranslate_wrapper" style="position: fixed; bottom: 20px; left: 20px; z-index: 999999;"></div>
+<script>window.gtranslateSettings = {"default_language":"tr","languages":["tr","en"],"wrapper_selector":".gtranslate_wrapper","flag_size":32}</script>
+<script src="https://cdn.gtranslate.net/widgets/latest/flags.js" defer></script>
+
+</body>
+</html>

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0a0a0a">
+
+  <title>Ücretsiz PDF Düzenleyici — Veli Kesgin Araçları</title>
+  <meta name="description" content="Ücretsiz PDF düzenleyici — PDF birleştir, böl, sıkıştır. Tarayıcıda çalışır, dosyalarınız sunucuya yüklenmez, kayıt gerektirmez.">
+  <meta name="keywords" content="ücretsiz pdf düzenleyici, pdf birleştir, pdf böl, online pdf düzenleme, pdf araç">
+  <meta name="author" content="Veli Kesgin">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://velikesgin.com/tool-pdf.html">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://velikesgin.com/tool-pdf.html">
+  <meta property="og:title" content="Ücretsiz PDF Düzenleyici">
+  <meta property="og:description" content="PDF dosyalarını ücretsiz düzenleyin. Kayıt gerektirmez.">
+  <meta property="og:image" content="https://velikesgin.com/assets/images/og-image.jpg">
+  <meta property="og:locale" content="tr_TR">
+  <meta property="og:site_name" content="Veli Kesgin Araçları">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Ücretsiz PDF Düzenleyici">
+  <meta name="twitter:description" content="PDF dosyalarını ücretsiz düzenleyin. Kayıt gerektirmez.">
+  <meta name="twitter:image" content="https://velikesgin.com/assets/images/og-image.jpg">
+
+  <link rel="icon" type="image/svg+xml" href="assets/images/favicon.svg">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebApplication",
+        "name": "Ücretsiz PDF Düzenleyici",
+        "alternateName": "PDF Editor & Merger",
+        "description": "PDF dosyalarını ücretsiz düzenleyin, birleştirin veya ayırın. Kayıt gerektirmez, doğrudan tarayıcınızda işlem yapın.",
+        "url": "https://velikesgin.com/tool-pdf.html",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Web Browser",
+        "browserRequirements": "Requires JavaScript",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "TRY",
+          "availability": "https://schema.org/InStock"
+        },
+        "featureList": ["PDF birleştirme", "PDF sayfalarını ayırma", "Kayıt gerektirmez", "Tarayıcıda çalışır", "Ücretsiz"],
+        "creator": {
+          "@type": "Person",
+          "name": "Veli Kesgin",
+          "url": "https://velikesgin.com"
+        },
+        "keywords": "ücretsiz pdf düzenleyici, pdf birleştirme, pdf bölme, pdf editör"
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          { "@type": "Question", "name": "PDF düzenlemek ücretsiz mi?", "acceptedAnswer": { "@type": "Answer", "text": "Evet, bu araç tamamen ücretsizdir. Herhangi bir kayıt veya ödeme gerekmez." } },
+          { "@type": "Question", "name": "Hangi işlemleri yapabilirim?", "acceptedAnswer": { "@type": "Answer", "text": "PDF dosyalarını birleştirebilir, ayırabilir veya çeşitli sayfaları çıkarabilirsiniz." } },
+          { "@type": "Question", "name": "Dosya boyutu sınırı var mı?", "acceptedAnswer": { "@type": "Answer", "text": "Tarayıcı belleğine bağlı olarak makul boyutlardaki dosyaları rahatlıkla işleyebilirsiniz." } },
+          { "@type": "Question", "name": "PDF dosyalarım güvende mi?", "acceptedAnswer": { "@type": "Answer", "text": "Evet, tüm işlemler tarayıcınızda gerçekleşir ve dosyalarınız hiçbir sunucuya gönderilmez." } }
+        ]
+      }
+    ]
+  }
+  </script>
+  <link rel="stylesheet" href="assets/css/reset.css">
+  <link rel="stylesheet" href="assets/css/variables.css">
+  <link rel="stylesheet" href="assets/css/global.css">
+  <link rel="stylesheet" href="assets/css/tool.css">
+  <!-- PDF-Lib -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <!-- PDF.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+<!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-NRXJP6L8XZ"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-NRXJP6L8XZ');
+  </script>
+</head>
+<body>
+
+  <div id="header-placeholder"></div>
+
+  <main>
+    <section class="tool-hero-text">
+      <h1>Ücretsiz PDF Düzenleyici</h1>
+      <p class="tool-lead">
+        Veli Kesgin tarafından geliştirilen bu ücretsiz araç ile PDF dosyalarını düzenleyebilir,
+        birleştirebilir veya sayfalarını ayırabilirsiniz. 
+        Kayıt gerektirmez, işlemler tamamen tarayıcınızda gerçekleşir.
+      </p>
+    </section>
+
+    <section class="tool-faq">
+      <h2>Sıkça Sorulan Sorular</h2>
+      
+      <div class="tool-faq-item">
+        <h3>PDF düzenlemek ücretsiz mi?</h3>
+        <p>Evet, bu araç tamamen ücretsizdir. Herhangi bir kayıt veya ödeme gerekmez.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Hangi işlemleri yapabilirim?</h3>
+        <p>PDF dosyalarını birleştirebilir, ayırabilir veya çeşitli sayfaları çıkarabilirsiniz.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>Dosya boyutu sınırı var mı?</h3>
+        <p>Tarayıcı belleğine bağlı olarak makul boyutlardaki dosyaları rahatlıkla işleyebilirsiniz.</p>
+      </div>
+      
+      <div class="tool-faq-item">
+        <h3>PDF dosyalarım güvende mi?</h3>
+        <p>Evet, tüm işlemler tarayıcınızda gerçekleşir ve dosyalarınız hiçbir sunucuya gönderilmez.</p>
+      </div>
+    </section>
+    <section id="tool-hero">
+      <div class="tool-hero-inner">
+        <p class="section-eyebrow">// araçlar — no: 04</p>
+        <h1 class="tool-title">
+          <span class="tool-line">PDF DÜZENLEYİCİ</span>
+          <span class="tool-line outline-text">(BİRLEŞTİR & AYIR)</span>
+        </h1>
+        <p class="tool-desc">
+          PDF dosyalarınızı sunucuya yüklemeden tamamen kendi bilgisayarınızda güvende işleyin.<br>
+          İster belgeleri birleştirin, isterseniz istediğiniz sayfaları aradan çekip çıkartın.
+        </p>
+      </div>
+    </section>
+
+    <section id="tool-app">
+      <div class="tool-app-inner">
+        
+        <!-- Sekmeler (Tabs) -->
+        <div class="tool-tabs">
+          <button class="tab-btn active" data-tab="merge">PDF Birleştir</button>
+          <button class="tab-btn" data-tab="split">PDF Sayfa Ayır</button>
+          <button class="tab-btn" data-tab="compress">PDF Küçült</button>
+        </div>
+
+        <div class="tool-card">
+          
+          <div class="tool-card-left">
+            <h2 class="tool-step" id="step1Title">Adım 1: PDF Dosyalarını Seç</h2>
+            <p class="tool-step-desc" id="step1Desc">Birleştirmek istediğiniz PDF belgelerini sırasıyla içeri aktarın.</p>
+            
+            <label for="pdfInput" class="upload-zone" id="uploadZone">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              <span>Belge Eklemek İçin Tıklayın<br><small>veya sürükleyip bırakın</small></span>
+              <input type="file" id="pdfInput" accept="application/pdf" multiple hidden>
+            </label>
+            
+            <!-- Seçilen dosyalar listesi -->
+            <ul id="fileList" class="file-list" style="margin-top: 20px;"></ul>
+            
+            <!-- Sadece Split (Ayır) modunda görünecek ayarlar -->
+            <div id="splitSettings" style="display: none; margin-top: 24px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="input-group">
+                  <label for="startPage">Başlangıç Sayfası</label>
+                  <input type="number" id="startPage" min="1" placeholder="Örn: 1">
+                </div>
+                <div class="input-group">
+                  <label for="endPage">Bitiş Sayfası</label>
+                  <input type="number" id="endPage" min="1" placeholder="Örn: 5">
+                </div>
+              </div>
+              <div class="tool-info-box">
+                <span class="info-icon">💡</span>
+                <p>Mevcut PDF'in toplam sayfa sayısını sağdaki ekranda görüntüleyebilirsiniz.</p>
+              </div>
+            </div>
+            
+            <!-- Sadece Compress modunda görünecek ayarlar -->
+            <div id="compressSettings" style="display: none; margin-top: 24px;">
+              <div class="input-group">
+                <label for="qualitySlider" style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                  Görsel Sıkıştırma Kalitesi
+                  <span id="qualityVal" style="color:var(--accent);">Orta (60%)</span>
+                </label>
+                <input type="range" id="qualitySlider" min="0.1" max="1" step="0.1" value="0.6">
+              </div>
+              <div class="tool-info-box" style="margin-top: 12px;">
+                <span class="info-icon">💡</span>
+                <p>Uyarı: Sayfalar optimize edilmiş görsellere dönüştürülecektir. PDF boyutu ciddi oranda küçülür ancak metinler seçilemez.</p>
+              </div>
+            </div>
+            
+          </div>
+          
+          <div class="tool-card-right">
+            <h2 class="tool-step" id="step2Title">Adım 2: Birleştir ve İndir</h2>
+            <p class="tool-step-desc" id="step2Desc">Dosyalar tarayıcınızın içinde şifrelenerek anında işlenir.</p>
+            
+            <div id="emptyState" class="empty-state" style="margin-top: 40px; text-align:center;">
+              İşlem bekletiliyor...
+            </div>
+
+            <!-- Sadece Compress modunda görünecek boyut istatistikleri -->
+            <div id="statsPanel" style="display:none; margin-top: 24px;">
+              <div style="display:flex; justify-content:space-between; margin-bottom: 12px; font-size: 14px; color: var(--text-muted);">
+                <span>Orjinal: <strong id="origSizeStr" style="color:var(--text-main);">0 KB</strong></span>
+                <span>Yeni: <strong id="newSizeStr" style="color:var(--text-main);">0 KB</strong></span>
+              </div>
+            </div>
+
+            <!-- İşlem Rapor Banner -->
+            <div id="reportBanner" class="gain-banner" style="display:none; margin-top: 12px;">
+              İşlem Raporu Buraya Gelecek
+            </div>
+            
+            <!-- İşlem Başlat Butonu -->
+            <button class="btn btn-primary btn-full" id="actionBtn" style="margin-top:20px; font-size:14px; display:none;">
+              Birleştirilmiş Belgeyi İndir ↓
+            </button>
+            <div id="loadingStatus" style="display:none; text-align:center; font-family:var(--font-mono); color:var(--accent); font-size: 13px; margin-top:12px;">
+              İşleniyor, lütfen bekleyin...
+            </div>
+            
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="footer-placeholder"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="assets/js/inject.js"></script>
+  <script>
+    document.addEventListener('componentsLoaded', () => {
+      const s = document.createElement('script');
+      s.src = 'assets/js/main.js';
+      document.body.appendChild(s);
+    });
+  </script>
+  <script src="assets/js/tool-pdf.js"></script>
+
+<!-- GTranslate: https://gtranslate.io/ -->
+<div class="gtranslate_wrapper" style="position: fixed; bottom: 20px; left: 20px; z-index: 999999;"></div>
+<script>window.gtranslateSettings = {"default_language":"tr","languages":["tr","en"],"wrapper_selector":".gtranslate_wrapper","flag_size":32}</script>
+<script src="https://cdn.gtranslate.net/widgets/latest/flags.js" defer></script>
+
+</body>
+</html>

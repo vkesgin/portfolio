@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://velikesgin.com/sitemap-index.xml

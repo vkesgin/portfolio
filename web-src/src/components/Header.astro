@@ -1,0 +1,47 @@
+---
+import { getLangFromUrl, useTranslations } from '../i18n/utils';
+
+const lang = getLangFromUrl(Astro.url);
+const t = useTranslations(lang);
+---
+<div id="mobileMenu">
+  <a href={`/${lang}/`} class="mobile-link" onclick="closeMenu()">{t('nav.home')}</a>
+  <a href="/ui" class="mobile-link" onclick="closeMenu()" style="color: #ff2b73; margin-bottom: 10px;">UI Kütüphanesi <span style="font-size: 10px; background: #ff2b73; color: white; padding: 2px 6px; border-radius: 10px; margin-left: 5px; vertical-align: middle;">YENİ</span></a>
+  <a href={`/${lang}/#works`} class="mobile-link" onclick="closeMenu()">{t('nav.works')}</a>
+  <a href={`/${lang}/services`} class="mobile-link" onclick="closeMenu()">{t('nav.services')}</a>
+  <a href={`/${lang}/about`} class="mobile-link" onclick="closeMenu()">{t('nav.about')}</a>
+  <a href={`/${lang}/contact`} class="mobile-link" onclick="closeMenu()">{t('nav.contact')}</a>
+  <div class="mobile-socials">
+    <a href="https://instagram.com/veli.ksgn" target="_blank" class="mobile-social">Instagram</a>
+    <a href="https://www.behance.net/velikesgin" target="_blank" class="mobile-social">Behance</a>
+    <a href="https://www.patreon.com/c/VeliKesgin" target="_blank" class="mobile-social">Patreon</a>
+  </div>
+</div>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<nav id="nav">
+  <a href={`/${lang}/`} class="nav-logo">VK<span>.</span></a>
+  <ul class="nav-links">
+    <li style="margin-right: 15px;">
+      <a href="/ui" style="color: #ff2b73; display: flex; align-items: center; gap: 6px;">
+        UI Kütüphanesi
+        <span style="background: rgba(255, 43, 115, 0.2); color: #ff2b73; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 10px; border: 1px solid rgba(255, 43, 115, 0.4); line-height: 1;">YENİ</span>
+      </a>
+    </li>
+    <li><a href={`/${lang}/#works`}>{t('nav.works')}</a></li>
+    <li><a href={`/${lang}/services`}>{t('nav.services')}</a></li>
+    <li><a href={`/${lang}/about`}>{t('nav.about')}</a></li>
+    <li><a href={`/${lang}/contact`}>{t('nav.contact')}</a></li>
+    <!-- Language Switcher -->
+    <li>
+      <a href={lang === 'tr' ? Astro.url.pathname.replace('/tr', '/en') : Astro.url.pathname.replace('/en', '/tr')} style="font-weight: bold; border: 1px solid rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 4px;">
+        {lang === 'tr' ? 'EN' : 'TR'}
+      </a>
+    </li>
+  </ul>
+  <button class="hamburger" id="hamburger" aria-label="Menüyü aç" aria-expanded="false" aria-controls="mobileMenu">
+    <span></span><span></span>
+  </button>
+</nav>

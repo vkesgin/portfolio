@@ -1,0 +1,19 @@
+<!DOCTYPE html><html><body><script src="https://unpkg.com/@rive-app/canvas@2.21.6/rive.js"></script><script>
+setTimeout(async () => {
+  const res = await fetch("https://vk-portfolio-api.vkesgin38.workers.dev/files/files/dceca572a52449b1.riv");
+  const buffer = await res.arrayBuffer();
+  const canvas = document.createElement("canvas");
+  const r = new rive.Rive({
+    buffer, canvas, autoplay:false,
+    onLoad: () => {
+      console.log("Artboard Names:", r.artboardNames);
+    }
+  });
+}, 1000);
+</script>
+<!-- GTranslate: https://gtranslate.io/ -->
+<div class="gtranslate_wrapper" style="position: fixed; bottom: 20px; left: 20px; z-index: 999999;"></div>
+<script>window.gtranslateSettings = {"default_language":"tr","languages":["tr","en"],"wrapper_selector":".gtranslate_wrapper","flag_size":32}</script>
+<script src="https://cdn.gtranslate.net/widgets/latest/flags.js" defer></script>
+
+</body></html>

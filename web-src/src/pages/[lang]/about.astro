@@ -1,0 +1,223 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import { getLangFromUrl } from '../../i18n/utils';
+import { ui } from '../../i18n/ui';
+
+export function getStaticPaths() {
+  return Object.keys(ui).map(lang => ({ params: { lang } }));
+}
+
+const lang = getLangFromUrl(Astro.url);
+
+const c = {
+  tr: {
+    title: "Hakkımda — Veli Kesgin | Çok Disiplinli Yaratıcı",
+    eyebrow1: "// hakkımda",
+    eyebrow2: "// biyografi",
+    eyebrow3: "// araçlar & teknolojiler",
+    eyebrow4: "// deneyim zaman çizelgesi",
+    eyebrow5: "// sıkça sorulan sorular",
+    heroTitle1: "VELİ",
+    heroTitle2: "KESGİN",
+    loc: "Afyonkarahisar, Türkiye",
+    role: "Freelance & Ajans",
+    exp: "7+ Yıl Deneyim",
+    bio: [
+      "2015'ten bu yana görsel iletişim ve dijital üretimin neredeyse her alanında aktif olarak çalışıyorum. Web tasarımından 3D animasyona, videografiden oyun geliştirmeye kadar geniş bir spektrumda üretim yapıyorum.",
+      "Afyonkarahisar merkezli çalışarak hem yerel hem de ulusal ölçekte kurumsal ve bireysel projelere imza attım. Ajans deneyimini serbest çalışmayla harmanlayan, çok disiplinli bir üretim anlayışım var.",
+      "Her proje için en doğru disiplini seçiyor, gerektiğinde birden fazla alanı birleştirerek bütünleşik çözümler üretiyorum."
+    ],
+    contactBtn: "İletişime Geç ↗",
+    storyTitle: "YOLCULUK<br><span class=\"outline-text\">HİKAYESİ</span>",
+    faqTitle: "MERAK<br><span class=\"outline-text\">EDİLENLER</span>",
+    ctaTitle: "BİRLİKTE<br><span class=\"outline-text\">ÜRETELİM</span>",
+    ctaSub: "Projen için doğru kişiyi buldun.",
+    ctaBtn: "Portfolyoma Bak",
+    stats: { exp: "YIL DENEYİM", disc: "DİSİPLİN", tools: "ARAÇ & TEKNOLOJİ", proj: "TAMAMLANAN PROJE" }
+  },
+  en: {
+    title: "About Me — Veli Kesgin | Multidisciplinary Creative",
+    eyebrow1: "// about me",
+    eyebrow2: "// biography",
+    eyebrow3: "// tools & technologies",
+    eyebrow4: "// experience timeline",
+    eyebrow5: "// frequently asked questions",
+    heroTitle1: "VELI",
+    heroTitle2: "KESGIN",
+    loc: "Afyonkarahisar, Turkey",
+    role: "Freelance & Agency",
+    exp: "7+ Years Experience",
+    bio: [
+      "Since 2015, I have been actively working in almost every field of visual communication and digital production. I produce in a wide spectrum from web design to 3D animation, from videography to game development.",
+      "Working from Afyonkarahisar, I have completed corporate and individual projects on both a local and national scale. I have a multidisciplinary production approach that blends agency experience with freelance work.",
+      "I choose the right discipline for each project and, when necessary, combine multiple fields to create integrated solutions."
+    ],
+    contactBtn: "Contact Me ↗",
+    storyTitle: "JOURNEY<br><span class=\"outline-text\">STORY</span>",
+    faqTitle: "FREQUENTLY<br><span class=\"outline-text\">ASKED</span>",
+    ctaTitle: "LET'S BUILD<br><span class=\"outline-text\">TOGETHER</span>",
+    ctaSub: "You found the right person for your project.",
+    ctaBtn: "See My Portfolio",
+    stats: { exp: "YEARS EXP.", disc: "DISCIPLINES", tools: "TOOLS & TECH", proj: "COMPLETED PROJECTS" }
+  }
+}[lang];
+---
+<MainLayout title={c.title}>
+  <section id="abt-hero">
+    <div class="abt-hero-inner">
+      <p class="section-eyebrow abt-eyebrow">{c.eyebrow1}</p>
+      <h1 class="abt-hero-title">
+        <span class="abt-line">{c.heroTitle1}</span>
+        <span class="abt-line abt-line--outline">{c.heroTitle2}</span>
+      </h1>
+      <div class="abt-hero-meta">
+        <span class="abt-meta-item">
+          <span class="abt-meta-dot"></span>
+          {c.loc}
+        </span>
+        <span class="abt-meta-sep">·</span>
+        <span class="abt-meta-item">{c.role}</span>
+        <span class="abt-meta-sep">·</span>
+        <span class="abt-meta-item">{c.exp}</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="abt-bio">
+    <div class="abt-bio-inner">
+      <div class="abt-bio-left">
+        <div class="abt-photo-wrap">
+          <div class="abt-photo-inner">
+            <img src="/assets/images/veli.jpg" alt="Veli Kesgin" class="abt-photo-img" loading="lazy">
+            <div class="abt-photo-scanlines"></div>
+            <div class="abt-photo-overlay"></div>
+            <div class="abt-photo-corners">
+              <span class="apc apc--tl"></span><span class="apc apc--tr"></span><span class="apc apc--bl"></span><span class="apc apc--br"></span>
+            </div>
+          </div>
+        </div>
+        <p class="section-eyebrow">{c.eyebrow2}</p>
+        <div class="abt-bio-text">
+          {c.bio.map(p => <p class="abt-bio-p">{p}</p>)}
+        </div>
+        <div class="abt-contact-row">
+          <a href={`/${lang}/contact`} class="btn btn-primary">{c.contactBtn}</a>
+          <a href="https://www.behance.net/velikesgin" target="_blank" class="btn btn-outline">Behance</a>
+          <a href="https://instagram.com/veli.ksgn" target="_blank" class="btn btn-outline">Instagram</a>
+        </div>
+      </div>
+
+      <div class="abt-bio-right">
+        <p class="section-eyebrow" style="margin-bottom:20px">{c.eyebrow3}</p>
+        <div class="tools-grid">
+          <div class="tool-group">
+            <span class="tool-group-label">3D & Oyun</span>
+            <div class="tool-list">
+              <div class="tool-item"><span class="tool-name">Blender</span><div class="tool-bar"><div class="tool-fill" data-w="95"></div></div></div>
+              <div class="tool-item"><span class="tool-name">Cinema 4D</span><div class="tool-bar"><div class="tool-fill" data-w="85"></div></div></div>
+              <div class="tool-item"><span class="tool-name">Unreal Engine</span><div class="tool-bar"><div class="tool-fill" data-w="78"></div></div></div>
+              <div class="tool-item"><span class="tool-name">Unity</span><div class="tool-bar"><div class="tool-fill" data-w="72"></div></div></div>
+            </div>
+          </div>
+          <div class="tool-group">
+            <span class="tool-group-label">Video & Animasyon</span>
+            <div class="tool-list">
+              <div class="tool-item"><span class="tool-name">After Effects</span><div class="tool-bar"><div class="tool-fill" data-w="92"></div></div></div>
+              <div class="tool-item"><span class="tool-name">Premiere Pro</span><div class="tool-bar"><div class="tool-fill" data-w="90"></div></div></div>
+              <div class="tool-item"><span class="tool-name">DaVinci Resolve</span><div class="tool-bar"><div class="tool-fill" data-w="80"></div></div></div>
+              <div class="tool-item"><span class="tool-name">Audition</span><div class="tool-bar"><div class="tool-fill" data-w="70"></div></div></div>
+            </div>
+          </div>
+          <div class="tool-group">
+            <span class="tool-group-label">Tasarım</span>
+            <div class="tool-list">
+              <div class="tool-item"><span class="tool-name">Photoshop</span><div class="tool-bar"><div class="tool-fill" data-w="95"></div></div></div>
+              <div class="tool-item"><span class="tool-name">Illustrator</span><div class="tool-bar"><div class="tool-fill" data-w="90"></div></div></div>
+              <div class="tool-item"><span class="tool-name">InDesign</span><div class="tool-bar"><div class="tool-fill" data-w="80"></div></div></div>
+              <div class="tool-item"><span class="tool-name">XD / Figma</span><div class="tool-bar"><div class="tool-fill" data-w="85"></div></div></div>
+            </div>
+          </div>
+          <div class="tool-group">
+            <span class="tool-group-label">Yazılım & Web</span>
+            <div class="tool-list">
+              <div class="tool-item"><span class="tool-name">HTML / CSS / JS</span><div class="tool-bar"><div class="tool-fill" data-w="92"></div></div></div>
+              <div class="tool-item"><span class="tool-name">GSAP / Three.js</span><div class="tool-bar"><div class="tool-fill" data-w="85"></div></div></div>
+              <div class="tool-item"><span class="tool-name">React</span><div class="tool-bar"><div class="tool-fill" data-w="70"></div></div></div>
+              <div class="tool-item"><span class="tool-name">VS Code / Git</span><div class="tool-bar"><div class="tool-fill" data-w="95"></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="abt-timeline">
+    <div class="abt-tl-inner">
+      <p class="section-eyebrow">{c.eyebrow4}</p>
+      <h2 class="section-title abt-tl-title" set:html={c.storyTitle}></h2>
+      <div class="abt-tl-list">
+        <div class="abt-tl-item">
+          <div class="abt-tl-year-col"><span class="abt-tl-year">2015</span></div>
+          <div class="abt-tl-connector"><div class="abt-tl-dot"></div><div class="abt-tl-line"></div></div>
+          <div class="abt-tl-content">
+            <h3 class="abt-tl-role">Başlangıç — Grafik & Web</h3>
+            <p class="abt-tl-where">Serbest</p>
+            <p class="abt-tl-desc">Grafik tasarım ve web arayüzleri ile yaratıcı üretime ilk adımları attım.</p>
+          </div>
+        </div>
+        <div class="abt-tl-item abt-tl-item--active">
+          <div class="abt-tl-year-col"><span class="abt-tl-year" style="color:var(--accent)">2026</span></div>
+          <div class="abt-tl-connector"><div class="abt-tl-dot abt-tl-dot--active"></div></div>
+          <div class="abt-tl-content">
+            <h3 class="abt-tl-role">Şu An — Tam Spektrum Üretim</h3>
+            <p class="abt-tl-where">Afyonkarahisar · Freelance & Ajans</p>
+            <p class="abt-tl-desc">Tüm disiplinleri tek çatı altında birleştirerek projeleri uçtan uca üretiyorum.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="abt-stats">
+    <div class="abt-stats-inner">
+      <div class="abt-stat">
+        <div class="abt-stat-num"><span class="count" data-target="7">0</span><span class="abt-stat-plus">+</span></div>
+        <div class="abt-stat-label">{c.stats.exp}</div>
+      </div>
+      <div class="abt-stat-div"></div>
+      <div class="abt-stat">
+        <div class="abt-stat-num"><span class="count" data-target="6">0</span></div>
+        <div class="abt-stat-label">{c.stats.disc}</div>
+      </div>
+      <div class="abt-stat-div"></div>
+      <div class="abt-stat">
+        <div class="abt-stat-num"><span class="count" data-target="15">0</span><span class="abt-stat-plus">+</span></div>
+        <div class="abt-stat-label">{c.stats.tools}</div>
+      </div>
+      <div class="abt-stat-div"></div>
+      <div class="abt-stat">
+        <div class="abt-stat-num"><span class="count" data-target="18">0</span><span class="abt-stat-plus">+</span></div>
+        <div class="abt-stat-label">{c.stats.proj}</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="abt-cta">
+    <div class="abt-cta-inner">
+      <h2 class="abt-cta-title" set:html={c.ctaTitle}></h2>
+      <p class="abt-cta-sub">{c.ctaSub}</p>
+      <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap">
+        <a href={`/${lang}/contact`} class="btn btn-primary" style="font-size:13px;padding:16px 44px;letter-spacing:.12em">{c.contactBtn}</a>
+        <a href={`/${lang}/portfolio`} class="btn btn-outline">{c.ctaBtn}</a>
+      </div>
+    </div>
+  </section>
+
+  <Fragment slot="head">
+    <link rel="stylesheet" href="/assets/css/about.css">
+  </Fragment>
+  
+  <Fragment slot="scripts">
+    <script src="/assets/js/about.js" is:inline></script>
+  </Fragment>
+</MainLayout>

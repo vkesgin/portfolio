@@ -1,0 +1,214 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import { getLangFromUrl } from '../../i18n/utils';
+import { ui } from '../../i18n/ui';
+
+export function getStaticPaths() {
+  return Object.keys(ui).map(lang => ({ params: { lang } }));
+}
+
+const lang = getLangFromUrl(Astro.url);
+
+const c = {
+  tr: {
+    title: "İletişim — Veli Kesgin | Proje Teklifi Al",
+    eyebrow1: "// iletişim",
+    heroTitle1: "BİRLİKTE",
+    heroTitle2: "ÇALIŞALIM",
+    heroSub: "Yeni bir proje mi var? Bir fikir mi? Ya da sadece merhaba mı demek istiyorsun?<br>Her mesaj cevaplanır — genellikle 24 saat içinde.",
+    eyebrow2: "// doğrudan ulaş",
+    direct: {
+      email: "E-posta",
+      instagram: "Instagram",
+      behance: "Behance",
+      patreon: "Patreon",
+      avail: "Şu an müsait",
+      availSub: "Yeni projeler için hazırım"
+    },
+    eyebrow3: "// proje formu",
+    form: {
+      nameLabel: "İsim Soyisim",
+      namePlaceholder: "Veli Kesgin",
+      nameErr: "İsim gerekli",
+      emailLabel: "E-posta",
+      emailPlaceholder: "ornek@mail.com",
+      emailErr: "Geçerli e-posta girin",
+      subjectLabel: "Konu",
+      subjectPlaceholder: "Proje türünü seçin",
+      subjectErr: "Konu seçin",
+      messageLabel: "Mesaj",
+      messagePlaceholder: "Projen hakkında kısaca anlat — ne yapmak istiyorsun, tahmini süre, bütçe aralığı...",
+      messageErr: "Mesaj gerekli (min 20 karakter)",
+      submit: "Gönder",
+      privacy: "Bilgilerin sadece iletişim amacıyla kullanılır, paylaşılmaz."
+    },
+    success: {
+      title: "Mesajın alındı!",
+      sub: "En kısa sürede geri döneceğim — genellikle 24 saat içinde.",
+      btn: "Yeni Mesaj Gönder"
+    },
+    error: "Mesaj gönderilemedi. Lütfen doğrudan"
+  },
+  en: {
+    title: "Contact — Veli Kesgin | Get a Quote",
+    eyebrow1: "// contact",
+    heroTitle1: "LET'S WORK",
+    heroTitle2: "TOGETHER",
+    heroSub: "Have a new project? An idea? Or just want to say hi?<br>Every message is answered — usually within 24 hours.",
+    eyebrow2: "// reach out directly",
+    direct: {
+      email: "Email",
+      instagram: "Instagram",
+      behance: "Behance",
+      patreon: "Patreon",
+      avail: "Currently available",
+      availSub: "Ready for new projects"
+    },
+    eyebrow3: "// project form",
+    form: {
+      nameLabel: "Full Name",
+      namePlaceholder: "John Doe",
+      nameErr: "Name is required",
+      emailLabel: "Email",
+      emailPlaceholder: "example@mail.com",
+      emailErr: "Enter a valid email",
+      subjectLabel: "Subject",
+      subjectPlaceholder: "Select project type",
+      subjectErr: "Select a subject",
+      messageLabel: "Message",
+      messagePlaceholder: "Tell me briefly about your project — what you want to do, estimated time, budget range...",
+      messageErr: "Message is required (min 20 characters)",
+      submit: "Send",
+      privacy: "Your information is used only for communication purposes and will not be shared."
+    },
+    success: {
+      title: "Message received!",
+      sub: "I will get back to you as soon as possible — usually within 24 hours.",
+      btn: "Send New Message"
+    },
+    error: "Message could not be sent. Please write directly to"
+  }
+}[lang];
+---
+<MainLayout title={c.title}>
+  <section id="contact-hero">
+    <div class="contact-hero-inner">
+      <p class="section-eyebrow ct-eyebrow">{c.eyebrow1}</p>
+      <h1 class="ct-hero-title">
+        <span class="ct-line">{c.heroTitle1}</span>
+        <span class="ct-line ct-line--outline">{c.heroTitle2}</span>
+      </h1>
+      <p class="ct-hero-sub" set:html={c.heroSub}></p>
+    </div>
+  </section>
+
+  <section id="contact-body">
+    <div class="contact-body-inner">
+      <div class="contact-info">
+        <div class="ct-info-block">
+          <p class="section-eyebrow">{c.eyebrow2}</p>
+          <div class="ct-direct-links">
+            <a href="mailto:veli@velikesgin.com" class="ct-direct-item">
+              <div class="ct-direct-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+              <div class="ct-direct-info"><span class="ct-direct-label">{c.direct.email}</span><span class="ct-direct-val">veli@velikesgin.com</span></div><span class="ct-direct-arrow">↗</span>
+            </a>
+            <a href="https://instagram.com/veli.ksgn" target="_blank" rel="noopener" class="ct-direct-item">
+              <div class="ct-direct-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg></div>
+              <div class="ct-direct-info"><span class="ct-direct-label">{c.direct.instagram}</span><span class="ct-direct-val">@veli.ksgn</span></div><span class="ct-direct-arrow">↗</span>
+            </a>
+            <a href="https://www.behance.net/velikesgin" target="_blank" rel="noopener" class="ct-direct-item">
+              <div class="ct-direct-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h7a4 4 0 0 1 0 8H3z"/><path d="M3 14h8a4 4 0 0 1 0 8H3z"/><line x1="14" y1="8" x2="21" y2="8"/><path d="M21 13c0 2.5-1.8 4-4 4s-4-1.5-4-4 1.8-4 4-4c1.8 0 3.2.8 3.8 2"/></svg></div>
+              <div class="ct-direct-info"><span class="ct-direct-label">{c.direct.behance}</span><span class="ct-direct-val">behance.net/velikesgin</span></div><span class="ct-direct-arrow">↗</span>
+            </a>
+            <a href="https://www.patreon.com/c/VeliKesgin" target="_blank" rel="noopener" class="ct-direct-item">
+              <div class="ct-direct-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="14.5" cy="9.5" r="6.5"/><line x1="3" y1="2" x2="3" y2="22"/></svg></div>
+              <div class="ct-direct-info"><span class="ct-direct-label">{c.direct.patreon}</span><span class="ct-direct-val">patreon.com/VeliKesgin</span></div><span class="ct-direct-arrow">↗</span>
+            </a>
+          </div>
+        </div>
+        <div class="ct-availability">
+          <div class="ct-avail-dot"></div>
+          <div><span class="ct-avail-title">{c.direct.avail}</span><span class="ct-avail-sub">{c.direct.availSub}</span></div>
+        </div>
+      </div>
+
+      <div class="contact-form-wrap">
+        <p class="section-eyebrow" style="margin-bottom:24px">{c.eyebrow3}</p>
+        <form id="contactForm" novalidate>
+          <div class="ct-form-row">
+            <div class="ct-field" id="field-name">
+              <label class="ct-label" for="name">{c.form.nameLabel}</label>
+              <input type="text" id="name" name="from_name" class="ct-input" placeholder={c.form.namePlaceholder} autocomplete="name" required>
+              <span class="ct-field-line"></span>
+              <span class="ct-error" id="err-name">{c.form.nameErr}</span>
+            </div>
+            <div class="ct-field" id="field-email">
+              <label class="ct-label" for="email">{c.form.emailLabel}</label>
+              <input type="email" id="email" name="from_email" class="ct-input" placeholder={c.form.emailPlaceholder} autocomplete="email" required>
+              <span class="ct-field-line"></span>
+              <span class="ct-error" id="err-email">{c.form.emailErr}</span>
+            </div>
+          </div>
+          <div class="ct-field" id="field-subject">
+            <label class="ct-label" for="subject">{c.form.subjectLabel}</label>
+            <div class="ct-select-wrap">
+              <select id="subject" name="subject" class="ct-select" required>
+                <option value="" disabled selected>{c.form.subjectPlaceholder}</option>
+                <option value="Web Design">Web Design</option>
+                <option value="3D Animasyon">3D Animasyon</option>
+                <option value="2D Animasyon">2D Animasyon</option>
+                <option value="Videografi">Videografi</option>
+                <option value="Grafik Tasarım">Grafik Tasarım</option>
+                <option value="Yazılım">Yazılım</option>
+                <option value="Diğer">Diğer / Birden Fazla</option>
+              </select>
+              <span class="ct-select-arrow">↓</span>
+            </div>
+            <span class="ct-field-line"></span>
+            <span class="ct-error" id="err-subject">{c.form.subjectErr}</span>
+          </div>
+          <div class="ct-field" id="field-message">
+            <label class="ct-label" for="message">{c.form.messageLabel}</label>
+            <textarea id="message" name="message" class="ct-textarea" rows="5" placeholder={c.form.messagePlaceholder} required></textarea>
+            <span class="ct-field-line"></span>
+            <span class="ct-char-count" id="charCount">0 / 1000</span>
+            <span class="ct-error" id="err-message">{c.form.messageErr}</span>
+          </div>
+          <div class="ct-form-bottom">
+            <button type="submit" class="ct-submit" id="submitBtn">
+              <span class="ct-submit-text">{c.form.submit}</span>
+              <span class="ct-submit-arrow">↗</span>
+              <span class="ct-submit-loader" id="submitLoader"><span></span><span></span><span></span></span>
+            </button>
+            <p class="ct-privacy">{c.form.privacy}</p>
+          </div>
+        </form>
+
+        <div class="ct-success" id="ctSuccess">
+          <div class="ct-success-icon">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="15" stroke="#00e5ff" stroke-width="1.2"/>
+              <path d="M9 16l5 5 9-10" stroke="#00e5ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3 class="ct-success-title">{c.success.title}</h3>
+          <p class="ct-success-sub">{c.success.sub}</p>
+          <button class="btn btn-outline" onclick="resetForm()" style="margin-top:16px;font-size:12px">{c.success.btn}</button>
+        </div>
+
+        <div class="ct-error-msg" id="ctErrorMsg">
+          {c.error} <a href="mailto:veli@velikesgin.com">veli@velikesgin.com</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <Fragment slot="head">
+    <link rel="stylesheet" href="/assets/css/contact.css">
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js" is:inline></script>
+  </Fragment>
+
+  <Fragment slot="scripts">
+    <script src="/assets/js/contact.js" is:inline></script>
+  </Fragment>
+</MainLayout>

@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Bebas+Neue&display=swap');
+
+:root {
+  /* Renkler */
+  --bg-primary:    #0a0a0a;
+  --bg-surface:    #111111;
+  --bg-surface-2:  #1a1a1a;
+  --border:        #1e1e1e;
+  --border-hover:  #2a2a2a;
+
+  --text-primary:   #f0f0f0;
+  --text-secondary: #999999;
+  --text-muted:     #717171;
+
+  --accent:         #00e5ff;
+  --accent-dark:    #00b8d4;
+  --accent-glow:    rgba(0, 229, 255, 0.15);
+  --accent-glow-lg: rgba(0, 229, 255, 0.30);
+  --danger:         #ff0066;
+
+  /* Fontlar */
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body:    'Space Grotesk', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* Animasyon */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast:    0.2s;
+  --dur-mid:     0.45s;
+  --dur-slow:    0.8s;
+
+  /* Spacing */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  32px;
+  --space-xl:  64px;
+  --space-2xl: 120px;
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+
+  /* Z-index */
+  --z-base:    1;
+  --z-overlay: 100;
+  --z-modal:   200;
+  --z-nav:     300;
+}

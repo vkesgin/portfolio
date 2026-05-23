@@ -1,0 +1,207 @@
+---
+import MainLayout from '../../layouts/MainLayout.astro';
+import { getLangFromUrl } from '../../i18n/utils';
+import { ui } from '../../i18n/ui';
+
+export function getStaticPaths() {
+  return Object.keys(ui).map(lang => ({ params: { lang } }));
+}
+
+const lang = getLangFromUrl(Astro.url);
+
+const content = {
+  tr: {
+    heroTitle1: "VELİ",
+    heroTitle2: "KESGİN",
+    heroRole: "Veli Kesgin — Web Tasarım · 3D Animasyon · Videografi · Grafik Tasarım · Yazılım",
+    seeWorks: "Çalışmalarımı Gör ↓",
+    contact: "İletişime Geç",
+    tools: "// Araçlar",
+    statsExp: "YIL<br>DENEYİM",
+    statsProj: "TAMAMLANAN<br>PROJE",
+    statsDisc: "FARKLI<br>DİSİPLİN",
+    statsSucc: "TESLİMAT<br>BAŞARISI",
+    skillsHeader: "NE<br><span class=\"outline-text\">YAPIYORUM</span>",
+    worksHeader: "SEÇİLMİŞ<br><span class=\"outline-text\">İŞLER</span>",
+    aboutHeader: "BEN<br><span class=\"outline-text\">KİMİM</span>",
+    ctaHeader1: "BİRLİKTE",
+    ctaHeader2: "YAPALIM",
+    ctaSub: "Projen için doğru kişiyi arıyorsan — buradayım.<br>Web, animasyon, video veya yazılım. Hepsinde."
+  },
+  en: {
+    heroTitle1: "VELI",
+    heroTitle2: "KESGIN",
+    heroRole: "Veli Kesgin — Web Design · 3D Animation · Videography · Graphic Design · Dev",
+    seeWorks: "See My Works ↓",
+    contact: "Contact Me",
+    tools: "// Tools",
+    statsExp: "YEARS<br>EXPERIENCE",
+    statsProj: "COMPLETED<br>PROJECTS",
+    statsDisc: "DIFFERENT<br>DISCIPLINES",
+    statsSucc: "DELIVERY<br>SUCCESS",
+    skillsHeader: "WHAT<br><span class=\"outline-text\">I DO</span>",
+    worksHeader: "SELECTED<br><span class=\"outline-text\">WORKS</span>",
+    aboutHeader: "WHO<br><span class=\"outline-text\">AM I</span>",
+    ctaHeader1: "LET'S BUILD",
+    ctaHeader2: "TOGETHER",
+    ctaSub: "If you are looking for the right person for your project — I'm here.<br>Web, animation, video or dev. In all of them."
+  }
+};
+
+const c = content[lang];
+---
+<MainLayout title="Veli Kesgin — Web Design, 3D Animasyon & Videografi">
+  <section id="hero">
+    <div class="hero-inner">
+      <div class="hero-text-side">
+        <a href="/ui" class="ui-live-badge" style="display: inline-flex; align-items: center; gap: 8px; background: rgba(255, 43, 115, 0.1); border: 1px solid rgba(255, 43, 115, 0.3); padding: 8px 16px; border-radius: 50px; color: #ff2b73; text-decoration: none; font-size: 14px; font-weight: 600; margin-bottom: 24px; transition: all 0.3s ease; box-shadow: 0 0 20px rgba(255, 43, 115, 0.15);">
+          <span style="display: inline-block; width: 8px; height: 8px; background: #ff2b73; border-radius: 50%; box-shadow: 0 0 10px #ff2b73;"></span>
+          Yeni Rive UI Kütüphanemi Keşfet ↗
+        </a>
+
+        <p class="hero-label">Afyonkarahisar <span>—</span> 2015'ten Beri</p>
+        <h1 class="hero-title">
+          <span class="line-wrap"><span class="line" style="font-size:clamp(40px,7vw,95px);color:var(--text-secondary);letter-spacing:.18em">{c.heroTitle1}</span></span>
+          <span class="line-wrap"><span class="line outline-line">{c.heroTitle2}</span></span>
+        </h1>
+        <div class="hero-role">
+          <span class="role-dash">—</span>
+          <span id="roleText"></span>
+          <span class="type-cursor">_</span>
+        </div>
+        <p class="hero-desc">{c.heroRole}</p>
+        <div class="hero-cta">
+          <a href="#works" class="btn btn-primary">{c.seeWorks}</a>
+          <a href={`/${lang}/contact`} class="btn btn-outline">{c.contact}</a>
+        </div>
+      </div>
+
+      <div class="hero-photo-side" id="heroPhoto">
+        <div class="hero-photo-inner" id="heroPhotoInner">
+          <picture>
+            <source srcset="/assets/images/veli.webp" type="image/webp">
+            <img src="/assets/images/veli.jpg" alt="Veli Kesgin" class="hero-img" id="heroImg" fetchpriority="high">
+          </picture>
+          <div class="hero-photo-scanlines"></div>
+          <div class="hero-photo-overlay"></div>
+          <div class="hero-photo-cyan-line"></div>
+          <div class="hero-photo-corners">
+            <span class="hpc hpc--tl"></span>
+            <span class="hpc hpc--tr"></span>
+            <span class="hpc hpc--bl"></span>
+            <span class="hpc hpc--br"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="hero-scroll">
+      <span>SCROLL</span>
+      <div class="scroll-track"><div class="scroll-thumb"></div></div>
+    </div>
+
+    <div class="hero-tools-wrapper">
+      <p class="hero-tools-title">{c.tools}</p>
+      <div class="hero-tools-marquee" id="toolsMarquee">
+        <div class="tools-track" id="toolsTrack">
+          <a href="/tool-pdf.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> PDF</a>
+          <a href="/tool-audio.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg> Audio</a>
+          <a href="/tool-bg-remover.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h18v18H3z"></path><path d="M12 8v8"></path><path d="M8 12h8"></path></svg> BG Remove</a>
+          <a href="/tool-image.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Image Compress</a>
+          <a href="/tool-palette.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path><line x1="2" y1="12" x2="22" y2="12"></line></svg> Palette</a>
+          <a href="/tool-password.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg> Password</a>
+          <a href="/tool-qr.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><rect x="7" y="7" width="3" height="3"></rect><rect x="14" y="7" width="3" height="3"></rect><rect x="7" y="14" width="3" height="3"></rect><rect x="14" y="14" width="3" height="3"></rect></svg> QR</a>
+          <a href="/tool-converter.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 16 12 12 8 16"></polyline><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path><polyline points="16 16 12 12 8 16"></polyline></svg> Converter</a>
+          
+          <a href="/tool-pdf.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> PDF</a>
+          <a href="/tool-audio.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg> Audio</a>
+          <a href="/tool-bg-remover.html" class="tool-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h18v18H3z"></path><path d="M12 8v8"></path><path d="M8 12h8"></path></svg> BG Remove</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="stats">
+    <div class="stats-inner">
+      <div class="stats-line"></div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-num">
+            <span class="count" data-target="7">0</span>
+            <span class="stat-plus">+</span>
+          </div>
+          <div class="stat-label" set:html={c.statsExp}></div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-num">
+            <span class="count" data-target="18">0</span>
+          </div>
+          <div class="stat-label" set:html={c.statsProj}></div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-num">
+            <span class="count" data-target="6">0</span>
+          </div>
+          <div class="stat-label" set:html={c.statsDisc}></div>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <div class="stat-num">
+            <span class="count" data-target="100">0</span>
+            <span class="stat-plus">%</span>
+          </div>
+          <div class="stat-label" set:html={c.statsSucc}></div>
+        </div>
+      </div>
+      <div class="stats-line"></div>
+    </div>
+  </section>
+
+  <section id="skills">
+    <div class="skills-inner">
+      <div class="skills-header">
+        <p class="section-eyebrow">// 03 — disiplinler</p>
+        <h2 class="section-title" set:html={c.skillsHeader}></h2>
+      </div>
+      <div class="skills-grid">
+        <a href={`/${lang}/services#web`} class="skill-card" data-index="01">
+          <div class="skill-card-top">
+            <span class="skill-num">01</span><span class="skill-arrow">↗</span>
+          </div>
+          <h3 class="skill-name">Web Design</h3>
+        </a>
+        <a href={`/${lang}/services#graphic`} class="skill-card" data-index="02">
+          <div class="skill-card-top">
+            <span class="skill-num">02</span><span class="skill-arrow">↗</span>
+          </div>
+          <h3 class="skill-name">Grafik Tasarım</h3>
+        </a>
+        <a href={`/${lang}/services#2d`} class="skill-card" data-index="03">
+          <div class="skill-card-top">
+            <span class="skill-num">03</span><span class="skill-arrow">↗</span>
+          </div>
+          <h3 class="skill-name">2D Animasyon</h3>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section id="cta">
+    <div class="cta-inner">
+      <h2 class="cta-heading">
+        <span class="cta-line" data-text={c.ctaHeader1}>{c.ctaHeader1}</span>
+        <span class="cta-line cta-line--outline" data-text={c.ctaHeader2}>{c.ctaHeader2}</span>
+      </h2>
+      <p class="cta-sub" set:html={c.ctaSub}></p>
+      <div class="cta-btns">
+        <a href={`/${lang}/contact`} class="btn btn-primary cta-btn-main">{c.contact} ↗</a>
+      </div>
+    </div>
+  </section>
+  
+  <Fragment slot="scripts">
+    <script src="/assets/js/portfolio-data.js?v=3" is:inline></script>
+  </Fragment>
+</MainLayout>

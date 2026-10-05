@@ -112,9 +112,29 @@ const INSPIRE_CARD_PLATFORMS = new Set(['web', 'behance', 'dribbble', 'linkedin'
 const INSPIRE_GENERIC_TITLES = new Set([
   'instagram', 'tiktok', 'tiktok - make your day', 'x', 'twitter', 'facebook', 'log into facebook', 'facebook - log in or sign up',
   'youtube', 'before you continue to youtube', 'before you continue', 'pinterest', 'linkedin', 'threads', 'vimeo', 'spotify',
+  'spotify – web player', 'spotify - web player',
   'soundcloud', 'login', 'log in', 'sign in', 'sign up', 'just a moment...', 'access denied', 'attention required! | cloudflare',
   'error', 'forbidden', 'page not found', '404 not found', 'not found',
 ]);
+// GET /api/inspire/posts page size (newest first, ?before=<id> cursor; X-Fikir-Next names the next cursor)
+const INSPIRE_PAGE_SIZE = 200;
+// A failed preview fetch is stored as meta '{"failed":1,"at":<s>}' and not retried before this
+const INSPIRE_META_RETRY_S = 2 * 24 * 60 * 60;
+// Rate limits: bucket -> [max requests, window seconds]. Counted in D1 (inspire_rate), fixed windows.
+const INSPIRE_LIMITS = {
+  guest:    [30, 600],    // guest tokens per IP / 10 min
+  login:    [5, 900],     // FAILED password logins per IP / 15 min
+  post:     [30, 3600],   // new posts per guest cid or user / hour
+  post_ip:  [60, 3600],   // new posts per IP / hour
+  note:     [60, 3600],   // new notes per guest cid or user / hour
+  note_ip:  [120, 3600],
+  check:    [30, 60],     // duplicate checks per cid or user / minute (may resolve short links)
+  check_ip: [60, 60],
+  fetch_ip: [30, 60],     // /posts/:id/meta calls that fetch a third-party page, per IP / minute
+};
+// Guest display names that would pass for the owner (compared after inspireFoldName()).
+const INSPIRE_RESERVED_NAMES = ['yonetici', 'admin', 'administrator', 'moderator', 'moderatör', 'site sahibi'];
+const INSPIRE_RESERVED_PARTS = ['veli kesgin', 'vkesgin'];
 
 function b64urlFromBytes(bytes) {
   let bin = '';
@@ -185,7 +205,9 @@ async function inspireActor(request, env) {
   if (!p) return null;
   if (p.g === 1) {
     if (typeof p.cid !== 'string' || !INSPIRE_CID_RE.test(p.cid)) return null;
-    return { guest: true, cid: p.cid, userId: null, username: null, name: cleanInspireName(p.name), isAdmin: false };
+    const name = cleanInspireName(p.name);
+    // tokens minted before the reserved-name check still post, but as Anonim
+    return { guest: true, cid: p.cid, userId: null, username: null, name: inspireReservedName(name) ? '' : name, isAdmin: false };
   }
   const userId = Number(p.userId);
   if (!Number.isSafeInteger(userId) || userId <= 0) return null;
@@ -226,9 +248,45 @@ function cleanInspireText(v) {
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
     .trim();
 }
+// Fold a display name for impersonation checks: case, Turkish İ/ı, diacritics, common look-alikes
+// (l/1/I -> i, 0 -> o, Cyrillic letters) and everything that is not a letter or digit.
+const INSPIRE_CONFUSABLES = { 'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'у': 'y', 'х': 'x', 'к': 'k', 'і': 'i', 'ѕ': 's', 'ν': 'v' };
+function inspireFoldName(s) {
+  return String(s || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
+    .replace(/[аеорсухкіѕν]/g, (c) => INSPIRE_CONFUSABLES[c])
+    .replace(/[ı1l|!]/g, 'i').replace(/0/g, 'o')
+    .replace(/[^a-z0-9]/g, '');
+}
+let inspireAdminNameFolded = '';   // owner's full_name from inspire_users (set by the migration)
+function inspireReservedName(name) {
+  const f = inspireFoldName(name);
+  if (!f) return false;
+  if (INSPIRE_RESERVED_NAMES.some((r) => inspireFoldName(r) === f)) return true;
+  const parts = INSPIRE_RESERVED_PARTS.map(inspireFoldName);
+  if (inspireAdminNameFolded.length >= 5) parts.push(inspireAdminNameFolded);
+  return parts.some((p) => f.includes(p));
+}
+
+// JSON body, read with a byte cap (a huge body is never buffered whole). null = too large / not an object.
 async function inspireBody(request) {
-  const text = await request.text();
-  if (text.length > INSPIRE_MAX_BODY) return null;
+  if (Number(request.headers.get('Content-Length') || 0) > INSPIRE_MAX_BODY) return null;
+  let text = '';
+  if (request.body) {
+    const reader = request.body.getReader();
+    const chunks = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > INSPIRE_MAX_BODY) { reader.cancel().catch(() => {}); return null; }
+      chunks.push(value);
+    }
+    const buf = new Uint8Array(size);
+    let off = 0;
+    for (const c of chunks) { buf.set(c, off); off += c.byteLength; }
+    text = new TextDecoder().decode(buf);
+  }
   if (!text.trim()) return {};
   try {
     const d = JSON.parse(text);
@@ -274,6 +332,12 @@ async function migrateInspireSchema(env) {
       FOREIGN KEY(post_id) REFERENCES inspire_posts(id) ON DELETE CASCADE,
       FOREIGN KEY(user_id) REFERENCES inspire_users(id) ON DELETE CASCADE
     )`),
+    // Fixed-window request counters (k = bucket + ':' + hashed IP / cid / user id; reset = unix seconds)
+    db.prepare(`CREATE TABLE IF NOT EXISTS inspire_rate (
+      k TEXT PRIMARY KEY,
+      n INTEGER NOT NULL,
+      reset INTEGER NOT NULL
+    )`),
   ]);
   const columns = {
     inspire_users: [['is_first_login', 'INTEGER DEFAULT 1']],
@@ -297,11 +361,17 @@ async function migrateInspireSchema(env) {
   ]);
   // Reserved owner row for guest content (user_id is NOT NULL + FK). Its password can never be used:
   // /api/inspire/login rejects this username.
-  const unusable = '!' + crypto.randomUUID() + crypto.randomUUID();
   await db.prepare("INSERT OR IGNORE INTO inspire_users (username, password, full_name) VALUES (?, ?, 'Misafir')")
-    .bind(INSPIRE_GUEST_USERNAME, unusable).run();
+    .bind(INSPIRE_GUEST_USERNAME, inspireUnusablePassword()).run();
   const guest = await db.prepare('SELECT id FROM inspire_users WHERE username=?').bind(INSPIRE_GUEST_USERNAME).first();
   inspireGuestId = guest.id;
+  // The owner logs in with ADMIN_PASSWORD only. A password stored in the owner's row (a copy written by
+  // the old first login, or one set through change-password) must not remain a second credential.
+  await db.prepare("UPDATE inspire_users SET password=?, is_first_login=0 WHERE username=? AND substr(password, 1, 1) <> '!'")
+    .bind(inspireUnusablePassword(), INSPIRE_ADMIN_USERNAME).run();
+  const owner = await db.prepare('SELECT full_name FROM inspire_users WHERE username=?').bind(INSPIRE_ADMIN_USERNAME).first();
+  inspireAdminNameFolded = inspireFoldName(owner && owner.full_name);
+  await db.prepare('DELETE FROM inspire_rate WHERE reset < ?').bind(Math.floor(Date.now() / 1000)).run();
   // Backfill dedupe keys for legacy rows (old 'reels'/'link'/... types parse like any other link).
   let lastId = 0;
   for (let round = 0; round < 100; round++) {
@@ -322,10 +392,14 @@ async function migrateInspireSchema(env) {
 
 // ── Row -> JSON ──
 // ?1 = guest cid (or NULL), ?2 = registered user id (or NULL). Never select user_id / client_id into output.
+// author_role ('admin' | 'user' | 'guest') lets the board mark the owner's content; a guest can pick any name.
+const INSPIRE_ROLE_SQL = (t) => `CASE WHEN ${t}.client_id IS NOT NULL OR u.username = '${INSPIRE_GUEST_USERNAME}' THEN 'guest'
+      WHEN u.username = '${INSPIRE_ADMIN_USERNAME}' THEN 'admin' ELSE 'user' END AS author_role`;
 const INSPIRE_POST_SELECT = `
-  SELECT p.id, p.type, p.url, p.description, p.created_at, p.meta,
+  SELECT p.id, p.type, p.url, p.description, p.created_at, p.meta, p.url_key,
     COALESCE(p.author_name,
       CASE WHEN u.username = '__guest__' THEN '' ELSE COALESCE(NULLIF(u.full_name, ''), u.username) END, '') AS author,
+    ${INSPIRE_ROLE_SQL('p')},
     CASE WHEN (?1 IS NOT NULL AND p.client_id = ?1)
            OR (?2 IS NOT NULL AND p.client_id IS NULL AND p.user_id = ?2) THEN 1 ELSE 0 END AS is_mine
   FROM inspire_posts p LEFT JOIN inspire_users u ON u.id = p.user_id`;
@@ -333,6 +407,7 @@ const INSPIRE_NOTE_SELECT = `
   SELECT n.id, n.post_id, n.content, n.is_public, n.created_at,
     COALESCE(n.author_name,
       CASE WHEN u.username = '__guest__' THEN '' ELSE COALESCE(NULLIF(u.full_name, ''), u.username) END, '') AS author,
+    ${INSPIRE_ROLE_SQL('n')},
     CASE WHEN (?1 IS NOT NULL AND n.client_id = ?1)
            OR (?2 IS NOT NULL AND n.client_id IS NULL AND n.user_id = ?2) THEN 1 ELSE 0 END AS is_mine
   FROM inspire_notes n LEFT JOIN inspire_users u ON u.id = n.user_id`;
@@ -343,33 +418,125 @@ const INSPIRE_NOTE_VISIBLE = `(n.is_public = 1
 function inspireOwnerParams(actor) {
   return [actor && actor.guest ? actor.cid : null, actor && !actor.guest ? actor.userId : null];
 }
-function inspireMetaOut(v) {
+function inspireMetaParse(v) {
   if (!v) return null;
   try { const m = JSON.parse(v); return m && typeof m === 'object' && !Array.isArray(m) ? m : null; } catch { return null; }
+}
+const inspireMetaFailed = (m) => !!(m && m.failed);
+// Negative cache entry still fresh (no new fetch until it expires)
+const inspireMetaFresh = (m) => inspireMetaFailed(m) && Math.floor(Date.now() / 1000) - Number(m.at || 0) < INSPIRE_META_RETRY_S;
+function inspireMetaOut(v) {
+  const m = inspireMetaParse(v);
+  return m && !inspireMetaFailed(m) ? m : null;
 }
 function inspirePostOut(r, isAdmin, notes) {
   return {
     id: r.id, type: r.type, url: r.url || '', description: r.description || '', created_at: r.created_at,
-    author: r.author || '', is_mine: !!r.is_mine, can_delete: !!r.is_mine || !!isAdmin,
-    meta: inspireMetaOut(r.meta), notes: notes || [],
+    author: r.author || '', author_role: r.author_role || 'user', is_mine: !!r.is_mine, can_delete: !!r.is_mine || !!isAdmin,
+    meta: inspireMetaOut(r.meta), meta_failed: inspireMetaFresh(inspireMetaParse(r.meta)), notes: notes || [],
   };
 }
 function inspireNoteOut(n, isAdmin) {
   return {
-    id: n.id, content: n.content || '', author: n.author || '', is_public: n.is_public === 1,
+    id: n.id, content: n.content || '', author: n.author || '', author_role: n.author_role || 'user', is_public: n.is_public === 1,
     is_mine: !!n.is_mine, can_edit: !!n.is_mine || !!isAdmin, created_at: n.created_at,
   };
 }
+
+// ── Old fikir.html compatibility (rollout window / cached copies) ──
+// The old page builds cards with innerHTML, puts note text into an inline onclick="editNote(id, '…')"
+// string, knows only the types below, and decides ownership with user_id. GET /api/inspire/posts
+// without "X-Fikir-Client: 2" gets inert text, legacy type names, and (registered users only) the
+// caller's OWN user_id on rows that are theirs.
+const INSPIRE_LEGACY_TYPES = new Set(['reels', 'link', 'pinterest', 'drive', 'youtube', 'video', 'image']);
+function inspireLegacyText(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/'/g, '’').replace(/\\/g, '＼')   // an entity would be decoded back inside onclick="…"
+    .replace(/[\r\n]+/g, ' ');
+}
+function inspireLegacyUrl(s) {
+  return String(s || '').replace(/["'<>`\\\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+}
+function inspireLegacyPost(post, actor) {
+  let type = post.type, url = post.url;
+  if (!INSPIRE_LEGACY_TYPES.has(type)) {
+    const p = type === 'text' ? null : parseLink(url);
+    if (p && p.platform === 'instagram' && p.id && ['reel', 'p', 'tv'].includes(p.subtype)) type = 'reels';
+    // text: an empty 'pinterest' block is the old page's only media-less card (description = the text)
+    else type = type === 'text' ? 'pinterest' : 'link';
+  }
+  // the old page's own patterns; anything else ends in its <img src=url> / refused-iframe fallback
+  if (type === 'youtube' && !/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))[\w-]{11}/.test(url)) type = 'link';
+  if (type === 'drive' && !/\/d\/[^/]+/.test(url)) type = 'link';
+  if (type === 'reels') url = url.replace(/\/+$/, '');   // the old page appends '/embed'
+  const ownId = actor && !actor.guest ? actor.userId : undefined;
+  const out = {
+    ...post, type, url: inspireLegacyUrl(url), description: inspireLegacyText(post.description), author: inspireLegacyText(post.author),
+    notes: post.notes.map((n) => ({ ...n, content: inspireLegacyText(n.content), author: inspireLegacyText(n.author), ...(n.is_mine && ownId ? { user_id: ownId } : {}) })),
+  };
+  if (post.is_mine && ownId) out.user_id = ownId;
+  return out;
+}
+
 async function inspireAuthorName(db, actor) {
   if (actor.guest) return actor.name;
   const row = await db.prepare('SELECT username, full_name FROM inspire_users WHERE id=?').bind(actor.userId).first();
   if (!row || row.username === INSPIRE_GUEST_USERNAME) return null;
   return row.full_name || row.username;
 }
-async function inspireFindDuplicate(db, key) {
-  if (!key) return null;
-  const r = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.url_key = ?3 ORDER BY p.id ASC LIMIT 1`).bind(null, null, key).first();
-  return r ? { id: r.id, author: r.author || '', created_at: r.created_at } : null;
+// Dedupe keys of a parsed link: its key and, for a resolved short link, the 'short:' key that rows saved
+// unresolved (legacy rows, or a failed lookup) still carry.
+function inspireDupKeys(p) {
+  return p && p.key ? [p.key, p.shortKey || p.key] : null;
+}
+async function inspireFindDuplicate(db, keys) {
+  if (!keys) return null;
+  const r = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.url_key IN (?3, ?4) ORDER BY p.id ASC LIMIT 1`).bind(null, null, keys[0], keys[1]).first();
+  return r ? { id: r.id, author: r.author || '', created_at: r.created_at, url_key: r.url_key } : null;
+}
+// A short link just resolved: rows that still carry its 'short:' key get the real key (and the duplicate
+// check finds them from either form from now on).
+function inspireRekeyShort(db, ctx, parsed) {
+  if (!parsed || !parsed.shortKey || parsed.shortKey === parsed.key || !ctx || typeof ctx.waitUntil !== 'function') return;
+  ctx.waitUntil(db.prepare('UPDATE inspire_posts SET url_key=? WHERE url_key=?').bind(parsed.key, parsed.shortKey).run().catch(() => {}));
+}
+const inspireDupOut = (d) => ({ id: d.id, author: d.author, created_at: d.created_at });
+// Only plain DNS names / IPv4 hosts (a '"' or '<' in a host would survive URL parsing).
+function inspireHostOk(href) {
+  try { return /^[a-z0-9._-]+$/i.test(new URL(href).hostname); } catch { return false; }
+}
+function inspireUnusablePassword() {
+  return '!' + crypto.randomUUID() + crypto.randomUUID();
+}
+
+// ── Rate limits (D1 fixed windows; fail open if the counter itself errors) ──
+const INSPIRE_RATE_SQL = `INSERT INTO inspire_rate (k, n, reset) VALUES (?1, 1, ?2)
+  ON CONFLICT(k) DO UPDATE SET n = CASE WHEN reset <= ?3 THEN 1 ELSE n + 1 END,
+                               reset = CASE WHEN reset <= ?3 THEN ?2 ELSE reset END
+  RETURNING n`;
+async function inspireIpKey(request) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('inspire-ip:' + ip)));
+  return 'ip:' + [...d.subarray(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+const inspireActorKey = (actor) => (actor.guest ? 'c:' + actor.cid : 'u:' + actor.userId);
+// Counts this request in every [bucket, id] pair; true if any of them is over its limit.
+async function inspireOverLimit(db, pairs) {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const res = await db.batch(pairs.map(([b, id]) => db.prepare(INSPIRE_RATE_SQL).bind(`${b}:${id}`, now + INSPIRE_LIMITS[b][1], now)));
+    return res.some((r, i) => { const row = r && r.results && r.results[0]; return !!row && row.n > INSPIRE_LIMITS[pairs[i][0]][0]; });
+  } catch (e) {
+    console.error('inspire rate limit', e && e.message);
+    return false;
+  }
+}
+async function inspireRateCount(db, bucket, id) {
+  try {
+    const r = await db.prepare('SELECT n FROM inspire_rate WHERE k=? AND reset > ?').bind(`${bucket}:${id}`, Math.floor(Date.now() / 1000)).first();
+    return r ? r.n : 0;
+  } catch (e) { return 0; }
 }
 
 // ── Safe server-side fetching ──
@@ -480,7 +647,10 @@ function inspireAttrs(s) {
 }
 function inspireMetaText(s, max) {
   if (s == null) return null;
-  let t = inspireDecodeEntities(s)
+  let t = inspireDecodeEntities(s);
+  // Some sites (LinkedIn) double-encode: content="Microsoft&amp;#39;s" -> decode once more.
+  if (/&(#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|amp|quot|apos|lt|gt|nbsp);/.test(t)) t = inspireDecodeEntities(t);
+  t = t
     .replace(/<[^>]*>/g, ' ')
     .replace(/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069\uFEFF]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -525,11 +695,48 @@ function inspireParseHead(html, pageUrl) {
     site_name: inspireMetaText(pick('og:site_name', 'application-name'), 100),
   };
 }
+// Pinterest pin pages carry their OpenGraph tags ~1.2MB deep in the body (past the read limit); the
+// oEmbed endpoint is small. Its thumbnail keeps the pin's aspect ratio, which the board uses to size the embed.
+async function inspireFetchPinterestMeta(pinUrl, selfHost) {
+  let href = 'https://www.pinterest.com/oembed.json?url=' + encodeURIComponent(pinUrl);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), INSPIRE_FETCH_TIMEOUT_MS);
+  try {
+    let res;
+    for (let hop = 0; ; hop++) {   // follows only the locale redirect (www -> tr.pinterest.com)
+      const u = inspireSafeURL(href, selfHost);
+      if (!u || !/(^|\.)pinterest\.com$/.test(u.hostname)) return null;
+      res = await fetch(u.href, { method: 'GET', redirect: 'manual', signal: ctrl.signal, headers: inspireFetchHeaders('application/json') });
+      const loc = res.status >= 300 && res.status < 400 ? res.headers.get('Location') : null;
+      if (!loc) break;
+      inspireDiscard(res);
+      if (hop >= 2) return null;
+      href = new URL(loc, u.href).href;
+    }
+    const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+    if (!res.ok || !ct.includes('json')) { inspireDiscard(res); return null; }
+    const d = JSON.parse(await inspireReadText(res, 64 * 1024, ct));
+    let image = null;
+    try {
+      const iu = new URL(String(d.thumbnail_url || ''));
+      if (iu.protocol === 'https:' && /(^|\.)pinimg\.com$/.test(iu.hostname)) image = iu.href;
+    } catch (e) {}
+    const title = inspireMetaText(d.title, 200);
+    if (!title && !image) return null;
+    return { title, description: inspireMetaText(d.author_name, 400), image, site_name: 'Pinterest', provider: 'pinterest.com' };
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 // Fetch preview metadata for a link. Returns {title, description, image, site_name, provider} or null.
 // A private Google Drive/Docs file (redirect to accounts.google.com) returns {..., login_wall: true}.
 async function inspireFetchMeta(href, selfHost) {
   let provider;
   try { provider = new URL(href).hostname.toLowerCase().replace(/^www\./, ''); } catch { return null; }
+  const pl = parseLink(href);
+  if (pl && pl.platform === 'pinterest' && pl.subtype === 'pin' && pl.id) return inspireFetchPinterestMeta(pl.canonical, selfHost);
   let current = href;
   const deadline = Date.now() + INSPIRE_FETCH_BUDGET_MS;
   for (let hop = 0; hop <= INSPIRE_MAX_HOPS; hop++) {
@@ -646,6 +853,7 @@ function inspireCacheSet(map, key, value, ttlMs) {
   map.set(key, { value, exp: Date.now() + ttlMs });
 }
 // parseLink + server-side short-link resolution. Unresolvable short links are kept as they are.
+// A resolved result carries shortKey (the 'short:' key of the input) for the duplicate check.
 async function inspireParseInput(raw, selfHost) {
   const parsed = parseLink(raw);
   if (!parsed || !parsed.needsResolve) return parsed;
@@ -656,7 +864,7 @@ async function inspireParseInput(raw, selfHost) {
   }
   if (finalUrl) {
     const again = parseLink(finalUrl);
-    if (again && !again.needsResolve) return again;
+    if (again && !again.needsResolve) return { ...again, shortKey: parsed.key };
   }
   return parsed;
 }
@@ -664,16 +872,23 @@ function inspireNeedsCard(p) {
   if (p.platform === 'image' || p.platform === 'video') return false;
   return INSPIRE_CARD_PLATFORMS.has(p.platform) || !p.embed;
 }
+const inspireMetaFailure = () => JSON.stringify({ failed: 1, at: Math.floor(Date.now() / 1000) });
+// Fetch + store preview metadata; a failure is stored too (negative cache, see INSPIRE_META_RETRY_S).
 async function inspireStoreMeta(db, id, href, selfHost) {
   const meta = await inspireFetchMeta(href, selfHost);
-  if (meta) await db.prepare('UPDATE inspire_posts SET meta=? WHERE id=? AND meta IS NULL').bind(JSON.stringify(meta), id).run();
+  await db.prepare(`UPDATE inspire_posts SET meta=? WHERE id=? AND (meta IS NULL OR meta LIKE '{"failed":%')`)
+    .bind(meta ? JSON.stringify(meta) : inspireMetaFailure(), id).run();
   return meta;
 }
 
 // ── /api/inspire/* router. Every error is JSON {error, message} with CORS headers. ──
 async function handleInspire(request, env, ctx, cleanPath, method, origin) {
   const fail = (status, error, message, extra) => json({ error, message, ...(extra || {}) }, status, origin);
+  const limited = () => fail(429, 'rate_limited', 'Çok fazla istek. Biraz bekleyip tekrar dene.');
   try {
+    if ((method === 'POST' || method === 'PUT') && Number(request.headers.get('Content-Length') || 0) > INSPIRE_MAX_BODY) {
+      return fail(413, 'payload_too_large', 'İstek çok büyük');
+    }
     await ensureInspireSchema(env);
     const db = env.DB;
     const selfHost = new URL(request.url).hostname.toLowerCase();
@@ -696,44 +911,55 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       const cid = typeof d.cid === 'string' ? d.cid : '';
       if (!INSPIRE_CID_RE.test(cid)) return fail(400, 'invalid_cid', 'Geçersiz istemci kimliği');
       const name = cleanInspireName(d.name);
+      if (inspireReservedName(name)) return fail(400, 'reserved_name', 'Bu isim kullanılamaz, lütfen başka bir isim seç');
+      if (await inspireOverLimit(db, [['guest', await inspireIpKey(request)]])) return limited();
       const token = await signInspireJWT({ g: 1, cid, name }, env.JWT_SECRET || 'secret', INSPIRE_GUEST_TTL_S);
       return json({ token, user: { guest: true, name, display_name: name || 'Anonim', is_admin: false } }, 200, origin);
     }
 
     // Password login (owner/admin 'vkesgin38' and legacy registered users)
     if (cleanPath === '/api/inspire/login' && method === 'POST') {
+      const ipKey = await inspireIpKey(request);
+      if (await inspireRateCount(db, 'login', ipKey) >= INSPIRE_LIMITS.login[0]) return limited();
       const d = (await inspireBody(request)) || {};
       const username = typeof d.username === 'string' ? d.username.trim() : '';
       const password = typeof d.password === 'string' ? d.password : '';
       if (!username || !password) return fail(401, 'missing_credentials', 'Kullanıcı adı ve şifre gereklidir');
-      if (username === INSPIRE_GUEST_USERNAME) return fail(401, 'invalid_credentials', 'Hatalı kullanıcı adı veya şifre');
+      const denied = async () => {
+        await inspireOverLimit(db, [['login', ipKey]]);   // only failures count
+        return fail(401, 'invalid_credentials', 'Hatalı kullanıcı adı veya şifre');
+      };
+      if (username === INSPIRE_GUEST_USERNAME) return denied();
       let row = null;
       if (username === INSPIRE_ADMIN_USERNAME) {
-        if (!env.ADMIN_PASSWORD) return fail(401, 'invalid_credentials', 'Hatalı kullanıcı adı veya şifre');
-        if (await inspireSafeEqual(password, env.ADMIN_PASSWORD)) {
+        // The owner account is gated by ADMIN_PASSWORD alone, never by the password column of its row.
+        if (!env.ADMIN_PASSWORD || !(await inspireSafeEqual(password, env.ADMIN_PASSWORD))) return denied();
+        row = await db.prepare('SELECT * FROM inspire_users WHERE username=?').bind(INSPIRE_ADMIN_USERNAME).first();
+        if (!row) {
+          await db.prepare("INSERT OR IGNORE INTO inspire_users (username, password, full_name, is_first_login) VALUES (?, ?, 'Veli Kesgin', 0)")
+            .bind(INSPIRE_ADMIN_USERNAME, inspireUnusablePassword()).run();
           row = await db.prepare('SELECT * FROM inspire_users WHERE username=?').bind(INSPIRE_ADMIN_USERNAME).first();
-          if (!row) {
-            await db.prepare("INSERT OR IGNORE INTO inspire_users (username,password,full_name) VALUES (?,?,'Veli Kesgin')")
-              .bind(INSPIRE_ADMIN_USERNAME, password).run();
-            row = await db.prepare('SELECT * FROM inspire_users WHERE username=?').bind(INSPIRE_ADMIN_USERNAME).first();
-          }
+          if (row) inspireAdminNameFolded = inspireFoldName(row.full_name);
         }
+      } else {
+        row = await db.prepare('SELECT * FROM inspire_users WHERE username=? AND password=?').bind(username, password).first();
       }
-      if (!row) row = await db.prepare('SELECT * FROM inspire_users WHERE username=? AND password=?').bind(username, password).first();
-      if (!row) return fail(401, 'invalid_credentials', 'Hatalı kullanıcı adı veya şifre');
+      if (!row) return denied();
       const token = await signInspireJWT({ userId: row.id, username: row.username }, env.JWT_SECRET || 'secret', INSPIRE_USER_TTL_S);
       const name = row.full_name || row.username;
+      const isAdmin = row.username === INSPIRE_ADMIN_USERNAME;
       return json({ token, user: {
-        id: row.id, username: row.username, full_name: row.full_name, is_first_login: row.is_first_login,
-        guest: false, name, display_name: name, is_admin: row.username === INSPIRE_ADMIN_USERNAME,
+        id: row.id, username: row.username, full_name: row.full_name, is_first_login: isAdmin ? 0 : row.is_first_login,
+        guest: false, name, display_name: name, is_admin: isAdmin,
       } }, 200, origin);
     }
 
-    // Legacy: password change for registered users
+    // Legacy: password change for registered users (never for the owner: see /login)
     if (cleanPath === '/api/inspire/change-password' && method === 'POST') {
       const actor = await inspireActor(request, env);
       if (!actor) return fail(401, 'unauthorized', 'Yetkisiz');
       if (actor.guest) return fail(403, 'forbidden', 'Misafir hesabının şifresi yok');
+      if (actor.isAdmin) return fail(403, 'forbidden', 'Yönetici şifresi buradan değiştirilemez');
       const d = (await inspireBody(request)) || {};
       const newPassword = typeof d.newPassword === 'string' ? d.newPassword : '';
       if (newPassword.length < 4) return fail(400, 'invalid_password', 'Gecerli bir sifre giriniz');
@@ -741,21 +967,36 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       return json({ ok: true }, 200, origin);
     }
 
-    // Board: newest first. Private notes only reach their author (filtered in SQL).
+    // Board: newest first, INSPIRE_PAGE_SIZE per request (?before=<id>; X-Fikir-Next = next cursor).
+    // Private notes only reach their author (filtered in SQL).
     if (cleanPath === '/api/inspire/posts' && method === 'GET') {
       const actor = await inspireActor(request, env);   // optional
       const [cid, uid] = inspireOwnerParams(actor);
+      const q = new URL(request.url).searchParams;
+      const limit = Math.min(INSPIRE_PAGE_SIZE, Math.max(1, parseInt(q.get('limit'), 10) || INSPIRE_PAGE_SIZE));
+      const before = /^\d{1,15}$/.test(q.get('before') || '') ? Number(q.get('before')) : null;
       const [postsRes, notesRes] = await db.batch([
-        db.prepare(`${INSPIRE_POST_SELECT} ORDER BY p.id DESC`).bind(cid, uid),
-        db.prepare(`${INSPIRE_NOTE_SELECT} WHERE ${INSPIRE_NOTE_VISIBLE} ORDER BY n.id ASC`).bind(cid, uid),
+        db.prepare(`${INSPIRE_POST_SELECT} WHERE (?3 IS NULL OR p.id < ?3) ORDER BY p.id DESC LIMIT ?4`).bind(cid, uid, before, limit + 1),
+        db.prepare(`${INSPIRE_NOTE_SELECT} WHERE ${INSPIRE_NOTE_VISIBLE} AND n.post_id IN
+          (SELECT id FROM inspire_posts WHERE (?3 IS NULL OR id < ?3) ORDER BY id DESC LIMIT ?4) ORDER BY n.id ASC`).bind(cid, uid, before, limit),
       ]);
+      const rows = postsRes.results || [];
+      const more = rows.length > limit;
+      if (more) rows.length = limit;
       const isAdmin = !!(actor && actor.isAdmin);
       const notesByPost = new Map();
       for (const n of notesRes.results || []) {
         if (!notesByPost.has(n.post_id)) notesByPost.set(n.post_id, []);
         notesByPost.get(n.post_id).push(inspireNoteOut(n, isAdmin));
       }
-      return json((postsRes.results || []).map((r) => inspirePostOut(r, isAdmin, notesByPost.get(r.id))), 200, origin);
+      let out = rows.map((r) => inspirePostOut(r, isAdmin, notesByPost.get(r.id)));
+      if (request.headers.get('X-Fikir-Client') !== '2') out = out.map((p) => inspireLegacyPost(p, actor));
+      const res = json(out, 200, origin);
+      if (more) {
+        res.headers.set('X-Fikir-Next', String(rows[rows.length - 1].id));
+        res.headers.set('Access-Control-Expose-Headers', 'X-Fikir-Next');
+      }
+      return res;
     }
 
     // Live duplicate/platform check for the add modal
@@ -767,10 +1008,12 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       const raw = typeof d.url === 'string' ? d.url.trim() : '';
       if (!raw) return fail(400, 'url_required', 'Link gerekli');
       if (raw.length > MAX_URL_LENGTH) return fail(400, 'url_too_long', 'Link çok uzun');
+      if (await inspireOverLimit(db, [['check', inspireActorKey(actor)], ['check_ip', await inspireIpKey(request)]])) return limited();
       const parsed = await inspireParseInput(raw, selfHost);
-      if (!parsed) return fail(400, 'invalid_url', 'Geçerli bir http(s) linki girin');
-      const dup = await inspireFindDuplicate(db, parsed.key);
-      return json({ duplicate: !!dup, ...(dup ? { existing: dup } : {}), platform: parsed.platform, canonical: parsed.canonical }, 200, origin);
+      if (!parsed || !inspireHostOk(parsed.canonical)) return fail(400, 'invalid_url', 'Geçerli bir http(s) linki girin');
+      const dup = await inspireFindDuplicate(db, inspireDupKeys(parsed));
+      if (dup) inspireRekeyShort(db, ctx, parsed);
+      return json({ duplicate: !!dup, ...(dup ? { existing: inspireDupOut(dup) } : {}), platform: parsed.platform, canonical: parsed.canonical }, 200, origin);
     }
 
     // Create a link idea {url, description?} or a text idea {type:'text', text}
@@ -782,7 +1025,8 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       const author = await inspireAuthorName(db, actor);
       if (author === null) return fail(401, 'unauthorized', 'Oturum geçersiz, tekrar giriş yapın');
       const [cid, uid] = inspireOwnerParams(actor);
-      let type, storedUrl, description, urlKey = null, metaJson = null, parsed = null, metaLater = false;
+      if (await inspireOverLimit(db, [['post', inspireActorKey(actor)], ['post_ip', await inspireIpKey(request)]])) return limited();
+      let type, storedUrl, description, urlKey = null, shortKey = null, metaJson = null, parsed = null, metaLater = false;
       if (d.type === 'text') {
         const text = cleanInspireText(d.text);
         if (!text) return fail(400, 'empty_text', 'Fikir metni boş olamaz');
@@ -796,25 +1040,30 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
         description = cleanInspireText(d.description);
         if (description.length > INSPIRE_MAX_DESC) return fail(400, 'description_too_long', `Açıklama en fazla ${INSPIRE_MAX_DESC} karakter olabilir`);
         parsed = await inspireParseInput(raw, selfHost);
-        if (!parsed) return fail(400, 'invalid_url', 'Geçerli bir http(s) linki girin');
-        const dup = await inspireFindDuplicate(db, parsed.key);
-        if (dup) return fail(409, 'duplicate', 'Bu link zaten eklenmiş', { existing: dup });
-        type = parsed.platform; storedUrl = parsed.canonical; urlKey = parsed.key;
+        if (!parsed || !inspireHostOk(parsed.canonical)) return fail(400, 'invalid_url', 'Geçerli bir http(s) linki girin');
+        const keys = inspireDupKeys(parsed);
+        const dup = await inspireFindDuplicate(db, keys);
+        if (dup) {
+          inspireRekeyShort(db, ctx, parsed);
+          return fail(409, 'duplicate', 'Bu link zaten eklenmiş', { existing: inspireDupOut(dup) });
+        }
+        type = parsed.platform; storedUrl = parsed.canonical; urlKey = keys[0]; shortKey = keys[1];
         if (inspireNeedsCard(parsed)) {
           const meta = await inspireFetchMeta(parsed.canonical, selfHost);
-          if (meta) metaJson = JSON.stringify(meta);
+          metaJson = meta ? JSON.stringify(meta) : inspireMetaFailure();
         } else if (parsed.platform !== 'image' && parsed.platform !== 'video') {
           metaLater = true;   // embeddable: metadata is only a fallback, fetch it after responding
         }
       }
-      // Conditional insert closes the race between two simultaneous adds of the same link.
+      // Conditional insert closes the race between two simultaneous adds of the same link (either key form).
       const ins = await db.prepare(
         `INSERT INTO inspire_posts (user_id, type, url, description, author_name, client_id, url_key, meta)
          SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
-         WHERE ?7 IS NULL OR NOT EXISTS (SELECT 1 FROM inspire_posts WHERE url_key = ?7)`
-      ).bind(actor.guest ? inspireGuestId : actor.userId, type, storedUrl, description, author, cid, urlKey, metaJson).run();
+         WHERE ?7 IS NULL OR NOT EXISTS (SELECT 1 FROM inspire_posts WHERE url_key IN (?7, ?9))`
+      ).bind(actor.guest ? inspireGuestId : actor.userId, type, storedUrl, description, author, cid, urlKey, metaJson, shortKey).run();
       if (!ins.meta || !ins.meta.changes) {
-        return fail(409, 'duplicate', 'Bu link zaten eklenmiş', { existing: await inspireFindDuplicate(db, urlKey) });
+        const dup = await inspireFindDuplicate(db, [urlKey, shortKey]);
+        return fail(409, 'duplicate', 'Bu link zaten eklenmiş', { existing: dup ? inspireDupOut(dup) : null });
       }
       const id = ins.meta.last_row_id;
       if (metaLater && ctx && typeof ctx.waitUntil === 'function') {
@@ -824,18 +1073,30 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       return json(inspirePostOut(row, actor.isAdmin, []), 201, origin);
     }
 
-    // Fetch + store preview metadata for an existing post whose meta is still empty (idempotent)
+    // Fetch + store preview metadata for an existing post whose meta is still empty (idempotent).
+    // A recent failure is answered from the negative cache without fetching again.
     if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/meta$/)) && method === 'POST') {
       const actor = await inspireActor(request, env);
       if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
       const id = Number(m[1]);
       const row = await db.prepare('SELECT id, url, meta FROM inspire_posts WHERE id=?').bind(id).first();
       if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
-      if (row.meta) return json({ meta: inspireMetaOut(row.meta) }, 200, origin);
-      const parsed = row.url ? parseLink(row.url) : null;
+      const stored = inspireMetaParse(row.meta);
+      if (stored && !inspireMetaFailed(stored)) return json({ meta: stored }, 200, origin);
+      if (inspireMetaFresh(stored)) return json({ meta: null }, 200, origin);
+      let parsed = row.url ? parseLink(row.url) : null;
       if (!parsed || parsed.platform === 'image' || parsed.platform === 'video') return json({ meta: null }, 200, origin);
       if (inspireCacheGet(inspireMetaAttempts, id) !== undefined) return json({ meta: null }, 200, origin);
+      if (await inspireOverLimit(db, [['fetch_ip', await inspireIpKey(request)]])) return limited();
       inspireCacheSet(inspireMetaAttempts, id, true, 10 * 60e3);
+      if (parsed.needsResolve) {
+        // Row saved as an unresolved short link (pin.it, vm.tiktok.com, ...): store the real link and key once.
+        const resolved = await inspireParseInput(row.url, selfHost);
+        if (resolved && !resolved.needsResolve && inspireHostOk(resolved.canonical)) {
+          await db.prepare('UPDATE inspire_posts SET url=?, url_key=? WHERE id=?').bind(resolved.canonical, resolved.key, id).run();
+          parsed = resolved;
+        }
+      }
       const meta = await inspireStoreMeta(db, id, parsed.canonical, selfHost);
       return json({ meta: meta || null }, 200, origin);
     }
@@ -852,6 +1113,7 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       const isPublic = d.is_public === true || d.is_public === 1 || d.is_public === '1' || d.is_public === 'true' ? 1 : 0;
       const author = await inspireAuthorName(db, actor);
       if (author === null) return fail(401, 'unauthorized', 'Oturum geçersiz, tekrar giriş yapın');
+      if (await inspireOverLimit(db, [['note', inspireActorKey(actor)], ['note_ip', await inspireIpKey(request)]])) return limited();
       const [cid, uid] = inspireOwnerParams(actor);
       const postId = Number(m[1]);
       const ins = await db.prepare(
@@ -963,7 +1225,8 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+          // fikir.html marks itself with X-Fikir-Client (old pages get escaped text, see inspireLegacyPost)
+          'Access-Control-Allow-Headers': path.startsWith('/api/inspire/') ? 'Content-Type,Authorization,X-Fikir-Client' : 'Content-Type,Authorization',
           'Access-Control-Max-Age': '86400',
         }
       });

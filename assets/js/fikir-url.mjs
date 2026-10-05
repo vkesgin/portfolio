@@ -34,7 +34,7 @@ export const TRACKING_PARAMS = Object.freeze([
   'igsh', 'igshid', 'ig_rid', 'si', 'mibextid', 'sfnsn', '__cft__*', '__tn__',
   'feature', 'ref', 'ref_src', 'ref_url', 'share_id', 'ab_channel',
   '_r', '_t', 'is_from_webapp', 'sender_device', 'is_copy_url', 'share_app_id', 'share_item_id', 'share_link_id',
-  'trk', 'trackingid', 'lipi', 'rcm',
+  'trk', 'trackingid', 'lipi', 'rcm', 'wt.mc_id',
 ]);
 
 // Extra parameters that are tracking only on specific hosts (base host, see baseHost()).
@@ -904,7 +904,7 @@ function parseLinkedIn(u, base, segs) {
   return generic('linkedin', u);
 }
 
-// Behance / Dribbble (preview cards) ------------------------------------------
+// Behance (project embed) / Dribbble (preview card) ----------------------------
 function parseBehance(u, base, segs) {
   if (base !== 'behance.net') return null;
   const [s0, s1, s2] = segs;
@@ -913,6 +913,8 @@ function parseBehance(u, base, segs) {
       id: s1, subtype: 'project',
       canonical: `https://www.behance.net/gallery/${s1}${s2 ? '/' + encodeURIComponent(s2) : ''}`,
       key: 'behance:' + s1,
+      // Behance's own embed code (404x316 cover + title bar); renders cross-site (checked 2026-10-05).
+      embed: makeEmbed(`https://www.behance.net/embed/project/${s1}?ilo0=1`, { aspect: 404 / 316 }),
     });
   }
   return generic('behance', u);

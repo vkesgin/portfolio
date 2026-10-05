@@ -7,3 +7,28 @@ ui-src
 .wrangler
 *.tgz
 *.pack
+
+# The site is published from the repo root (wrangler.jsonc assets.directory "."), so
+# everything that is not a page or a page asset must be listed here (gitignore syntax,
+# a leading "/" anchors to the repo root). assets/js/fikir-url.mjs IS served (fikir.html imports it).
+# Secrets / local config, anywhere
+.dev.vars*
+.env*
+*.toml
+# Worker source + config (holds [vars]), tests, Astro sources, tooling
+/worker/
+/tests/
+/web-src/
+/.claude/
+/.gitignore
+/package.json
+/package-lock.json
+# One-off scripts, backups, scratch data
+/patch*.js
+/fix*.js
+/temp_*
+/test.js
+/*.py
+*.bak
+/microlink_test.json
+/projects_all.json

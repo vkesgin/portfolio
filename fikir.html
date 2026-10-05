@@ -343,6 +343,11 @@
       max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .author-badge.is-mine { color: var(--accent); background: rgba(0, 229, 255, 0.08); }
+    /* Set by the server (author_role), so a guest who picks the owner's name does not get it */
+    .role-badge {
+      display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border-radius: 999px;
+      border: 1px solid rgba(0, 229, 255, 0.35); color: var(--accent); font-size: 10px; font-weight: 600; white-space: nowrap;
+    }
     .post-date { color: #666; }
     .src-link { color: #777; text-decoration: none; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     @media (hover: hover) { .src-link:hover { color: var(--accent); } }
@@ -451,6 +456,23 @@
     .toast.out { opacity: 0; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; }
     @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
+    /* "N yeni fikir" pill: posts that arrive by refresh while the user reads further down */
+    .new-posts {
+      /* below the modal overlays (1000+): never shown over, or clickable from, an open dialog */
+      position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 900;
+      background: var(--accent); color: #000; border: 0; border-radius: 999px; padding: 9px 18px;
+      font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      animation: pill-in 0.2s ease-out;
+    }
+    .new-posts[hidden] { display: none; }
+    @keyframes pill-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+    /* Device code (guest identity backup) */
+    .device-code { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
+    .device-code .modal-input { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; letter-spacing: 0.02em; }
+    .field-label { display: block; font-size: 12px; color: #aaa; margin: 4px 0 6px; text-align: left; }
+    #restore-form { margin-top: 12px; }
+
     /* ---------- Small screens ---------- */
     @media (max-width: 600px) {
       :root { --gap: 16px; }
@@ -490,7 +512,14 @@
         <button type="button" class="link-btn" id="anon-btn">İsimsiz devam et</button>
         <div id="guest-error" class="auth-error" role="alert" hidden></div>
       </form>
-      <div class="auth-hint">Şifre gerekmez. Paylaşımların bu cihaza bağlı kalır; silme hakkın bu cihazdan geçerlidir.</div>
+      <div class="auth-hint">Şifre gerekmez. Paylaşımların bu tarayıcıya bağlı kalır; silme hakkın ve özel notların buradan geçerlidir. Tarayıcı verileri silinirse (Safari bir haftadan uzun girilmeyen sitelerinkini silebilir) bu bağ kopar: "İsmi değiştir" ekranındaki cihaz kodunu sakla.</div>
+      <button type="button" class="link-btn" id="restore-toggle" aria-expanded="false" aria-controls="restore-form">Cihaz kodum var</button>
+      <form id="restore-form" novalidate hidden>
+        <label class="field-label" for="restore-code">Daha önce kaydettiğin cihaz kodu</label>
+        <input type="text" id="restore-code" class="auth-input" placeholder="Cihaz kodu" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button type="submit" class="auth-btn outline" id="restore-btn">Kodla devam et</button>
+        <div id="restore-error" class="auth-error" role="alert" hidden></div>
+      </form>
 
       <div class="admin-sep">
         <button type="button" class="admin-toggle" id="admin-toggle" aria-expanded="false" aria-controls="admin-form">Yönetici girişi</button>
@@ -519,6 +548,7 @@
     </header>
     <div id="board-status" class="board-status" aria-live="polite" hidden></div>
     <div id="board" class="board"></div>
+    <button type="button" id="new-posts" class="new-posts" hidden></button>
   </div>
 
   <!-- Add idea modal -->
@@ -565,6 +595,12 @@
         <div id="name-error" class="form-error" role="alert" hidden></div>
         <button type="submit" class="btn btn-primary btn-block" id="name-submit">Kaydet</button>
       </form>
+      <label class="field-label" for="cid-code" style="margin-top: 18px;">Cihaz kodun</label>
+      <div class="device-code">
+        <input type="text" id="cid-code" class="modal-input" readonly autocomplete="off" spellcheck="false" translate="no">
+        <button type="button" class="btn btn-outline btn-sm" id="cid-copy">Kopyala</button>
+      </div>
+      <p class="modal-note">Bu kodu güvenli bir yere kaydet ve kimseyle paylaşma: kodu bilen, paylaşımlarını silebilir ve özel notlarını görebilir. Tarayıcı verilerin silinirse giriş ekranındaki "Cihaz kodum var" ile paylaşımlarına yeniden sahip olursun.</p>
     </div>
   </div>
 
@@ -602,7 +638,7 @@
     const PROD_API = 'https://vk-portfolio-api.vkesgin38.workers.dev';
     const API_BASE = resolveApiBase();
     const ADMIN_USERNAME = 'vkesgin38';
-    const LS = { token: 'fikir_token', user: 'fikir_user', cid: 'fikir_cid', name: 'fikir_name', aspect: 'fikir_ar' };
+    const LS = { token: 'fikir_token', user: 'fikir_user', cid: 'fikir_cid', name: 'fikir_name', aspect: 'fikir_ar', embedH: 'fikir_eh' };
     const LEGACY = { token: 'inspire_token', user: 'inspire_user' };
     const CID_RE = /^[A-Za-z0-9_-]{16,64}$/;
     const NAME_MAX = 40;
@@ -613,10 +649,16 @@
     const MIN_AUTO_H = 150;
     const MAX_AUTO_H = 1400;
     const MAX_MEDIA_H = 720;        // tall (9:16) players are narrowed so they never exceed this
+    const PIN_DEFAULT_R = 1.5;      // Pinterest: most pins are 2:3 until the real ratio is known
+    const PIN_MIN_R = 0.4;
+    const PIN_MAX_R = 2.2;
+    const PIN_FOOTER = 98;          // px under the pin image inside Pinterest's embed
     const AUTO_REVEAL_MS = 2500;    // autoHeight frames are shown this long after load even without a height message
     const LOAD_REVEAL_MS = 10000;
     const REFRESH_MS = 120000;
     const REFRESH_ON_FOCUS_MS = 30000;
+    const AT_TOP_PX = 80;           // refresh inserts/removes cards directly only this close to the top
+    const MAX_PAGES = 10;           // GET /api/inspire/posts pages (server sends X-Fikir-Next while more exist)
 
     // Server-driven feature flags (GET /api/inspire/config). `storyboard` is the
     // extension point for the AI storyboard phase; nothing uses it yet.
@@ -698,6 +740,32 @@
         return s.length > 90 ? s.slice(0, 89) + '…' : s;
       } catch (_) { return String(url || ''); }
     }
+    // Readable title from the URL slug when there is no preview metadata
+    // (sites that block server-side fetches), e.g. dribbble.com/shots/123-Mobile-App-UI -> "Mobile App UI".
+    function slugTitle(url) {
+      let segs;
+      try { segs = new URL(url).pathname.split('/').filter(Boolean); } catch (_) { return ''; }
+      for (let i = segs.length - 1; i >= 0; i--) {
+        let s = segs[i];
+        try { s = decodeURIComponent(s); } catch (_) { /* keep raw */ }
+        s = s.replace(/\.[a-z0-9]{2,5}$/i, '').replace(/^\d{5,}-|-\d{5,}$/g, '').replace(/[-_+]+/g, ' ').replace(/\s+/g, ' ').trim();
+        const words = s.split(' ');
+        const alpha = words.filter((w) => /^\p{L}+$/u.test(w)).length;
+        if (words.length < 2 || alpha * 2 < words.length) continue; // ids, hashes, dates
+        return s.length > 120 ? s.slice(0, 119) + '…' : s;
+      }
+      return '';
+    }
+    // "@zuck · Gönderi" / "@jack · Profil" for social links without metadata.
+    function handleTitle(url, parsed) {
+      if (!parsed) return '';
+      let handle = '';
+      try { handle = (/^\/(@[^/]{1,40})/.exec(decodeURIComponent(new URL(url).pathname)) || [])[1] || ''; } catch (_) { /* none */ }
+      if (!handle && parsed.subtype === 'profile' && parsed.id) handle = '@' + String(parsed.id).replace(/^@/, '');
+      if (!handle) return '';
+      const sub = SUBTYPES[parsed.subtype];
+      return sub ? `${handle} · ${sub}` : handle;
+    }
     const faviconUrl = (host, size) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`;
 
     function parseDate(v) {
@@ -733,8 +801,9 @@
         image: safeHttpUrl(m.image) || '',
         site_name: s(m.site_name, 100),
         provider: s(m.provider, 100),
+        login_wall: m.login_wall === true, // private Drive/Docs file: Google refuses to frame it
       };
-      return out.title || out.description || out.image || out.site_name ? out : null;
+      return out.title || out.description || out.image || out.site_name || out.login_wall ? out : null;
     }
     const metaSig = (m) => JSON.stringify(normMeta(m));
 
@@ -901,9 +970,11 @@
       return 'Sunucu hatası. Lütfen tekrar dene.';
     }
 
+    // opts.raw: resolve to { data, res } (response headers are needed for paging).
     async function api(method, path, body, opts = {}) {
-      const { signal, auth = true } = opts;
-      const headers = {};
+      const { signal, auth = true, raw: wantRaw = false } = opts;
+      // Marks this client: requests without it (old cached fikir.html) get HTML-escaped text from the API.
+      const headers = { 'X-Fikir-Client': '2' };
       if (body != null) headers['Content-Type'] = 'application/json';
       const tokenAtStart = auth ? session.token : null;
       if (tokenAtStart) headers.Authorization = 'Bearer ' + tokenAtStart;
@@ -925,7 +996,7 @@
         if (res.status === 401 && tokenAtStart && tokenAtStart === session.token) handleUnauthorized();
         throw new ApiError(res.status, data && data.error, msg, data);
       }
-      return data;
+      return wantRaw ? { data, res } : data;
     }
 
     async function loadConfig() {
@@ -1008,9 +1079,8 @@
       store.del(LS.user);
     }
 
-    async function guestLogin(rawName, btn) {
+    async function guestLogin(rawName, btn, err = $('guest-error')) {
       const name = cleanName(rawName);
-      const err = $('guest-error');
       err.hidden = true;
       setBusy(btn, true);
       try {
@@ -1019,11 +1089,45 @@
         setSession(r.token, normalizeUser(r.user, { guest: true, name }));
         store.set(LS.name, name);
         showBoard();
+        return true;
       } catch (e) {
         err.textContent = e.message || 'Giriş yapılamadı.';
         err.hidden = false;
+        return false;
       } finally {
         setBusy(btn, false);
+      }
+    }
+
+    // The device code is the guest client id. Entering it in a new or wiped browser (Safari deletes
+    // site storage after ~7 days without a visit) gives back ownership of earlier posts and private notes.
+    async function restoreWithCode() {
+      const code = $('restore-code').value.trim();
+      const err = $('restore-error');
+      err.hidden = true;
+      if (!CID_RE.test(code)) {
+        err.textContent = 'Geçersiz cihaz kodu.';
+        err.hidden = false;
+        return;
+      }
+      const prev = session.cid;
+      session.cid = code;
+      if (await guestLogin($('guest-name').value, $('restore-btn'), err)) {
+        store.set(LS.cid, code);
+        $('restore-code').value = '';
+      } else {
+        session.cid = prev;
+      }
+    }
+    async function copyCid() {
+      const input = $('cid-code');
+      try {
+        await navigator.clipboard.writeText(input.value);
+        toast('Cihaz kodu kopyalandı.', 'ok');
+      } catch (_) {
+        input.focus();
+        input.select();
+        toast('Kod seçildi, şimdi kopyalayabilirsin.');
       }
     }
 
@@ -1119,10 +1223,19 @@
     const posts = new Map();             // postId -> entry
     const cardOwner = new WeakMap();     // card element -> entry (for observers)
     const board = { el: null, cols: [], n: 0, ready: false, loaded: false };
-    const load = { seq: 0, ctrl: null, lastAt: 0 };
+    const load = { seq: 0, ctrl: null, lastAt: 0, aborted: false };
     const mut = { epoch: 0, inflight: 0 };
+    // Structural changes that arrive by refresh while the user is scrolled down would
+    // shift a column under the reader; they wait here until the user is back at the top
+    // (or taps the "yeni fikir" pill). The user's own add/delete apply at once.
+    const pending = { add: new Map(), remove: new Set() };
+    // Height changes of cards wholly ABOVE the viewport (embed resize, pin ratio, late
+    // metadata, refreshed notes/text) would push what the user is reading; they wait in
+    // entry.deferred until that card scrolls into view (viewIO) or the user is at the top.
+    const deferredEntries = new Set();
     let nearIO = null;
     let farIO = null;
+    let viewIO = null;
     let resizeTimer = 0;
     let refreshTimer = 0;
 
@@ -1145,6 +1258,7 @@
       board.el.addEventListener('submit', onBoardSubmit);
       nearIO = new IntersectionObserver(onNear, { rootMargin: `${NEAR_MARGIN}px 0px ${NEAR_MARGIN}px 0px` });
       farIO = new IntersectionObserver(onFar, { rootMargin: `${FAR_MARGIN}px 0px ${FAR_MARGIN}px 0px` });
+      viewIO = new IntersectionObserver(onView);
       if ('ResizeObserver' in window) {
         new ResizeObserver(() => {
           clearTimeout(resizeTimer);
@@ -1231,11 +1345,33 @@
       mut.inflight++;
       mut.epoch++;
       abortLoad();
-      try { return await fn(); } finally { mut.inflight--; mut.epoch++; }
+      try {
+        return await fn();
+      } finally {
+        mut.inflight--;
+        mut.epoch++;
+        // The list request this mutation cancelled (e.g. the very first load) is sent again.
+        if (!mut.inflight && session.token && (load.aborted || !board.loaded)) loadPosts({ initial: !posts.size });
+      }
     }
     function abortLoad() {
       load.seq++;
-      if (load.ctrl) { load.ctrl.abort(); load.ctrl = null; }
+      if (load.ctrl) { load.ctrl.abort(); load.ctrl = null; load.aborted = true; }
+    }
+
+    // All pages, newest first. complete=false when MAX_PAGES was reached before the end.
+    async function fetchPosts(signal) {
+      let list = [];
+      let before = null;
+      for (let i = 0; i < MAX_PAGES; i++) {
+        const path = '/api/inspire/posts' + (before ? '?before=' + encodeURIComponent(before) : '');
+        const { data, res } = await api('GET', path, null, { signal, raw: true });
+        if (!Array.isArray(data)) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        list = list.concat(data);
+        before = res.headers.get('X-Fikir-Next');
+        if (!before || !data.length) return { list, complete: true };
+      }
+      return { list, complete: false };
     }
 
     async function loadPosts({ initial = false } = {}) {
@@ -1244,15 +1380,16 @@
       if (load.ctrl) load.ctrl.abort();
       const ctrl = new AbortController();
       load.ctrl = ctrl;
+      load.aborted = false;
       const epoch = mut.epoch;
       if (initial && !posts.size) setStatus('loading');
       try {
-        const list = await api('GET', '/api/inspire/posts', null, { signal: ctrl.signal });
+        const { list, complete } = await fetchPosts(ctrl.signal);
         if (seq !== load.seq || epoch !== mut.epoch || !session.token) return; // out of order / stale
-        if (!Array.isArray(list)) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
         load.lastAt = Date.now();
+        const firstFill = !board.loaded;
         board.loaded = true;
-        reconcile(list);
+        reconcile(list, complete, firstFill);
         updateEmptyState();
       } catch (e) {
         if ((e && e.name === 'AbortError') || seq !== load.seq || !session.token) return;
@@ -1264,21 +1401,40 @@
     }
 
     // Keyed diff: existing cards are patched in place (text only), missing ones
-    // removed, new ones inserted. Media is never recreated.
-    function reconcile(list) {
+    // removed, new ones inserted. Media is never recreated. complete=false: the list
+    // stops at MAX_PAGES, so cards older than its last post are left alone.
+    // firstFill: no list has been shown yet (cards added by the user meanwhile stay on top).
+    function reconcile(list, complete = true, firstFill = false) {
       const seen = new Set();
       const fresh = [];
+      let oldest = Infinity;
+      const above = new Set(); // one layout read for all cards, before any patch writes
+      for (const e of posts.values()) if (isAbove(e)) above.add(e);
       for (const p of list) {
         if (!p || p.id == null) continue;
         const id = String(p.id);
         if (seen.has(id)) continue;
         seen.add(id);
+        if (Number(id) < oldest) oldest = Number(id);
         const e = posts.get(id);
-        if (e) patchCard(e, p); else fresh.push(p);
+        if (e) patchCard(e, p, above.has(e)); else fresh.push(p);
       }
-      for (const [id, e] of posts) if (!seen.has(id)) removeEntry(e);
-      if (!fresh.length) return;
-      if (!posts.size) {
+      const first = !posts.size || firstFill;
+      const top = window.scrollY <= AT_TOP_PX;
+      for (const id of [...pending.add.keys()]) if (!seen.has(id)) pending.add.delete(id); // deleted again meanwhile
+      for (const [id, e] of posts) {
+        if (seen.has(id) || (!complete && Number(id) < oldest)) continue;
+        // a card wholly below the viewport can go now: only cards under it (also off screen) move
+        if (top || e.el.getBoundingClientRect().top >= window.innerHeight) { removeEntry(e); pending.remove.delete(id); }
+        else pending.remove.add(id);
+      }
+      if (!fresh.length) { updatePendingUI(); return; }
+      if (!first && !top) {
+        for (const p of fresh) pending.add.set(String(p.id), p);
+        updatePendingUI();
+        return;
+      }
+      if (first) {
         for (const p of fresh) {            // first fill: newest first, top to bottom
           const e = createEntry(p);
           posts.set(e.id, e);
@@ -1286,7 +1442,9 @@
           observeEntry(e);
         }
       } else {
+        pending.add.clear();                 // all of them are in `fresh` again
         for (const p of fresh.slice().reverse()) insertTop(p); // so the newest ends on top
+        updatePendingUI();
       }
     }
 
@@ -1302,6 +1460,52 @@
       return e;
     }
 
+    function updatePendingUI() {
+      const n = pending.add.size;
+      const pill = $('new-posts');
+      pill.textContent = n ? `↑ ${n} yeni fikir` : '';
+      pill.hidden = !n;
+    }
+    function flushPending() {
+      for (const id of pending.remove) { const e = posts.get(id); if (e) removeEntry(e); }
+      pending.remove.clear();
+      const adds = [...pending.add.values()].sort((a, b) => Number(a.id) - Number(b.id)); // newest ends on top
+      pending.add.clear();
+      for (const p of adds) insertTop(p);
+      updatePendingUI();
+      updateEmptyState();
+    }
+    function onScrollPending() {
+      if (window.scrollY > AT_TOP_PX) return;
+      if (pending.add.size || pending.remove.size) flushPending();
+      if (deferredEntries.size) for (const e of [...deferredEntries]) flushDeferred(e);
+    }
+
+    // Size-changing update of a card: applied now, or kept until the card is in view when
+    // the card is wholly above the viewport (nothing the user is looking at may move).
+    const isAbove = (e) => e.el.isConnected && e.el.getBoundingClientRect().bottom <= 0;
+    function applyOrDefer(e, key, fn, above = isAbove(e)) {
+      if (viewIO && above) {
+        if (!e.deferred) e.deferred = new Map();
+        e.deferred.set(key, fn); // the latest update of each kind wins
+        if (!deferredEntries.has(e)) { deferredEntries.add(e); viewIO.observe(e.el); }
+        return;
+      }
+      fn();
+    }
+    function flushDeferred(e) {
+      const d = e.deferred;
+      e.deferred = null;
+      if (deferredEntries.delete(e) && viewIO) viewIO.unobserve(e.el);
+      if (d) for (const fn of d.values()) fn();
+    }
+    function onView(records) {
+      for (const rec of records) {
+        const e = rec.isIntersecting && cardOwner.get(rec.target);
+        if (e && e.deferred) flushDeferred(e);
+      }
+    }
+
     function observeEntry(e) {
       cardOwner.set(e.el, e);
       nearIO.observe(e.el);
@@ -1311,6 +1515,8 @@
     function removeEntry(e) {
       if (nearIO) nearIO.unobserve(e.el);
       if (farIO) farIO.unobserve(e.el);
+      if (deferredEntries.delete(e) && viewIO) viewIO.unobserve(e.el);
+      e.deferred = null;
       if (e.media) { unmount(e.media); wanted.delete(e.media); }
       clearTimeout(e.flashTimer);
       e.el.remove();
@@ -1323,6 +1529,10 @@
       for (const e of [...posts.values()]) removeEntry(e);
       posts.clear();
       wanted.clear();
+      deferredEntries.clear();
+      pending.add.clear();
+      pending.remove.clear();
+      updatePendingUI();
       metaQueue.length = 0;
       board.loaded = false;
       if (board.el) { board.el.textContent = ''; board.cols = []; board.n = 0; }
@@ -1341,6 +1551,7 @@
     }
 
     function showPost(id) {
+      if (!posts.has(String(id)) && pending.add.has(String(id))) flushPending(); // e.g. "Göster" on a duplicate that arrived by refresh
       const e = posts.get(String(id));
       if (!e) {
         toast('Bu fikir şu an listede görünmüyor.', 'error');
@@ -1371,7 +1582,9 @@
       const src = safeHttpUrl(raw) || parsed.canonical;
       if (platform === 'image') return { kind: 'image', platform, parsed, src };
       if (platform === 'video') return { kind: 'video', platform, parsed, src };
-      if (parsed.embed && !parsed.needsResolve) return { kind: 'embed', platform, parsed };
+      const meta = normMeta(post.meta);
+      // a private Drive/Docs file only frames Google's "refused to connect" page: preview card instead
+      if (parsed.embed && !parsed.needsResolve && !(meta && meta.login_wall)) return { kind: 'embed', platform, parsed };
       return { kind: 'card', platform, parsed };
     }
 
@@ -1414,7 +1627,9 @@
       const box = h('div', { class: 'media-box' });
       const m = {
         entry, box, platform, embed: parsed.embed, iframe: null, facade: null, thumb: null, titleEl: null,
-        knownHeight: null, lastUsed: 0, revealTimer: 0,
+        // last measured height of this Instagram/X embed (earlier visit): reserved instead of the default
+        knownHeight: parsed.embed.autoHeight ? (Number(embedHeights[entry.id]) || null) : null,
+        lastUsed: 0, revealTimer: 0,
       };
       sizeEmbedBox(m);
       m.facade = buildFacade(entry, m);
@@ -1426,6 +1641,7 @@
     function sizeEmbedBox(m) {
       const e = m.embed;
       const s = m.box.style;
+      if (m.platform === 'pinterest') { sizePinBox(m, Number(aspectCache[m.entry.id]) || PIN_DEFAULT_R); return; }
       if (e.aspect && e.aspect > 0) {
         s.aspectRatio = String(e.aspect);
         s.width = `min(100%, ${Math.round(MAX_MEDIA_H * e.aspect)}px)`;
@@ -1436,6 +1652,26 @@
       }
     }
 
+    // Pinterest's embed sends no size messages; its layout is the pin image at full
+    // width plus a ~96px footer. The ratio (height/width) comes from the pin thumbnail
+    // (meta.image, via oEmbed) once it loads, and is remembered for the next visit.
+    function sizePinBox(m, r) {
+      r = Math.min(PIN_MAX_R, Math.max(PIN_MIN_R, r));
+      const s = m.box.style;
+      s.height = '0';
+      s.paddingBottom = `calc(${(r * 100).toFixed(2)}% + ${PIN_FOOTER}px)`; // % of the width
+    }
+    function watchPinThumb(m, img) {
+      if (m.platform !== 'pinterest') return;
+      img.addEventListener('load', () => {
+        if (!img.naturalWidth || !img.naturalHeight) return;
+        const r = Math.round((img.naturalHeight / img.naturalWidth) * 1000) / 1000;
+        if (Number(aspectCache[m.entry.id]) === r) return;
+        rememberAspect(m.entry.id, r);
+        applyOrDefer(m.entry, 'pin', () => sizePinBox(m, r));
+      }, { once: true });
+    }
+
     function buildFacade(entry, m) {
       const { parsed, platform } = entry.view;
       const info = platformInfo(platform);
@@ -1443,7 +1679,7 @@
       const f = h('button', { type: 'button', class: 'facade', 'data-action': 'mount', 'aria-label': `${info.name} içeriğini göster` });
       f.style.setProperty('--pc', info.color);
       const thumbUrl = safeHttpUrl(parsed.thumb) || (meta && meta.image) || null;
-      if (thumbUrl) { m.thumb = makeThumb(thumbUrl); f.append(m.thumb); }
+      if (thumbUrl) { m.thumb = makeThumb(thumbUrl); watchPinThumb(m, m.thumb); f.append(m.thumb); }
       m.titleEl = h('span', { class: 'facade-title' }, meta ? meta.title : '');
       f.append(
         h('span', { class: 'facade-shade' }),
@@ -1465,16 +1701,20 @@
 
     /* Direct images: reserved box; natural ratio is adopted only while the card
        is below the viewport (so visible content never jumps) and remembered. */
-    const aspectCache = (() => {
-      try { const o = JSON.parse(store.get(LS.aspect) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (_) { return {}; }
-    })();
-    function rememberAspect(id, ratio) {
-      if (aspectCache[id] === ratio) return;
-      aspectCache[id] = ratio;
-      const keys = Object.keys(aspectCache);
-      if (keys.length > 400) delete aspectCache[keys[0]];
-      store.set(LS.aspect, JSON.stringify(aspectCache));
+    function loadCache(key) {
+      try { const o = JSON.parse(store.get(key) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (_) { return {}; }
     }
+    function remember(cache, key, id, value) {
+      if (cache[id] === value) return;
+      cache[id] = value;
+      const keys = Object.keys(cache);
+      if (keys.length > 400) delete cache[keys[0]];
+      store.set(key, JSON.stringify(cache));
+    }
+    const aspectCache = loadCache(LS.aspect);   // post id -> image / pin ratio
+    const embedHeights = loadCache(LS.embedH);  // post id -> measured Instagram/X embed height (px)
+    const rememberAspect = (id, ratio) => remember(aspectCache, LS.aspect, id, ratio);
+    const rememberEmbedHeight = (id, px) => remember(embedHeights, LS.embedH, id, px);
 
     function buildImageMedia(entry) {
       const src = entry.view.src;
@@ -1500,7 +1740,10 @@
       const src = entry.view.src;
       const box = h('div', { class: 'media-box' });
       box.style.aspectRatio = '16 / 9';
-      const v = h('video', { class: 'media-video', src, preload: 'none', controls: true, playsinline: true, 'webkit-playsinline': true, controlslist: 'nodownload' });
+      // '#t=0.1' makes browsers (iOS Safari too) paint a first frame instead of a black box once
+      // metadata is loaded; preload switches from 'none' to 'metadata' when the card comes near.
+      const v = h('video', { class: 'media-video', src: src.includes('#') ? src : src + '#t=0.1', preload: 'none', controls: true, playsinline: true, 'webkit-playsinline': true, controlslist: 'nodownload' });
+      entry.refs.video = v;
       v.addEventListener('error', () => showMediaFallback(box, src, 'Video yüklenemedi'), { once: true });
       box.append(v);
       return h('div', { class: 'media' }, box);
@@ -1548,12 +1791,14 @@
       const meta = normMeta(entry.post.meta);
       const href = safeHttpUrl(parsed.canonical) || '';
       const host = hostOf(href);
-      setText(r.lvTitle, (meta && meta.title) || prettyUrl(href));
+      const locked = !!(meta && meta.login_wall);
+      setText(r.lvTitle, locked ? 'Özel dosya: açmak için erişim gerekli'
+        : (meta && meta.title) || handleTitle(href, parsed) || slugTitle(href) || prettyUrl(href));
       const desc = meta ? meta.description : '';
       setText(r.lvDesc, desc);
       r.lvDesc.hidden = !desc;
       const pname = platform !== 'web' ? platformInfo(platform).name : '';
-      setText(r.lvSiteText, (meta && (meta.site_name || meta.provider)) || pname || host);
+      setText(r.lvSiteText, (meta && !locked && (meta.site_name || meta.provider)) || pname || host);
       const img = (meta && meta.image) || safeHttpUrl(parsed.thumb) || '';
       if (entry.shown.visual === img && r.lvVisual.firstChild) return;
       entry.shown.visual = img;
@@ -1601,7 +1846,8 @@
         entry.shown.desc = post.description || '';
         info.append(r.desc);
       }
-      r.author = h('span', { class: 'author-badge' + (post.is_mine ? ' is-mine' : ''), translate: 'no', title: post.is_mine ? 'Senin paylaşımın' : null }, displayName(post.author));
+      entry.shown.author = displayName(post.author);
+      r.author = h('span', { class: 'author-badge' + (post.is_mine ? ' is-mine' : ''), translate: 'no', title: post.is_mine ? 'Senin paylaşımın' : null }, entry.shown.author);
       const d = parseDate(post.created_at);
       entry.shown.date = d ? fmtRelative(d) : '';
       r.date = h('time', { class: 'post-date', datetime: d ? d.toISOString() : null, title: d ? fmtLongDate(d) : null }, entry.shown.date);
@@ -1612,7 +1858,7 @@
       }
       r.del = h('button', { type: 'button', class: 'text-btn danger', 'data-action': 'delete-post', hidden: !post.can_delete }, 'Sil');
       right.append(r.del);
-      info.append(h('div', { class: 'post-meta' }, h('div', { class: 'post-meta-left' }, r.author, r.date), right));
+      info.append(h('div', { class: 'post-meta' }, h('div', { class: 'post-meta-left' }, r.author, roleBadge(post), r.date), right));
 
       r.notesTitle = h('div', { class: 'notes-title', hidden: true }, 'Notlar');
       r.notesList = h('div', { class: 'notes-list' });
@@ -1627,10 +1873,23 @@
       return info;
     }
 
-    // Refresh path: only text parts that actually changed are touched.
-    function patchCard(entry, post) {
+    // Verified badge from the server's author_role (a guest may type any name).
+    function roleBadge(item) {
+      return item && item.author_role === 'admin'
+        ? h('span', { class: 'role-badge', title: 'Doğrulanmış yönetici hesabı' }, '✓ Yönetici')
+        : null;
+    }
+
+    // Refresh path: data is updated now; the DOM (text, notes: may change the card's
+    // height) through applyOrDefer, comparing against what is shown.
+    function patchCard(entry, post, above) {
       const old = entry.post;
       entry.post = post;
+      applyOrDefer(entry, 'text', () => renderPatch(entry), above);
+      if (metaSig(old.meta) !== metaSig(post.meta)) patchMeta(entry, above);
+    }
+    function renderPatch(entry) {
+      const post = entry.post;
       const r = entry.refs;
       const s = entry.shown;
       const desc = post.description || '';
@@ -1641,27 +1900,45 @@
         r.desc.textContent = desc;
         r.desc.hidden = !desc;
       }
-      if (old.author !== post.author) r.author.textContent = displayName(post.author);
-      if (!!old.is_mine !== !!post.is_mine) r.author.classList.toggle('is-mine', !!post.is_mine);
+      const author = displayName(post.author);
+      if (s.author !== author) { s.author = author; r.author.textContent = author; }
+      r.author.classList.toggle('is-mine', !!post.is_mine);
       r.del.hidden = !post.can_delete;
       const rel = fmtRelative(parseDate(post.created_at));
       if (s.date !== rel) { s.date = rel; r.date.textContent = rel; }
-      if (metaSig(old.meta) !== metaSig(post.meta)) patchMeta(entry);
       reconcileNotes(entry, post.notes);
     }
 
-    function patchMeta(entry) {
+    function patchMeta(entry, above) {
       const kind = entry.view.kind;
-      if (kind === 'card') { fillLinkCard(entry); return; }
-      if (kind === 'embed' && entry.media) {
+      const meta = normMeta(entry.post.meta);
+      if (kind === 'embed' && meta && meta.login_wall) { applyOrDefer(entry, 'media', () => swapToCard(entry), above); return; }
+      if (kind === 'card') { applyOrDefer(entry, 'meta', () => fillLinkCard(entry), above); return; }
+      if (kind === 'embed' && entry.media) { // overlay title / thumb inside the fixed box: no size change
         const m = entry.media;
-        const meta = normMeta(entry.post.meta);
         setText(m.titleEl, meta ? meta.title : '');
         if (!m.thumb && meta && meta.image) {
           m.thumb = makeThumb(meta.image);
+          watchPinThumb(m, m.thumb);
           m.facade.prepend(m.thumb);
         }
       }
+    }
+
+    // The file turned out private (meta.login_wall arrived after the card was built):
+    // only this card's media is replaced by a preview card.
+    function swapToCard(entry) {
+      const m = entry.media;
+      if (entry.view.kind !== 'embed' || !m) return;
+      unmount(m);
+      wanted.delete(m);
+      if (farIO) farIO.unobserve(entry.el);
+      entry.media = null;
+      entry.view = { ...entry.view, kind: 'card' };
+      const media = buildLinkCard(entry);
+      const old = entry.el.querySelector(':scope > .media');
+      if (old) old.replaceWith(media); else entry.el.prepend(media);
+      entry.el.classList.replace('kind-embed', 'kind-card');
     }
 
     /* ------------------------------------------------------------------- notes */
@@ -1675,7 +1952,7 @@
       nv.actions = h('div', { class: 'note-actions', hidden: !n.can_edit },
         h('button', { type: 'button', class: 'text-btn', 'data-action': 'edit-note' }, 'Düzenle'),
         h('button', { type: 'button', class: 'text-btn danger', 'data-action': 'delete-note' }, 'Sil'));
-      nv.el = h('div', { class: 'note', 'data-note-id': String(n.id) }, h('div', { class: 'note-head' }, nv.author, nv.priv, nv.date), nv.text, nv.actions);
+      nv.el = h('div', { class: 'note', 'data-note-id': String(n.id) }, h('div', { class: 'note-head' }, nv.author, roleBadge(n), nv.priv, nv.date), nv.text, nv.actions);
       return nv;
     }
 
@@ -1863,7 +2140,8 @@
         if (!e || !posts.has(e.id)) continue;
         if (rec.isIntersecting) {
           if (e.media) wanted.add(e.media);
-          if (e.view.kind === 'card' && !normMeta(e.post.meta) && !e.metaRequested) requestMeta(e);
+          if ((e.view.kind === 'card' || e.view.platform === 'pinterest') && !normMeta(e.post.meta) && !e.post.meta_failed && !e.metaRequested) requestMeta(e);
+          if (e.refs.video && e.refs.video.preload === 'none') e.refs.video.preload = 'metadata';
         } else if (e.media) {
           wanted.delete(e.media);
         }
@@ -1992,7 +2270,8 @@
           const hpx = Math.min(msg.height, MAX_AUTO_H);
           if (m.knownHeight !== hpx) {
             m.knownHeight = hpx;
-            m.box.style.height = hpx + 'px';
+            rememberEmbedHeight(m.entry.id, hpx);
+            applyOrDefer(m.entry, 'height', () => { m.box.style.height = m.knownHeight + 'px'; });
           }
           reveal(m, m.iframe);
         } else if (msg.type === 'MOUNTED' || msg.type === 'twttr.private.rendered') {
@@ -2036,7 +2315,8 @@
     }
 
     /* =============================================================== ADD MODAL */
-    const add = { tab: 'link', checkSeq: 0, checkCtrl: null, timer: 0, dup: null, checking: false };
+    // session: incremented on every open; a submit only closes / resets the dialog it came from.
+    const add = { tab: 'link', checkSeq: 0, checkCtrl: null, timer: 0, dup: null, checking: false, session: 0 };
 
     function findByKey(key) {
       if (!key) return null;
@@ -2045,9 +2325,13 @@
     }
 
     function openAddModal() {
+      add.session++;
+      setBusy($('link-submit'), false); // a submit still running from a closed dialog does not lock this one
+      setBusy($('text-submit'), false);
       resetAddModal();
       openModal($('add-modal'), add.tab === 'link' ? $('link-url') : $('text-body'));
     }
+    const addModalOpen = () => modalStack.some((m) => m.el === $('add-modal'));
     function closeAddModal() {
       clearTimeout(add.timer);
       add.checkSeq++;
@@ -2169,17 +2453,23 @@
       if (add.dup) return;
       clearTimeout(add.timer);
       add.checkSeq++;
+      const addSession = add.session;
+      const sameDialog = () => add.session === addSession && addModalOpen();
       setBusy(btn, true);
       try {
         const description = $('link-desc').value.trim();
         const post = await mutate(() => api('POST', '/api/inspire/posts', { url: p.canonical, description }));
         if (!post || post.id == null) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
-        closeAddModal();
+        const live = sameDialog();
+        if (live) closeAddModal();
+        flushPending();
         const e = insertTop(post);
         toast('Fikir eklendi.', 'ok');
-        if (e) showPost(e.id);
+        if (e && live) showPost(e.id);
       } catch (e) {
-        if (e.status === 409) {
+        if (!sameDialog()) { // the dialog was closed (or reopened for something else) meanwhile
+          if (e.status !== 401) toast(e.message || 'Paylaşılamadı.', 'error');
+        } else if (e.status === 409) {
           setDup((e.data && e.data.existing) || {});
           toast(e.message || 'Bu link zaten eklenmiş.', 'error');
         } else if (e.status !== 401) {
@@ -2187,8 +2477,7 @@
           err.hidden = false;
         }
       } finally {
-        setBusy(btn, false);
-        updateLinkSubmit();
+        if (add.session === addSession) { setBusy(btn, false); updateLinkSubmit(); }
       }
     }
 
@@ -2208,22 +2497,27 @@
       const err = $('text-error');
       err.hidden = true;
       if (!text || text.length > config.max_text_len) return;
+      const addSession = add.session;
+      const sameDialog = () => add.session === addSession && addModalOpen();
       setBusy(btn, true);
       try {
         const post = await mutate(() => api('POST', '/api/inspire/posts', { type: 'text', text }));
         if (!post || post.id == null) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
-        closeAddModal();
+        const live = sameDialog();
+        if (live) closeAddModal();
+        flushPending();
         const e = insertTop(post);
         toast('Fikir eklendi.', 'ok');
-        if (e) showPost(e.id);
+        if (e && live) showPost(e.id);
       } catch (e) {
-        if (e.status !== 401) {
+        if (e.status === 401) { /* handled by api() */ }
+        else if (!sameDialog()) toast(e.message || 'Paylaşılamadı.', 'error');
+        else {
           err.textContent = e.message || 'Paylaşılamadı.';
           err.hidden = false;
         }
       } finally {
-        setBusy(btn, false);
-        updateTextCounter();
+        if (add.session === addSession) { setBusy(btn, false); updateTextCounter(); }
       }
     }
 
@@ -2246,8 +2540,17 @@
       $('btn-rename').addEventListener('click', () => {
         $('name-input').value = session.user ? session.user.name : '';
         $('name-error').hidden = true;
+        $('cid-code').value = session.cid || '';
         openModal($('name-modal'), $('name-input'));
       });
+      $('cid-copy').addEventListener('click', copyCid);
+      $('restore-toggle').addEventListener('click', () => {
+        const form = $('restore-form');
+        form.hidden = !form.hidden;
+        $('restore-toggle').setAttribute('aria-expanded', String(!form.hidden));
+        if (!form.hidden) $('restore-code').focus();
+      });
+      $('restore-form').addEventListener('submit', (e) => { e.preventDefault(); restoreWithCode(); });
       $('name-form').addEventListener('submit', (e) => { e.preventDefault(); renameGuest(); });
 
       $('tab-link').addEventListener('click', () => selectTab('link'));
@@ -2271,6 +2574,12 @@
       $('text-body').addEventListener('input', updateTextCounter);
       $('text-form').addEventListener('submit', submitText);
 
+      $('new-posts').addEventListener('click', () => {
+        flushPending();
+        const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+      });
+      window.addEventListener('scroll', onScrollPending, { passive: true });
       window.addEventListener('message', onEmbedMessage);
       window.addEventListener('blur', onWindowBlur);
       document.addEventListener('visibilitychange', () => {

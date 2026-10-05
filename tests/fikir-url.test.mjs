@@ -166,7 +166,8 @@ const CASES = [
   ['https://www.linkedin.com/feed/update/urn%3Ali%3Aactivity%3A7369432203736305666', { key: 'linkedin:activity:7369432203736305666' }],
   ['https://www.linkedin.com/pulse/some-article-ahmet-yilmaz/', { platform: 'linkedin', id: null, embed: null }],
   ['https://lnkd.in/dAbC123', { platform: 'linkedin', needsResolve: true }],
-  ['https://www.behance.net/gallery/123456789/Brand-Identity?tracking_source=search', { platform: 'behance', id: '123456789', key: 'behance:123456789', embed: null }],
+  ['https://www.behance.net/gallery/123456789/Brand-Identity?tracking_source=search', { platform: 'behance', id: '123456789', key: 'behance:123456789', src: 'https://www.behance.net/embed/project/123456789?ilo0=1', aspect: 404 / 316 }],
+  ['https://www.behance.net/someuser/moodboards', { platform: 'behance', id: null, embed: null }],
   ['https://dribbble.com/shots/23456789-Mobile-App-UI', { platform: 'dribbble', id: '23456789', key: 'dribbble:23456789', embed: null }],
 
   // ------------------------------------------------------ direct files / web
@@ -324,6 +325,7 @@ describe('stripTracking', () => {
     ['https://example.com/ara?q=%C3%A7i%C3%A7ek+bah%C3%A7e&UTM_Source=X', 'https://example.com/ara?q=%C3%A7i%C3%A7ek+bah%C3%A7e'],
     ['https://app.example.com/?utm_source=a#/sayfa/2', 'https://app.example.com/#/sayfa/2'],
     ['https://example.com/', 'https://example.com/'],
+    ['https://code.visualstudio.com/?WT.mc_id=vscode_aka&lang=tr', 'https://code.visualstudio.com/?lang=tr'], // Microsoft campaign id (aka.ms)
   ];
   for (const [input, out] of CASES_ST) {
     test(input, () => { assert.equal(stripTracking(input), out); });

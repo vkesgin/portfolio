@@ -1,0 +1,87 @@
+{
+ "title": "STM Ferahlık Gösterisi",
+ "logline": "STM projesinin geniş sokakları, devasa bir filin bile rahatça dolaşabileceği kadar ferah bir yapı sunuyor.",
+ "core_message": "STM'nin geniş sokakları, en büyük canlılar için bile yeterince ferah.",
+ "interpretations": [
+  {
+   "name": "STM",
+   "meaning": "Sayın Gayrimenkul tarafından geliştirilen ticari bir proje veya dükkanlar sokağı.",
+   "confidence": "high"
+  },
+  {
+   "name": "Fil",
+   "meaning": "Sokakların genişliğini ve ferahlığını vurgulamak için kullanılan gerçeküstü bir ölçek aracı.",
+   "confidence": "high"
+  }
+ ],
+ "assumptions": [
+  "STM, modern mimariye sahip, geniş yürüme yolları ve dükkan cepheleri olan bir ticari komplekstir.",
+  "Fil, gerçekçi bir görünüme sahip ancak sahnenin absürtlüğü için bir metafor olarak kullanılmıştır.",
+  "Mekan, dükkanların karşılıklı dizildiği geniş bir cadde formundadır."
+ ],
+ "style_bible_en": "Rough grayscale graphite pencil storyboard sketch, loose confident lines, light hatching for shadows, plain white paper, no color, no text, no logos. The LOCATION is a modern commercial street with clean-lined, contemporary shop facades, wide paved walkways, and a clear, open sky. The main character is THE ELEPHANT: a massive, majestic African elephant with detailed skin texture. The setting is an orderly, upscale outdoor shopping district.",
+ "anchor_prompt_en": "Wide, eye-level view of a modern commercial street with contemporary shop facades on both sides. THE ELEPHANT is standing in the center of the wide paved walkway, facing the camera in a neutral pose. No text.",
+ "aspect_ratio": "16:9",
+ "scenes": [
+  {
+   "n": 1,
+   "title": "Giriş",
+   "duration_s": 4,
+   "shot": "wide",
+   "camera_move": "pan",
+   "action": "Geniş ve modern bir dükkanlar sokağının ortasından devasa bir fil ağır adımlarla kadraja girer.",
+   "onscreen_text": "",
+   "vo": "Bazı genişlikler sadece bakarak anlaşılmaz.",
+   "sound": "Derinden gelen ağır ayak sesleri, hafif ve merak uyandırıcı bir müzik.",
+   "image_prompt_en": "Wide shot, 24mm lens. THE ELEPHANT enters the frame from the left, walking onto a wide, paved commercial street. The modern shop facades line the sides of the street under a bright sky. The elephant's massive scale is immediately apparent against the architecture."
+  },
+  {
+   "n": 2,
+   "title": "Ölçek Vurgusu",
+   "duration_s": 5,
+   "shot": "medium",
+   "camera_move": "tracking",
+   "action": "Kamera filin yanından yürüyüşünü takip eder; fil, dükkanların arasındaki geniş boşlukta rahatça ilerlemektedir.",
+   "onscreen_text": "",
+   "vo": "Gerçek ferahlığı hissetmek gerekir.",
+   "sound": "Ayak seslerinin ritmik ve tok yankısı, hafif rüzgar sesi.",
+   "image_prompt_en": "Medium shot, side profile. THE ELEPHANT walks steadily through the center of the street. On both sides, the modern shop entrances and large glass windows are visible. There is significant clearance between the elephant and the buildings."
+  },
+  {
+   "n": 3,
+   "title": "Genişlik Kanıtı",
+   "duration_s": 6,
+   "shot": "aerial_drone",
+   "camera_move": "crane_up",
+   "action": "Kamera yükselerek yukarıdan bakış sağlar; fil, dükkanlar arasındaki devasa koridorun ortasında küçük bir nokta gibi değil, rahatça sığan bir figür olarak görünür.",
+   "onscreen_text": "",
+   "vo": "STM'nin geniş sokaklarıyla her şey yerli yerinde.",
+   "sound": "Müzik yükselir, daha epik ve güven verici bir tona geçer.",
+   "image_prompt_en": "Aerial drone shot, high angle looking down. THE ELEPHANT is walking down the long, wide avenue of the commercial complex. The street is exceptionally wide, with shops organized in neat rows on either side, showing the immense scale of the walkways."
+  },
+  {
+   "n": 4,
+   "title": "Yakın Plan Ölçek",
+   "duration_s": 4,
+   "shot": "close_up",
+   "camera_move": "static",
+   "action": "Filin devasa ayağı, bir dükkanın giriş kapısının hemen yanındaki geniş kaldırıma basar; aradaki mesafe çok belirgindir.",
+   "onscreen_text": "",
+   "vo": "Sayın Gayrimenkul güvencesiyle.",
+   "sound": "Güçlü bir ayak sesi ve ardından gelen yumuşak bir bitiş müziği.",
+   "image_prompt_en": "Close-up shot, low angle. THE ELEPHANT's massive, wrinkled foot steps onto the pavement in the foreground. In the midground, a shop entrance is clearly visible, showing a large, comfortable distance between the foot and the building facade."
+  },
+  {
+   "n": 5,
+   "title": "Logo/Kapanış",
+   "duration_s": 3,
+   "shot": "medium",
+   "camera_move": "static",
+   "action": "Modern bir dükkanın üzerindeki boş tabela panosu görünür.",
+   "onscreen_text": "SAYIN GAYRİMENKUL",
+   "vo": "",
+   "sound": "Marka jingle'ı.",
+   "image_prompt_en": "Medium shot of a modern, blank shop fascia on a clean building wall. The lighting is bright and professional. No text or logos on the sign."
+  }
+ ]
+}

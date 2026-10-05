@@ -1,0 +1,82 @@
+{
+  "title": "STM'de Dev Genişlik",
+  "logline": "STM projesinin geniş sokaklarında yürüyen dev bir fil, ticari alanların ferahlığını ve dükkan aralarının büyüklüğünü çarpıcı bir şekilde gösterir.",
+  "core_message": "STM'nin sunduğu geniş sokaklar ve ferah dükkan araları, en büyük hacimlere bile rahatça yer açacak kadar büyüktür.",
+  "interpretations": [
+    {
+      "name": "STM",
+      "meaning": "Sayın Ticaret Merkezi veya projenin özel adı olan ticari bloklar alanı.",
+      "confidence": "high"
+    }
+  ],
+  "assumptions": [
+    "STM, modern mimariye sahip, dükkanlardan oluşan bir ticari proje alanıdır.",
+    "Fil, mekanın genişliğini vurgulamak için kullanılan gerçeküstü bir görsel metafordur.",
+    "Sokaklar, dükkan blokları arasında geniş geçiş alanları olarak kurgulanmıştır."
+  ],
+  "style_bible_en": "Rough grayscale graphite pencil storyboard sketch, loose confident lines, light hatching for shadows, plain white paper, no color, no text, no logos. LOCATION: STM commercial complex, modern single or double-story shop units with large glass windows and metal shutters, wide paved streets between blocks, clean urban layout. CHARACTER: THE ELEPHANT: a large, majestic African elephant with wrinkled skin and large ears.",
+  "anchor_prompt_en": "Wide, eye-level view of the STM commercial street. THE ELEPHANT stands in the middle of a wide paved street between two modern shop buildings, looking calm. The architecture is clean and contemporary.",
+  "aspect_ratio": "16:9",
+  "scenes": [
+    {
+      "n": 1,
+      "title": "Giriş ve Merak",
+      "duration_s": 4,
+      "shot": "wide",
+      "camera_move": "dolly_in",
+      "action": "STM projesinin modern dükkan blokları görünür. Uzaktan dev bir fil, geniş sokağın girişinden ağır adımlarla içeri doğru yürümeye başlar.",
+      "onscreen_text": "",
+      "vo": "",
+      "sound": "Derinden gelen, ağır ve ritmik fil ayak sesleri. Hafif, merak uyandırıcı bir müzik.",
+      "image_prompt_en": "Wide shot, 24mm lens. THE ELEPHANT is walking towards the camera down a wide, paved street between modern commercial shop buildings. The buildings have large windows and clean lines. The elephant is in the midground, appearing massive against the urban backdrop."
+    },
+    {
+      "n": 2,
+      "title": "Genişliğin Kanıtı",
+      "duration_s": 5,
+      "shot": "full",
+      "camera_move": "static",
+      "action": "Fil, iki dükkan arasındaki sokağın tam ortasından geçer. Fil o kadar büyüktür ki, dükkanların cepheleri ile filin yanları arasında hala geniş bir boşluk kalmaktadır.",
+      "onscreen_text": "Geniş sokaklar,",
+      "vo": "Bazı yerler sadece geniş değildir,",
+      "sound": "Filin ağır adımlarının yankısı. Ritmik ve güçlü sesler.",
+      "image_prompt_en": "Full shot, eye-level. THE ELEPHANT is walking between two shop buildings. There is significant empty space on both sides of the elephant, emphasizing the width of the street. The shop fronts are visible on the left and right edges of the frame."
+    },
+    {
+      "n": 3,
+      "title": "Ölçek ve Detay",
+      "duration_s": 4,
+      "shot": "close_up",
+      "camera_move": "tilt",
+      "action": "Kamera yer seviyesinden yukarı doğru bakar. Filin devasa bacağı dükkan girişinin yanından geçerken, dükkanın yüksekliği ve sokağın ferahlığı vurgulanır.",
+      "onscreen_text": "Gerçekten ferah.",
+      "vo": "Sizin için yer açar.",
+      "sound": "Daha görkemli ve yükselen bir orkestral müzik.",
+      "image_prompt_en": "Close-up shot, looking up from a low angle. A detailed view of THE ELEPHANT'S massive leg as it steps on the pavement. In the background, the tall glass facade of a shop building is visible, showing the scale difference between the animal and the architecture."
+    },
+    {
+      "n": 4,
+      "title": "Genel Bakış",
+      "duration_s": 5,
+      "shot": "aerial_drone",
+      "camera_move": "drone_flyover",
+      "action": "Kuş bakışı görünümde, filin STM projesindeki geniş sokak ağında rahatça ilerlediği görülür. Projenin düzenli ve geniş yapısı netleşir.",
+      "onscreen_text": "STM Ticaret Merkezi",
+      "vo": "STM'de yeriniz her zaman geniş.",
+      "sound": "Müzik zirve noktasına ulaşır. Hafif rüzgar sesi.",
+      "image_prompt_en": "Aerial drone shot, high angle. THE ELEPHANT is walking through the grid-like street layout of the STM complex. The wide streets and the organized arrangement of the shop blocks are clearly visible from above."
+    },
+    {
+      "n": 5,
+      "title": "Logo ve Kapanış",
+      "duration_s": 3,
+      "shot": "medium",
+      "camera_move": "static",
+      "action": "STM projesindeki şık bir dükkanın önünde, üzerinde yazı olmayan boş bir tabela görünür. Ekranın ortasında marka logosu belirir.",
+      "onscreen_text": "SAYIN GAYRİMENKUL",
+      "vo": "",
+      "sound": "Markanın imza sesi (audio logo).",
+      "image_prompt_en": "Medium shot, eye-level. A clean, modern shop front within the STM complex. A blank shop fascia/sign is mounted on the building. The lighting is bright and professional."
+    }
+  ]
+}

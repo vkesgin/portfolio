@@ -660,9 +660,10 @@
     const AT_TOP_PX = 80;           // refresh inserts/removes cards directly only this close to the top
     const MAX_PAGES = 10;           // GET /api/inspire/posts pages (server sends X-Fikir-Next while more exist)
 
-    // Server-driven feature flags (GET /api/inspire/config). `storyboard` is the
-    // extension point for the AI storyboard phase; nothing uses it yet.
-    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000 };
+    // Server-driven feature flags (GET /api/inspire/config). `storyboard` = the storyboard
+    // creation UI may be shown to this user; `sb` = limits + today's remaining quota (null before login).
+    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null };
+    const SB_MODULE = '/assets/js/fikir-storyboard.mjs?v=20261005';
     window.fikirConfig = config;
 
     const session = { token: null, user: null, cid: null };
@@ -904,6 +905,7 @@
     function dismissModal(el) {
       if (el === $('add-modal')) closeAddModal();
       else if (el === $('confirm-modal')) settleConfirm(false);
+      else if (typeof el.sbDismiss === 'function') el.sbDismiss();   // storyboard viewer
       else closeModal(el);
     }
     function closeAllModals() {
@@ -1001,9 +1003,11 @@
 
     async function loadConfig() {
       try {
-        const c = await api('GET', '/api/inspire/config', null, { auth: false });
+        // With a session the server adds today's remaining storyboard quota; it never answers 401 here.
+        const c = await api('GET', '/api/inspire/config', null, { auth: !!session.token });
         if (c && typeof c === 'object') {
           if (typeof c.storyboard === 'boolean') config.storyboard = c.storyboard;
+          config.sb = c.sb && typeof c.sb === 'object' ? c.sb : null;
           for (const k of ['max_note_len', 'max_text_len']) {
             if (Number.isInteger(c[k]) && c[k] > 0 && c[k] <= 100000) config[k] = c[k];
           }
@@ -1012,6 +1016,28 @@
       $('text-body').maxLength = config.max_text_len;
       $('text-max').textContent = String(config.max_text_len);
       updateTextCounter();
+      if (sbUI) sbUI.configChanged();
+      else if (config.storyboard) ensureStoryboardUI();
+    }
+
+    /* AI storyboards: /assets/js/fikir-storyboard.mjs is loaded only when creation is allowed
+       or a post already has a storyboard. Everything storyboard-related lives in that module. */
+    let sbUI = null;
+    let sbLoading = null;
+    function ensureStoryboardUI() {
+      if (sbUI) return Promise.resolve(sbUI);
+      if (!sbLoading) {
+        sbLoading = import(SB_MODULE).then((mod) => {
+          sbUI = mod.createStoryboardUI({
+            api, ApiError, h, toast, confirmDialog, openModal, closeModal, setBusy, session, config, API_BASE, safeHttpUrl, posts,
+            defer: (entry, key, fn) => applyOrDefer(entry, key, fn),   // card height changes wait while the card is above the viewport
+          });
+          sbUI.configChanged();
+          for (const e of posts.values()) if (e.view.kind === 'text') applyOrDefer(e, 'sb', () => sbUI.mount(e));
+          return sbUI;
+        }).catch((err) => { sbLoading = null; console.error('storyboard module', err); return null; });
+      }
+      return sbLoading;
     }
 
     /* ----------------------------------------------------------------- session */
@@ -1181,6 +1207,8 @@
 
     function logout(message) {
       clearSession();
+      config.storyboard = false;   // per-user flags; the next login reloads them (showBoard -> loadConfig)
+      config.sb = null;
       teardownBoard();
       closeAllModals();
       showEntry(message);
@@ -1206,6 +1234,7 @@
       $('entry-screen').hidden = true;
       $('dashboard').hidden = false;
       renderHeader();
+      loadConfig();   // per-user storyboard flag + quota need the session
       initBoard();
       loadPosts({ initial: true });
       startRefresh();
@@ -1391,6 +1420,7 @@
         board.loaded = true;
         reconcile(list, complete, firstFill);
         updateEmptyState();
+        if (!sbUI && list.some((p) => p && p.storyboard)) ensureStoryboardUI();
       } catch (e) {
         if ((e && e.name === 'AbortError') || seq !== load.seq || !session.token) return;
         if (e.status === 401) return; // handled by api()
@@ -1513,6 +1543,7 @@
     }
 
     function removeEntry(e) {
+      if (sbUI) sbUI.unmount(e);
       if (nearIO) nearIO.unobserve(e.el);
       if (farIO) farIO.unobserve(e.el);
       if (deferredEntries.delete(e) && viewIO) viewIO.unobserve(e.el);
@@ -1526,6 +1557,7 @@
     function teardownBoard() {
       abortLoad();
       stopRefresh();
+      if (sbUI) sbUI.stopAll();
       for (const e of [...posts.values()]) removeEntry(e);
       posts.clear();
       wanted.clear();
@@ -1819,8 +1851,8 @@
       visual.append(fav, h('span', { class: 'ph-host', translate: 'no' }, host || 'Bağlantı'));
     }
 
-    /* Text idea card. `.sb-slot` is the (hidden, empty) mount point for the
-       later AI storyboard phase. */
+    /* Text idea card. `.sb-slot` (hidden until used) holds the AI storyboard panel
+       (assets/js/fikir-storyboard.mjs). */
     function buildTextIdea(entry) {
       const r = entry.refs;
       r.textBody = h('div', { class: 'text-idea-body' }, entry.post.description || '');
@@ -1831,10 +1863,12 @@
       return wrap;
     }
 
-    // Extension point for the AI storyboard phase: when GET /api/inspire/config
-    // returns storyboard:true, fill entry.refs.sbSlot here. Intentionally empty now.
+    // AI storyboard panel inside the text card (viewing works for everyone; creation needs config.storyboard).
+    // Without a storyboard and without creation rights the slot stays hidden and the module is not loaded.
     function mountStoryboard(entry) {
-      if (!config.storyboard || !entry.refs.sbSlot) return;
+      if (!entry.refs.sbSlot) return;
+      if (sbUI) sbUI.mount(entry);
+      else if (entry.post.storyboard || config.storyboard) ensureStoryboardUI();
     }
 
     function buildInfo(entry) {
@@ -1907,6 +1941,10 @@
       const rel = fmtRelative(parseDate(post.created_at));
       if (s.date !== rel) { s.date = rel; r.date.textContent = rel; }
       reconcileNotes(entry, post.notes);
+      if (entry.view.kind === 'text') {
+        if (sbUI) sbUI.patch(entry, post);
+        else if (post.storyboard) ensureStoryboardUI();
+      }
     }
 
     function patchMeta(entry, above) {
@@ -2348,6 +2386,7 @@
       setDup(null);
       updateTextCounter();
       updateLinkSubmit();
+      if (sbUI) sbUI.resetAddForm();
     }
 
     function selectTab(tab) {
@@ -2501,13 +2540,15 @@
       const sameDialog = () => add.session === addSession && addModalOpen();
       setBusy(btn, true);
       try {
-        const post = await mutate(() => api('POST', '/api/inspire/posts', { type: 'text', text }));
+        const sbSpec = sbUI ? sbUI.formSpec() : null;   // null = no storyboard requested
+        const post = await mutate(() => api('POST', '/api/inspire/posts', { type: 'text', text, ...(sbSpec ? { storyboard: sbSpec } : {}) }));
         if (!post || post.id == null) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
         const live = sameDialog();
         if (live) closeAddModal();
         flushPending();
         const e = insertTop(post);
-        toast('Fikir eklendi.', 'ok');
+        toast(post.storyboard ? 'Fikir eklendi, storyboard hazırlanıyor.' : 'Fikir eklendi.', 'ok');
+        if (sbUI) sbUI.afterTextPost(e, post);
         if (e && live) showPost(e.id);
       } catch (e) {
         if (e.status === 401) { /* handled by api() */ }
@@ -2593,9 +2634,8 @@
       session.cid = ensureCid();
       restoreSession();
       bindStaticUI();
-      loadConfig();
-      if (session.token && session.user) showBoard();
-      else showEntry();
+      if (session.token && session.user) showBoard();   // loads the config itself (with the session)
+      else { loadConfig(); showEntry(); }
       window.__fikirReady = true;
     }
 

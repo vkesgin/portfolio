@@ -1,0 +1,37 @@
+# =====================================================================================
+# LOCAL TEST ONLY - never deploy.  LOCAL TEST ONLY - never deploy.  LOCAL TEST ONLY.
+# Never run `wrangler deploy`, `wrangler versions upload` or any remote command with
+# `-c wrangler.sbtest.toml`. It enables FAKE AI (SB_FAKE_AI=1) and opens storyboards to
+# guests; it exists only for tests/storyboard-e2e/ (wrangler dev on 127.0.0.1:8813).
+# =====================================================================================
+# Local-only test config for Phase B (fake AI, local D1/R2/Workflows). NEVER deploy this file:
+# the database_id is a placeholder, so `wrangler deploy -c wrangler.sbtest.toml` fails by design.
+name = "vk-portfolio-api-sbtest"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vk-portfolio-sbtest"
+database_id = "00000000-0000-4000-8000-000000000000"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "vk-portfolio-sbtest-files"
+
+[[workflows]]
+name = "vk-storyboard-sbtest"
+binding = "STORYBOARD_WF"
+class_name = "StoryboardWorkflow"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+ALLOWED_ORIGIN = "http://127.0.0.1:4733"
+SB_ENABLED = "1"
+SB_ADMIN_ONLY = "0"
+SB_FAKE_AI = "1"
+SB_FAKE_TAVILY = "1"
+SB_FAKE_DELAY_MS = "300"

@@ -1,0 +1,87 @@
+{
+ "title": "STM Genişlik Gösterisi",
+ "logline": "STM'nin ferah sokakları, devasa bir filin bile rahatça dolaşabileceği kadar geniştir.",
+ "core_message": "STM ticari projesinin sunduğu eşsiz sokak genişliği ve ferahlık vurgulanmaktadır.",
+ "interpretations": [
+  {
+   "name": "STM",
+   "meaning": "Sayın Gayrimenkul tarafından geliştirilen ticari bir proje veya dükkanlar bölgesi.",
+   "confidence": "medium"
+  },
+  {
+   "name": "Sayın Gayrimenkul",
+   "meaning": "Gayrimenkul geliştiricisi ve proje sahibi firma.",
+   "confidence": "high"
+  }
+ ],
+ "assumptions": [
+  "STM, modern mimariye sahip, geniş yaya ve araç yolları olan bir ticari yerleşkedir.",
+  "Fil, görsel bir ölçek referansı olarak gerçekçi bir Afrika fili olarak tasvir edilecektir.",
+  "Mekan, dükkanların yan yana dizildiği, temiz ve modern bir sokak yapısına sahiptir."
+ ],
+ "style_bible_en": "Rough grayscale graphite pencil storyboard sketch, loose confident lines, light hatching for shadows, plain white paper, no color, no text, no logos. The LOCATION is a modern commercial complex with sleek, minimalist shop blocks, wide paved streets, and clean architectural lines. THE ELEPHANT is a massive, realistic African elephant. People are generic, with no recognizable faces.",
+ "anchor_prompt_en": "Wide, eye-level view of the modern commercial complex's wide street with THE ELEPHANT standing in the center of the frame, looking towards the camera, neutral pose.",
+ "aspect_ratio": "16:9",
+ "scenes": [
+  {
+   "n": 1,
+   "title": "Geniş Sokakların Tanıtımı",
+   "duration_s": 4,
+   "shot": "wide",
+   "camera_move": "static",
+   "action": "STM projesindeki modern dükkanların arasındaki geniş ve temiz sokak görünür. Sokak boş ve ferah bir yapıdadır.",
+   "onscreen_text": "",
+   "vo": "Bazı genişlikleri anlatmak için kelimeler yetmez.",
+   "sound": "Hafif rüzgar sesi, huzurlu bir atmosfer.",
+   "image_prompt_en": "Wide shot, 24mm lens, a clean and empty wide street between modern shop blocks, bright daylight, architectural shadows, no people."
+  },
+  {
+   "n": 2,
+   "title": "Filin Görünmesi",
+   "duration_s": 4,
+   "shot": "wide",
+   "camera_move": "pan",
+   "action": "Sokağın uzak ucundan devasa bir fil, ağır adımlarla sokağa doğru giriş yapar.",
+   "onscreen_text": "",
+   "vo": "Öyle bir ferahlık ki...",
+   "sound": "Derinden gelen, ritmik ve ağır ayak sesleri: Güm... güm...",
+   "image_prompt_en": "Wide shot, 35mm lens, THE ELEPHANT enters from the background, walking towards the midground, positioned in the center of the wide street between the shop buildings."
+  },
+  {
+   "n": 3,
+   "title": "Sokakta Yürüyüş ve Ölçek",
+   "duration_s": 5,
+   "shot": "full",
+   "camera_move": "tracking",
+   "action": "Fil, dükkanların arasındaki yolda rahatça yürürken, dükkan cepheleri ile fil arasında hala çok geniş bir boşluk kalır.",
+   "onscreen_text": "",
+   "vo": "...en büyük misafirleri bile rahatça ağırlayacak kadar geniş.",
+   "sound": "Ağır ayak sesleri ve filin derin nefes alışları.",
+   "image_prompt_en": "Full shot, eye-level, THE ELEPHANT walks through the street, its massive body occupies the center, leaving plenty of space between its sides and the shop facades on the left and right, emphasizing the width of the path."
+  },
+  {
+   "n": 4,
+   "title": "Devasa Ölçek Vurgusu",
+   "duration_s": 4,
+   "shot": "medium",
+   "camera_move": "static",
+   "action": "Alçak açıdan çekim; filin devasa gövdesi bir dükkan girişinin hemen yanından geçerken, dükkanın boyutuyla filin büyüklüğü kıyaslanır.",
+   "onscreen_text": "STM: Sınırları zorlayan ferahlık",
+   "vo": "STM: Sınırları zorlayan ferahlık.",
+   "sound": "Güçlü bir ayak sesi ve yankılanan bir efekt.",
+   "image_prompt_en": "Low angle shot, 35mm lens, close-up on THE ELEPHANT's massive side as it passes a shop entrance, the shop's glass facade and door are visible in the foreground to show the scale comparison."
+  },
+  {
+   "n": 5,
+   "title": "Marka Kapanışı",
+   "duration_s": 3,
+   "shot": "medium",
+   "camera_move": "static",
+   "action": "Modern bir binanın üzerindeki boş bir tabela görünür; arka planda STM sokakları bulanıktır.",
+   "onscreen_text": "Sayın Gayrimenkul",
+   "vo": "",
+   "sound": "Markanın imza melodisi (jingle).",
+   "image_prompt_en": "Medium shot, eye-level, a blank sign on a modern building wall in the same commercial complex, soft daylight, out of focus street in the background."
+  }
+ ]
+}

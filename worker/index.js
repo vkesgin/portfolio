@@ -1,4 +1,9 @@
 import { parseLink, MAX_URL_LENGTH } from '../assets/js/fikir-url.mjs';
+import {
+  handleStoryboard, sbConfigPayload, sbAttachSummaries, sbStartForNewPost, sbDeleteForPost, sbScheduled, ensureStoryboardSchema,
+} from './storyboard/routes.js';
+// Cloudflare Workflows: the class named in wrangler.toml [[workflows]] class_name must be exported by the main module.
+export { StoryboardWorkflow } from './storyboard/workflow.js';
 
 const CORS = (origin) => ({
   'Access-Control-Allow-Origin':  origin || '*',
@@ -83,6 +88,24 @@ async function kpssAuth(request, env) {
   if (!token) return null;
   return verifyKpssJWT(token, env.JWT_SECRET || 'secret');
 }
+// KPSS owner account: 'vkesgin38' authenticates with the CURRENT env.ADMIN_PASSWORD only (constant-time compare,
+// inspireSafeEqual), never with the password column of its kpss_users row. Older code copied ADMIN_PASSWORD into that
+// row and later accepted the stored copy, so a rotated (leaked) password kept working. The row now holds an unusable
+// value ('!' + 2 UUIDs, as for inspire_users); this one-time, idempotent migration overwrites any older stored copy.
+const KPSS_OWNER_USERNAME = 'vkesgin38';
+let kpssOwnerMigrated = null;
+function migrateKpssOwnerPassword(env) {
+  if (!kpssOwnerMigrated) {
+    kpssOwnerMigrated = env.DB.prepare(
+      "UPDATE kpss_users SET password=? WHERE username=? AND NOT (substr(password, 1, 1) = '!' AND length(password) = 73)"
+    ).bind(inspireUnusablePassword(), KPSS_OWNER_USERNAME).run()
+      .catch((e) => { kpssOwnerMigrated = null; throw e; });
+  }
+  return kpssOwnerMigrated;
+}
+async function kpssOwnerPasswordOk(env, password) {
+  return !!env.ADMIN_PASSWORD && typeof password === 'string' && await inspireSafeEqual(password, env.ADMIN_PASSWORD);
+}
 
 // ─── INSPIRE (Fikir Havuzu) HELPERS ───
 // Tokens: HMAC-SHA256 with key JWT_SECRET + '_inspire'. New tokens are base64url(UTF-8 JSON) so Turkish
@@ -131,6 +154,8 @@ const INSPIRE_LIMITS = {
   check:    [30, 60],     // duplicate checks per cid or user / minute (may resolve short links)
   check_ip: [60, 60],
   fetch_ip: [30, 60],     // /posts/:id/meta calls that fetch a third-party page, per IP / minute
+  sb:       [30, 600],    // storyboard create / redraw / rewrite / resume / delete per cid or user / 10 min
+  sb_ip:    [60, 600],    //   (cost is capped separately by the daily sb_quota counters)
 };
 // Guest display names that would pass for the owner (compared after inspireFoldName()).
 const INSPIRE_RESERVED_NAMES = ['yonetici', 'admin', 'administrator', 'moderator', 'moderatör', 'site sahibi'];
@@ -508,6 +533,11 @@ function inspireHostOk(href) {
 }
 function inspireUnusablePassword() {
   return '!' + crypto.randomUUID() + crypto.randomUUID();
+}
+
+// Storyboard hooks inside the existing inspire handlers never fail the request they ride on.
+async function sbHook(label, fn, fallback) {
+  try { return await fn(); } catch (e) { console.error('sb ' + label, e && e.stack || e); return fallback; }
 }
 
 // ── Rate limits (D1 fixed windows; fail open if the counter itself errors) ──
@@ -890,18 +920,35 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       return fail(413, 'payload_too_large', 'İstek çok büyük');
     }
     await ensureInspireSchema(env);
+    // Storyboard tables (idempotent, memoized like the inspire schema). If this fails, the rest of the board keeps
+    // working: the storyboard hooks below fall back to "no storyboards" and the storyboard routes answer 503.
+    const sbReady = await ensureStoryboardSchema(env).then(() => true, (e) => { console.error('sb schema', e && e.message); return false; });
     const db = env.DB;
     const selfHost = new URL(request.url).hostname.toLowerCase();
     let m;
+    // Only the current board (fikir.html sends "X-Fikir-Client: 2") gets storyboard fields; old cached pages never see them.
+    const sbClient = request.headers.get('X-Fikir-Client') === '2';
+    // AI storyboards (worker/storyboard/routes.js): same JSON/CORS/error shape, actor, post select and rate limiter as below.
+    const sbDeps = {
+      db, fail, ok: (data, status = 200) => json(data, status, origin),
+      getActor: () => inspireActor(request, env), readBody: () => inspireBody(request),
+      cleanText: cleanInspireText, postSelect: INSPIRE_POST_SELECT, ownerParams: inspireOwnerParams, maxText: INSPIRE_MAX_TEXT,
+      overLimit: async (actor) => inspireOverLimit(db, [['sb', inspireActorKey(actor)], ['sb_ip', await inspireIpKey(request)]]),
+      limited,
+    };
 
     // Table init (kept for the old frontend; the migration above already ran)
     if (cleanPath === '/api/inspire/init' && method === 'GET') {
       return json({ ok: true }, 200, origin);
     }
 
-    // Feature flags / limits. Extension point for the AI storyboard phase.
+    // Feature flags / limits. `storyboard` = the storyboard creation UI may be shown to this caller;
+    // `sb` carries the limits and (with a session) today's remaining quota. Auth is optional here and an
+    // invalid token is ignored (never 401).
     if (cleanPath === '/api/inspire/config' && method === 'GET') {
-      return json({ storyboard: false, max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT }, 200, origin);
+      const actor = await inspireActor(request, env);
+      const sb = sbReady ? await sbHook('config', () => sbConfigPayload(env, db, actor), null) : null;
+      return json({ storyboard: !!(sb && sb.can_create), max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT, sb }, 200, origin);
     }
 
     // Guest session: a name (or nothing = Anonim) + a client-generated id. No password.
@@ -990,7 +1037,11 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
         notesByPost.get(n.post_id).push(inspireNoteOut(n, isAdmin));
       }
       let out = rows.map((r) => inspirePostOut(r, isAdmin, notesByPost.get(r.id)));
-      if (request.headers.get('X-Fikir-Client') !== '2') out = out.map((p) => inspireLegacyPost(p, actor));
+      if (sbClient) {   // text posts: `storyboard` = summary of the latest version, or null
+        if (!sbReady || !(await sbHook('summaries', () => sbAttachSummaries(env, db, out), null))) {
+          for (const p of out) if (p.type === 'text') p.storyboard = null;
+        }
+      } else out = out.map((p) => inspireLegacyPost(p, actor));
       const res = json(out, 200, origin);
       if (more) {
         res.headers.set('X-Fikir-Next', String(rows[rows.length - 1].id));
@@ -1032,7 +1083,7 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
         if (!text) return fail(400, 'empty_text', 'Fikir metni boş olamaz');
         if (text.length > INSPIRE_MAX_TEXT) return fail(400, 'text_too_long', `Fikir metni en fazla ${INSPIRE_MAX_TEXT} karakter olabilir`);
         type = 'text'; storedUrl = ''; description = text;
-        // AI storyboard phase: generate here (or in ctx.waitUntil) when config.storyboard is enabled.
+        // An optional `storyboard` object starts an AI storyboard after the insert (see below).
       } else {
         const raw = typeof d.url === 'string' ? d.url.trim() : '';
         if (!raw) return fail(400, 'url_required', 'Link gerekli');
@@ -1070,7 +1121,19 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
         ctx.waitUntil(inspireStoreMeta(db, id, parsed.canonical, selfHost).catch(() => {}));
       }
       const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
-      return json(inspirePostOut(row, actor.isAdmin, []), 201, origin);
+      // Text ideas (current board only) always carry a `storyboard` key; starting one never fails the post itself.
+      let sbExtra = type === 'text' && sbClient ? { storyboard: null } : {};
+      if (type === 'text' && sbClient && d.storyboard && typeof d.storyboard === 'object' && !Array.isArray(d.storyboard)) {
+        try {
+          if (!sbReady) throw new Error('storyboard schema unavailable');
+          sbExtra = await sbStartForNewPost(env, ctx, sbDeps, request, actor, id, d.storyboard);
+        }
+        catch (e) {
+          console.error('sb start (new post)', id, e && e.stack || e);
+          sbExtra = { storyboard: null, storyboard_error: { error: 'sb_unavailable', message: 'Storyboard başlatılamadı. Karttaki düğmeyle tekrar dene.' } };
+        }
+      }
+      return json({ ...inspirePostOut(row, actor.isAdmin, []), ...sbExtra }, 201, origin);
     }
 
     // Fetch + store preview metadata for an existing post whose meta is still empty (idempotent).
@@ -1135,10 +1198,14 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
       if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
       if (!(siteAdmin || actor.isAdmin || row.is_mine)) return fail(403, 'forbidden', 'Bu fikri silme yetkin yok');
+      // Its storyboards go in the same batch; Workflow instances + R2 objects are cleaned up after it succeeded.
+      const sbDel = sbReady ? await sbHook('delete', () => sbDeleteForPost(env, db, id), null) : null;   // null: the cron sweeps orphans
       await db.batch([
+        ...(sbDel ? sbDel.stmts : []),
         db.prepare('DELETE FROM inspire_notes WHERE post_id=?').bind(id),
         db.prepare('DELETE FROM inspire_posts WHERE id=?').bind(id),
       ]);
+      if (sbDel && ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(sbDel.cleanup().catch((e) => console.error('sb cleanup', e && e.message)));
       return json({ ok: true }, 200, origin);
     }
 
@@ -1164,6 +1231,14 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       await db.prepare('UPDATE inspire_notes SET content=?, is_public=COALESCE(?, is_public) WHERE id=?').bind(content, isPublic, id).run();
       const updated = await db.prepare(`${INSPIRE_NOTE_SELECT} WHERE n.id = ?3`).bind(cid, uid, id).first();
       return json(inspireNoteOut(updated, actor.isAdmin), 200, origin);
+    }
+
+    // AI storyboards (worker/storyboard/routes.js): /posts/:id/storyboards, /storyboards/:sbId[/…], /sb-admin/usage
+    if (sbReady) {
+      const sbRes = await handleStoryboard(request, env, ctx, cleanPath, method, sbDeps);
+      if (sbRes) return sbRes;
+    } else if (/^\/api\/inspire\/(?:storyboards\/|sb-admin\/|posts\/\d{1,15}\/storyboards$)/.test(cleanPath)) {
+      return fail(503, 'sb_unavailable', 'Storyboard servisi şu an kullanılamıyor. Biraz sonra tekrar dene.');
     }
 
     return fail(404, 'not_found', 'Bulunamadı');
@@ -1212,6 +1287,10 @@ async function uiAuth(request, env) {
 }
 
 export default {
+  // Cron (wrangler.toml [triggers]): reconcile stuck storyboard jobs, sweep orphans, prune old quota/ledger rows.
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(sbScheduled(env).catch((e) => console.error('sb cron', e && e.stack || e)));
+  },
   async fetch(request, env, ctx) {
     const url    = new URL(request.url);
     const path   = url.pathname;
@@ -1367,21 +1446,30 @@ if (path.startsWith('/api/kpss')) {
   if (path === '/api/kpss/login' && method === 'POST') {
     const { username, password } = await request.json().catch(() => ({}));
     if (!username || !password) return json({ error: 'Kullanıcı adı ve şifre gereklidir' }, 401, origin);
-    
-    if (username === 'vkesgin38' && password === env.ADMIN_PASSWORD) {
-       const oldAdmin = await env.DB.prepare("SELECT * FROM kpss_users WHERE username='admin'").first();
-       if (oldAdmin) {
-          await env.DB.prepare("UPDATE kpss_users SET username='vkesgin38', full_name='Veli Kesgin', password=? WHERE username='admin'").bind(password).run();
-       } else {
-          const exists = await env.DB.prepare("SELECT * FROM kpss_users WHERE username='vkesgin38'").first();
-          if (!exists) {
-            const todayDate = new Date().toISOString().split('T')[0];
-            await env.DB.prepare("INSERT INTO kpss_users (username,password,full_name,exam_name,exam_date) VALUES ('vkesgin38',?,'Veli Kesgin','KPSS',?)").bind(password, todayDate).run();
-          }
-       }
+    // Defense in depth (the owner branch below never reads the stored password); a failure is retried next time.
+    await migrateKpssOwnerPassword(env).catch((e) => console.error('kpss owner migration', e && e.message));
+
+    let user = null;
+    if (username === KPSS_OWNER_USERNAME) {
+      // Owner: current ADMIN_PASSWORD only (401 when it is not set); the password is never written into the row.
+      if (!(await kpssOwnerPasswordOk(env, password))) return json({ error: 'Hatalı kullanıcı adı veya şifre' }, 401, origin);
+      user = await env.DB.prepare('SELECT * FROM kpss_users WHERE username=?').bind(KPSS_OWNER_USERNAME).first();
+      if (!user) {
+        // First owner login: take over the legacy 'admin' row, or create the owner row, with an unusable password.
+        const oldAdmin = await env.DB.prepare("SELECT id FROM kpss_users WHERE username='admin'").first();
+        if (oldAdmin) {
+          await env.DB.prepare("UPDATE kpss_users SET username=?, full_name='Veli Kesgin', password=? WHERE username='admin'")
+            .bind(KPSS_OWNER_USERNAME, inspireUnusablePassword()).run();
+        } else {
+          const todayDate = new Date().toISOString().split('T')[0];
+          await env.DB.prepare("INSERT INTO kpss_users (username,password,full_name,exam_name,exam_date) VALUES (?,?,'Veli Kesgin','KPSS',?)")
+            .bind(KPSS_OWNER_USERNAME, inspireUnusablePassword(), todayDate).run();
+        }
+        user = await env.DB.prepare('SELECT * FROM kpss_users WHERE username=?').bind(KPSS_OWNER_USERNAME).first();
+      }
+    } else {
+      user = await env.DB.prepare("SELECT * FROM kpss_users WHERE username=? AND password=?").bind(username, password).first();
     }
-    
-    let user = await env.DB.prepare("SELECT * FROM kpss_users WHERE username=? AND password=?").bind(username, password).first();
     if (!user) return json({ error: 'Hatalı kullanıcı adı veya şifre' }, 401, origin);
 
     if (user.username === 'vkesgin38' && user.full_name === 'Admin') {
@@ -1561,7 +1649,10 @@ if (path.startsWith('/api/kpss')) {
 
   if (path === '/api/kpss/user' && method === 'DELETE') {
     const { password } = await request.json();
-    const user = await env.DB.prepare('SELECT * FROM kpss_users WHERE id=? AND password=?').bind(uid, password).first();
+    // The owner's row holds no usable password (see migrateKpssOwnerPassword): confirm with the current ADMIN_PASSWORD.
+    const user = kpssUser.username === KPSS_OWNER_USERNAME
+      ? ((await kpssOwnerPasswordOk(env, password)) ? await env.DB.prepare('SELECT * FROM kpss_users WHERE id=? AND username=?').bind(uid, KPSS_OWNER_USERNAME).first() : null)
+      : await env.DB.prepare('SELECT * FROM kpss_users WHERE id=? AND password=?').bind(uid, password).first();
     if (!user) return json({ error: 'Hatalı şifre' }, 401, origin);
     await env.DB.prepare('DELETE FROM kpss_daily_plans WHERE user_id=?').bind(uid).run();
     await env.DB.prepare('DELETE FROM kpss_teachers WHERE user_id=?').bind(uid).run();

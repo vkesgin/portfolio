@@ -26,7 +26,7 @@ export const STORYBOARD_SCHEMA_V6 = {
     logline: str,
     core_message: str,
     interpretations: {
-      type: "array", minItems: 1, maxItems: 6,
+      type: "array", minItems: 0, maxItems: 6,   // [] is valid: an idea without brand, place or acronym has nothing to read
       items: {
         type: "object", additionalProperties: false,
         required: ["name", "meaning", "confidence"],
@@ -39,8 +39,10 @@ export const STORYBOARD_SCHEMA_V6 = {
       type: "array", maxItems: 4,
       items: {
         type: "object", additionalProperties: false,
-        required: ["name", "look"],
-        properties: { name: nonEmpty, look: nonEmpty }, // name: "THE ELEPHANT" (normalised in code)
+        required: ["name", "name_tr", "look"],
+        // name: "THE ELEPHANT" (canonical id, normalised in code); name_tr: "fil" (Turkish display name; coerceDraft derives it
+        // for drafts that have none, so stored pre-name_tr drafts stay valid)
+        properties: { name: nonEmpty, name_tr: nonEmpty, look: nonEmpty },
       },
     },
     anchor_prompt_en: nonEmpty,

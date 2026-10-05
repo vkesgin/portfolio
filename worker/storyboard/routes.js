@@ -12,6 +12,7 @@ import {
 } from "./db.js";
 import { TEXT_MODEL } from "./prompt.v6.js";
 import { IMG_MODEL } from "./images.js";
+import { localizeCharNames } from "./postprocess.js";
 
 export { ensureStoryboardSchema };
 
@@ -223,6 +224,7 @@ async function loadFull(env, deps, sbId, actor, debug) {
   const admin = !!(actor && actor.isAdmin);
   const owner = !!(actor && post && (post.is_mine || admin));
   const draft = sb.draft_json ? JSON.parse(sb.draft_json) : null;
+  if (draft) localizeCharNames(draft);   // drafts stored before the lint replaced English character ids ("THE COMMUTER aniden durur")
   const research = sb.research_json ? JSON.parse(sb.research_json) : null;
   const input = JSON.parse(sb.input_json);
   const imgs = new Map((b.results || []).map((r) => [r.n, r]));

@@ -391,6 +391,11 @@
     }
     .modal-overlay.active { opacity: 1; }
     #confirm-modal { z-index: 1100; }
+    /* GTranslate flag widget (fixed bottom-left, z-index 999999): it covered the storyboard viewer on phones. Hidden while
+       any dialog is open (html.modal-open, set by openModal/closeModal; :has() as a fallback) and in print. */
+    html.modal-open .gtranslate_wrapper, html.sb-print .gtranslate_wrapper { display: none !important; }
+    body:has(.modal-overlay:not([hidden])) .gtranslate_wrapper { display: none !important; }   /* separate rule: an old engine drops only this one */
+    @media print { .gtranslate_wrapper { display: none !important; } }
     .modal-content {
       background: var(--card-bg);
       border: 1px solid var(--border);
@@ -890,6 +895,7 @@
     function openModal(el, focusEl) {
       if (modalStack.some((m) => m.el === el)) return;
       modalStack.push({ el, restore: document.activeElement });
+      document.documentElement.classList.add('modal-open');
       el.hidden = false;
       requestAnimationFrame(() => el.classList.add('active'));
       if (focusEl) setTimeout(() => focusEl.focus({ preventScroll: true }), 30);
@@ -898,6 +904,7 @@
       const i = modalStack.findIndex((m) => m.el === el);
       if (i < 0) return;
       const [{ restore }] = modalStack.splice(i, 1);
+      document.documentElement.classList.toggle('modal-open', modalStack.length > 0);
       el.classList.remove('active');
       el.hidden = true;
       if (restore && restore.isConnected && typeof restore.focus === 'function') restore.focus({ preventScroll: true });

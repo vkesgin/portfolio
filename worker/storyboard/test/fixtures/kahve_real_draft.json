@@ -1,0 +1,108 @@
+{
+ "title": "Kahve Kokusuyla Gelen Akın",
+ "logline": "Sabah işe yetişmeye çalışan şehirli insanlar, büyüleyici bir kahve kokusunun peşinden sürüklenerek yeni açılan dükkana girer.",
+ "core_message": "Bu kahvenin kokusu bile insanları durdurmaya ve rotalarını değiştirmeye yetiyor.",
+ "interpretations": [
+  {
+   "name": "[MARKA ADI]",
+   "meaning": "Reklamda ismi henüz belirtilmemiş olan kahve markası.",
+   "confidence": "high"
+  }
+ ],
+ "assumptions": [
+  "Dükkanın modern, minimalist ve davetkar bir tasarımı olduğu varsayılmıştır.",
+  "Karakterler sabah saatlerinde işe giden, şık ama günlük kıyafetli şehirli profesyonellerdir.",
+  "Mekan, sabah güneşinin yeni doğduğu, temiz ve modern bir şehir sokağıdır."
+ ],
+ "location_en": "A modern urban sidewalk at sunrise, featuring a minimalist coffee shop with large glass windows and a clean stone facade. The sidewalk is wide, made of grey granite. Soft, golden morning light filters through the city buildings, creating long, soft shadows.",
+ "characters_en": [
+  {
+   "name": "THE COMMUTER",
+   "look": "A man in his 30s, wearing a sharp navy blue blazer, a crisp white shirt, and dark trousers, carrying a brown leather briefcase."
+  },
+  {
+   "name": "THE OFFICE WORKER",
+   "look": "A woman in her late 20s, wearing a stylish beige trench coat, professional dark trousers, and carrying a black laptop bag."
+  }
+ ],
+ "anchor_prompt_en": "A wide, eye-level view of the modern coffee shop storefront on a sunlit city street, with THE COMMUTER walking past on the sidewalk in a neutral pose.",
+ "aspect_ratio": "9:16",
+ "scenes": [
+  {
+   "n": 1,
+   "title": "Sabah Telaşı",
+   "duration_s": 4,
+   "shot": "wide",
+   "camera_move": "tracking",
+   "characters": [
+    "THE COMMUTER",
+    "THE OFFICE WORKER"
+   ],
+   "action": "Sabahın erken saatlerinde, insanlar hızlı adımlarla işe yetişmeye çalışarak kaldırımda yürürler.",
+   "onscreen_text": "",
+   "vo": "Sabahın o hızlı telaşı içinde büyüleyici bir koku sizi durdurabilir.",
+   "sound": "Şehir gürültüsü, hızlı ayak sesleri, hafif bir sabah ambiyansı.",
+   "image_prompt_en": "Wide shot, 24mm lens. THE COMMUTER and THE OFFICE WORKER walking briskly on the grey granite sidewalk past the modern coffee shop. Morning sunlight and long shadows on the street."
+  },
+  {
+   "n": 2,
+   "title": "Büyüleyici Koku",
+   "duration_s": 4,
+   "shot": "close_up",
+   "camera_move": "static",
+   "characters": [
+    "THE COMMUTER"
+   ],
+   "action": "THE COMMUTER aniden durur, burnunu hafifçe havaya kaldırarak derin bir nefes alır ve kokuyu içine çeker.",
+   "onscreen_text": "",
+   "vo": "",
+   "sound": "Hafif bir rüzgar esintisi, yumuşak bir 'whoosh' efekti.",
+   "image_prompt_en": "Close-up, 85mm lens. THE COMMUTER stops walking and tilts his head up slightly, eyes closing momentarily as he inhales deeply with a pleasant expression."
+  },
+  {
+   "n": 3,
+   "title": "Ortak Tepki",
+   "duration_s": 4,
+   "shot": "medium",
+   "camera_move": "pan",
+   "characters": [
+    "THE COMMUTER",
+    "THE OFFICE WORKER"
+   ],
+   "action": "THE COMMUTER ve THE OFFICE WORKER aynı anda durup, kokunun geldiği yöne, yani dükkana doğru dönerler.",
+   "onscreen_text": "",
+   "vo": "Herkesin rotasını değiştiren o an.",
+   "sound": "Merak uyandırıcı, hafif ve ritmik bir müzik girişi.",
+   "image_prompt_en": "Medium shot, 35mm lens. THE COMMUTER and THE OFFICE WORKER standing on the sidewalk, both turning their bodies in unison towards the coffee shop entrance, looking intrigued."
+  },
+  {
+   "n": 4,
+   "title": "Dükkana Akın",
+   "duration_s": 5,
+   "shot": "wide",
+   "camera_move": "dolly_in",
+   "characters": [
+    "THE COMMUTER",
+    "THE OFFICE WORKER"
+   ],
+   "action": "İnsanlar, grubun öncülüğünde dükkanın kapısına doğru çekilirler.",
+   "onscreen_text": "Yeni Favoriniz",
+   "vo": "Yeni kahve durağınız açıldı.",
+   "sound": "Neşeli ve davetkar bir müzik, dükkan kapısının açılma sesi.",
+   "image_prompt_en": "Wide shot, 24mm lens. THE COMMUTER and THE OFFICE WORKER walking towards the entrance of the modern coffee shop, following the flow of people."
+  },
+  {
+   "n": 5,
+   "title": "Marka Kapanış",
+   "duration_s": 4,
+   "shot": "medium",
+   "camera_move": "static",
+   "characters": [],
+   "action": "Dükkanın önündeki modern ve boş tabela görünür.",
+   "onscreen_text": "[MARKA ADI]",
+   "vo": "",
+   "sound": "Markanın imza melodisi.",
+   "image_prompt_en": "Medium shot, 50mm lens. A blank shop fascia/sign hanging above the entrance of the modern coffee shop, with the sunlit street in the background."
+  }
+ ]
+}

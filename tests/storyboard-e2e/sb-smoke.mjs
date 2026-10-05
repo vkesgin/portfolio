@@ -172,6 +172,8 @@ if (MODE === "main") {
   w = await waitSb(sb4, ADM);
   r = await call("GET", `/api/inspire/storyboards/${sb4}?debug=1`, null, ADM);
   assert.ok(r.data.debug && r.data.debug.plan && r.data.draft.scenes[0].image_prompt_en);
+  assert.equal(r.data.draft.characters_en[0].name_tr, "fil", "Turkish display name stored with the character");
+  assert.ok(r.data.debug.plan.jobs.find((j) => j.kind === "char").prompt.includes("neutral three-quarter view"));
   r = await call("GET", "/api/inspire/sb-admin/usage", null, ADM);
   assert.equal(r.status, 200); assert.ok(r.data.quota.find((q) => q.scope === "sb").n >= 4);
   // capacity guard: every job has ended and fake AI ledgers 0 neurons, so all reservations were released

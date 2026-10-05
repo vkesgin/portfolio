@@ -1,6 +1,7 @@
 // postprocess.js: deterministic parse / coerce / validate / lint for the storyboard draft (no model call, no Node APIs).
 import { STORYBOARD_SCHEMA_V6, validate, SHOTS, MOVES, ASPECTS, CONFIDENCE } from "./schema.v6.js";
-import { trLower, trUpper, fold, escapeRe, extractEntities } from "./research.js";
+import { trLower, trUpper, fold, escapeRe, extractEntities, cleanName } from "./research.js";
+import { defaultNameTr, normNameTr, isProperTr, capFirst, attachSuffix } from "./trtext.js";
 import { SYSTEM_PROMPT_V6, buildUserMessageV6, TEXT_MODEL, TEXT_PARAMS, TEXT_RATES, SCENE_SYSTEM_V6, SCENE_PARAMS, buildSceneMessageV6 } from "./prompt.v6.js";
 
 // Pipeline-owned style sentence (the text model must not own the drawing style).
@@ -82,7 +83,10 @@ export function mentions(text, name, loose = false) {
   if (!loose) return new RegExp(`(?<![A-Za-z])${escapeRe(name).replace(/\s+/g, "\\s+")}(?![A-Za-z])`).test(String(text || ""));
   return new RegExp(`(?<![A-Za-z])${escapeRe(nounOf(name)).replace(/\s+/g, "\\s+")}(?:e?s)?(?![A-Za-z])`, "i").test(String(text || ""));
 }
-function resolveName(raw, known) {
+// trNames: { "THE COMMUTER": "yolcu" } - a scene may list the Turkish display name instead of the canonical one.
+function resolveName(raw, known, trNames = {}) {
+  const byTr = Object.keys(trNames).find((k) => fold(trNames[k]) === fold(String(raw ?? "").trim()));
+  if (byTr) return byTr;
   const n = normCharName(raw);
   if (!n) return null;
   if (known.includes(n)) return n;
@@ -123,7 +127,17 @@ export function coerceDraft(obj, { context = "" } = {}) {
   if (/dikey|reels|story|stories|tiktok|shorts|9:16/i.test(String(context)) && obj.aspect_ratio !== "9:16") { fixes.push(`aspect_ratio ${obj.aspect_ratio}->9:16 (context says vertical)`); obj.aspect_ratio = "9:16"; }
   if (typeof obj.assumptions === "string") { obj.assumptions = [obj.assumptions]; fixes.push("assumptions str->[str]"); }
   if (Array.isArray(obj.assumptions) && obj.assumptions.length > 6) { obj.assumptions = obj.assumptions.slice(0, 6); fixes.push("assumptions cut to 6"); }
+  // zero readings are valid (an idea without brand, place or acronym); a missing key or a junk item never costs a repair call
+  if (obj.interpretations == null) { obj.interpretations = []; fixes.push("interpretations missing -> []"); }
   if (obj.interpretations && !Array.isArray(obj.interpretations)) { obj.interpretations = [obj.interpretations]; fixes.push("interpretations obj->[obj]"); }
+  if (Array.isArray(obj.interpretations)) {
+    const n0 = obj.interpretations.length;
+    obj.interpretations = obj.interpretations.filter((it) => it && typeof it === "object" && typeof it.name === "string" && it.name.trim());
+    if (obj.interpretations.length < n0) fixes.push(`interpretations: dropped ${n0 - obj.interpretations.length} item(s) without a name`);
+    for (const it of obj.interpretations) if (typeof it.meaning !== "string") it.meaning = it.meaning == null ? "" : String(it.meaning);
+    if (obj.interpretations.length > 6) { obj.interpretations = obj.interpretations.slice(0, 6); fixes.push("interpretations cut to 6"); }
+  }
+  if (obj.assumptions == null) { obj.assumptions = []; fixes.push("assumptions missing -> []"); }
   for (const it of obj.interpretations || []) if (it && it.confidence != null && !CONFIDENCE.includes(it.confidence)) { const c = coerceConfidence(it.confidence); fixes.push(`confidence ${it.confidence}->${c}`); it.confidence = c; }
 
   if (obj.characters_en == null) { obj.characters_en = []; fixes.push("characters_en missing -> []"); }
@@ -133,10 +147,21 @@ export function coerceDraft(obj, { context = "" } = {}) {
       const name = normCharName(c.name);
       if (name !== c.name) fixes.push(`character name ${c.name}->${name}`);
       const look = typeof c.look === "string" && c.look.trim() ? c.look.trim() : nounOf(name).toLowerCase();
-      return { name, look };
+      // name_tr: Turkish display name used in every Turkish field (older drafts have none -> derived from the English noun)
+      const rawTr = c.name_tr ?? c.nameTr ?? c.tr_name ?? c.turkish_name ?? c.name_turkish ?? c.ad;
+      const name_tr = normNameTr(rawTr, name, look);
+      if (rawTr == null) fixes.push(`${name}.name_tr missing -> "${name_tr}"`);
+      else if (name_tr !== rawTr) fixes.push(`${name}.name_tr "${rawTr}"->"${name_tr}"`);
+      return { name, name_tr, look };
     }).filter((c) => !seen.has(c.name) && seen.add(c.name)).slice(0, 4);
+    const used = new Set();   // two characters never share a Turkish name ("yolcu", "diğer yolcu")
+    for (const c of obj.characters_en) {
+      if (used.has(fold(c.name_tr))) { const t = `diğer ${trLower(c.name_tr)}`; fixes.push(`${c.name}.name_tr "${c.name_tr}"->"${t}" (duplicate)`); c.name_tr = t; }
+      used.add(fold(c.name_tr));
+    }
   }
   const known = (obj.characters_en || []).map((c) => c.name);
+  const trNames = Object.fromEntries((obj.characters_en || []).map((c) => [c.name, c.name_tr]));
 
   if (Array.isArray(obj.scenes)) obj.scenes.forEach((sc, i) => {
     if (!sc || typeof sc !== "object") return;
@@ -154,7 +179,7 @@ export function coerceDraft(obj, { context = "" } = {}) {
     }
     const out = [];
     for (const raw of list) {
-      const r = resolveName(raw, known);
+      const r = resolveName(raw, known, trNames);
       if (r) { if (!out.includes(r)) out.push(r); if (r !== raw) fixes.push(`scenes[${i}].characters ${raw}->${r}`); }
       else fixes.push(`scenes[${i}].characters dropped unknown "${raw}"`);
     }
@@ -252,12 +277,100 @@ export function sanitizeImagePrompt(p, tokens = []) {
   }
   s = splitSentences(s).filter((x) => !LIGHT_SENTENCE_RE.test(x)).join(" ");   // "The lighting is bright and professional."
   s = s.replace(new RegExp(`,\\s*(?=${REALISM_RE.source})`, "gi"), " ").replace(REALISM_RE, "");
+  s = stripColorWords(s);
   return s.replace(/\(\s*\)/g, "").replace(/\s{2,}/g, " ").replace(/\s+([,.;:'’])/g, "$1").replace(/([,;:])\1+/g, "$1")
     .replace(/\b(the|a|an) (?=[,.;:])/gi, "").replace(/\bthe the\b/gi, "the").replace(/,\s*\./g, ".").trim();
 }
 
+// ------------------------------------------------------------------ 6b. colour words in image prompt parts
+// klein copies hues from the prompt (real run: "navy blue blazer", "brown leather briefcase", "golden morning light" ->
+// golden tint on every frame). Every model-written image part loses chromatic colour words and colour temperature;
+// light/dark values stay ("navy blue blazer" -> "dark blazer", "beige coat" -> "light coat", "light gray", "white shirt").
+const wordSet = (s) => new Set(s.trim().split(/\s+/));
+const C_DARK = wordSet("navy maroon burgundy brown indigo oxblood umber auburn");
+const C_LIGHT = wordSet("beige khaki blond blonde ecru");
+const C_PLAIN = wordSet(`red blue green yellow purple violet pink teal turquoise cyan magenta crimson scarlet azure cobalt ochre
+  chartreuse fuchsia cerulean vermilion golden sepia mauve aqua aquamarine tawny neon rosy rusty reddish bluish greenish
+  yellowish brownish pinkish purplish orangey orangish goldish`);
+// also everyday nouns (fruit, metal, drink): a colour only in adjective position ("gold watch", "olive green"), never "an orange on the table"
+const C_AMBIG = wordSet("orange lime olive mint rose cherry plum wine salmon coral peach copper bronze rust ginger gold emerald ruby sapphire amber lavender lilac mustard mahogany chestnut cream ivory platinum");
+const AMBIG_DARK = wordSet("mahogany chestnut"), AMBIG_LIGHT = wordSet("cream ivory platinum");
+const C_MODS = wordSet("light pale dark deep bright vivid vibrant soft muted warm cool rich pastel neon dusty burnt hot electric sky royal baby navy forest bottle blood cherry lemon lime olive mint sea ocean midnight powder steel ice icy");
+const MOD_DARK = wordSet("dark deep midnight navy forest bottle blood burnt");
+const MOD_LIGHT = wordSet("light pale pastel powder baby ice icy");
+const C_SUFX = wordSet("colored coloured toned tinted hued");
+const NOT_ADJ_NEXT = wordSet(`and or on in at of with is are was were to from by for the a an near under over behind beside next into onto
+  juice juices tree trees peel slice slices grove groves blossom blossoms oil leaf leaves bush bushes petal petals garden gardens
+  fillet glass glasses bottle bottles barrel barrels cellar bar bars medal medals mine`);
+const isColor = (w) => C_DARK.has(w) || C_LIGHT.has(w) || C_PLAIN.has(w);
+export function stripColorWords(text) {
+  let T = String(text || "");
+  if (!T.trim()) return T.trim();
+  const X = "\u0001";   // removed span; "\u0002" marks an inserted tonal word (article fix)
+  T = T.replace(/\bgolden[\s-]+hour(?:[\s-]+(?:light|lighting|sunlight|glow))?/gi, (m) => (/^G/.test(m) ? "Low sun" : "low sun"))
+    .replace(/#[0-9a-f]{3,8}\b/gi, X).replace(/\b(?:rgba?|hsla?|cmyk)\s*\([^)]*\)/gi, X).replace(/\bpantone\s+[\w-]+/gi, X)
+    .replace(/\b(?:warm|cool|cold)(?:[\s-]+(?:toned|tinted|hued))?(?=[\s-]+(?:(?:morning|evening|afternoon|ambient|soft|natural|diffused|street|window|interior|indoor)\s+)?(?:light|lighting|lights|glow|sunlight|daylight|lamplight)\b)/gi, X)
+    .replace(/\b(?:warm|cool|cold|earth|earthy|golden|pastel|muted|neutral|sunset|autumn|autumnal|jewel|vivid|vibrant|bright|bold|rich|natural|candy|neon)[\s-]+(?:tones?|hues?|colou?rs?|palette|shades|tints?|cast)\b/gi, X)
+    .replace(/\b(?:warm|cool)[\s-]+(?:toned|tinted)\b/gi, X)
+    .replace(/\b(?:sepia(?:[\s-]+toned)?|tinted|tints?|duotone|technicolou?r|polychrome|multi-?colou?red|rainbow-colou?red|(?:brightly|richly|vividly)[\s-]+colou?red|colou?r[\s-]+(?:grad(?:ed|ing)|temperature|palette|scheme|accents?|splash(?:es)?|pops?))\b/gi, X);
+  const toks = [...T.matchAll(/[A-Za-z]+/g)].map((m) => ({ w: m[0], lw: m[0].toLowerCase(), s: m.index, e: m.index + m[0].length }));
+  // modifiers join only by a space or hyphen ("navy blue"); colours may also be listed ("red, blue and green")
+  const gapOk = (a, b, list) => /^[\s-]*$/.test(T.slice(a.e, b.s)) || (list && /^\s*[,&/]\s*$/.test(T.slice(a.e, b.s)));
+  const ambigIsColor = (k) => {
+    const nx = toks[k + 1], pv = toks[k - 1];
+    if (!nx || !/^[\s-]+$/.test(T.slice(toks[k].e, nx.s)) || (pv && pv.lw === "of")) return false;
+    if (C_SUFX.has(nx.lw) || isColor(nx.lw)) return true;
+    if ((nx.lw === "and" || nx.lw === "or") && toks[k + 2] && isColor(toks[k + 2].lw)) return true;
+    return !NOT_ADJ_NEXT.has(nx.lw);
+  };
+  const edits = [];
+  for (let i = 0; i < toks.length;) {
+    const mods = [], cols = [];
+    let k = i, last = -1;
+    for (; k < toks.length; k++) {
+      const x = toks[k];
+      if (k > i && !gapOk(toks[k - 1], x, cols.length > 0)) break;
+      if (isColor(x.lw) || (C_AMBIG.has(x.lw) && (mods.length || cols.length || ambigIsColor(k)))) { cols.push(x.lw); last = k; continue; }
+      if (C_MODS.has(x.lw) && !cols.length) { mods.push(x.lw); continue; }
+      if ((x.lw === "and" || x.lw === "or") && cols.length) continue;
+      if (C_SUFX.has(x.lw) && last === k - 1) { last = k; continue; }
+      break;
+    }
+    if (last < 0) { i++; continue; }
+    const tone = mods.some((m) => MOD_DARK.has(m)) ? "dark" : mods.some((m) => MOD_LIGHT.has(m)) ? "light"
+      : C_DARK.has(cols[0]) || AMBIG_DARK.has(cols[0]) ? "dark" : C_LIGHT.has(cols[0]) || AMBIG_LIGHT.has(cols[0]) ? "light" : "";
+    const cap = /^[A-Z]/.test(toks[i].w);
+    edits.push({ s: toks[i].s, e: toks[last].e, repl: tone ? "\u0002" + (cap ? tone[0].toUpperCase() + tone.slice(1) : tone) : X });
+    i = last + 1;
+  }
+  for (const ed of edits.reverse()) T = T.slice(0, ed.s) + ed.repl + T.slice(ed.e);
+  return T
+    .replace(/(^|[,;(]\s*|\b(?:a|an|the|with|in|and)\s+)\u0001+\s+(?:and|or|&)\s+/gi, "$1")                // "a red and white sign" -> "a white sign"
+    .replace(/\s*\b(?:in|with|of|and|or|under|at|wearing)\s*\u0001+\s*(?=[,.;:!?)]|$|(?:on|in|at|of|over|under|near|by|and)\b)/gi, " ") // "dressed in red." -> "dressed."
+    .replace(/\b(an?)\s+\u0002/gi, (m, a) => (a[0] === "A" ? "A " : "a "))                                  // "an indigo coat" -> "a dark coat"
+    .replace(/\b(an?)(\s+)(?:\u0001[\s,-]*)+(?=[A-Za-z])/g, (m, a, sp, off, str) => {                          // "an amber lamp" -> "a lamp"
+      const nx = str.slice(off + m.length, off + m.length + 1);
+      return (/[aeiou]/i.test(nx) ? (a[0] === "A" ? "An" : "an") : (a[0] === "A" ? "A" : "a")) + " ";
+    })
+    .replace(/(^|[.!?]\s+)\u0001+[\s,-]*(\p{Ll})/gu, (m, a, c) => a + c.toUpperCase())                        // "Golden light ..." -> "Light ..."
+    .replace(/\u0001+[\s-]*/g, " ").replace(/\u0002/g, "")
+    .replace(/\s{2,}/g, " ").replace(/\s+([,.;:!?)])/g, "$1").replace(/\(\s+/g, "(").replace(/([,;:])(?:\s*[,;:])+/g, "$1")
+    .replace(/^\s*[,;:]\s*/, "").replace(/,\s*\./g, ".").replace(/\(\s*\)/g, "").replace(/\s{2,}/g, " ").trim();
+}
+
 // ------------------------------------------------------------------ 7. VO merge ("Öyle bir ferahlık ki..." + "...en büyük ...")
-export function mergeSplitVO(scenes) {
+// protect: proper nouns / acronyms (brand, place, names from the idea); everything else starting the joined half is
+// Turkish-lowercased ("Öyle ki..." + "Her adımda ..." -> "Öyle ki her adımda ...").
+export function lowerJoinStart(text, protect = []) {
+  const m = String(text).match(/^(\p{Lu})(\p{L}*)/u);
+  if (!m) return text;
+  const w = m[0];
+  if (w.length >= 2 && w === trUpper(w)) return text;                                    // acronym / all caps
+  const words = new Set(protect.filter(Boolean).flatMap((p) => String(p).split(/[\s'’]+/)).filter((x) => /^\p{Lu}/u.test(x)));
+  if (words.has(w)) return text;
+  return trLower(m[1]) + String(text).slice(1);
+}
+export function mergeSplitVO(scenes, protect = []) {
   const fixes = [];
   const open = (v) => /(\.\.\.|…)\s*$/.test(v);
   const cont = (v) => /^(\.\.\.|…)/.test(v);
@@ -269,12 +382,105 @@ export function mergeSplitVO(scenes) {
     while (j < scenes.length) {
       const av = String(a.vo || "").trim(), bv = String(scenes[j].vo || "").trim();
       if (!av || !bv || !(open(av) || cont(bv) || (comma(av) && lowerStart(bv.replace(/^(\.\.\.|…)\s*/, ""))))) break;
-      a.vo = `${av.replace(/(\.\.\.|…|[,;])\s*$/, "")} ${bv.replace(/^(\.\.\.|…)\s*/, "")}`.replace(/\s{2,}/g, " ");
+      a.vo = `${av.replace(/(\.\.\.|…|[,;])\s*$/, "")} ${lowerJoinStart(bv.replace(/^(\.\.\.|…)\s*/, ""), protect)}`.replace(/\s{2,}/g, " ");
       scenes[j].vo = "";
       fixes.push(`scene ${a.n}+${scenes[j].n} vo: split sentence merged into scene ${a.n}`);
       j++;
     }
   }
+  return fixes;
+}
+
+// ------------------------------------------------------------------ 7b. bracket placeholders ("[MARKA ADI]", "[X m]")
+// A placeholder never reaches the client: a brand placeholder becomes the brand the client gave; anything else drops its
+// line (the sentence, the on-screen text, the assumption or the reading). Brackets around ordinary words are unwrapped.
+const PH_RE = /\[\s*([^[\]\n]{1,40}?)\s*\](?:['’](\p{L}+))?/gu;
+const PH_WORDS = /\b(?:x+|n|marka|brand|logo|firma|sirket|company|isletme|adi|ismi|isim|name|urun|sayi|rakam|tarih|adres|fiyat|telefon|tel|sehir|yer|mekan|slogan|web|site|url|metre|m2|tl|yuzde|kampanya|indirim|oran|saat|gun)\b/;
+const BRAND_PH = /\b(?:marka|brand|logo|firma|sirket|company|isletme)|\b(?:adi|ismi|isim|name)\b/;
+export const isPlaceholder = (inner) => {
+  const letters = String(inner).match(/\p{L}/gu) || [];
+  return /\.\.\.|…|_{2,}/.test(inner) || (letters.length > 0 && letters.every((c) => /\p{Lu}/u.test(c))) || PH_WORDS.test(fold(inner));
+};
+// brand: what the client typed (MARKA) or an org-looking name in FİKİR; never a guess.
+export function stripPlaceholders(d, { brand = "" } = {}) {
+  const fixes = [];
+  const fix = (where, text, mode = "sentence") => {
+    const T = String(text ?? "");
+    if (!T.includes("[")) return T;
+    const notes = [];
+    let out = T.replace(PH_RE, (m, inner, suf) => {
+      if (!isPlaceholder(inner)) { notes.push(`"${m}" unwrapped`); return inner + (suf ? `'${suf}` : ""); }
+      if (brand && BRAND_PH.test(fold(inner))) { notes.push(`"${m}" -> brand`); return suf ? attachSuffix(brand, suf, { apostrophe: true }) : brand; }
+      notes.push(`"${m}" removed`);
+      return "\u0000";
+    });
+    if (!notes.length) return T;
+    if (out.includes("\u0000")) {
+      if (mode === "line") out = "";
+      else if (mode === "title") out = out.replace(/\s*\u0000\s*/g, " ").replace(/\s{2,}/g, " ").replace(/^[\s:,–—-]+|[\s:,–—-]+$/g, "").trim();
+      else out = splitSentences(out).filter((x) => !x.includes("\u0000")).join(" ");
+    }
+    fixes.push(`${where}: placeholder ${notes.join(", ")}`);
+    return out;
+  };
+  d.title = fix("title", d.title, "title") || "Storyboard";
+  for (const k of ["logline", "core_message"]) d[k] = fix(k, d[k]);
+  d.assumptions = (d.assumptions || []).map((a, i) => { const x = fix(`assumptions[${i}]`, a, "line"); return x === "" && String(a).trim() ? null : x; }).filter((a) => a != null);
+  d.interpretations = (d.interpretations || []).filter((it) => {
+    const inv = [...String(it.name).matchAll(PH_RE)].some((m) => isPlaceholder(m[1]));
+    if (inv) fixes.push(`interpretation "${it.name}": dropped (reading of a placeholder)`);
+    return !inv;
+  });
+  d.interpretations = d.interpretations.map((it, i) => {
+    const meaning = fix(`interpretations[${i}].meaning`, it.meaning, "line");
+    return meaning === "" && String(it.meaning).trim() ? null : { ...it, name: fix(`interpretations[${i}].name`, it.name, "title"), meaning };
+  }).filter((it) => it && it.name);
+  const last = d.scenes.length;
+  for (const sc of d.scenes) {
+    sc.title = fix(`scene ${sc.n} title`, sc.title, "title") || (sc.n === last ? "Kapanış" : `Sahne ${sc.n}`);
+    sc.onscreen_text = fix(`scene ${sc.n} onscreen_text`, sc.onscreen_text, "line");
+    for (const k of ["action", "vo", "sound"]) sc[k] = fix(`scene ${sc.n} ${k}`, sc[k]);
+  }
+  return fixes;
+}
+
+// ------------------------------------------------------------------ 7c. English character ids in Turkish text
+// "THE COMMUTER aniden durur" -> "Yolcu aniden durur"; "THE COMMUTER'ın" -> "yolcunun"; a proper name keeps its
+// apostrophe ("Ayşe Teyze'nin"). Matches "THE X" in any case, and the bare noun in capitals (4+ letters, not in
+// onscreen_text, where Turkish capitals are common).
+export const TR_FIELDS = ["title", "action", "onscreen_text", "vo", "sound"];
+export function localizeCharNames(d) {
+  const fixes = [];
+  const chars = (d.characters_en || []).filter((c) => c && c.name).map((c) => ({ id: c.name, tr: c.name_tr || defaultNameTr(c.name, c.look) }))
+    .sort((a, b) => b.id.length - a.id.length);
+  if (!chars.length) return fixes;
+  const rx = chars.map(({ id, tr }) => {
+    const noun = nounOf(id), words = escapeRe(noun).replace(/\s+/g, "\\s+");
+    const tail = "(?:['’](\\p{L}+))?(?![\\p{L}\\p{N}])";
+    return { id, tr, the: new RegExp(`(?<![\\p{L}\\p{N}])the\\s+${words}${tail}`, "giu"),
+      bare: noun.replace(/\s/g, "").length >= 4 ? new RegExp(`(?<![\\p{L}\\p{N}'’])${words}${tail}`, "gu") : null };
+  });
+  const put = (where, text, bareOk = true) => {
+    let T = String(text ?? "");
+    if (!T) return T;
+    const before = T;
+    for (const r of rx) {
+      const repl = (m, suf, off, str) => {
+        const proper = isProperTr(r.tr);
+        let w = suf ? attachSuffix(r.tr, suf, { apostrophe: proper }) : r.tr;
+        if (!str.slice(0, off).trim() || /[.!?…]["'”’)]?\s*$/.test(str.slice(0, off))) w = capFirst(w);
+        return w;
+      };
+      T = T.replace(r.the, repl);
+      if (bareOk && r.bare) T = T.replace(r.bare, repl);
+    }
+    if (T !== before) fixes.push(`${where}: English character id -> Turkish name`);
+    return T;
+  };
+  for (const k of ["title", "logline", "core_message"]) d[k] = put(k, d[k]);
+  d.assumptions = (d.assumptions || []).map((a, i) => put(`assumptions[${i}]`, a));
+  for (const it of d.interpretations || []) it.meaning = put(`interpretation "${it.name}"`, it.meaning);
+  for (const sc of d.scenes || []) for (const k of TR_FIELDS) sc[k] = put(`scene ${sc.n} ${k}`, sc[k], k !== "onscreen_text");
   return fixes;
 }
 
@@ -295,7 +501,13 @@ export function lintDraft(d, ctx = {}) {
   d.assumptions = (d.assumptions || []).map(apos);
   for (const it of d.interpretations || []) { it.name = apos(it.name); it.meaning = apos(it.meaning); }
   for (const sc of d.scenes) for (const k of ["title", "action", "onscreen_text", "vo", "sound"]) sc[k] = apos(sc[k]);
-  fixes.push(...mergeSplitVO(d.scenes));
+  const userBrand = cleanName(ctx.brand);
+  const brand = userBrand || (ents.brand && (ents.orgs || []).includes(ents.brand) ? ents.brand : "");
+  fixes.push(...stripPlaceholders(d, { brand }));
+  fixes.push(...localizeCharNames(d));
+  const protect = [ctx.brand, ctx.place, ents.brand, ents.place, ...(ents.orgs || []), ...(ents.places || []), ...(ents.persons || []),
+    ...(ents.names || []), ...acronyms, ...(d.characters_en || []).map((c) => c.name_tr).filter(isProperTr)];
+  fixes.push(...mergeSplitVO(d.scenes, protect));
 
   const scrub = (where, v) => {
     const r = scrubExpansions(v, unknown, allowedLower);
@@ -320,6 +532,11 @@ export function lintDraft(d, ctx = {}) {
     }
     const ac = unknown.find((a) => trUpper(it.name).includes(trUpper(a)));
     if (ac && it.confidence === "high") { it.confidence = "medium"; fixes.push(`interpretation "${it.name}": high->medium (no verified source for ${ac})`); }
+    // no research (no_key, no_entities, disabled, ...): nothing can confirm a reading, unless the client wrote it in BAĞLAM
+    // ("Yorumu düzelt") or it is a corrected acronym
+    const noResearch = !String(ctx.research || "").trim();
+    const fromClient = allowedExp.some((e) => trUpper(it.name).includes(trUpper(e.ac))) || (ctx.context && trLower(ctx.context).includes(trLower(it.name)));
+    if (noResearch && it.confidence === "high" && !fromClient) { it.confidence = "medium"; fixes.push(`interpretation "${it.name}": high->medium (no research)`); }
   }
   for (const ac of unknown) {
     const readings = (d.interpretations || []).filter((it) => trUpper(it.name).includes(trUpper(ac)));
@@ -411,6 +628,10 @@ export async function textCall(ai, inputs, model = TEXT_MODEL) {
       neurons: neuronsOf(model, u) };
   } catch (e) { return { ms: Date.now() - t0, error: String((e && e.message) || e) }; }
 }
+// One in-step repair only when it can help: a transport error is retried once; invalid JSON goes back for fixing.
+// No repair when the output was cut off (finish=length: the repair has the same token cap, gemma's reasoning would eat
+// it again) or when there is no text at all (nothing to repair): the caller's fallback step (gpt-oss) takes over at once.
+const repairable = (a, r) => !r.ok && a.finish !== "length" && (!!a.error || String(a.text ?? "").trim() !== "");
 const quotaError = (msg) => Object.assign(new Error("QUOTA: " + msg), { quota: true });
 
 // input: { idea, context, research (notes text), brand, place, entities, allowedExpansions, otherEntities }
@@ -421,7 +642,7 @@ export async function draftStage(ai, input, log = [], { model = TEXT_MODEL, para
   log.push({ step: "draft", model, ms: a.ms, tokens_in: a.in, tokens_out: a.out, neurons: a.neurons, finish: a.finish, error: a.error || null });
   if (a.error && QUOTA_RE.test(a.error)) throw quotaError(a.error);
   let r = a.error ? { ok: false, errors: [a.error], coerced: [] } : finalizeDraft(a.text, input);
-  if (!r.ok && a.finish !== "length") {
+  if (repairable(a, r)) {
     const b = await textCall(ai, a.error ? { messages, ...params } : buildRepairInputs(SYSTEM_PROMPT_V6, a.text, r.errors, a.out, params), model);
     log.push({ step: "draft_repair", model, ms: b.ms, tokens_in: b.in, tokens_out: b.out, neurons: b.neurons, finish: b.finish, error: b.error || null, reason: r.errors.slice(0, 5) });
     if (b.error && QUOTA_RE.test(b.error)) throw quotaError(b.error);
@@ -454,12 +675,15 @@ export function finalizeScene(text, draft, n, ctx = {}) {
 // input: same object as draftStage plus { draft, n, note }.
 export async function rewriteSceneStage(ai, input, log = [], { model = TEXT_MODEL, params = SCENE_PARAMS } = {}) {
   const { draft, n } = input;
-  const messages = [{ role: "system", content: SCENE_SYSTEM_V6 }, { role: "user", content: buildSceneMessageV6(input) }];
+  // the model sees Turkish names even in drafts stored before the lint replaced English character ids
+  const shown = JSON.parse(JSON.stringify(draft));
+  localizeCharNames(shown);
+  const messages = [{ role: "system", content: SCENE_SYSTEM_V6 }, { role: "user", content: buildSceneMessageV6({ ...input, draft: shown }) }];
   const a = await textCall(ai, { messages, ...params }, model);
   log.push({ step: "scene", model, ms: a.ms, tokens_in: a.in, tokens_out: a.out, neurons: a.neurons, finish: a.finish, error: a.error || null });
   if (a.error && QUOTA_RE.test(a.error)) throw quotaError(a.error);
   let r = a.error ? { ok: false, errors: [a.error] } : finalizeScene(a.text, draft, n, input);
-  if (!r.ok && a.finish !== "length") {
+  if (repairable(a, r)) {
     const b = await textCall(ai, a.error ? { messages, ...params } : buildRepairInputs(SCENE_SYSTEM_V6, a.text, r.errors, a.out, params, "sahne JSON'u"), model);
     log.push({ step: "scene_repair", model, ms: b.ms, tokens_in: b.in, tokens_out: b.out, neurons: b.neurons, finish: b.finish, error: b.error || null, reason: r.errors.slice(0, 5) });
     if (b.error && QUOTA_RE.test(b.error)) throw quotaError(b.error);

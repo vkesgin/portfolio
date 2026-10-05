@@ -1,6 +1,6 @@
 // images.js: FLUX.2 klein 4B prompt builders, reference selection, multipart call, base64 handling (no Node APIs).
 // Input: a v6 draft after lintDraft() (image fields already brand-stripped).
-import { stripStyleSentences, mentions } from "./postprocess.js";
+import { stripStyleSentences, mentions, stripColorWords } from "./postprocess.js";
 
 export const IMG_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 // Style C from the image prototype (cleanest storyboard look on klein-4b). Goes FIRST in every prompt.
@@ -33,24 +33,31 @@ export const estNeurons = (w, h, refs) => +(tiles(w, h) * TILE_OUT + refs.reduce
 
 const AERIAL_RE = /bird'?s[- ]eye|top[- ]down|overhead view|looking (steeply )?down/i;
 export const isAerial = (sc) => sc.shot === "aerial_drone" || AERIAL_RE.test(sc.image_prompt_en || "");
-const looks = (chars) => chars.map((c) => `${c.name}: ${String(c.look).trim().replace(/[.\s]+$/, "")}.`).join(" ");
+// Every model-written part goes through stripColorWords() (also drafts stored before the lint stripped colours); the
+// pipeline's own IMG_STYLE / IMG_TAIL ("light gray shading", "no color") are never touched and the tail stays last.
+const looks = (chars) => chars.map((c) => `${c.name}: ${stripColorWords(String(c.look).trim()).replace(/[.\s]+$/, "")}.`).join(" ");
 const joinAnd = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const squash = (s) => s.replace(/\s{2,}/g, " ").replace(/\s+\./g, ".").trim();
+const sentence = (s) => { const t = String(s || "").trim(); return t && !/[.!?]$/.test(t) ? t + "." : t; };
 
-// "Use THE ELEPHANT exactly as drawn in image 1 and the place exactly as drawn in image 2, in the same pencil style; compose a new camera shot."
+// "Use THE ELEPHANT as designed in image 1 and the place exactly as drawn in image 2, in the same pencil style; new pose and
+// camera angle, do not copy the pose of image 1." (real run: frames copied the character sheet's side-on pose)
 export function refInstruction(refs) {
   if (!refs.length) return "";
-  const parts = refs.map((r, i) => (r.kind === "char" ? `${r.name} exactly as drawn in image ${i + 1}` : `the place exactly as drawn in image ${i + 1}`));
-  return `Use ${joinAnd(parts)}, in the same pencil style; compose a new camera shot.`;
+  const parts = refs.map((r, i) => (r.kind === "char" ? `${r.name} as designed in image ${i + 1}` : `the place exactly as drawn in image ${i + 1}`));
+  const charImgs = refs.map((r, i) => (r.kind === "char" ? `image ${i + 1}` : null)).filter(Boolean);
+  return `Use ${joinAnd(parts)}, in the same pencil style; ${charImgs.length ? `new pose and camera angle, do not copy the pose of ${joinAnd(charImgs)}.` : "compose a new camera shot."}`;
 }
 
+// Neutral three-quarter pose on the sheet (a strict side view was copied into every frame in the real run).
+export const SHEET_POSE = "Drawn alone, standing in a neutral three-quarter view, whole body visible, isolated on plain white paper, no background, no floor, no people, no buildings.";
 // Pure planning: every prompt, size, seed and reference id. Nothing is called here.
 // opts.maxCharSheets: 1 = measured setup (main character only); 2+ is untested.
 // opts.aerialPlate: extra empty top-down plate for aerial frames (+31.42 neurons, untested; fixes sign lettering seen without a plate).
 export function planImages(d, { seed = 4242, maxCharSheets = 1, aerialPlate = false } = {}) {
   const sz = SIZES[d.aspect_ratio] || SIZES["16:9"];
   const [fw, fh] = sz.frame, [rw, rh] = sz.ref;
-  const location = stripStyleSentences(d.location_en) || d.location_en;
+  const location = stripColorWords(stripStyleSentences(d.location_en) || d.location_en);
   const chars = d.characters_en || [];
   const sceneCount = (c) => d.scenes.filter((s) => (s.characters || []).includes(c.name)).length;
   const sheetChars = chars.filter((c) => sceneCount(c) > 0).sort((a, b) => sceneCount(b) - sceneCount(a)).slice(0, maxCharSheets);
@@ -58,15 +65,15 @@ export function planImages(d, { seed = 4242, maxCharSheets = 1, aerialPlate = fa
 
   const jobs = [];
   jobs.push({ id: "anchor", stage: "anchor", width: rw, height: rh, seed, refs: [],
-    prompt: squash(`${IMG_STYLE} ${location} ${looks(chars)} ${d.anchor_prompt_en} ${IMG_TAIL}`) });
+    prompt: squash(`${IMG_STYLE} ${location} ${looks(chars)} ${stripColorWords(d.anchor_prompt_en)} ${IMG_TAIL}`) });
 
   for (const c of sheetChars) {
     const fromAnchor = inAnchor.includes(c);
     jobs.push({ id: `ref_char_${c.name.replace(/^THE /, "").replace(/\W+/g, "_").toLowerCase()}`, stage: "refs", kind: "char", name: c.name,
       width: rw, height: rh, seed, refs: ["anchor"],
       prompt: squash(fromAnchor
-        ? `${IMG_STYLE} Character reference sheet: ${c.name} exactly as drawn in image 1. ${looks([c])} Drawn alone in full side view facing right, whole body visible, isolated on plain white paper, no background, no floor, no people, no buildings. ${IMG_TAIL}`
-        : `${IMG_STYLE} Character reference sheet in the same pencil style as image 1: ${looks([c])} Drawn alone in full side view facing right, whole body visible, isolated on plain white paper, no background, no floor, no people, no buildings. ${IMG_TAIL}`) });
+        ? `${IMG_STYLE} Character reference sheet: ${c.name} exactly as drawn in image 1. ${looks([c])} ${SHEET_POSE} ${IMG_TAIL}`
+        : `${IMG_STYLE} Character reference sheet in the same pencil style as image 1: ${looks([c])} ${SHEET_POSE} ${IMG_TAIL}`) });
   }
   const removeList = inAnchor.map((c) => c.name);
   const empty = `${removeList.length ? `remove ${joinAnd(removeList)}, ` : ""}no animals, only a few tiny generic passers-by in the distance.`;
@@ -98,15 +105,16 @@ export function frameJob(d, sc, { location, sheetJobs, eyePlate, aerialPlate, si
     ...(!aerial ? (eyePlate ? [{ kind: "loc", id: eyePlate }] : []) : aerialPlate ? [{ kind: "loc", id: aerialPlate }] : []),
   ].slice(0, 4);
   const setting = `${location}${present.length ? " " + looks(present) : ""}`;
+  // the scene's own pose/action comes first, then framing, then the reference rule; the grayscale tail stays last
   return { id: `frame_${sc.n}`, stage: "frames", n: sc.n, width: size[0], height: size[1], seed, refs: refs.map((r) => r.id),
-    prompt: squash(`${IMG_STYLE} ${SHOT_HINT[sc.shot] || ""}. ${refInstruction(refs)} ${sc.image_prompt_en} Setting: ${setting} ${IMG_TAIL}`) };
+    prompt: squash(`${IMG_STYLE} ${sentence(stripColorWords(sc.image_prompt_en))} ${SHOT_HINT[sc.shot] || ""}. ${refInstruction(refs)} Setting: ${setting} ${IMG_TAIL}`) };
 }
 
 // Re-plans one frame against the reference images that actually exist (doneIds: Set of job ids with an image).
 // Used for every frame of a build (after the reference stage) and for redraw/rewrite/resume. With all references
 // present it returns exactly the frame job planImages() made; a missing reference is simply left out.
 export function planFrameForOp(d, n, plan, doneIds, seed) {
-  const location = stripStyleSentences(d.location_en) || d.location_en;
+  const location = stripColorWords(stripStyleSentences(d.location_en) || d.location_en);
   const refsDone = plan.jobs.filter((j) => j.stage === "refs" && doneIds.has(j.id));
   const sheetJobs = refsDone.filter((j) => j.kind === "char").map((j) => ({ id: j.id, name: j.name }));
   const has = (id) => refsDone.some((j) => j.id === id);

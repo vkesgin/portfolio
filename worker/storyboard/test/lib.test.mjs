@@ -4,19 +4,22 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { extractEntities, buildSearchQueries, buildResearchNotes, findExpansions, cleanName, runResearch } from "../research.js";
 import { tryParse, coerceDraft, finalizeDraft, lintDraft, scrubExpansions, sanitizeImagePrompt, mergeSplitVO, draftStage, ownStyleSentence, TEXT_STYLE,
-  finalizeScene, rewriteSceneStage, applyFormat, neuronsOf, correctionExpansions, QUOTA_RE } from "../postprocess.js";
+  finalizeScene, rewriteSceneStage, applyFormat, neuronsOf, correctionExpansions, QUOTA_RE, stripColorWords, stripPlaceholders, localizeCharNames,
+  isPlaceholder } from "../postprocess.js";
+import { attachSuffix, defaultNameTr, normNameTr } from "../trtext.js";
 import { SB_DDL, sbConfig, COST, neuronItem, quotaStmts, isCheckError, ipBucket, utcDay, ledgerRowsStmts, buildReleaseStmt, buildRefundStmt,
   opReleaseStmt, opRefundStmt, buildEndStmts, opEndStmts } from "../db.js";
-import { planImages, renderPlan, refInstruction, planFrameForOp } from "../images.js";
+import { planImages, renderPlan, refInstruction, planFrameForOp, IMG_TAIL, IMG_STYLE } from "../images.js";
 import { validate, STORYBOARD_SCHEMA_V6 } from "../schema.v6.js";
-import { buildContext, buildSceneMessageV6, TEXT_FALLBACK, TEXT_FALLBACK_PARAMS, SCENE_SYSTEM_V6 } from "../prompt.v6.js";
+import { buildContext, buildSceneMessageV6, buildUserMessageV6, TEXT_FALLBACK, TEXT_FALLBACK_PARAMS, SCENE_SYSTEM_V6, SCENE_PARAMS, TEXT_PARAMS,
+  SYSTEM_PROMPT_V6 } from "../prompt.v6.js";
 import { createFakeAI } from "../fake-ai.js";
 import { FAKE_DRAFT_V6, FAKE_TAVILY } from "../fixtures.js";
 
 const FIX = new URL("./fixtures/", import.meta.url);
 const FILES = { "text/BEST_example_storyboard.json": "best_v4_draft.json", "e2e/out/run1_draft.json": "run1_v5_draft.json",
   "e2e/out/run2_draft.json": "run2_v5_draft.json", "e2e/req_storyboard.json": "stm_research.json" };
-const read = (f) => JSON.parse(fs.readFileSync(new URL(FILES[f], FIX), "utf8"));
+const read = (f) => JSON.parse(fs.readFileSync(new URL(FILES[f] || f, FIX), "utf8"));
 const STM_IDEA = "Sayın Gayrimenkul için STM'nin sokaklarında fil dolaşacak, dükkan aralarının büyüklüğünü göstermek için";
 let n = 0; const ok = (name) => console.log(`ok ${++n} ${name}`);
 
@@ -100,7 +103,8 @@ const FIXTURE = [
     "Aerial view of the complex. THE ELEPHANT's trunk near a blank sign.");
   assert.equal(ownStyleSentence("Rough pencil sketch, loose. The LOCATION is a street.").text, TEXT_STYLE + " The LOCATION is a street.");
   assert.equal(refInstruction([{ kind: "char", name: "THE ELEPHANT" }, { kind: "loc" }]),
-    "Use THE ELEPHANT exactly as drawn in image 1 and the place exactly as drawn in image 2, in the same pencil style; compose a new camera shot.");
+    "Use THE ELEPHANT as designed in image 1 and the place exactly as drawn in image 2, in the same pencil style; new pose and camera angle, do not copy the pose of image 1.");
+  assert.equal(refInstruction([{ kind: "loc" }]), "Use the place exactly as drawn in image 1, in the same pencil style; compose a new camera shot.");
   ok("scrubber / VO merge / sanitize / style ownership");
 }
 
@@ -223,7 +227,7 @@ for (const [name, file] of [["BEST v4 (invented expansion)", "text/BEST_example_
   assert.ok(!("extra" in r.scene)); assert.doesNotMatch(r.scene.image_prompt_en, /STM|SAYIN/);
   assert.equal(finalizeScene('{"title": 1}', draft, 3, { idea: STM_IDEA }).ok, false);
   const msg = buildSceneMessageV6({ idea: STM_IDEA, context: "", draft, n: 5, note: "Logo daha büyük" });
-  assert.match(msg, /\(n=5\)/); assert.match(msg, /son sahne/); assert.match(msg, /THE ELEPHANT:/);
+  assert.match(msg, /\(n=5\)/); assert.match(msg, /son sahne/); assert.match(msg, /THE ELEPHANT \(Türkçe: fil\):/);
   const fake = createFakeAI({ SB_FAKE_DELAY_MS: "0" });
   const log = [];
   const out = await rewriteSceneStage(fake, { idea: STM_IDEA, context: "", draft, n: 2, note: "Daha yakın plan" }, log);
@@ -357,6 +361,208 @@ for (const [name, file] of [["BEST v4 (invented expansion)", "text/BEST_example_
   await db.batch(ledgerRowsStmts(db, [{ sbId: "sb_" + "9".repeat(32), kind: "image", neurons: 5 }], "build"));
   assert.equal((await db.prepare("SELECT COUNT(*) AS c FROM sb_ledger WHERE sb_id = ?1").bind("sb_" + "9".repeat(32)).first()).c, 1);
   ok("capacity: atomic neuron reservation (CHECK); finalize/finish batches idempotent (ledger, release, refund once); no refund with a draft");
+}
+
+// ---------------------------------------------------------------- 11. Phase C: quality fixes from the real Workers AI run
+// Real Kahve draft (kahve_real_draft.json: research no_entities, gemma output after its repair call, as stored).
+const KAHVE_IDEA = "Kahve dükkanı açılışı: sabah işe giden insanlar kokuyu takip edip dükkana giriyor";
+const kahveCtx = (extra = {}) => ({ idea: KAHVE_IDEA, context: "", research: null, entities: extractEntities(KAHVE_IDEA), ...extra });
+const TR_KEYS = ["title", "action", "onscreen_text", "vo", "sound"];
+const allTurkish = (d) => [d.title, d.logline, d.core_message, ...d.assumptions, ...d.interpretations.flatMap((i) => [i.name, i.meaning]),
+  ...d.scenes.flatMap((sc) => TR_KEYS.map((k) => sc[k]))].join("\n");
+{
+  // Bug 1: the scene rewrite gets the same token cap as a full draft; a cut-off or empty answer goes straight to the fallback
+  assert.equal(SCENE_PARAMS.max_completion_tokens, TEXT_PARAMS.max_completion_tokens);
+  assert.ok(SCENE_PARAMS.max_completion_tokens >= 6000);
+  const draft = JSON.parse(JSON.stringify(FAKE_DRAFT_V6));
+  const answer = (content, finish) => ({ async run() { return { choices: [{ message: { content }, finish_reason: finish }], usage: { prompt_tokens: 2000, completion_tokens: 2500 } }; } });
+  for (const [content, finish] of [[null, "length"], ["", "stop"], [null, "stop"], ['{"n": 2, "title": "yarım', "length"]]) {
+    const log = [];
+    await assert.rejects(rewriteSceneStage(answer(content, finish), { idea: STM_IDEA, context: "", draft, n: 2, note: "x" }, log), /scene invalid after repair/);
+    assert.deepEqual(log.map((l) => l.step), ["scene"], `no repair call for ${JSON.stringify([content, finish])}`);
+    const dlog = [];
+    await assert.rejects(draftStage(answer(content, finish), ctxSTM, dlog), /draft invalid after repair/);
+    assert.deepEqual(dlog.map((l) => l.step), ["draft"]);
+  }
+  // the rewrite request carries the raised cap; the gpt-oss fallback (workflow "scene-fallback" step) still answers
+  const seen = [];
+  const spy = { async run(model, inputs) { seen.push([model, inputs.max_completion_tokens ?? inputs.max_tokens]); return { choices: [{ message: { content: null }, finish_reason: "length" }], usage: {} }; } };
+  await assert.rejects(rewriteSceneStage(spy, { idea: STM_IDEA, context: "", draft, n: 2, note: "x" }, []));
+  assert.deepEqual(seen, [["@cf/google/gemma-4-26b-a4b-it", 6000]]);
+  const fb = await rewriteSceneStage(createFakeAI({ SB_FAKE_DELAY_MS: "0" }), { idea: STM_IDEA, context: "", draft, n: 2, note: "x" }, [],
+    { model: TEXT_FALLBACK, params: { ...TEXT_FALLBACK_PARAMS, max_tokens: 2500, reasoning_effort: "low" } });
+  assert.equal(fb.scene.n, 2);
+  ok("bug 1: scene rewrite cap 6000 (= TEXT_PARAMS); finish=length / empty answer -> no repair call, straight to the fallback");
+}
+{
+  // Bug 2a: zero interpretations are valid -> no repair call (real run: +122 neurons, +60 s and an invented "[MARKA ADI]" reading)
+  const raw = read("kahve_real_draft.json");
+  const zero = { ...raw, interpretations: [] };
+  assert.deepEqual(validate(STORYBOARD_SCHEMA_V6.properties.interpretations, []), []);
+  const r0 = finalizeDraft(JSON.stringify(zero), kahveCtx());
+  assert.ok(r0.ok, JSON.stringify(r0.errors)); assert.deepEqual(r0.draft.interpretations, []);
+  const { interpretations, ...noKey } = raw;                                     // a model that leaves the key out
+  assert.ok(finalizeDraft(JSON.stringify(noKey), kahveCtx()).ok);
+  const calls = [];
+  const ai = { async run(model, inputs) { calls.push(inputs.messages[1].content); return { choices: [{ message: { content: JSON.stringify(zero) }, finish_reason: "stop" }], usage: { prompt_tokens: 2193, completion_tokens: 3573 } }; } };
+  const log = [];
+  const out = await draftStage(ai, kahveCtx(), log);
+  assert.deepEqual(log.map((l) => l.step), ["draft"], "one call, no repair");
+  assert.deepEqual(out.draft.interpretations, []);
+  assert.match(calls[0], /interpretations boş liste \(\[\]\)/); assert.match(calls[0], /\[MARKA ADI\]/);
+  assert.match(buildUserMessageV6({ idea: STM_IDEA, entities: extractEntities(STM_IDEA) }), /en az iki olası okumayı/);
+  assert.match(SYSTEM_PROMPT_V6, /\(0-6 items;/); assert.match(SYSTEM_PROMPT_V6, /Never write placeholders in square brackets/);
+  assert.doesNotMatch(SYSTEM_PROMPT_V6, /use a placeholder such as/);
+  assert.match(SCENE_SYSTEM_V6, /Never write placeholders in square brackets/);
+  ok("bug 2a: interpretations [] valid (schema, coercion, prompt); Kahve draft needs no repair call");
+}
+{
+  // Bug 2b: bracket placeholders never reach the client; a placeholder reading is dropped; no "high" without research
+  const raw = read("kahve_real_draft.json");                                    // stored: "[MARKA ADI]" reading (high) + end card "[MARKA ADI]"
+  const r = finalizeDraft(JSON.stringify(raw), kahveCtx());
+  assert.ok(r.ok, JSON.stringify(r.errors));
+  assert.deepEqual(r.draft.interpretations, []);
+  assert.equal(r.draft.scenes[4].onscreen_text, "");
+  assert.doesNotMatch(allTurkish(r.draft), /\[|\]/);
+  assert.ok(r.lint.fixes.some((f) => /reading of a placeholder/.test(f)));
+  // the client typed a brand -> the brand replaces a brand placeholder (with the right suffix); other placeholders drop their line
+  const withBrand = JSON.parse(JSON.stringify(raw));
+  withBrand.scenes[3].vo = "[MARKA ADI]'nın kokusu sizi bekliyor. Kapımız açık.";
+  withBrand.scenes[2].vo = "Tam [X m] uzaktan bile duyulur. Herkes durur.";
+  withBrand.scenes[1].sound = "[kuş sesleri], hafif rüzgâr.";
+  withBrand.assumptions.push("Dükkân [ADRES] adresindedir.");
+  const rb = finalizeDraft(JSON.stringify(withBrand), kahveCtx({ brand: "Sayın Gayrimenkul" }));
+  assert.equal(rb.draft.scenes[4].onscreen_text, "Sayın Gayrimenkul");
+  assert.equal(rb.draft.scenes[3].vo, "Sayın Gayrimenkul'ün kokusu sizi bekliyor. Kapımız açık.");
+  assert.equal(rb.draft.scenes[2].vo, "Herkes durur.");
+  assert.equal(rb.draft.scenes[1].sound, "kuş sesleri, hafif rüzgâr.");
+  assert.ok(!rb.draft.assumptions.some((a) => /ADRES/.test(a)));
+  assert.deepEqual(rb.draft.interpretations, [], "a reading of a placeholder is invented even when the brand is known");
+  assert.doesNotMatch(allTurkish(rb.draft), /\[|\]/);
+  const t = { title: "[MARKA ADI] Açılışı", logline: "", core_message: "", assumptions: [], interpretations: [], scenes: [{ n: 1, title: "[MARKA]", action: "", onscreen_text: "", vo: "", sound: "" }] };
+  stripPlaceholders(t, {});
+  assert.equal(t.title, "Açılışı"); assert.equal(t.scenes[0].title, "Kapanış");
+  assert.ok(isPlaceholder("MARKA ADI") && isPlaceholder("X m") && isPlaceholder("Ürün adı") && !isPlaceholder("kuş sesleri"));
+  // without research nothing can confirm a reading: "high" -> "medium", unless the client wrote it in BAĞLAM
+  const hi = JSON.parse(JSON.stringify(FAKE_DRAFT_V6));
+  const noRes = finalizeDraft(JSON.stringify(hi), { idea: STM_IDEA, context: "", research: null });
+  assert.ok(noRes.draft.interpretations.every((i) => i.confidence !== "high"), JSON.stringify(noRes.draft.interpretations));
+  const withRes = finalizeDraft(JSON.stringify(hi), ctxSTM);
+  assert.equal(withRes.draft.interpretations.find((i) => i.name === "Fil").confidence, "high");
+  const corr = "STM = Sayın Ticaret Merkezi";
+  const fromClient = finalizeDraft(JSON.stringify({ ...hi, interpretations: [{ name: "STM", meaning: "Sayın Ticaret Merkezi, dükkân projesi.", confidence: "high" }] }),
+    { idea: STM_IDEA, research: null, context: buildContext({ corrections: corr }), allowedExpansions: correctionExpansions(corr) });
+  assert.equal(fromClient.draft.interpretations[0].confidence, "high");
+  ok("bug 2b: [MARKA ADI] reading dropped, placeholder lines removed / brand substituted with suffix; no 'high' without research");
+}
+{
+  // Bug 3: merged VO lowercases the joined half (Turkish I/İ), proper nouns and acronyms keep their capital
+  const sc = (a, b) => { const x = [{ n: 1, vo: a }, { n: 2, vo: b }]; mergeSplitVO(x, ["Sayın Gayrimenkul", "STM", "Ayşe Teyze"]); return x[0].vo; };
+  assert.equal(sc("Öyle ki...", "Her adımda ferahlığı hissedin."), "Öyle ki her adımda ferahlığı hissedin.");
+  assert.equal(sc("Kapıyı açın...", "İçerisi sizi bekliyor."), "Kapıyı açın içerisi sizi bekliyor.");
+  assert.equal(sc("Bir anda...", "Işıklar yanar."), "Bir anda ışıklar yanar.");
+  assert.equal(sc("Öyle ki...", "STM'de her yer geniş."), "Öyle ki STM'de her yer geniş.");
+  assert.equal(sc("Güvenle...", "Sayın Gayrimenkul yanınızda."), "Güvenle Sayın Gayrimenkul yanınızda.");
+  assert.equal(sc("Sabah olunca...", "Ayşe Teyze kapıyı açar."), "Sabah olunca Ayşe Teyze kapıyı açar.");
+  const real = JSON.parse(JSON.stringify(FAKE_DRAFT_V6));                          // the STM run's broken line, through the full lint
+  real.scenes[1].vo = "Öyle ki..."; real.scenes[2].vo = "Her adımda ferahlığı hissedin.";
+  const r = finalizeDraft(JSON.stringify(real), ctxSTM);
+  assert.equal(r.draft.scenes[1].vo, "Öyle ki her adımda ferahlığı hissedin."); assert.equal(r.draft.scenes[2].vo, "");
+  ok("bug 3: mergeSplitVO Turkish-lowercases the joined start (Her->her, İ->i, I->ı); acronyms/brand/names kept");
+}
+{
+  // Bug 4: English character ids never stay in Turkish text; name_tr (model) or a derived Turkish noun (older drafts)
+  assert.deepEqual([attachSuffix("yolcu", "ın", { apostrophe: false }), attachSuffix("adam", "ı", { apostrophe: false }), attachSuffix("köpek", "ı", { apostrophe: false }),
+    attachSuffix("kedi", "le", { apostrophe: false }), attachSuffix("kadın", "a", { apostrophe: false }), attachSuffix("kedi", "daki", { apostrophe: false }),
+    attachSuffix("Ayşe Teyze", "nin"), attachSuffix("STM", "ın"), attachSuffix("Sayın Gayrimenkul", "nın")],
+    ["yolcunun", "adamı", "köpeği", "kediyle", "kadına", "kedideki", "Ayşe Teyze'nin", "STM'nin", "Sayın Gayrimenkul'ün"]);
+  assert.deepEqual([defaultNameTr("THE COMMUTER"), defaultNameTr("THE OLD MAN"), defaultNameTr("THE OLD SOFA"), defaultNameTr("THE BLOB", "a tall woman in a coat")],
+    ["yolcu", "yaşlı adam", "eski kanepe", "kadın"]);
+  assert.deepEqual([normNameTr("ADAM", "THE COMMUTER"), normNameTr("Adam", "THE COMMUTER"), normNameTr("THE COMMUTER", "THE COMMUTER"), normNameTr("commuter", "THE COMMUTER"),
+    normNameTr("Ayşe Teyze", "THE AUNT"), normNameTr("Genç Kadın", "THE WOMAN")], ["adam", "adam", "yolcu", "yolcu", "Ayşe Teyze", "genç kadın"]);
+  // older stored draft (no name_tr): coercion derives it, the schema still validates, the lint replaces every id
+  const raw = read("kahve_real_draft.json");
+  assert.ok(raw.characters_en.every((c) => !("name_tr" in c)));
+  const r = finalizeDraft(JSON.stringify(raw), kahveCtx());
+  assert.ok(r.ok, JSON.stringify(r.errors));
+  assert.deepEqual(r.draft.characters_en.map((c) => c.name_tr), ["yolcu", "çalışan"]);
+  assert.doesNotMatch(allTurkish(r.draft), /THE [A-Z]|COMMUTER|OFFICE WORKER/);
+  assert.match(r.draft.scenes[1].action, /^Yolcu aniden durur/);
+  assert.match(r.draft.scenes[2].action, /^Yolcu ve çalışan aynı anda durup/);
+  assert.deepEqual(r.draft.scenes[2].characters, ["THE COMMUTER", "THE OFFICE WORKER"], "canonical ids stay for the image pipeline");
+  assert.ok(!r.lint.warnings.some((w) => /English canonical name/.test(w)));
+  // model-provided name_tr with Turkish suffixes after the id; proper name from the idea keeps its apostrophe
+  const m = JSON.parse(JSON.stringify(raw));
+  m.characters_en[0].name_tr = "adam"; m.characters_en[1].name_tr = "Genç Kadın";
+  m.scenes[1].action = "Kahve kokusu THE COMMUTER'ı durdurur; THE OFFICE WORKER'ın gözleri parlar.";
+  m.scenes[3].vo = "the commuter'la birlikte herkes içeri girer.";
+  m.scenes[3].sound = "COMMUTER'ın ayak sesleri.";
+  const rm = finalizeDraft(JSON.stringify(m), kahveCtx());
+  assert.equal(rm.draft.scenes[1].action, "Kahve kokusu adamı durdurur; genç kadının gözleri parlar.");
+  assert.equal(rm.draft.scenes[3].vo, "Adamla birlikte herkes içeri girer.");
+  assert.equal(rm.draft.scenes[3].sound, "Adamın ayak sesleri.");
+  const p = JSON.parse(JSON.stringify(raw));
+  p.characters_en = [{ name: "THE AUNT", name_tr: "Ayşe Teyze", look: "an elderly woman" }];
+  p.scenes[1].characters = ["THE AUNT"]; p.scenes[1].action = "THE AUNT'nin kedisi kapıda bekler.";
+  const rp = finalizeDraft(JSON.stringify(p), kahveCtx({ idea: "Ayşe Teyze kahve dükkanı açıyor" }));
+  assert.equal(rp.draft.scenes[1].action, "Ayşe Teyze'nin kedisi kapıda bekler.");
+  // a scene may list the Turkish name in characters -> mapped back to the canonical id
+  const q = JSON.parse(JSON.stringify(raw)); q.characters_en[0].name_tr = "adam"; q.scenes[1].characters = ["adam"];
+  assert.deepEqual(finalizeDraft(JSON.stringify(q), kahveCtx()).draft.scenes[1].characters, ["THE COMMUTER"]);
+  // short nouns are never matched bare ("boy" = height in Turkish); onscreen capitals are left alone
+  const b = { title: "t", logline: "", core_message: "", assumptions: [], interpretations: [], characters_en: [{ name: "THE BOY", name_tr: "çocuk", look: "a boy" }, { name: "THE COMMUTER", name_tr: "yolcu", look: "a man" }],
+    scenes: [{ n: 1, title: "Boy farkı", action: "THE BOY koşar, boy farkı görünür.", onscreen_text: "COMMUTER DEĞİL", vo: "", sound: "" }] };
+  localizeCharNames(b);
+  assert.equal(b.scenes[0].action, "Çocuk koşar, boy farkı görünür."); assert.equal(b.scenes[0].title, "Boy farkı"); assert.equal(b.scenes[0].onscreen_text, "COMMUTER DEĞİL");
+  // scene rewrite on an older draft: the prompt shows the Turkish name, the rewritten scene gets Turkish names
+  const old = read("kahve_real_draft.json");
+  assert.match(buildSceneMessageV6({ idea: KAHVE_IDEA, context: "", draft: old, n: 2, note: "x" }), /- THE COMMUTER \(Türkçe: yolcu\):/);
+  const sc = { ...old.scenes[2], action: "THE COMMUTER ve THE OFFICE WORKER dükkâna döner." };
+  const fs2 = finalizeScene(JSON.stringify(sc), old, 3, kahveCtx());
+  assert.ok(fs2.ok, JSON.stringify(fs2.errors)); assert.equal(fs2.scene.action, "Yolcu ve çalışan dükkâna döner.");
+  ok("bug 4: name_tr (schema/prompt/coercion, derived for older drafts); ids -> Turkish names with suffix harmony in all Turkish fields");
+}
+{
+  // Bug 5: colour words leave every model-written image part; light/dark values stay; the grayscale tail stays last
+  const C = /\b(navy|blue|brown|beige|golden|gold|amber|sepia|tinted|warm (?:light|tones?)|cool light|red|green|yellow|orange|purple|pink|teal|maroon|burgundy|khaki)\b|#[0-9a-f]{3,6}\b|rgb\(/i;
+  assert.equal(stripColorWords("A man in his 30s, wearing a sharp navy blue blazer, a crisp white shirt, and dark trousers, carrying a brown leather briefcase."),
+    "A man in his 30s, wearing a sharp dark blazer, a crisp white shirt, and dark trousers, carrying a dark leather briefcase.");
+  assert.equal(stripColorWords("A woman wearing a stylish beige trench coat and carrying a black laptop bag."), "A woman wearing a stylish light trench coat and carrying a black laptop bag.");
+  assert.equal(stripColorWords("The sidewalk is made of grey granite. Soft, golden morning light filters through the buildings."),
+    "The sidewalk is made of grey granite. Soft, morning light filters through the buildings.");
+  assert.equal(stripColorWords("Golden hour light with warm tones on a red-brick wall, an amber lamp, an indigo coat, a red and white sign."),
+    "Low sun on a brick wall, a lamp, a dark coat, a white sign.");
+  assert.equal(stripColorWords("Warm light from the window, a #ff8800 awning, rgb(10,20,30) door, sepia tinted look, light blue shirt, light gray shading."),
+    "Light from the window, an awning, door, look, light shirt, light gray shading.");
+  assert.equal(stripColorWords("An orange on the table, a rose garden, orange juice, coffee cup, black and white tiles, silver railings."),
+    "An orange on the table, a rose garden, orange juice, coffee cup, black and white tiles, silver railings.");
+  for (const x of ["a sharp navy blue blazer", "golden morning light", "a light gray shading", "dark trousers"]) assert.equal(stripColorWords(stripColorWords(x)), stripColorWords(x));
+  // lint: the real Kahve draft's looks / location lose every colour word
+  const r = finalizeDraft(JSON.stringify(read("kahve_real_draft.json")), kahveCtx());
+  const parts = [r.draft.location_en, r.draft.anchor_prompt_en, ...r.draft.characters_en.map((c) => c.look), ...r.draft.scenes.map((s) => s.image_prompt_en)];
+  for (const x of parts) assert.doesNotMatch(x, C, x);
+  assert.match(r.draft.characters_en[0].look, /dark blazer.*white shirt.*dark trousers.*dark leather briefcase/);
+  // images.js: a draft stored BEFORE this fix (colours in it) still gets colour-free prompts; style first, tail last
+  const plan = planImages(read("kahve_real_draft.json"));
+  for (const j of plan.jobs) {
+    const model = j.prompt.slice(IMG_STYLE.length, -IMG_TAIL.length);
+    assert.doesNotMatch(model, C, `${j.id}: ${model}`);
+    assert.ok(j.prompt.startsWith(IMG_STYLE) && j.prompt.endsWith(IMG_TAIL), j.id);
+  }
+  assert.match(SYSTEM_PROMPT_V6, /Never name a colour, tint or colour temperature/);
+  ok("bug 5: colour / colour-temperature words stripped from every image part (lint + planner, old drafts too); tonal words kept; tail last");
+}
+{
+  // Bug 7: neutral three-quarter character sheet; frames state the scene's action first and must not copy the sheet's pose
+  const r = finalizeDraft(JSON.stringify(read("e2e/out/run1_draft.json")), ctxSTM);
+  const plan = planImages(r.draft);
+  const sheet = plan.jobs.find((j) => j.kind === "char");
+  assert.match(sheet.prompt, /neutral three-quarter view/); assert.doesNotMatch(sheet.prompt, /side view/);
+  const f2 = plan.jobs.find((j) => j.id === "frame_2");
+  const sc2 = r.draft.scenes[1].image_prompt_en;
+  assert.ok(f2.prompt.indexOf(sc2.slice(0, 30)) > 0 && f2.prompt.indexOf(sc2.slice(0, 30)) < f2.prompt.indexOf("Use THE ELEPHANT"), "action before the reference rule");
+  assert.match(f2.prompt, /new pose and camera angle, do not copy the pose of image 1\./);
+  ok("bug 7: sheet in neutral three-quarter view; frame prompt = style, scene action, framing, 'do not copy the pose of image 1', setting, tail");
 }
 
 console.log(`\nall ${n} tests passed`);

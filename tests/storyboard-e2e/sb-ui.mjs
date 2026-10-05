@@ -10,6 +10,7 @@ fs.mkdirSync(OUT, { recursive: true });
 let n = 0;
 const MINE = ".post-card:has(.author-badge.is-mine)";   // the board may hold other guests' cards
 const ok = (m) => console.log(`ok ${++n} ${m}`);
+const gtDisplay = () => page.$eval(".gtranslate_wrapper", (e) => getComputedStyle(e).display);   // GTranslate flag widget (fixed, bottom-left)
 const browser = await puppeteer.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: true, args: ["--lang=tr-TR"] });
 const page = await browser.newPage();
 const errors = [];
@@ -42,9 +43,11 @@ assert.ok(thumbs >= 3, "thumbs");
 await page.screenshot({ path: path.join(OUT, "2-card-done.png") });
 ok(`card done: ${thumbs} thumbnails, chip ${await page.$eval(`${MINE} .sb-chip`, (e) => e.textContent)}`);
 
+assert.notEqual(await gtDisplay(), "none", "GTranslate widget visible on the board");
 await page.click(`${MINE} [data-sb="open"]`);
 await page.waitForSelector("#sb-viewer:not([hidden]) .sb-scene img");
 await page.waitForFunction(() => [...document.querySelectorAll(".sb-scene img")].every((i) => i.complete && i.naturalWidth > 0));
+assert.equal(await gtDisplay(), "none", "GTranslate widget hidden while the viewer is open");
 const head = await page.$eval(".sb-head", (e) => e.innerText);
 assert.match(head, /SAYIN GAYRİMENKUL\s+·\s+KAYSERİ\s+·\s+KABA STORYBOARD/);
 assert.match(head, /Ana mesaj:/); assert.match(head, /Format: 16:9\s+·\s+5 sahne\s+·\s+toplam \d+ sn/);
@@ -84,6 +87,7 @@ ok("Yeniden çiz: frame 1 replaced by rev 1 without reopening; an open note on s
 // print: A4 landscape PDF of the sheet only
 await page.evaluate(() => document.documentElement.classList.add("sb-print"));
 await page.emulateMediaType("print");
+assert.equal(await gtDisplay(), "none", "GTranslate widget hidden in print");
 const pdf = Buffer.from(await page.pdf({ preferCSSPageSize: true, printBackground: true }));
 fs.writeFileSync(path.join(OUT, "sheet.pdf"), pdf);
 const pages = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
@@ -96,7 +100,11 @@ ok(`print: A4 landscape PDF (${box[1]}x${box[2]} pt), ${pages} page(s)`);
 
 await page.keyboard.press("Escape");
 await page.waitForFunction(() => document.querySelector("#sb-viewer").hidden);
-ok("Esc closes the viewer");
+assert.notEqual(await gtDisplay(), "none", "GTranslate widget back after the viewer closed");
+await page.emulateMediaType("print");
+assert.equal(await gtDisplay(), "none", "GTranslate widget hidden when the board itself is printed");
+await page.emulateMediaType("screen");
+ok("Esc closes the viewer; GTranslate widget hidden while it was open and in print, visible again after closing");
 
 // mobile width: no horizontal scroll in the viewer
 await page.setViewport({ width: 390, height: 844, isMobile: true });   // isMobile change reloads the page
@@ -104,10 +112,11 @@ await page.waitForSelector(`${MINE} [data-sb="open"]`, { timeout: 15000 });
 await page.click(`${MINE} [data-sb="open"]`);
 await page.waitForSelector("#sb-viewer:not([hidden]) .sb-scene img");
 const overflow = await page.$eval(".sb-viewer-inner", (e) => e.scrollWidth - e.clientWidth);
+assert.equal(await gtDisplay(), "none", "GTranslate widget hidden over the viewer on a phone");
 assert.ok(overflow <= 1, `horizontal overflow ${overflow}px`);
 await new Promise((r) => setTimeout(r, 500));   // modal-overlay opacity transition
 await page.screenshot({ path: path.join(OUT, "4-viewer-mobile.png") });
-ok("mobile 390px: viewer without horizontal scroll");
+ok("mobile 390px: viewer without horizontal scroll, GTranslate widget hidden");
 
 assert.deepEqual(errors, [], "page errors: " + errors.join(" | "));
 ok("no page errors");

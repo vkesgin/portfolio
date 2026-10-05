@@ -108,6 +108,7 @@ export const FAKE_DRAFT_V6 = {
  "characters_en": [
   {
    "name": "THE ELEPHANT",
+   "name_tr": "fil",
    "look": "a massive, majestic African elephant with detailed skin texture"
   }
  ]

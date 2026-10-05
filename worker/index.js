@@ -1,3 +1,5 @@
+import { parseLink, MAX_URL_LENGTH } from '../assets/js/fikir-url.mjs';
+
 const CORS = (origin) => ({
   'Access-Control-Allow-Origin':  origin || '*',
   'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
@@ -82,36 +84,831 @@ async function kpssAuth(request, env) {
   return verifyKpssJWT(token, env.JWT_SECRET || 'secret');
 }
 
-// Inspire JWT helpers
-async function signInspireJWT(payload, secret) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    'raw', enc.encode(secret + '_inspire'), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+// ─── INSPIRE (Fikir Havuzu) HELPERS ───
+// Tokens: HMAC-SHA256 with key JWT_SECRET + '_inspire'. New tokens are base64url(UTF-8 JSON) so Turkish
+// names (ş, ğ, ı) survive; tokens made by the old btoa() helper (standard base64 of Latin-1 JSON) still verify.
+// Payloads: guest {g:1, cid, name, iat, exp}  |  registered/admin {userId, username, iat, exp}
+// iat/exp are seconds (JWT NumericDate). Old tokens have no exp (still valid) and a millisecond iat.
+const INSPIRE_ADMIN_USERNAME = 'vkesgin38';
+const INSPIRE_GUEST_USERNAME = '__guest__';           // reserved inspire_users row that owns guest posts/notes
+const INSPIRE_GUEST_TTL_S    = 180 * 24 * 60 * 60;
+const INSPIRE_USER_TTL_S     = 30 * 24 * 60 * 60;
+const INSPIRE_CID_RE         = /^[A-Za-z0-9_-]{16,64}$/;
+const INSPIRE_MAX_NAME       = 40;
+const INSPIRE_MAX_NOTE       = 1000;
+const INSPIRE_MAX_TEXT       = 2000;
+const INSPIRE_MAX_DESC       = 2000;
+const INSPIRE_MAX_BODY       = 64 * 1024;
+// Server-side fetches (short-link resolve, OG metadata)
+const INSPIRE_FETCH_TIMEOUT_MS = 5000;   // per hop
+const INSPIRE_FETCH_BUDGET_MS  = 8000;   // whole redirect chain
+const INSPIRE_MAX_HOPS         = 5;
+const INSPIRE_MAX_HTML_BYTES   = 512 * 1024;
+const INSPIRE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
+// Platforms that never embed (or embed poorly) and always need a preview card; other platforms get a
+// best-effort background fetch. Direct image/video files need no metadata.
+const INSPIRE_CARD_PLATFORMS = new Set(['web', 'behance', 'dribbble', 'linkedin', 'threads', 'figma', 'gdocs']);
+// Titles that describe a login wall, consent/challenge page or the bare platform, not the content.
+const INSPIRE_GENERIC_TITLES = new Set([
+  'instagram', 'tiktok', 'tiktok - make your day', 'x', 'twitter', 'facebook', 'log into facebook', 'facebook - log in or sign up',
+  'youtube', 'before you continue to youtube', 'before you continue', 'pinterest', 'linkedin', 'threads', 'vimeo', 'spotify',
+  'soundcloud', 'login', 'log in', 'sign in', 'sign up', 'just a moment...', 'access denied', 'attention required! | cloudflare',
+  'error', 'forbidden', 'page not found', '404 not found', 'not found',
+]);
+
+function b64urlFromBytes(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x2000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x2000));
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+// Accepts base64url and standard base64, with or without padding.
+function bytesFromB64(str) {
+  let t = String(str).replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+  if (t.length % 4 === 1) throw new Error('bad base64');
+  t += '='.repeat((4 - (t.length % 4)) % 4);
+  const bin = atob(t);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+function inspireLatin1(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x2000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x2000));
+  return s;
+}
+function inspireTokenJSON(part) {
+  const bytes = bytesFromB64(part);
+  let text;
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
+  catch { text = inspireLatin1(bytes); }   // legacy btoa() token with Latin-1 characters
+  return JSON.parse(text);
+}
+async function inspireHmacKey(secret, usage) {
+  return crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret + '_inspire'), { name: 'HMAC', hash: 'SHA-256' }, false, [usage]
   );
-  const header = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body   = btoa(JSON.stringify({ ...payload, iat: Date.now() }));
-  const sig    = await crypto.subtle.sign('HMAC', key, enc.encode(`${header}.${body}`));
-  return `${header}.${body}.${btoa(String.fromCharCode(...new Uint8Array(sig)))}`;
+}
+async function signInspireJWT(payload, secret, ttlSeconds) {
+  const enc = new TextEncoder();
+  const now = Math.floor(Date.now() / 1000);
+  const header = b64urlFromBytes(enc.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' })));
+  const body   = b64urlFromBytes(enc.encode(JSON.stringify({ ...payload, iat: now, exp: now + ttlSeconds })));
+  const sig    = await crypto.subtle.sign('HMAC', await inspireHmacKey(secret, 'sign'), enc.encode(`${header}.${body}`));
+  return `${header}.${body}.${b64urlFromBytes(new Uint8Array(sig))}`;
 }
 async function verifyInspireJWT(token, secret) {
   try {
-    const [header, body, sig] = token.split('.');
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      'raw', enc.encode(secret + '_inspire'), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']
-    );
-    const valid = await crypto.subtle.verify('HMAC', key,
-      Uint8Array.from(atob(sig), c => c.charCodeAt(0)),
-      enc.encode(`${header}.${body}`)
-    );
+    const parts = String(token).split('.');
+    if (parts.length !== 3) return null;
+    const [header, body, sig] = parts;
+    const valid = await crypto.subtle.verify('HMAC', await inspireHmacKey(secret, 'verify'),
+      bytesFromB64(sig), new TextEncoder().encode(`${header}.${body}`));
     if (!valid) return null;
-    return JSON.parse(atob(body));
+    const payload = inspireTokenJSON(body);
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+    if (payload.exp != null) {
+      const exp = Number(payload.exp);
+      const expMs = exp > 1e12 ? exp : exp * 1000;
+      if (!Number.isFinite(expMs) || expMs <= Date.now()) return null;
+    }
+    return payload;
   } catch { return null; }
 }
 async function inspireAuth(request, env) {
-  const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
+  const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '').trim();
   if (!token) return null;
   return verifyInspireJWT(token, env.JWT_SECRET || 'secret');
+}
+// Verified token -> actor, or null. Guests are identified by their client id (cid), registered users by id.
+async function inspireActor(request, env) {
+  const p = await inspireAuth(request, env);
+  if (!p) return null;
+  if (p.g === 1) {
+    if (typeof p.cid !== 'string' || !INSPIRE_CID_RE.test(p.cid)) return null;
+    return { guest: true, cid: p.cid, userId: null, username: null, name: cleanInspireName(p.name), isAdmin: false };
+  }
+  const userId = Number(p.userId);
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+  const username = typeof p.username === 'string' ? p.username : '';
+  if (username === INSPIRE_GUEST_USERNAME) return null;
+  return { guest: false, cid: null, userId, username, name: null, isAdmin: username === INSPIRE_ADMIN_USERNAME };
+}
+async function inspireSafeEqual(a, b) {
+  const enc = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(String(a))),
+    crypto.subtle.digest('SHA-256', enc.encode(String(b))),
+  ]);
+  const x = new Uint8Array(ha), y = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+
+// Display name: trim, collapse whitespace, drop control / bidi-override characters, max 40 characters.
+function cleanInspireName(v) {
+  if (typeof v !== 'string') return '';
+  let s = v.normalize('NFC')
+    .replace(/[\u200B\u200E\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/g, '')
+    .replace(/[\u0000-\u001F\u007F-\u009F\u00AD\u2028\u2029]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const chars = Array.from(s);
+  if (chars.length > INSPIRE_MAX_NAME) s = chars.slice(0, INSPIRE_MAX_NAME).join('').trim();
+  return s;
+}
+// Free text (notes, text ideas, descriptions): keep newlines/tabs, drop other control characters.
+function cleanInspireText(v) {
+  if (typeof v !== 'string') return '';
+  return v.normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u2028\u2029]/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069\uFEFF]/g, '')
+    .trim();
+}
+async function inspireBody(request) {
+  const text = await request.text();
+  if (text.length > INSPIRE_MAX_BODY) return null;
+  if (!text.trim()) return {};
+  try {
+    const d = JSON.parse(text);
+    return d && typeof d === 'object' && !Array.isArray(d) ? d : null;
+  } catch { return null; }
+}
+
+// ── Schema (idempotent; runs once per isolate) ──
+let inspireSchemaReady = null;
+let inspireGuestId = null;
+function ensureInspireSchema(env) {
+  if (!inspireSchemaReady) {
+    inspireSchemaReady = migrateInspireSchema(env).catch((e) => { inspireSchemaReady = null; throw e; });
+  }
+  return inspireSchemaReady;
+}
+async function migrateInspireSchema(env) {
+  const db = env.DB;
+  await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS inspire_users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      full_name TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now'))
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS inspire_posts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      url TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(user_id) REFERENCES inspire_users(id) ON DELETE CASCADE
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS inspire_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      post_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      content TEXT NOT NULL,
+      is_public INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(post_id) REFERENCES inspire_posts(id) ON DELETE CASCADE,
+      FOREIGN KEY(user_id) REFERENCES inspire_users(id) ON DELETE CASCADE
+    )`),
+  ]);
+  const columns = {
+    inspire_users: [['is_first_login', 'INTEGER DEFAULT 1']],
+    inspire_posts: [['author_name', 'TEXT'], ['client_id', 'TEXT'], ['url_key', 'TEXT'], ['meta', 'TEXT']],
+    inspire_notes: [['author_name', 'TEXT'], ['client_id', 'TEXT']],
+  };
+  for (const [table, cols] of Object.entries(columns)) {
+    let have = null;
+    try {
+      const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
+      have = new Set((results || []).map((r) => r.name));
+    } catch (e) {}
+    for (const [col, type] of cols) {
+      if (have && have.has(col)) continue;
+      try { await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run(); } catch (e) {}
+    }
+  }
+  await db.batch([
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_posts_url_key ON inspire_posts(url_key)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_notes_post ON inspire_notes(post_id)'),
+  ]);
+  // Reserved owner row for guest content (user_id is NOT NULL + FK). Its password can never be used:
+  // /api/inspire/login rejects this username.
+  const unusable = '!' + crypto.randomUUID() + crypto.randomUUID();
+  await db.prepare("INSERT OR IGNORE INTO inspire_users (username, password, full_name) VALUES (?, ?, 'Misafir')")
+    .bind(INSPIRE_GUEST_USERNAME, unusable).run();
+  const guest = await db.prepare('SELECT id FROM inspire_users WHERE username=?').bind(INSPIRE_GUEST_USERNAME).first();
+  inspireGuestId = guest.id;
+  // Backfill dedupe keys for legacy rows (old 'reels'/'link'/... types parse like any other link).
+  let lastId = 0;
+  for (let round = 0; round < 100; round++) {
+    const { results } = await db.prepare(
+      "SELECT id, url FROM inspire_posts WHERE url_key IS NULL AND url <> '' AND id > ? ORDER BY id LIMIT 100"
+    ).bind(lastId).all();
+    if (!results || !results.length) break;
+    const updates = [];
+    for (const r of results) {
+      lastId = r.id;
+      const parsed = parseLink(r.url);
+      if (parsed) updates.push(db.prepare('UPDATE inspire_posts SET url_key=? WHERE id=? AND url_key IS NULL').bind(parsed.key, r.id));
+    }
+    if (updates.length) await db.batch(updates);
+    if (results.length < 100) break;
+  }
+}
+
+// ── Row -> JSON ──
+// ?1 = guest cid (or NULL), ?2 = registered user id (or NULL). Never select user_id / client_id into output.
+const INSPIRE_POST_SELECT = `
+  SELECT p.id, p.type, p.url, p.description, p.created_at, p.meta,
+    COALESCE(p.author_name,
+      CASE WHEN u.username = '__guest__' THEN '' ELSE COALESCE(NULLIF(u.full_name, ''), u.username) END, '') AS author,
+    CASE WHEN (?1 IS NOT NULL AND p.client_id = ?1)
+           OR (?2 IS NOT NULL AND p.client_id IS NULL AND p.user_id = ?2) THEN 1 ELSE 0 END AS is_mine
+  FROM inspire_posts p LEFT JOIN inspire_users u ON u.id = p.user_id`;
+const INSPIRE_NOTE_SELECT = `
+  SELECT n.id, n.post_id, n.content, n.is_public, n.created_at,
+    COALESCE(n.author_name,
+      CASE WHEN u.username = '__guest__' THEN '' ELSE COALESCE(NULLIF(u.full_name, ''), u.username) END, '') AS author,
+    CASE WHEN (?1 IS NOT NULL AND n.client_id = ?1)
+           OR (?2 IS NOT NULL AND n.client_id IS NULL AND n.user_id = ?2) THEN 1 ELSE 0 END AS is_mine
+  FROM inspire_notes n LEFT JOIN inspire_users u ON u.id = n.user_id`;
+const INSPIRE_NOTE_VISIBLE = `(n.is_public = 1
+  OR (?1 IS NOT NULL AND n.client_id = ?1)
+  OR (?2 IS NOT NULL AND n.client_id IS NULL AND n.user_id = ?2))`;
+
+function inspireOwnerParams(actor) {
+  return [actor && actor.guest ? actor.cid : null, actor && !actor.guest ? actor.userId : null];
+}
+function inspireMetaOut(v) {
+  if (!v) return null;
+  try { const m = JSON.parse(v); return m && typeof m === 'object' && !Array.isArray(m) ? m : null; } catch { return null; }
+}
+function inspirePostOut(r, isAdmin, notes) {
+  return {
+    id: r.id, type: r.type, url: r.url || '', description: r.description || '', created_at: r.created_at,
+    author: r.author || '', is_mine: !!r.is_mine, can_delete: !!r.is_mine || !!isAdmin,
+    meta: inspireMetaOut(r.meta), notes: notes || [],
+  };
+}
+function inspireNoteOut(n, isAdmin) {
+  return {
+    id: n.id, content: n.content || '', author: n.author || '', is_public: n.is_public === 1,
+    is_mine: !!n.is_mine, can_edit: !!n.is_mine || !!isAdmin, created_at: n.created_at,
+  };
+}
+async function inspireAuthorName(db, actor) {
+  if (actor.guest) return actor.name;
+  const row = await db.prepare('SELECT username, full_name FROM inspire_users WHERE id=?').bind(actor.userId).first();
+  if (!row || row.username === INSPIRE_GUEST_USERNAME) return null;
+  return row.full_name || row.username;
+}
+async function inspireFindDuplicate(db, key) {
+  if (!key) return null;
+  const r = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.url_key = ?3 ORDER BY p.id ASC LIMIT 1`).bind(null, null, key).first();
+  return r ? { id: r.id, author: r.author || '', created_at: r.created_at } : null;
+}
+
+// ── Safe server-side fetching ──
+function inspireIsPrivateIPv4(host) {
+  const o = host.split('.').map(Number);
+  if (o.length !== 4 || o.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  const [a, b, c] = o;
+  return a === 0 || a === 10 || a === 127 || a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 192 && b === 0 && (c === 0 || c === 2)) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51 && c === 100) ||
+    (a === 203 && b === 0 && c === 113);
+}
+// URL object if it may be fetched server-side, else null. Blocks non-http(s), credentials, odd ports,
+// IPv6 literals, private/loopback IPv4, localhost and internal suffixes, and this worker's own hosts.
+function inspireSafeURL(href, selfHost) {
+  let u;
+  try { u = new URL(href); } catch { return null; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  if (u.username || u.password) return null;
+  if (u.port && !['80', '443', '8080', '8443'].includes(u.port)) return null;
+  const host = u.hostname.toLowerCase().replace(/\.+$/, '');
+  if (!host || host.includes(':') || host.startsWith('[')) return null;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    if (inspireIsPrivateIPv4(host)) return null;
+  } else {
+    if (!host.includes('.')) return null;
+    if (host === 'localhost' || /\.(localhost|local|internal|intranet|lan|home|corp|localdomain|home\.arpa)$/.test(host)) return null;
+    if (/(^|\.)(nip\.io|sslip\.io|xip\.io|localtest\.me|lvh\.me|vcap\.me)$/.test(host)) return null;
+  }
+  if (selfHost && host === selfHost) return null;
+  if (host === 'vk-portfolio-api.vkesgin38.workers.dev' || host.endsWith('.vkesgin38.workers.dev')) return null;
+  return u;
+}
+function inspireFetchHeaders(accept) {
+  // Fresh headers only: nothing from the incoming request (Authorization, cookies) is ever forwarded.
+  return { 'User-Agent': INSPIRE_UA, 'Accept': accept, 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' };
+}
+function inspireDiscard(res) {
+  try { if (res.body) res.body.cancel().catch(() => {}); } catch (e) {}
+}
+function inspireIsLoginURL(u) {
+  return u.hostname === 'accounts.google.com' ||
+    /\/(accounts\/login|login|signin|sign-in|sign_in|ServiceLogin)(\/|$)/i.test(u.pathname);
+}
+// Reads at most maxBytes (stops early after </head>) and decodes with the declared charset.
+async function inspireReadText(res, maxBytes, contentType) {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.byteLength;
+      if (/<\/head\s*>/i.test(inspireLatin1(value))) break;
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  const buf = new Uint8Array(Math.min(total, maxBytes));
+  let off = 0;
+  for (const c of chunks) {
+    const take = Math.min(c.byteLength, buf.length - off);
+    buf.set(c.subarray(0, take), off);
+    off += take;
+    if (off >= buf.length) break;
+  }
+  let charset = (/charset\s*=\s*["']?([\w-]+)/i.exec(contentType || '') || [])[1];
+  if (!charset) charset = (/<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(inspireLatin1(buf.subarray(0, 4096))) || [])[1];
+  let decoder;
+  try { decoder = new TextDecoder(charset || 'utf-8'); } catch { decoder = new TextDecoder('utf-8'); }
+  return decoder.decode(buf);
+}
+const INSPIRE_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '\u2013', mdash: '\u2014', hellip: '\u2026',
+  lsquo: '\u2018', rsquo: '\u2019', ldquo: '\u201C', rdquo: '\u201D', laquo: '\u00AB', raquo: '\u00BB', bull: '\u2022',
+  middot: '\u00B7', copy: '\u00A9', reg: '\u00AE', trade: '\u2122', euro: '\u20AC', pound: '\u00A3', deg: '\u00B0', times: '\u00D7',
+  ccedil: '\u00E7', Ccedil: '\u00C7', ouml: '\u00F6', Ouml: '\u00D6', uuml: '\u00FC', Uuml: '\u00DC', scedil: '\u015F',
+  Scedil: '\u015E', gbreve: '\u011F', Gbreve: '\u011E', inodot: '\u0131', imath: '\u0131', Idot: '\u0130', acirc: '\u00E2',
+  Acirc: '\u00C2', icirc: '\u00EE', ucirc: '\u00FB', eacute: '\u00E9', egrave: '\u00E8', aacute: '\u00E1', agrave: '\u00E0',
+  iacute: '\u00ED', oacute: '\u00F3', uacute: '\u00FA', ntilde: '\u00F1', auml: '\u00E4', Auml: '\u00C4', szlig: '\u00DF',
+};
+function inspireDecodeEntities(s) {
+  return String(s).replace(/&(#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});?/g, (m, e) => {
+    if (e[0] === '#') {
+      const cp = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return cp > 0 && cp <= 0x10FFFF && !(cp >= 0xD800 && cp <= 0xDFFF) ? String.fromCodePoint(cp) : m;
+    }
+    return Object.prototype.hasOwnProperty.call(INSPIRE_ENTITIES, e) ? INSPIRE_ENTITIES[e] : m;
+  });
+}
+function inspireAttrs(s) {
+  const out = Object.create(null);
+  const re = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  let m;
+  while ((m = re.exec(s))) {
+    const k = m[1].toLowerCase();
+    if (!(k in out)) out[k] = m[2] ?? m[3] ?? m[4] ?? '';
+  }
+  return out;
+}
+function inspireMetaText(s, max) {
+  if (s == null) return null;
+  let t = inspireDecodeEntities(s)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069\uFEFF]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!t) return null;
+  const chars = Array.from(t);
+  if (chars.length > max) t = chars.slice(0, max - 1).join('').trimEnd() + '\u2026';
+  return t;
+}
+// OpenGraph / Twitter-card / <title> from the document head.
+function inspireParseHead(html, pageUrl) {
+  const end = html.search(/<\/head\s*>|<body[\s>]/i);
+  const head = end > 0 ? html.slice(0, end) : html;
+  const metas = Object.create(null);
+  const metaRe = /<meta\b([^>]*)>/gi;
+  let m;
+  while ((m = metaRe.exec(head))) {
+    const a = inspireAttrs(m[1]);
+    const key = (a.property || a.name || a.itemprop || '').toLowerCase().trim();
+    if (key && a.content != null && a.content.trim() && !(key in metas)) metas[key] = a.content;
+  }
+  let imageSrc = null;
+  const linkRe = /<link\b([^>]*)>/gi;
+  while ((m = linkRe.exec(head))) {
+    const a = inspireAttrs(m[1]);
+    if (/(^|\s)image_src(\s|$)/i.test(a.rel || '') && a.href) { imageSrc = a.href; break; }
+  }
+  const pick = (...keys) => { for (const k of keys) if (metas[k]) return metas[k]; return null; };
+  const titleTag = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head);
+  let image = null;
+  const rawImage = pick('og:image:secure_url', 'og:image', 'og:image:url', 'twitter:image', 'twitter:image:src') || imageSrc;
+  if (rawImage) {
+    try {
+      const iu = new URL(inspireDecodeEntities(rawImage.trim()), pageUrl);
+      if ((iu.protocol === 'https:' || iu.protocol === 'http:') && iu.href.length <= 2048) image = iu.href;
+    } catch (e) {}
+  }
+  return {
+    title: inspireMetaText(pick('og:title', 'twitter:title') ?? (titleTag ? titleTag[1] : null), 200),
+    description: inspireMetaText(pick('og:description', 'twitter:description', 'description'), 400),
+    image,
+    site_name: inspireMetaText(pick('og:site_name', 'application-name'), 100),
+  };
+}
+// Fetch preview metadata for a link. Returns {title, description, image, site_name, provider} or null.
+// A private Google Drive/Docs file (redirect to accounts.google.com) returns {..., login_wall: true}.
+async function inspireFetchMeta(href, selfHost) {
+  let provider;
+  try { provider = new URL(href).hostname.toLowerCase().replace(/^www\./, ''); } catch { return null; }
+  let current = href;
+  const deadline = Date.now() + INSPIRE_FETCH_BUDGET_MS;
+  for (let hop = 0; hop <= INSPIRE_MAX_HOPS; hop++) {
+    const u = inspireSafeURL(current, selfHost);
+    if (!u) return null;
+    if (hop > 0 && inspireIsLoginURL(u)) {
+      return u.hostname === 'accounts.google.com'
+        ? { title: null, description: null, image: null, site_name: null, provider, login_wall: true }
+        : null;
+    }
+    const wait = Math.min(INSPIRE_FETCH_TIMEOUT_MS, deadline - Date.now());
+    if (wait <= 0) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), wait);
+    try {
+      const res = await fetch(u.href, {
+        method: 'GET', redirect: 'manual', signal: ctrl.signal,
+        headers: inspireFetchHeaders('text/html,application/xhtml+xml;q=0.9,*/*;q=0.8'),
+      });
+      const loc = res.status >= 300 && res.status < 400 ? res.headers.get('Location') : null;
+      if (loc) { inspireDiscard(res); current = new URL(loc, u.href).href; continue; }
+      if (!res.ok) { inspireDiscard(res); return null; }
+      const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+      if (ct.startsWith('image/')) {
+        inspireDiscard(res);
+        return { title: null, description: null, image: u.href, site_name: null, provider };
+      }
+      if (ct && !ct.includes('html') && !ct.includes('xml')) { inspireDiscard(res); return null; }
+      const html = await inspireReadText(res, INSPIRE_MAX_HTML_BYTES, ct);
+      const head = inspireParseHead(html, u.href);
+      if (head.title && INSPIRE_GENERIC_TITLES.has(head.title.toLowerCase())) head.title = null;
+      if (!head.title && !head.description && !head.image) return null;
+      return { ...head, provider };
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return null;
+}
+function inspireRefreshTarget(html, base) {
+  const re = /<meta\b([^>]*)>/gi;
+  let m;
+  while ((m = re.exec(html))) {
+    const a = inspireAttrs(m[1]);
+    if ((a['http-equiv'] || '').toLowerCase() !== 'refresh' || !a.content) continue;
+    const t = /url\s*=\s*['"]?([^'"\s;]+)/i.exec(inspireDecodeEntities(a.content));
+    if (t) { try { return new URL(t[1], base).href; } catch (e) {} }
+  }
+  return null;
+}
+function inspireLoginNext(u) {
+  for (const k of ['next', 'continue', 'redirect', 'redirect_url', 'return_to', 'returnTo']) {
+    const v = u.searchParams.get(k);
+    if (!v) continue;
+    try {
+      const t = new URL(v, u.href);
+      const p = parseLink(t.href);
+      if (p && !p.needsResolve) return t.href;
+    } catch (e) {}
+  }
+  return null;
+}
+// Follow a short link (pin.it, vm.tiktok.com, t.co, instagram.com/share/..., bit.ly, ...) without
+// fetching the destination page once it is a recognised content URL. Returns the final URL or null.
+async function inspireResolveLink(href, selfHost) {
+  let current = href;
+  const deadline = Date.now() + INSPIRE_FETCH_BUDGET_MS;
+  for (let hop = 0; hop <= INSPIRE_MAX_HOPS; hop++) {
+    const u = inspireSafeURL(current, selfHost);
+    if (!u) return null;
+    if (hop > 0) {
+      if (inspireIsLoginURL(u)) return inspireLoginNext(u);
+      const p = parseLink(u.href);
+      if (p && !p.needsResolve && p.id) return u.href;
+    }
+    if (hop === INSPIRE_MAX_HOPS) return null;
+    const wait = Math.min(INSPIRE_FETCH_TIMEOUT_MS, deadline - Date.now());
+    if (wait <= 0) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), wait);
+    try {
+      const res = await fetch(u.href, {
+        method: 'GET', redirect: 'manual', signal: ctrl.signal,
+        headers: inspireFetchHeaders('text/html,application/xhtml+xml;q=0.9,*/*;q=0.8'),
+      });
+      const loc = res.status >= 300 && res.status < 400 ? res.headers.get('Location') : null;
+      if (loc) { inspireDiscard(res); current = new URL(loc, u.href).href; continue; }
+      const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+      if (!res.ok || !ct.includes('html')) { inspireDiscard(res); return hop > 0 ? u.href : null; }
+      const next = inspireRefreshTarget(await inspireReadText(res, 64 * 1024, ct), u.href);
+      if (next && next !== u.href) { current = next; continue; }
+      return hop > 0 ? u.href : null;
+    } catch (e) {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return null;
+}
+// Per-isolate caches (best effort; isolates are short-lived).
+const inspireResolveCache = new Map();
+const inspireMetaAttempts = new Map();
+function inspireCacheGet(map, key) {
+  const e = map.get(key);
+  if (!e) return undefined;
+  if (e.exp < Date.now()) { map.delete(key); return undefined; }
+  return e.value;
+}
+function inspireCacheSet(map, key, value, ttlMs) {
+  if (map.size >= 500) map.delete(map.keys().next().value);
+  map.set(key, { value, exp: Date.now() + ttlMs });
+}
+// parseLink + server-side short-link resolution. Unresolvable short links are kept as they are.
+async function inspireParseInput(raw, selfHost) {
+  const parsed = parseLink(raw);
+  if (!parsed || !parsed.needsResolve) return parsed;
+  let finalUrl = inspireCacheGet(inspireResolveCache, parsed.canonical);
+  if (finalUrl === undefined) {
+    finalUrl = await inspireResolveLink(parsed.canonical, selfHost);
+    inspireCacheSet(inspireResolveCache, parsed.canonical, finalUrl, finalUrl ? 3600e3 : 300e3);
+  }
+  if (finalUrl) {
+    const again = parseLink(finalUrl);
+    if (again && !again.needsResolve) return again;
+  }
+  return parsed;
+}
+function inspireNeedsCard(p) {
+  if (p.platform === 'image' || p.platform === 'video') return false;
+  return INSPIRE_CARD_PLATFORMS.has(p.platform) || !p.embed;
+}
+async function inspireStoreMeta(db, id, href, selfHost) {
+  const meta = await inspireFetchMeta(href, selfHost);
+  if (meta) await db.prepare('UPDATE inspire_posts SET meta=? WHERE id=? AND meta IS NULL').bind(JSON.stringify(meta), id).run();
+  return meta;
+}
+
+// ── /api/inspire/* router. Every error is JSON {error, message} with CORS headers. ──
+async function handleInspire(request, env, ctx, cleanPath, method, origin) {
+  const fail = (status, error, message, extra) => json({ error, message, ...(extra || {}) }, status, origin);
+  try {
+    await ensureInspireSchema(env);
+    const db = env.DB;
+    const selfHost = new URL(request.url).hostname.toLowerCase();
+    let m;
+
+    // Table init (kept for the old frontend; the migration above already ran)
+    if (cleanPath === '/api/inspire/init' && method === 'GET') {
+      return json({ ok: true }, 200, origin);
+    }
+
+    // Feature flags / limits. Extension point for the AI storyboard phase.
+    if (cleanPath === '/api/inspire/config' && method === 'GET') {
+      return json({ storyboard: false, max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT }, 200, origin);
+    }
+
+    // Guest session: a name (or nothing = Anonim) + a client-generated id. No password.
+    if (cleanPath === '/api/inspire/guest' && method === 'POST') {
+      const d = await inspireBody(request);
+      if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
+      const cid = typeof d.cid === 'string' ? d.cid : '';
+      if (!INSPIRE_CID_RE.test(cid)) return fail(400, 'invalid_cid', 'Geçersiz istemci kimliği');
+      const name = cleanInspireName(d.name);
+      const token = await signInspireJWT({ g: 1, cid, name }, env.JWT_SECRET || 'secret', INSPIRE_GUEST_TTL_S);
+      return json({ token, user: { guest: true, name, display_name: name || 'Anonim', is_admin: false } }, 200, origin);
+    }
+
+    // Password login (owner/admin 'vkesgin38' and legacy registered users)
+    if (cleanPath === '/api/inspire/login' && method === 'POST') {
+      const d = (await inspireBody(request)) || {};
+      const username = typeof d.username === 'string' ? d.username.trim() : '';
+      const password = typeof d.password === 'string' ? d.password : '';
+      if (!username || !password) return fail(401, 'missing_credentials', 'Kullanıcı adı ve şifre gereklidir');
+      if (username === INSPIRE_GUEST_USERNAME) return fail(401, 'invalid_credentials', 'Hatalı kullanıcı adı veya şifre');
+      let row = null;
+      if (username === INSPIRE_ADMIN_USERNAME) {
+        if (!env.ADMIN_PASSWORD) return fail(401, 'invalid_credentials', 'Hatalı kullanıcı adı veya şifre');
+        if (await inspireSafeEqual(password, env.ADMIN_PASSWORD)) {
+          row = await db.prepare('SELECT * FROM inspire_users WHERE username=?').bind(INSPIRE_ADMIN_USERNAME).first();
+          if (!row) {
+            await db.prepare("INSERT OR IGNORE INTO inspire_users (username,password,full_name) VALUES (?,?,'Veli Kesgin')")
+              .bind(INSPIRE_ADMIN_USERNAME, password).run();
+            row = await db.prepare('SELECT * FROM inspire_users WHERE username=?').bind(INSPIRE_ADMIN_USERNAME).first();
+          }
+        }
+      }
+      if (!row) row = await db.prepare('SELECT * FROM inspire_users WHERE username=? AND password=?').bind(username, password).first();
+      if (!row) return fail(401, 'invalid_credentials', 'Hatalı kullanıcı adı veya şifre');
+      const token = await signInspireJWT({ userId: row.id, username: row.username }, env.JWT_SECRET || 'secret', INSPIRE_USER_TTL_S);
+      const name = row.full_name || row.username;
+      return json({ token, user: {
+        id: row.id, username: row.username, full_name: row.full_name, is_first_login: row.is_first_login,
+        guest: false, name, display_name: name, is_admin: row.username === INSPIRE_ADMIN_USERNAME,
+      } }, 200, origin);
+    }
+
+    // Legacy: password change for registered users
+    if (cleanPath === '/api/inspire/change-password' && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Yetkisiz');
+      if (actor.guest) return fail(403, 'forbidden', 'Misafir hesabının şifresi yok');
+      const d = (await inspireBody(request)) || {};
+      const newPassword = typeof d.newPassword === 'string' ? d.newPassword : '';
+      if (newPassword.length < 4) return fail(400, 'invalid_password', 'Gecerli bir sifre giriniz');
+      await db.prepare('UPDATE inspire_users SET password=?, is_first_login=0 WHERE id=?').bind(newPassword, actor.userId).run();
+      return json({ ok: true }, 200, origin);
+    }
+
+    // Board: newest first. Private notes only reach their author (filtered in SQL).
+    if (cleanPath === '/api/inspire/posts' && method === 'GET') {
+      const actor = await inspireActor(request, env);   // optional
+      const [cid, uid] = inspireOwnerParams(actor);
+      const [postsRes, notesRes] = await db.batch([
+        db.prepare(`${INSPIRE_POST_SELECT} ORDER BY p.id DESC`).bind(cid, uid),
+        db.prepare(`${INSPIRE_NOTE_SELECT} WHERE ${INSPIRE_NOTE_VISIBLE} ORDER BY n.id ASC`).bind(cid, uid),
+      ]);
+      const isAdmin = !!(actor && actor.isAdmin);
+      const notesByPost = new Map();
+      for (const n of notesRes.results || []) {
+        if (!notesByPost.has(n.post_id)) notesByPost.set(n.post_id, []);
+        notesByPost.get(n.post_id).push(inspireNoteOut(n, isAdmin));
+      }
+      return json((postsRes.results || []).map((r) => inspirePostOut(r, isAdmin, notesByPost.get(r.id))), 200, origin);
+    }
+
+    // Live duplicate/platform check for the add modal
+    if (cleanPath === '/api/inspire/posts/check' && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const d = await inspireBody(request);
+      if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
+      const raw = typeof d.url === 'string' ? d.url.trim() : '';
+      if (!raw) return fail(400, 'url_required', 'Link gerekli');
+      if (raw.length > MAX_URL_LENGTH) return fail(400, 'url_too_long', 'Link çok uzun');
+      const parsed = await inspireParseInput(raw, selfHost);
+      if (!parsed) return fail(400, 'invalid_url', 'Geçerli bir http(s) linki girin');
+      const dup = await inspireFindDuplicate(db, parsed.key);
+      return json({ duplicate: !!dup, ...(dup ? { existing: dup } : {}), platform: parsed.platform, canonical: parsed.canonical }, 200, origin);
+    }
+
+    // Create a link idea {url, description?} or a text idea {type:'text', text}
+    if (cleanPath === '/api/inspire/posts' && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const d = await inspireBody(request);
+      if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
+      const author = await inspireAuthorName(db, actor);
+      if (author === null) return fail(401, 'unauthorized', 'Oturum geçersiz, tekrar giriş yapın');
+      const [cid, uid] = inspireOwnerParams(actor);
+      let type, storedUrl, description, urlKey = null, metaJson = null, parsed = null, metaLater = false;
+      if (d.type === 'text') {
+        const text = cleanInspireText(d.text);
+        if (!text) return fail(400, 'empty_text', 'Fikir metni boş olamaz');
+        if (text.length > INSPIRE_MAX_TEXT) return fail(400, 'text_too_long', `Fikir metni en fazla ${INSPIRE_MAX_TEXT} karakter olabilir`);
+        type = 'text'; storedUrl = ''; description = text;
+        // AI storyboard phase: generate here (or in ctx.waitUntil) when config.storyboard is enabled.
+      } else {
+        const raw = typeof d.url === 'string' ? d.url.trim() : '';
+        if (!raw) return fail(400, 'url_required', 'Link gerekli');
+        if (raw.length > MAX_URL_LENGTH) return fail(400, 'url_too_long', 'Link çok uzun');
+        description = cleanInspireText(d.description);
+        if (description.length > INSPIRE_MAX_DESC) return fail(400, 'description_too_long', `Açıklama en fazla ${INSPIRE_MAX_DESC} karakter olabilir`);
+        parsed = await inspireParseInput(raw, selfHost);
+        if (!parsed) return fail(400, 'invalid_url', 'Geçerli bir http(s) linki girin');
+        const dup = await inspireFindDuplicate(db, parsed.key);
+        if (dup) return fail(409, 'duplicate', 'Bu link zaten eklenmiş', { existing: dup });
+        type = parsed.platform; storedUrl = parsed.canonical; urlKey = parsed.key;
+        if (inspireNeedsCard(parsed)) {
+          const meta = await inspireFetchMeta(parsed.canonical, selfHost);
+          if (meta) metaJson = JSON.stringify(meta);
+        } else if (parsed.platform !== 'image' && parsed.platform !== 'video') {
+          metaLater = true;   // embeddable: metadata is only a fallback, fetch it after responding
+        }
+      }
+      // Conditional insert closes the race between two simultaneous adds of the same link.
+      const ins = await db.prepare(
+        `INSERT INTO inspire_posts (user_id, type, url, description, author_name, client_id, url_key, meta)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+         WHERE ?7 IS NULL OR NOT EXISTS (SELECT 1 FROM inspire_posts WHERE url_key = ?7)`
+      ).bind(actor.guest ? inspireGuestId : actor.userId, type, storedUrl, description, author, cid, urlKey, metaJson).run();
+      if (!ins.meta || !ins.meta.changes) {
+        return fail(409, 'duplicate', 'Bu link zaten eklenmiş', { existing: await inspireFindDuplicate(db, urlKey) });
+      }
+      const id = ins.meta.last_row_id;
+      if (metaLater && ctx && typeof ctx.waitUntil === 'function') {
+        ctx.waitUntil(inspireStoreMeta(db, id, parsed.canonical, selfHost).catch(() => {}));
+      }
+      const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+      return json(inspirePostOut(row, actor.isAdmin, []), 201, origin);
+    }
+
+    // Fetch + store preview metadata for an existing post whose meta is still empty (idempotent)
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/meta$/)) && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const id = Number(m[1]);
+      const row = await db.prepare('SELECT id, url, meta FROM inspire_posts WHERE id=?').bind(id).first();
+      if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
+      if (row.meta) return json({ meta: inspireMetaOut(row.meta) }, 200, origin);
+      const parsed = row.url ? parseLink(row.url) : null;
+      if (!parsed || parsed.platform === 'image' || parsed.platform === 'video') return json({ meta: null }, 200, origin);
+      if (inspireCacheGet(inspireMetaAttempts, id) !== undefined) return json({ meta: null }, 200, origin);
+      inspireCacheSet(inspireMetaAttempts, id, true, 10 * 60e3);
+      const meta = await inspireStoreMeta(db, id, parsed.canonical, selfHost);
+      return json({ meta: meta || null }, 200, origin);
+    }
+
+    // Add a note to a post
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/notes$/)) && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const d = await inspireBody(request);
+      if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
+      const content = cleanInspireText(d.content);
+      if (!content) return fail(400, 'empty_note', 'Not boş olamaz');
+      if (content.length > INSPIRE_MAX_NOTE) return fail(400, 'note_too_long', `Not en fazla ${INSPIRE_MAX_NOTE} karakter olabilir`);
+      const isPublic = d.is_public === true || d.is_public === 1 || d.is_public === '1' || d.is_public === 'true' ? 1 : 0;
+      const author = await inspireAuthorName(db, actor);
+      if (author === null) return fail(401, 'unauthorized', 'Oturum geçersiz, tekrar giriş yapın');
+      const [cid, uid] = inspireOwnerParams(actor);
+      const postId = Number(m[1]);
+      const ins = await db.prepare(
+        `INSERT INTO inspire_notes (post_id, user_id, content, is_public, author_name, client_id)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6 WHERE EXISTS (SELECT 1 FROM inspire_posts WHERE id = ?1)`
+      ).bind(postId, actor.guest ? inspireGuestId : actor.userId, content, isPublic, author, cid).run();
+      if (!ins.meta || !ins.meta.changes) return fail(404, 'not_found', 'Fikir bulunamadı');
+      const row = await db.prepare(`${INSPIRE_NOTE_SELECT} WHERE n.id = ?3`).bind(cid, uid, ins.meta.last_row_id).first();
+      return json(inspireNoteOut(row, actor.isAdmin), 201, origin);
+    }
+
+    // Delete a post: its owner, the inspire admin, or a portfolio-admin JWT (as before)
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})$/)) && method === 'DELETE') {
+      const actor = await inspireActor(request, env);
+      const siteAdmin = actor ? null : await authMiddleware(request, env);
+      if (!actor && !(siteAdmin && siteAdmin.role === 'admin')) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const id = Number(m[1]);
+      const [cid, uid] = inspireOwnerParams(actor);
+      const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+      if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
+      if (!(siteAdmin || actor.isAdmin || row.is_mine)) return fail(403, 'forbidden', 'Bu fikri silme yetkin yok');
+      await db.batch([
+        db.prepare('DELETE FROM inspire_notes WHERE post_id=?').bind(id),
+        db.prepare('DELETE FROM inspire_posts WHERE id=?').bind(id),
+      ]);
+      return json({ ok: true }, 200, origin);
+    }
+
+    // Edit / delete a note: its owner or the inspire admin
+    if ((m = cleanPath.match(/^\/api\/inspire\/notes\/(\d{1,15})$/)) && (method === 'PUT' || method === 'DELETE')) {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const id = Number(m[1]);
+      const [cid, uid] = inspireOwnerParams(actor);
+      const row = await db.prepare(`${INSPIRE_NOTE_SELECT} WHERE n.id = ?3`).bind(cid, uid, id).first();
+      if (!row) return fail(404, 'not_found', 'Not bulunamadı');
+      if (!(actor.isAdmin || row.is_mine)) return fail(403, 'forbidden', 'Bu notu değiştirme yetkin yok');
+      if (method === 'DELETE') {
+        await db.prepare('DELETE FROM inspire_notes WHERE id=?').bind(id).run();
+        return json({ ok: true }, 200, origin);
+      }
+      const d = await inspireBody(request);
+      if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
+      const content = cleanInspireText(d.content);
+      if (!content) return fail(400, 'empty_note', 'Not boş olamaz');
+      if (content.length > INSPIRE_MAX_NOTE) return fail(400, 'note_too_long', `Not en fazla ${INSPIRE_MAX_NOTE} karakter olabilir`);
+      const isPublic = typeof d.is_public === 'boolean' ? (d.is_public ? 1 : 0) : null;   // optional
+      await db.prepare('UPDATE inspire_notes SET content=?, is_public=COALESCE(?, is_public) WHERE id=?').bind(content, isPublic, id).run();
+      const updated = await db.prepare(`${INSPIRE_NOTE_SELECT} WHERE n.id = ?3`).bind(cid, uid, id).first();
+      return json(inspireNoteOut(updated, actor.isAdmin), 200, origin);
+    }
+
+    return fail(404, 'not_found', 'Bulunamadı');
+  } catch (e) {
+    console.error('inspire error', cleanPath, e && e.stack || e);
+    return fail(500, 'server_error', 'Sunucu hatası, lütfen tekrar deneyin');
+  }
 }
 
 // UI JWT helpers
@@ -153,7 +950,7 @@ async function uiAuth(request, env) {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url    = new URL(request.url);
     const path   = url.pathname;
     const method = request.method;
@@ -175,7 +972,7 @@ export default {
     // === AUTH ===
     if (path === '/api/auth/login' && method === 'POST') {
       const { password } = await request.json().catch(() => ({}));
-      if (!password || password !== env.ADMIN_PASSWORD) {
+      if (!env.ADMIN_PASSWORD || !password || password !== env.ADMIN_PASSWORD) {
         return json({ error: 'Geçersiz şifre' }, 401, origin);
       }
       const token = await signJWT({ role: 'admin' }, env.JWT_SECRET);
@@ -513,41 +1310,12 @@ if (path.startsWith('/api/kpss')) {
 }
 // ─── KPSS ROUTES SONU ───
 // === INSPIRE ROUTES ===
-    // 1. Table Init
-    if (path === '/api/inspire/init' && method === 'GET') {
-      try {
-        await env.DB.prepare(`
-          CREATE TABLE IF NOT EXISTS inspire_users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            full_name TEXT DEFAULT '',
-            created_at TEXT DEFAULT (datetime('now'))
-          )
-        `).run();
-        try { await env.DB.prepare('ALTER TABLE inspire_users ADD COLUMN is_first_login INTEGER DEFAULT 1').run(); } catch(e) {}
-        await env.DB.prepare(`
-          CREATE TABLE IF NOT EXISTS inspire_posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            type TEXT NOT NULL, 
-            url TEXT NOT NULL,
-            description TEXT DEFAULT '',
-            created_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY(user_id) REFERENCES inspire_users(id) ON DELETE CASCADE
-          )
-        `).run();
-        return json({ok: true}, 200, origin);
-      } catch(e) {
-        return json({error: e.message}, 500, origin);
-      }
-    }
-
-    // 2. Admin User Management
+    // Inspire user management (portfolio admin JWT). The reserved '__guest__' row owns every guest
+    // post/note (ON DELETE CASCADE), so it is hidden from the list and cannot be deleted here.
     if (cleanPath === '/api/admin/inspire-users' && method === 'GET') {
       const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
-      const { results } = await env.DB.prepare('SELECT id, username, full_name, created_at, password FROM inspire_users ORDER BY id DESC').all();
+      const { results } = await env.DB.prepare("SELECT id, username, full_name, created_at, password FROM inspire_users WHERE username <> '__guest__' ORDER BY id DESC").all();
       return json(results, 200, origin);
     }
     if (cleanPath === '/api/admin/inspire-users' && method === 'POST') {
@@ -566,145 +1334,15 @@ if (path.startsWith('/api/kpss')) {
       const admin = await authMiddleware(request, env);
       if (!admin) return json({ error: 'Yetkisiz' }, 401, origin);
       const id = cleanPath.split('/').pop();
+      const target = await env.DB.prepare('SELECT username FROM inspire_users WHERE id=?').bind(id).first();
+      if (target && target.username === '__guest__') return json({ error: 'reserved_user', message: 'Misafir sistem kullanıcısı silinemez' }, 400, origin);
       await env.DB.prepare('DELETE FROM inspire_users WHERE id=?').bind(id).run();
       return json({ ok: true }, 200, origin);
     }
 
-    // 3. User Login
-    if (path === '/api/inspire/login' && method === 'POST') {
-      const { username, password } = await request.json().catch(() => ({}));
-      if (!username || !password) return json({ error: 'Kullanıcı adı ve şifre gereklidir' }, 401, origin);
-      
-      if (username === 'vkesgin38' && password === env.ADMIN_PASSWORD) {
-         const exists = await env.DB.prepare("SELECT * FROM inspire_users WHERE username='vkesgin38'").first();
-         if (!exists) {
-           await env.DB.prepare("INSERT INTO inspire_users (username,password,full_name) VALUES ('vkesgin38',?,'Veli Kesgin')").bind(password).run();
-         }
-      }
-      
-      let user = await env.DB.prepare("SELECT * FROM inspire_users WHERE username=? AND password=?").bind(username, password).first();
-      if (!user) return json({ error: 'Hatalı kullanıcı adı veya şifre' }, 401, origin);
-
-      const token = await signInspireJWT({ userId: user.id, username: user.username }, env.JWT_SECRET || 'secret');
-      return json({ token, user: { id:user.id, username:user.username, full_name:user.full_name, is_first_login: user.is_first_login } }, 200, origin);
-    }
-
-    
-    if (path === '/api/inspire/change-password' && method === 'POST') {
-      const user = await inspireAuth(request, env);
-      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
-      const { newPassword } = await request.json();
-      if (!newPassword || newPassword.length < 4) return json({ error: 'Gecerli bir sifre giriniz' }, 400, origin);
-      await env.DB.prepare('UPDATE inspire_users SET password=?, is_first_login=0 WHERE id=?').bind(newPassword, user.userId).run();
-      return json({ ok: true }, 200, origin);
-    }
-
-    // 4. Posts
-    if (path === '/api/inspire/posts' && method === 'GET') {
-      const { results } = await env.DB.prepare(`
-        SELECT p.*, u.full_name as author,
-        (
-          SELECT json_group_array(json_object('id', n.id, 'content', n.content, 'author', nu.full_name, 'is_public', n.is_public, 'user_id', n.user_id))
-          FROM inspire_notes n 
-          LEFT JOIN inspire_users nu ON n.user_id = nu.id 
-          WHERE n.post_id = p.id
-        ) as notes_json
-        FROM inspire_posts p 
-        LEFT JOIN inspire_users u ON p.user_id = u.id 
-        ORDER BY p.id DESC
-      `).all();
-      
-      const parsedResults = results.map(r => {
-        let notes = [];
-        try {
-          if (r.notes_json) {
-            notes = JSON.parse(r.notes_json);
-            // sqlite json_group_array might return '[{}]' if empty due to some joins, let's filter nulls
-            notes = notes.filter(n => n.id !== null);
-          }
-        } catch(e) {}
-        r.notes = notes;
-        delete r.notes_json;
-        return r;
-      });
-      return json(parsedResults, 200, origin);
-    }
-
-    if (path === '/api/inspire/posts' && method === 'POST') {
-      const user = await inspireAuth(request, env);
-      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
-      const d = await request.json();
-      if (!d.type || !d.url) return json({ error: 'Tip ve URL gerekli' }, 400, origin);
-      
-      const { meta } = await env.DB.prepare(
-        'INSERT INTO inspire_posts (user_id, type, url, description) VALUES (?, ?, ?, ?)'
-      ).bind(user.userId, d.type, d.url, d.description || '').run();
-      
-      const newPost = await env.DB.prepare(`
-        SELECT p.*, u.full_name as author 
-        FROM inspire_posts p 
-        LEFT JOIN inspire_users u ON p.user_id = u.id 
-        WHERE p.id=?
-      `).bind(meta.last_row_id).first();
-      
-      return json(newPost, 201, origin);
-    }
-
-    
-    if (cleanPath.match(/^\/api\/inspire\/posts\/\d+\/notes$/) && method === 'POST') {
-      const user = await inspireAuth(request, env);
-      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
-      const postId = cleanPath.split('/')[4];
-      const d = await request.json();
-      if (!d.content) return json({ error: 'İçerik gerekli' }, 400, origin);
-      await env.DB.prepare(
-        'INSERT INTO inspire_notes (post_id, user_id, content, is_public) VALUES (?, ?, ?, ?)'
-      ).bind(postId, user.userId, d.content, d.is_public ? 1 : 0).run();
-      return json({ ok: true }, 201, origin);
-    }
-
-    if (cleanPath.match(/^\/api\/inspire\/posts\/\d+$/) && method === 'DELETE') {
-      const user = await inspireAuth(request, env);
-      const admin = await authMiddleware(request, env);
-      if (!user && !admin) return json({ error: 'Yetkisiz' }, 401, origin);
-      
-      const id = cleanPath.split('/').pop();
-      
-      if (admin || (user && user.username === 'vkesgin38')) {
-        await env.DB.prepare('DELETE FROM inspire_posts WHERE id=?').bind(id).run();
-      } else {
-        await env.DB.prepare('DELETE FROM inspire_posts WHERE id=? AND user_id=?').bind(id, user.userId).run();
-      }
-      return json({ ok: true }, 200, origin);
-    }
-    
-    // Notes Delete
-    if (cleanPath.match(/^\/api\/inspire\/notes\/\d+$/) && method === 'DELETE') {
-      const user = await inspireAuth(request, env);
-      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
-      const id = cleanPath.split('/').pop();
-      if (user.username === 'vkesgin38') {
-        await env.DB.prepare('DELETE FROM inspire_notes WHERE id=?').bind(id).run();
-      } else {
-        await env.DB.prepare('DELETE FROM inspire_notes WHERE id=? AND user_id=?').bind(id, user.userId).run();
-      }
-      return json({ ok: true }, 200, origin);
-    }
-    
-    // Notes Edit
-    if (cleanPath.match(/^\/api\/inspire\/notes\/\d+$/) && method === 'PUT') {
-      const user = await inspireAuth(request, env);
-      if (!user) return json({ error: 'Yetkisiz' }, 401, origin);
-      const id = cleanPath.split('/').pop();
-      const d = await request.json();
-      if (!d.content) return json({ error: 'İçerik gerekli' }, 400, origin);
-      
-      if (user.username === 'vkesgin38') {
-        await env.DB.prepare('UPDATE inspire_notes SET content=? WHERE id=?').bind(d.content, id).run();
-      } else {
-        await env.DB.prepare('UPDATE inspire_notes SET content=? WHERE id=? AND user_id=?').bind(d.content, id, user.userId).run();
-      }
-      return json({ ok: true }, 200, origin);
+    // Fikir Havuzu API (/api/inspire/*): see handleInspire() above
+    if (cleanPath === '/api/inspire' || cleanPath.startsWith('/api/inspire/')) {
+      return handleInspire(request, env, ctx, cleanPath, method, origin);
     }
 
     // === PROTECTED: Auth gerekli ===

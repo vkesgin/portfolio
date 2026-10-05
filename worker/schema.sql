@@ -66,3 +66,42 @@ CREATE TABLE IF NOT EXISTS kpss_sticky_notes (
   updated_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY(user_id) REFERENCES kpss_users(id) ON DELETE CASCADE
 );
+
+-- ─── Fikir Havuzu (inspire) ───
+-- Documentation mirror: the worker creates/migrates these itself (ensureInspireSchema in worker/index.js).
+CREATE TABLE IF NOT EXISTS inspire_users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,          -- 'vkesgin38' = admin; '__guest__' = reserved owner of guest content
+  password TEXT NOT NULL,
+  full_name TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  is_first_login INTEGER DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS inspire_posts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,               -- guest posts: id of the '__guest__' row
+  type TEXT NOT NULL,                     -- platform from parseLink ('instagram','youtube',...,'web','image','video') or 'text'; legacy: 'reels','link',...
+  url TEXT NOT NULL,                      -- canonical URL ('' for text ideas)
+  description TEXT DEFAULT '',            -- text ideas store their text here
+  created_at TEXT DEFAULT (datetime('now')),
+  author_name TEXT,                       -- name at posting time ('' = Anonim); NULL on legacy rows
+  client_id TEXT,                         -- guest client id (NULL for registered users)
+  url_key TEXT,                           -- parseLink(url).key, dedupe key (NULL for text ideas)
+  meta TEXT,                              -- JSON {title, description, image, site_name, provider} or NULL
+  FOREIGN KEY(user_id) REFERENCES inspire_users(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS inspire_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  content TEXT NOT NULL,
+  is_public INTEGER DEFAULT 0,            -- 0 = visible to its author only
+  created_at TEXT DEFAULT (datetime('now')),
+  author_name TEXT,
+  client_id TEXT,
+  FOREIGN KEY(post_id) REFERENCES inspire_posts(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES inspire_users(id) ON DELETE CASCADE
+);
+-- Not UNIQUE: legacy duplicates may exist; uniqueness is enforced in code.
+CREATE INDEX IF NOT EXISTS idx_inspire_posts_url_key ON inspire_posts(url_key);
+CREATE INDEX IF NOT EXISTS idx_inspire_notes_post ON inspire_notes(post_id);

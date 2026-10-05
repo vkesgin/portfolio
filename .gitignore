@@ -9,3 +9,6 @@ scratch2/
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+# worker local dev secrets (test values only)
+worker/.dev.vars

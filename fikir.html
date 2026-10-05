@@ -2,34 +2,114 @@
 <html lang="tr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0a0a0a">
   <title>Fikir Havuzu — Veli Kesgin</title>
-  <link rel="stylesheet" href="assets/css/index.css">
+  <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg">
   <style>
     :root {
       --bg: #0a0a0a;
       --card-bg: #141414;
-      --border: rgba(255, 255, 255, 0.05);
+      --card-bg-2: #1a1a1a;
+      --border: rgba(255, 255, 255, 0.06);
+      --border-strong: rgba(255, 255, 255, 0.12);
       --text: #e0e0e0;
+      --muted: #8a8a8a;
+      --dim: #666;
       --accent: #00e5ff;
       --accent-hover: #00b8cc;
+      --danger: #ff5a5a;
+      --ok: #2ee59d;
+      --gap: 20px;
+      color-scheme: dark;
     }
+    html { scrollbar-gutter: stable; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
     body {
       background-color: var(--bg);
       color: var(--text);
-      font-family: 'Inter', 'Segoe UI', sans-serif;
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      line-height: 1.5;
       margin: 0;
       padding: 0;
+      overflow-x: clip;
     }
-    
-    /* Login Screen */
-    #login-screen {
+    button, input, textarea { font-family: inherit; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    }
+    .boot-error {
+      margin: 40px auto; max-width: 420px; padding: 16px 20px; text-align: center;
+      background: rgba(255, 90, 90, 0.08); border: 1px solid rgba(255, 90, 90, 0.3);
+      color: #ffb3b3; border-radius: 12px; font-size: 14px;
+    }
+
+    /* ---------- Buttons ---------- */
+    .btn {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, transform 0.2s;
+      border: 1px solid transparent;
+      font-size: 14px;
+      line-height: 1.3;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #000; font-weight: 600; }
+    .btn-outline { background: transparent; border-color: var(--border-strong); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; font-weight: 600; }
+    .btn-block { width: 100%; }
+    .btn-sm { padding: 6px 12px; font-size: 13px; }
+    .text-btn {
+      background: none; border: 0; padding: 0; font-size: 12px; color: var(--accent);
+      cursor: pointer; line-height: 1.4;
+    }
+    .text-btn.danger { color: var(--danger); }
+    .btn-mini {
+      background: var(--accent); color: #000; border: none; padding: 5px 12px; border-radius: 6px;
+      font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+      min-height: 28px;
+    }
+    .btn-mini:disabled { opacity: 0.5; cursor: not-allowed; }
+    @media (hover: hover) {
+      .btn-primary:not(:disabled):hover { background: var(--accent-hover); transform: translateY(-2px); }
+      .btn-outline:not(:disabled):hover { background: rgba(255, 255, 255, 0.05); }
+      .btn-danger:not(:disabled):hover { background: #ff3b3b; }
+      .text-btn:hover { text-decoration: underline; }
+    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+    .spinner-sm { width: 14px; height: 14px; }
+    .btn-primary .spinner, .btn-mini .spinner { border-color: rgba(0, 0, 0, 0.25); border-top-color: #000; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---------- Entry screen ---------- */
+    #entry-screen {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      padding: 20px;
+      min-height: 100dvh;
+      padding: 20px 16px;
     }
     .auth-box {
       background: var(--card-bg);
@@ -39,35 +119,22 @@
       width: 100%;
       max-width: 400px;
       text-align: center;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
     }
-    .auth-box h1 {
-      margin: 0 0 10px 0;
-      font-size: 28px;
-      color: #fff;
-    }
-    .auth-box p {
-      color: #888;
-      margin-bottom: 30px;
-      font-size: 14px;
-    }
+    .auth-box h1 { margin: 0 0 10px 0; font-size: 28px; color: #fff; }
+    .auth-sub { color: #888; margin: 0 0 28px; font-size: 14px; }
     .auth-input {
       width: 100%;
       padding: 14px;
       margin-bottom: 15px;
-      background: rgba(255,255,255,0.03);
+      background: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--border);
       border-radius: 12px;
       color: #fff;
       font-size: 15px;
-      transition: all 0.3s;
-      box-sizing: border-box;
+      transition: border-color 0.3s, background 0.3s;
     }
-    .auth-input:focus {
-      outline: none;
-      border-color: var(--accent);
-      background: rgba(0, 229, 255, 0.05);
-    }
+    .auth-input:focus { outline: none; border-color: var(--accent); background: rgba(0, 229, 255, 0.05); }
     .auth-btn {
       width: 100%;
       padding: 14px;
@@ -78,22 +145,35 @@
       font-weight: 600;
       font-size: 16px;
       cursor: pointer;
-      transition: all 0.3s;
+      transition: background 0.3s, transform 0.3s;
+      display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px;
     }
-    .auth-btn:hover {
-      background: var(--accent-hover);
-      transform: translateY(-2px);
+    .auth-btn:disabled { opacity: 0.6; cursor: wait; }
+    .auth-btn .spinner { border-color: rgba(0, 0, 0, 0.25); border-top-color: #000; }
+    .auth-btn.outline { background: transparent; color: #fff; border: 1px solid var(--border-strong); }
+    .auth-btn.outline .spinner { border-color: rgba(255, 255, 255, 0.3); border-top-color: #fff; }
+    @media (hover: hover) {
+      .auth-btn:not(:disabled):hover { background: var(--accent-hover); transform: translateY(-2px); }
+      .auth-btn.outline:not(:disabled):hover { background: rgba(255, 255, 255, 0.05); }
     }
-    #login-error {
-      color: #ff4444;
-      font-size: 13px;
-      margin-top: 15px;
-      display: none;
+    .link-btn {
+      display: inline-block; margin-top: 14px; background: none; border: 0; color: var(--accent);
+      font-size: 14px; cursor: pointer; padding: 4px 6px;
     }
+    @media (hover: hover) { .link-btn:hover { text-decoration: underline; } }
+    .auth-hint { margin-top: 18px; font-size: 12px; color: var(--dim); line-height: 1.5; }
+    .auth-error { color: #ff6b6b; font-size: 13px; margin-top: 12px; }
+    .auth-notice {
+      color: #ffd27a; font-size: 13px; margin: -12px 0 18px; padding: 8px 10px;
+      background: rgba(255, 210, 122, 0.08); border-radius: 8px;
+    }
+    .admin-sep { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .admin-toggle { background: none; border: 0; color: var(--dim); font-size: 12px; cursor: pointer; padding: 4px; }
+    @media (hover: hover) { .admin-toggle:hover { color: #aaa; } }
+    #admin-form { margin-top: 14px; }
 
-    /* Dashboard */
+    /* ---------- Dashboard ---------- */
     #dashboard {
-      display: none;
       padding: 40px 5%;
       max-width: 1400px;
       margin: 0 auto;
@@ -102,665 +182,2116 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 40px;
+      margin-bottom: 36px;
       flex-wrap: wrap;
       gap: 20px;
     }
-    .dash-header h1 {
-      margin: 0;
-      font-size: 32px;
-      color: #fff;
+    .dash-header h1 { margin: 0; font-size: 32px; color: #fff; line-height: 1.2; }
+    .greeting { color: #888; font-size: 14px; margin-top: 4px; overflow-wrap: anywhere; }
+    .greeting .who { color: #ccc; }
+    .admin-badge {
+      display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px;
+      background: rgba(0, 229, 255, 0.12); border: 1px solid rgba(0, 229, 255, 0.35);
+      color: var(--accent); font-size: 11px; font-weight: 600; letter-spacing: 0.03em; vertical-align: 1px;
     }
-    .dash-header span {
-      color: #888;
-      font-size: 14px;
-    }
-    .header-actions {
-      display: flex;
-      gap: 15px;
-    }
-    .btn {
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.3s;
-      border: 1px solid transparent;
-      font-size: 14px;
-    }
-    .btn-primary {
-      background: var(--accent);
-      color: #000;
-    }
-    .btn-primary:hover {
-      background: var(--accent-hover);
-      transform: translateY(-2px);
-    }
-    .btn-outline {
-      background: transparent;
-      border-color: var(--border);
-      color: #fff;
-    }
-    .btn-outline:hover {
-      background: rgba(255,255,255,0.05);
-    }
+    .header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
-    /* Masonry Grid */
-    .masonry-grid {
-      column-count: 4;
-      column-gap: 20px;
+    /* ---------- Board: N fixed columns, cards never move between columns ---------- */
+    .board {
+      display: grid;
+      grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr));
+      gap: var(--gap);
+      align-items: start;
     }
-    @media (max-width: 1200px) { .masonry-grid { column-count: 3; } }
-    @media (max-width: 900px) { .masonry-grid { column-count: 2; } }
-    @media (max-width: 600px) { .masonry-grid { column-count: 1; } }
+    .board-col { display: flex; flex-direction: column; gap: var(--gap); min-width: 0; }
+    .board-status { text-align: center; color: #888; padding: 48px 0; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .board-status .status-text.error { color: #ff6b6b; }
 
     .post-card {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 16px;
       overflow: hidden;
-      margin-bottom: 20px;
-      break-inside: avoid;
       display: flex;
       flex-direction: column;
-      transition: transform 0.3s, box-shadow 0.3s;
+      transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+      min-width: 0;
     }
-    .post-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-      border-color: rgba(255,255,255,0.1);
+    @media (hover: hover) {
+      .post-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        border-color: rgba(255, 255, 255, 0.1);
+      }
     }
-    .post-media {
-      width: 100%;
-      background: #000;
-      position: relative;
+    .post-card.flash { animation: flash 2.6s ease-out; }
+    @keyframes flash {
+      0%, 45% { box-shadow: 0 0 0 2px var(--accent), 0 0 40px rgba(0, 229, 255, 0.45); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 229, 255, 0); }
     }
-    .post-media iframe, .post-media video, .post-media img {
-      width: 100%;
-      display: block;
-      border: none;
-    }
-    .post-info {
-      padding: 15px;
-    }
-    .post-desc {
-      font-size: 14px;
-      color: #ddd;
-      margin: 0 0 10px 0;
-      line-height: 1.5;
-    }
-    .post-meta {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 12px;
-      color: #666;
-    }
-    .author-badge {
-      background: rgba(255,255,255,0.05);
-      padding: 4px 10px;
-      border-radius: 20px;
-      color: #aaa;
-    }
-    .delete-post {
-      background: transparent;
-      border: none;
-      color: #ff4444;
-      cursor: pointer;
-      opacity: 0.5;
-      transition: 0.3s;
-      font-size: 12px;
-    }
-    .delete-post:hover { opacity: 1; }
 
-    /* Modal */
+    /* Media slot: size is reserved up front so nothing jumps */
+    .media { width: 100%; background: #000; display: flex; justify-content: center; align-items: flex-start; }
+    .media-box { position: relative; width: 100%; overflow: hidden; background: #000; }
+    .embed-frame {
+      position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block;
+      opacity: 0; transition: opacity 0.25s ease-out; background: transparent;
+    }
+    .media-box.is-loaded .embed-frame { opacity: 1; }
+    .media-box.is-loaded .facade { visibility: hidden; }
+
+    .facade {
+      position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 14px;
+      border: 0; color: #fff; text-align: left; cursor: pointer; overflow: hidden;
+      display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; gap: 8px;
+      background: linear-gradient(160deg, #1d1d1d, #0c0c0c);
+      background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--pc, #00e5ff) 32%, transparent), transparent 62%), linear-gradient(160deg, #1d1d1d, #0c0c0c);
+    }
+    .facade-thumb { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.6; }
+    .facade-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0) 35%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.75)); }
+    .facade > :not(.facade-thumb):not(.facade-shade) { position: relative; }
+    .facade-chip {
+      display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+      background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .facade-chip .dot, .link-site .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pc, #00e5ff); flex: none; }
+    .facade-center { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .facade-play {
+      width: 58px; height: 58px; border-radius: 50%; background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.35); position: relative; transition: transform 0.2s, background 0.2s;
+    }
+    .facade-play::after {
+      content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-35%, -50%);
+      border-style: solid; border-width: 10px 0 10px 16px; border-color: transparent transparent transparent #fff;
+    }
+    .facade-label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #eee; }
+    .facade-spin { display: none; }
+    .media-box.is-mounted .facade-play, .media-box.is-mounted .facade-label { display: none; }
+    .media-box.is-mounted .facade-spin { display: inline-block; }
+    .facade-title {
+      font-size: 13px; color: #ddd; max-width: 100%; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere;
+    }
+    .facade-title:empty { display: none; }
+    @media (hover: hover) {
+      .facade:hover .facade-play { transform: scale(1.06); background: rgba(0, 229, 255, 0.25); }
+    }
+    /* short fixed-height embeds (Spotify track ...) */
+    .media-box.compact .facade { flex-direction: row; align-items: center; justify-content: flex-start; padding: 12px 14px; gap: 12px; }
+    .media-box.compact .facade-center { order: -1; align-self: center; }
+    .media-box.compact .facade-play { width: 44px; height: 44px; }
+    .media-box.compact .facade-play::after { border-width: 8px 0 8px 13px; }
+    .media-box.compact .facade-label { display: none; }
+    .media-box.compact .facade-chip { position: absolute; top: 10px; right: 10px; }
+    .media-box.compact .facade-title { flex: 1; -webkit-line-clamp: 3; }
+
+    .media-link { position: absolute; inset: 0; display: block; }
+    .media-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+    .media-video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #000; }
+    .media-fallback, .media-invalid {
+      position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; padding: 16px; text-align: center; color: #aaa; font-size: 13px; text-decoration: none;
+      background: radial-gradient(110% 80% at 50% 0%, rgba(0, 229, 255, 0.08), transparent 60%), #111;
+    }
+    .media-invalid { position: static; min-height: 120px; }
+    .media-fallback .mf-host, .media-invalid .mf-host { color: var(--accent); font-size: 12px; overflow-wrap: anywhere; }
+
+    /* Link preview card (platforms that cannot be framed) */
+    .media.media-linkcard { background: #101010; display: block; }
+    .link-card { display: block; color: inherit; text-decoration: none; }
+    .link-visual {
+      position: relative; aspect-ratio: 1.91 / 1; overflow: hidden; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px; padding: 12px;
+      background: linear-gradient(160deg, #1b1b1b, #0d0d0d);
+      background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--pc, #00e5ff) 28%, transparent), transparent 62%), linear-gradient(160deg, #1b1b1b, #0d0d0d);
+    }
+    .link-visual .og { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+    .ph-favicon { width: 52px; height: 52px; border-radius: 14px; background: rgba(255, 255, 255, 0.08); padding: 8px; }
+    .ph-host { font-size: 13px; color: #bbb; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .link-body { padding: 12px 15px 2px; }
+    .link-site { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); min-width: 0; }
+    .link-site img { width: 16px; height: 16px; border-radius: 3px; flex: none; }
+    .link-site span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .link-title {
+      margin-top: 6px; font-weight: 600; color: #fff; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .link-desc {
+      margin-top: 4px; font-size: 13px; color: #9a9a9a; overflow-wrap: anywhere;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    @media (hover: hover) { .link-card:hover .link-title { color: var(--accent); } }
+
+    /* Text idea card */
+    .text-idea { padding: 20px 18px 4px; background: linear-gradient(160deg, rgba(0, 229, 255, 0.09), rgba(0, 229, 255, 0) 60%); }
+    .text-idea-label {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+    }
+    .text-idea-label::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
+    .text-idea-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.6; color: #f2f2f2; }
+
+    /* Card info */
+    .post-info { padding: 15px; }
+    .post-desc { font-size: 14px; color: #ddd; margin: 0 0 10px 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .post-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: #666; flex-wrap: wrap; }
+    .post-meta-left, .post-meta-right { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+    .author-badge {
+      background: rgba(255, 255, 255, 0.05); padding: 4px 10px; border-radius: 20px; color: #aaa;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .author-badge.is-mine { color: var(--accent); background: rgba(0, 229, 255, 0.08); }
+    .post-date { color: #666; }
+    .src-link { color: #777; text-decoration: none; max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (hover: hover) { .src-link:hover { color: var(--accent); } }
+
+    /* Notes */
+    .notes { margin-top: 12px; }
+    .notes-title { font-size: 12px; color: #aaa; font-weight: 600; border-top: 1px solid var(--border); padding-top: 10px; }
+    .note { font-size: 13px; color: #ccc; margin-top: 6px; padding: 8px 10px; background: rgba(0, 0, 0, 0.25); border-radius: 8px; overflow-wrap: anywhere; }
+    .note-head { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: baseline; }
+    .note-author { color: #fff; font-weight: 600; }
+    .note-private { font-size: 10px; color: #777; }
+    .note-date { font-size: 11px; color: #5e5e5e; margin-left: auto; }
+    .note-text { white-space: pre-wrap; margin-top: 2px; }
+    .note-actions { margin-top: 5px; display: flex; gap: 14px; }
+    .note-edit-box { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+    .note-edit, .note-input {
+      width: 100%; padding: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-strong);
+      border-radius: 6px; color: #fff; font-size: 13px; resize: vertical;
+    }
+    .note-edit:focus, .note-input:focus { outline: none; border-color: var(--accent); }
+    .note-edit-actions { display: flex; justify-content: flex-end; align-items: center; gap: 14px; }
+    .note-form { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+    .note-form-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .note-public { font-size: 11px; color: #888; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+    /* ---------- Modals ---------- */
     .modal-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.8);
+      background: rgba(0, 0, 0, 0.8);
       backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
       display: flex;
       align-items: center;
       justify-content: center;
       z-index: 1000;
       opacity: 0;
-      pointer-events: none;
-      transition: 0.3s;
+      transition: opacity 0.25s;
+      padding: 16px;
+      overscroll-behavior: contain;
     }
-    .modal-overlay.active {
-      opacity: 1;
-      pointer-events: all;
-    }
+    .modal-overlay.active { opacity: 1; }
+    #confirm-modal { z-index: 1100; }
     .modal-content {
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 30px;
+      padding: 28px;
       width: 100%;
-      max-width: 500px;
+      max-width: 520px;
+      max-height: calc(100vh - 32px);
+      max-height: calc(100dvh - 32px);
+      overflow: auto;
       transform: translateY(20px);
-      transition: 0.3s;
+      transition: transform 0.25s;
     }
-    .modal-overlay.active .modal-content {
-      transform: translateY(0);
-    }
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-    .modal-header h2 { margin: 0; font-size: 20px; }
-    .close-modal {
-      background: transparent;
-      border: none;
-      color: #888;
-      font-size: 24px;
-      cursor: pointer;
-    }
+    .modal-sm { max-width: 400px; }
+    .modal-overlay.active .modal-content { transform: translateY(0); }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 12px; }
+    .modal-header h2 { margin: 0; font-size: 20px; color: #fff; }
+    .close-modal { background: transparent; border: none; color: #888; font-size: 26px; line-height: 1; cursor: pointer; padding: 0 4px; }
     .modal-input {
       width: 100%;
       padding: 12px;
-      margin-bottom: 15px;
-      background: rgba(0,0,0,0.2);
-      border: 1px solid var(--border);
+      margin-bottom: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border-strong);
       border-radius: 8px;
       color: #fff;
-      box-sizing: border-box;
+      font-size: 14px;
     }
-    textarea.modal-input {
-      resize: vertical;
-      min-height: 80px;
+    .modal-input:focus { outline: none; border-color: var(--accent); }
+    textarea.modal-input { resize: vertical; min-height: 80px; display: block; }
+    textarea.text-body { min-height: 160px; line-height: 1.55; }
+    .modal-note { font-size: 12px; color: #888; margin: -4px 0 14px; }
+    .tabs { display: flex; gap: 6px; background: rgba(255, 255, 255, 0.04); padding: 4px; border-radius: 10px; margin-bottom: 16px; }
+    .tab { flex: 1; background: none; border: 0; color: #aaa; padding: 9px 10px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+    .tab[aria-selected="true"] { background: var(--accent); color: #000; font-weight: 600; }
+    .detect { font-size: 12px; color: #888; min-height: 18px; margin: -4px 0 10px; overflow-wrap: anywhere; }
+    .detect.bad { color: #ff8a8a; }
+    .detect .pf { color: #ddd; font-weight: 600; }
+    .dup-box {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+      background: rgba(255, 90, 90, 0.08); border: 1px solid rgba(255, 90, 90, 0.3); color: #ffbdbd;
+      padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 12px;
     }
-    
-    .spinner {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid rgba(255,255,255,0.3);
-      border-radius: 50%;
-      border-top-color: #fff;
-      animation: spin 1s ease-in-out infinite;
+    .dup-box > span { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; }
+    .form-error { color: #ff6b6b; font-size: 13px; margin: -2px 0 10px; }
+    .counter { text-align: right; font-size: 12px; color: #777; margin: -6px 0 12px; }
+    .counter.over { color: #ff6b6b; }
+    .confirm-text { margin: 0 0 22px; color: #eee; font-size: 15px; }
+    .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+    /* ---------- Toasts ---------- */
+    #toasts {
+      position: fixed; right: 20px; bottom: 20px; z-index: 3000; display: flex; flex-direction: column; gap: 8px;
+      max-width: min(360px, calc(100vw - 32px)); pointer-events: none;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    
-    /* Admin Notice */
-    .admin-notice {
-      background: rgba(0, 229, 255, 0.1);
-      border: 1px solid rgba(0, 229, 255, 0.2);
-      color: var(--accent);
-      padding: 15px;
-      border-radius: 12px;
-      margin-bottom: 20px;
-      font-size: 13px;
-      display: none;
+    .toast {
+      pointer-events: auto; background: #1c1c1c; border: 1px solid var(--border-strong); border-left: 3px solid var(--accent);
+      color: #fff; padding: 11px 14px; border-radius: 10px; font-size: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      animation: toast-in 0.2s ease-out; overflow-wrap: anywhere;
+    }
+    .toast.error { border-left-color: var(--danger); }
+    .toast.ok { border-left-color: var(--ok); }
+    .toast.out { opacity: 0; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; }
+    @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    /* ---------- Small screens ---------- */
+    @media (max-width: 600px) {
+      :root { --gap: 16px; }
+      #dashboard { padding: 22px 16px 90px; }
+      .dash-header { margin-bottom: 22px; gap: 14px; }
+      .dash-header h1 { font-size: 26px; }
+      .header-actions { width: 100%; gap: 8px; }
+      .header-actions .btn { flex: 1 1 auto; padding: 10px 12px; }
+      .header-actions .btn-primary { flex-basis: 100%; }
+      .auth-box { padding: 30px 20px; }
+      .modal-content { padding: 20px; }
+      #toasts { left: 16px; right: 16px; bottom: 72px; max-width: none; }
+    }
+    @media (pointer: coarse) {
+      input, textarea { font-size: 16px !important; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
   </style>
 </head>
 <body>
+  <noscript><div class="boot-error">Fikir Havuzu için JavaScript gerekli.</div></noscript>
+  <div id="boot-error" class="boot-error" role="alert" hidden>Sayfa yüklenemedi. Lütfen sayfayı yenile.</div>
 
-  <!-- Login Screen -->
-  <div id="login-screen">
+  <!-- Entry screen: name or anonymous; password only for the owner -->
+  <main id="entry-screen" hidden>
     <div class="auth-box">
       <h1>Fikir Havuzu</h1>
-      <p>İlham veren içerikleri keşfet ve paylaş.</p>
-      
-      <form id="login-form">
-        <input type="text" id="username" class="auth-input" placeholder="Kullanıcı Adı" required>
-        <input type="password" id="password" class="auth-input" placeholder="Şifre" required>
-        <button type="submit" class="auth-btn" id="login-btn">Giriş Yap</button>
-        <div id="login-error"></div>
+      <p class="auth-sub">İlham veren içerikleri keşfet ve paylaş.</p>
+      <div id="entry-notice" class="auth-notice" role="status" hidden></div>
+
+      <form id="guest-form" novalidate>
+        <label class="sr-only" for="guest-name">Adın</label>
+        <input type="text" id="guest-name" class="auth-input" placeholder="Adın (isteğe bağlı)" maxlength="40" autocomplete="nickname" enterkeyhint="go">
+        <button type="submit" class="auth-btn" id="guest-btn">Giriş</button>
+        <button type="button" class="link-btn" id="anon-btn">İsimsiz devam et</button>
+        <div id="guest-error" class="auth-error" role="alert" hidden></div>
       </form>
+      <div class="auth-hint">Şifre gerekmez. Paylaşımların bu cihaza bağlı kalır; silme hakkın bu cihazdan geçerlidir.</div>
+
+      <div class="admin-sep">
+        <button type="button" class="admin-toggle" id="admin-toggle" aria-expanded="false" aria-controls="admin-form">Yönetici girişi</button>
+        <form id="admin-form" novalidate hidden>
+          <input type="text" id="admin-user" class="auth-input" placeholder="Kullanıcı adı" autocomplete="username" autocapitalize="off" spellcheck="false" aria-label="Kullanıcı adı">
+          <input type="password" id="admin-pass" class="auth-input" placeholder="Şifre" autocomplete="current-password" aria-label="Şifre">
+          <button type="submit" class="auth-btn outline" id="admin-btn">Yönetici olarak giriş yap</button>
+          <div id="admin-error" class="auth-error" role="alert" hidden></div>
+        </form>
+      </div>
     </div>
-  </div>
+  </main>
 
   <!-- Dashboard -->
-  <div id="dashboard">
-    <div class="dash-header">
+  <div id="dashboard" hidden>
+    <header class="dash-header">
       <div>
         <h1>Fikir Havuzu</h1>
-        <span id="user-greeting">Hoş geldin!</span>
+        <div class="greeting"><span>Hoş geldin, </span><span class="who" id="user-name" translate="no">Anonim</span><span id="admin-badge" class="admin-badge" hidden>Yönetici</span></div>
       </div>
       <div class="header-actions">
-        <button class="btn btn-primary" onclick="openModal()">+ Yeni Fikir Ekle</button>
-        <button class="btn btn-outline" onclick="logout()">Çıkış Yap</button>
+        <button type="button" class="btn btn-primary" id="btn-add">+ Yeni Fikir Ekle</button>
+        <button type="button" class="btn btn-outline" id="btn-rename" hidden>İsmi değiştir</button>
+        <button type="button" class="btn btn-outline" id="btn-logout">Çıkış</button>
       </div>
-    </div>
-    
-    
-
-    <div class="masonry-grid" id="posts-grid">
-      <!-- Posts will be injected here -->
-    </div>
+    </header>
+    <div id="board-status" class="board-status" aria-live="polite" hidden></div>
+    <div id="board" class="board"></div>
   </div>
 
-  
-  <!-- Change Password Modal -->
-  <div class="modal-overlay" id="pwd-modal" style="z-index: 2000;">
-    <div class="modal-content">
+  <!-- Add idea modal -->
+  <div class="modal-overlay" id="add-modal" hidden>
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="add-title">
       <div class="modal-header">
-        <h2>Şifrenizi Belirleyin</h2>
+        <h2 id="add-title">Yeni Fikir Ekle</h2>
+        <button type="button" class="close-modal" data-close aria-label="Kapat">×</button>
       </div>
-      <p style="font-size:13px; color:#aaa; margin-bottom:20px;">Güvenliğiniz için sisteme ilk girişinizde varsayılan şifrenizi değiştirmeniz gerekmektedir.</p>
-      <form id="pwd-form">
-        <input type="password" id="new-pwd" class="modal-input" placeholder="Yeni Şifreniz" required minlength="4">
-        <input type="password" id="new-pwd-confirm" class="modal-input" placeholder="Yeni Şifrenizi Tekrar Girin" required minlength="4">
-        <div id="pwd-error" style="color:#ff4444; font-size:12px; margin-bottom:10px; display:none;">Şifreler eşleşmiyor</div>
-        <button type="submit" class="btn btn-primary" style="width:100%" id="submit-pwd-btn">Şifremi Güncelle</button>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab" role="tab" id="tab-link" aria-selected="true" aria-controls="link-form">Link</button>
+        <button type="button" class="tab" role="tab" id="tab-text" aria-selected="false" aria-controls="text-form" tabindex="-1">Metin fikir</button>
+      </div>
+      <form id="link-form" role="tabpanel" aria-labelledby="tab-link" novalidate>
+        <input type="text" id="link-url" class="modal-input" inputmode="url" maxlength="2048" placeholder="Link yapıştır (Instagram, YouTube, TikTok, Pinterest…)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Link">
+        <div id="link-detect" class="detect" aria-live="polite"></div>
+        <div id="link-dup" class="dup-box" role="alert" hidden>
+          <span id="link-dup-text"></span>
+          <button type="button" class="btn btn-outline btn-sm" id="link-dup-show">Göster</button>
+        </div>
+        <textarea id="link-desc" class="modal-input" maxlength="2000" placeholder="Bu fikir hakkında ne düşünüyorsun? (İsteğe bağlı)" aria-label="Açıklama"></textarea>
+        <div id="link-error" class="form-error" role="alert" hidden></div>
+        <button type="submit" class="btn btn-primary btn-block" id="link-submit" disabled>Paylaş</button>
+      </form>
+      <form id="text-form" role="tabpanel" aria-labelledby="tab-text" novalidate hidden>
+        <textarea id="text-body" class="modal-input text-body" maxlength="2000" rows="6" placeholder="Fikrini yaz… Bir sahne, bir başlık, bir video konsepti…" aria-label="Metin fikir"></textarea>
+        <div class="counter" id="text-counter"><span id="text-count">0</span> / <span id="text-max">2000</span></div>
+        <div id="text-error" class="form-error" role="alert" hidden></div>
+        <button type="submit" class="btn btn-primary btn-block" id="text-submit" disabled>Paylaş</button>
       </form>
     </div>
   </div>
 
-  <!-- Add Post Modal -->
-  <div class="modal-overlay" id="add-modal">
-    <div class="modal-content">
+  <!-- Rename modal (guests) -->
+  <div class="modal-overlay" id="name-modal" hidden>
+    <div class="modal-content modal-sm" role="dialog" aria-modal="true" aria-labelledby="name-title">
       <div class="modal-header">
-        <h2>Yeni Fikir Ekle</h2>
-        <button class="close-modal" onclick="closeModal()">×</button>
+        <h2 id="name-title">İsmi değiştir</h2>
+        <button type="button" class="close-modal" data-close aria-label="Kapat">×</button>
       </div>
-      <form id="add-form">
-        
-        <input type="url" id="post-url" class="modal-input" placeholder="Link (Örn: https://instagram.com/reel/...)" required>
-        <textarea id="post-desc" class="modal-input" placeholder="Bu fikir hakkında ne düşünüyorsun? (İsteğe bağlı)"></textarea>
-        <button type="submit" class="btn btn-primary" style="width:100%" id="submit-post-btn">Paylaş</button>
+      <form id="name-form" novalidate>
+        <input type="text" id="name-input" class="modal-input" maxlength="40" placeholder="Adın (boş bırakırsan Anonim)" autocomplete="nickname" aria-label="Adın">
+        <p class="modal-note">Yeni ismin bundan sonraki fikir ve notlarında görünür; öncekiler eski isimle kalır.</p>
+        <div id="name-error" class="form-error" role="alert" hidden></div>
+        <button type="submit" class="btn btn-primary btn-block" id="name-submit">Kaydet</button>
       </form>
     </div>
   </div>
 
-  <script>
-    const API_URL = 'https://vk-portfolio-api.vkesgin38.workers.dev';
-    let currentUser = null;
-    let token = localStorage.getItem('inspire_token');
+  <!-- Confirm dialog -->
+  <div class="modal-overlay" id="confirm-modal" hidden>
+    <div class="modal-content modal-sm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text">
+      <p id="confirm-text" class="confirm-text"></p>
+      <div class="confirm-actions">
+        <button type="button" class="btn btn-outline" id="confirm-cancel">Vazgeç</button>
+        <button type="button" class="btn btn-danger" id="confirm-ok">Sil</button>
+      </div>
+    </div>
+  </div>
 
-    // Init App
-    async function init() {
-      // Sessizce tabloları kur (ilk açılışta veritabanı yoksa diye)
-      fetch(`${API_URL}/api/inspire/init`).catch(()=>{});
-      
-      if (token) {
-        const u = localStorage.getItem('inspire_user');
-        if (u) {
-          currentUser = JSON.parse(u);
-          showDashboard();
-          return;
+  <div id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+  <script nomodule>document.getElementById('boot-error').hidden = false;</script>
+  <script type="module">
+    /* =====================================================================
+     * Fikir Havuzu - board client.
+     * Links are parsed by the shared module /assets/js/fikir-url.mjs (same
+     * code runs in the worker). All DOM is built with createElement and
+     * textContent; every URL put into src/href passes safeHttpUrl().
+     * ===================================================================== */
+    let urlLib;
+    try {
+      urlLib = await import('/assets/js/fikir-url.mjs?v=20261003');
+    } catch (err) {
+      document.getElementById('boot-error').hidden = false;
+      throw err;
+    }
+    const { parseLink, parseEmbedMessage } = urlLib;
+
+    /* ---------------------------------------------------------------- config */
+    const PROD_API = 'https://vk-portfolio-api.vkesgin38.workers.dev';
+    const API_BASE = resolveApiBase();
+    const ADMIN_USERNAME = 'vkesgin38';
+    const LS = { token: 'fikir_token', user: 'fikir_user', cid: 'fikir_cid', name: 'fikir_name', aspect: 'fikir_ar' };
+    const LEGACY = { token: 'inspire_token', user: 'inspire_user' };
+    const CID_RE = /^[A-Za-z0-9_-]{16,64}$/;
+    const NAME_MAX = 40;
+    const NEAR_MARGIN = 800;        // mount iframes within this distance of the viewport (px)
+    const FAR_MARGIN = 3000;        // unmount them (back to facade) beyond this distance
+    const COARSE = matchMedia('(pointer: coarse)').matches;
+    const MAX_MOUNTED = COARSE ? 4 : 10;
+    const MIN_AUTO_H = 150;
+    const MAX_AUTO_H = 1400;
+    const MAX_MEDIA_H = 720;        // tall (9:16) players are narrowed so they never exceed this
+    const AUTO_REVEAL_MS = 2500;    // autoHeight frames are shown this long after load even without a height message
+    const LOAD_REVEAL_MS = 10000;
+    const REFRESH_MS = 120000;
+    const REFRESH_ON_FOCUS_MS = 30000;
+
+    // Server-driven feature flags (GET /api/inspire/config). `storyboard` is the
+    // extension point for the AI storyboard phase; nothing uses it yet.
+    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000 };
+    window.fikirConfig = config;
+
+    const session = { token: null, user: null, cid: null };
+
+    /* ------------------------------------------------------------- utilities */
+    function resolveApiBase() {
+      const host = location.hostname;
+      const local = host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host === '::1';
+      if (!local) return PROD_API;
+      const q = new URLSearchParams(location.search).get('api');
+      return (safeHttpUrl(q) || 'http://127.0.0.1:8799').replace(/\/+$/, '');
+    }
+
+    function safeHttpUrl(v) {
+      if (typeof v !== 'string' || !v || v.length > 4096) return null;
+      try {
+        const u = new URL(v);
+        return u.protocol === 'https:' || u.protocol === 'http:' ? u.href : null;
+      } catch (_) { return null; }
+    }
+
+    const store = {
+      get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+      set(k, v) { try { localStorage.setItem(k, v); } catch (_) { /* private mode / quota */ } },
+      del(k) { try { localStorage.removeItem(k); } catch (_) { /* ignore */ } },
+    };
+
+    const $ = (id) => document.getElementById(id);
+
+    // Tiny element builder. Text is always added as text nodes; href/src only
+    // accept absolute http(s) URLs.
+    function h(tag, attrs, ...kids) {
+      const el = document.createElement(tag);
+      if (attrs) {
+        for (const [k, v] of Object.entries(attrs)) {
+          if (v == null || v === false) continue;
+          if (k === 'class') el.className = v;
+          else if (k === 'hidden') el.hidden = true;
+          else if (k === 'href' || k === 'src') {
+            const safe = safeHttpUrl(v);
+            if (safe) el.setAttribute(k, safe);
+          } else el.setAttribute(k, v === true ? '' : String(v));
         }
       }
+      for (const kid of kids.flat()) {
+        if (kid == null || kid === false) continue;
+        el.append(kid instanceof Node ? kid : String(kid));
+      }
+      return el;
     }
-    init();
 
-    // Login
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const u = document.getElementById('username').value;
-      const p = document.getElementById('password').value;
-      const btn = document.getElementById('login-btn');
-      const err = document.getElementById('login-error');
-      
-      btn.innerHTML = '<div class="spinner"></div>';
-      err.style.display = 'none';
+    function setText(el, value) {
+      const v = value == null ? '' : String(value);
+      if (el.textContent !== v) el.textContent = v;
+    }
 
+    function cleanName(v) {
+      return String(v == null ? '' : v)
+        .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, NAME_MAX);
+    }
+    const displayName = (v) => cleanName(v) || 'Anonim';
+
+    function hostOf(url) {
+      try { return new URL(url).hostname.replace(/^www\./, ''); } catch (_) { return ''; }
+    }
+    function prettyUrl(url) {
       try {
-        const res = await fetch(`${API_URL}/api/inspire/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: u, password: p })
+        const u = new URL(url);
+        let p = u.pathname;
+        try { p = decodeURIComponent(p); } catch (_) { /* keep raw */ }
+        const s = u.hostname.replace(/^www\./, '') + (p === '/' ? '' : p.replace(/\/$/, ''));
+        return s.length > 90 ? s.slice(0, 89) + '…' : s;
+      } catch (_) { return String(url || ''); }
+    }
+    const faviconUrl = (host, size) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`;
+
+    function parseDate(v) {
+      if (v == null || v === '') return null;
+      let d;
+      if (typeof v === 'number') d = new Date(v);
+      else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(v)) d = new Date(v.replace(' ', 'T') + 'Z'); // D1 CURRENT_TIMESTAMP (UTC)
+      else d = new Date(v);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    function fmtRelative(d) {
+      if (!d) return '';
+      const s = (Date.now() - d.getTime()) / 1000;
+      if (s < 60) return 'az önce';
+      if (s < 3600) return Math.floor(s / 60) + ' dk önce';
+      if (s < 86400) return Math.floor(s / 3600) + ' sa önce';
+      if (s < 7 * 86400) return Math.floor(s / 86400) + ' gün önce';
+      const opts = { day: 'numeric', month: 'short' };
+      if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+      return d.toLocaleDateString('tr-TR', opts);
+    }
+    const fmtLongDate = (d) => (d ? d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+    const isPublicNote = (n) => n.is_public === true || n.is_public === 1 || String(n.is_public) === '1';
+
+    function normMeta(m) {
+      if (!m) return null;
+      if (typeof m === 'string') { try { m = JSON.parse(m); } catch (_) { return null; } }
+      if (!m || typeof m !== 'object') return null;
+      const s = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+      const out = {
+        title: s(m.title, 300),
+        description: s(m.description, 600),
+        image: safeHttpUrl(m.image) || '',
+        site_name: s(m.site_name, 100),
+        provider: s(m.provider, 100),
+      };
+      return out.title || out.description || out.image || out.site_name ? out : null;
+    }
+    const metaSig = (m) => JSON.stringify(normMeta(m));
+
+    function upsertById(list, item) {
+      const arr = Array.isArray(list) ? list.slice() : [];
+      const i = arr.findIndex((x) => x && String(x.id) === String(item.id));
+      if (i >= 0) arr[i] = item; else arr.push(item);
+      return arr;
+    }
+
+    function setBusy(btn, busy) {
+      if (!btn) return;
+      if (busy) {
+        if (btn.dataset.busy) return;
+        btn.dataset.busy = '1';
+        btn.dataset.label = btn.textContent;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        btn.textContent = '';
+        btn.append(h('span', { class: 'spinner spinner-sm', 'aria-hidden': 'true' }));
+      } else {
+        if (!btn.dataset.busy) return;
+        delete btn.dataset.busy;
+        btn.textContent = btn.dataset.label || '';
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+      }
+    }
+
+    /* --------------------------------------------------------------- platforms */
+    const PLATFORMS = {
+      instagram: { name: 'Instagram', color: '#E1306C' },
+      youtube: { name: 'YouTube', color: '#FF0033' },
+      tiktok: { name: 'TikTok', color: '#25F4EE' },
+      pinterest: { name: 'Pinterest', color: '#E60023' },
+      x: { name: 'X', color: '#9aa4ad' },
+      vimeo: { name: 'Vimeo', color: '#1AB7EA' },
+      drive: { name: 'Google Drive', color: '#1FA463' },
+      gdocs: { name: 'Google Dokümanlar', color: '#4285F4' },
+      facebook: { name: 'Facebook', color: '#1877F2' },
+      spotify: { name: 'Spotify', color: '#1DB954' },
+      soundcloud: { name: 'SoundCloud', color: '#FF5500' },
+      loom: { name: 'Loom', color: '#625DF5' },
+      figma: { name: 'Figma', color: '#A259FF' },
+      threads: { name: 'Threads', color: '#d0d0d0' },
+      linkedin: { name: 'LinkedIn', color: '#0A66C2' },
+      behance: { name: 'Behance', color: '#1769FF' },
+      dribbble: { name: 'Dribbble', color: '#EA4C89' },
+      image: { name: 'Görsel', color: '#00e5ff' },
+      video: { name: 'Video', color: '#00e5ff' },
+      web: { name: 'Web sayfası', color: '#00e5ff' },
+      text: { name: 'Metin fikir', color: '#00e5ff' },
+    };
+    const SUBTYPES = {
+      reel: 'Reel', p: 'Gönderi', tv: 'Video', profile: 'Profil', story: 'Hikâye', highlight: 'Öne çıkan', tag: 'Etiket',
+      audio: 'Ses', short: 'Shorts', video: 'Video', live: 'Canlı yayın', playlist: 'Oynatma listesi', channel: 'Kanal',
+      photo: 'Fotoğraf', pin: 'Pin', board: 'Pano', post: 'Gönderi', track: 'Parça', album: 'Albüm', episode: 'Bölüm',
+      show: 'Podcast', artist: 'Sanatçı', set: 'Liste', user: 'Profil', file: 'Dosya', folder: 'Klasör', doc: 'Doküman',
+      sheet: 'Tablo', slides: 'Sunum', form: 'Form', drawing: 'Çizim', design: 'Tasarım', proto: 'Prototip',
+      community: 'Topluluk', project: 'Proje', shot: 'Shot', activity: 'Gönderi', ugcPost: 'Gönderi', share: 'Gönderi',
+    };
+    const platformInfo = (p) => PLATFORMS[p] || PLATFORMS.web;
+    function platformLabel(platform, subtype) {
+      const name = platformInfo(platform).name;
+      const sub = subtype && SUBTYPES[subtype];
+      return sub && sub !== name ? `${name} · ${sub}` : name;
+    }
+
+    /* ------------------------------------------------------------------ toasts */
+    function toast(message, kind = 'info', ms = 3600) {
+      const el = h('div', { class: 'toast ' + kind, role: kind === 'error' ? 'alert' : 'status' }, message);
+      $('toasts').append(el);
+      setTimeout(() => {
+        el.classList.add('out');
+        setTimeout(() => el.remove(), 250);
+      }, ms);
+    }
+
+    /* ------------------------------------------------------------------ modals */
+    const modalStack = [];
+    let confirmResolve = null;
+
+    function openModal(el, focusEl) {
+      if (modalStack.some((m) => m.el === el)) return;
+      modalStack.push({ el, restore: document.activeElement });
+      el.hidden = false;
+      requestAnimationFrame(() => el.classList.add('active'));
+      if (focusEl) setTimeout(() => focusEl.focus({ preventScroll: true }), 30);
+    }
+    function closeModal(el) {
+      const i = modalStack.findIndex((m) => m.el === el);
+      if (i < 0) return;
+      const [{ restore }] = modalStack.splice(i, 1);
+      el.classList.remove('active');
+      el.hidden = true;
+      if (restore && restore.isConnected && typeof restore.focus === 'function') restore.focus({ preventScroll: true });
+    }
+    function dismissModal(el) {
+      if (el === $('add-modal')) closeAddModal();
+      else if (el === $('confirm-modal')) settleConfirm(false);
+      else closeModal(el);
+    }
+    function closeAllModals() {
+      while (modalStack.length) dismissModal(modalStack[modalStack.length - 1].el);
+    }
+
+    function confirmDialog(message, okLabel = 'Sil') {
+      if (confirmResolve) settleConfirm(false);
+      $('confirm-text').textContent = message;
+      $('confirm-ok').textContent = okLabel;
+      openModal($('confirm-modal'), $('confirm-cancel'));
+      return new Promise((resolve) => { confirmResolve = resolve; });
+    }
+    function settleConfirm(value) {
+      const r = confirmResolve;
+      confirmResolve = null;
+      closeModal($('confirm-modal'));
+      if (r) r(value);
+    }
+
+    function bindModalChrome() {
+      for (const el of document.querySelectorAll('.modal-overlay')) {
+        let downOnOverlay = false; // a text selection that ends on the backdrop must not close the dialog
+        el.addEventListener('pointerdown', (e) => { downOnOverlay = e.target === el; });
+        el.addEventListener('click', (e) => {
+          if (e.target === el && downOnOverlay) dismissModal(el);
         });
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.error || 'Giriş başarısız');
-        
-        token = data.token;
-        currentUser = data.user;
-        localStorage.setItem('inspire_token', token);
-        localStorage.setItem('inspire_user', JSON.stringify(currentUser));
-        
-        showDashboard();
-      } catch(error) {
-        err.textContent = error.message;
-        err.style.display = 'block';
+        for (const b of el.querySelectorAll('[data-close]')) b.addEventListener('click', () => dismissModal(el));
+      }
+      $('confirm-ok').addEventListener('click', () => settleConfirm(true));
+      $('confirm-cancel').addEventListener('click', () => settleConfirm(false));
+      document.addEventListener('keydown', (e) => {
+        const top = modalStack[modalStack.length - 1];
+        if (!top) return;
+        if (e.key === 'Escape') { e.preventDefault(); dismissModal(top.el); return; }
+        if (e.key === 'Tab') { // keep focus inside the dialog
+          const f = [...top.el.querySelectorAll('button, input, textarea, a[href]')].filter((x) => !x.disabled && x.offsetParent !== null);
+          if (!f.length) return;
+          const first = f[0], last = f[f.length - 1];
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+      });
+    }
+
+    /* --------------------------------------------------------------------- API */
+    class ApiError extends Error {
+      constructor(status, code, message, data) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.code = code;
+        this.data = data;
+      }
+    }
+    function defaultError(status) {
+      if (status === 400) return 'Geçersiz istek.';
+      if (status === 401) return 'Oturum geçersiz.';
+      if (status === 403) return 'Bu işlem için yetkin yok.';
+      if (status === 404) return 'Bulunamadı.';
+      if (status === 409) return 'Bu kayıt zaten var.';
+      if (status === 413) return 'İçerik çok uzun.';
+      if (status === 429) return 'Çok fazla istek. Biraz bekleyip tekrar dene.';
+      return 'Sunucu hatası. Lütfen tekrar dene.';
+    }
+
+    async function api(method, path, body, opts = {}) {
+      const { signal, auth = true } = opts;
+      const headers = {};
+      if (body != null) headers['Content-Type'] = 'application/json';
+      const tokenAtStart = auth ? session.token : null;
+      if (tokenAtStart) headers.Authorization = 'Bearer ' + tokenAtStart;
+      let res;
+      try {
+        res = await fetch(API_BASE + path, {
+          method, headers, signal, cache: 'no-store',
+          body: body != null ? JSON.stringify(body) : undefined,
+        });
+      } catch (e) {
+        if (e && e.name === 'AbortError') throw e;
+        throw new ApiError(0, 'network', 'Sunucuya ulaşılamadı. Bağlantını kontrol et.');
+      }
+      let data = null;
+      const raw = await res.text().catch(() => '');
+      if (raw) { try { data = JSON.parse(raw); } catch (_) { data = null; } }
+      if (!res.ok) {
+        const msg = (data && (data.message || (typeof data.error === 'string' ? data.error : ''))) || defaultError(res.status);
+        if (res.status === 401 && tokenAtStart && tokenAtStart === session.token) handleUnauthorized();
+        throw new ApiError(res.status, data && data.error, msg, data);
+      }
+      return data;
+    }
+
+    async function loadConfig() {
+      try {
+        const c = await api('GET', '/api/inspire/config', null, { auth: false });
+        if (c && typeof c === 'object') {
+          if (typeof c.storyboard === 'boolean') config.storyboard = c.storyboard;
+          for (const k of ['max_note_len', 'max_text_len']) {
+            if (Number.isInteger(c[k]) && c[k] > 0 && c[k] <= 100000) config[k] = c[k];
+          }
+        }
+      } catch (_) { /* defaults stay */ }
+      $('text-body').maxLength = config.max_text_len;
+      $('text-max').textContent = String(config.max_text_len);
+      updateTextCounter();
+    }
+
+    /* ----------------------------------------------------------------- session */
+    function makeCid() {
+      try { if (crypto.randomUUID) return crypto.randomUUID().replace(/-/g, ''); } catch (_) { /* insecure context */ }
+      const b = new Uint8Array(24);
+      crypto.getRandomValues(b);
+      return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    function ensureCid() {
+      let cid = store.get(LS.cid);
+      if (!cid || !CID_RE.test(cid)) {
+        cid = makeCid();
+        store.set(LS.cid, cid);
+      }
+      return cid;
+    }
+
+    function normalizeUser(u, fallback = {}) {
+      const o = u && typeof u === 'object' ? u : {};
+      const guest = o.guest === true || (o.guest == null && fallback.guest === true);
+      const username = guest ? null : (typeof o.username === 'string' ? o.username : null);
+      const name = cleanName(guest ? (o.name != null ? o.name : fallback.name) : (o.full_name || o.name || o.display_name || username || ''));
+      const isAdmin = !guest && (o.is_admin === true || o.is_admin === 1 || username === ADMIN_USERNAME);
+      return { guest, username, name, display_name: name || cleanName(o.display_name) || 'Anonim', is_admin: isAdmin };
+    }
+
+    // One-time move of the old password-login session (keeps an existing admin session).
+    function migrateLegacy() {
+      const oldToken = store.get(LEGACY.token);
+      if (oldToken && !store.get(LS.token)) {
+        let u = null;
+        try { u = JSON.parse(store.get(LEGACY.user) || 'null'); } catch (_) { u = null; }
+        if (u && typeof u === 'object') {
+          store.set(LS.token, oldToken);
+          store.set(LS.user, JSON.stringify(normalizeUser(u, { guest: false })));
+        }
+      }
+      if (oldToken !== null || store.get(LEGACY.user) !== null) {
+        store.del(LEGACY.token);
+        store.del(LEGACY.user);
+      }
+    }
+
+    function restoreSession() {
+      const t = store.get(LS.token);
+      let u = null;
+      try { u = JSON.parse(store.get(LS.user) || 'null'); } catch (_) { u = null; }
+      if (t && u && typeof u === 'object') {
+        session.token = t;
+        session.user = normalizeUser(u);
+      }
+    }
+
+    function setSession(token, user) {
+      session.token = token;
+      session.user = user;
+      store.set(LS.token, token);
+      store.set(LS.user, JSON.stringify(user));
+    }
+    function clearSession() {
+      session.token = null;
+      session.user = null;
+      store.del(LS.token);
+      store.del(LS.user);
+    }
+
+    async function guestLogin(rawName, btn) {
+      const name = cleanName(rawName);
+      const err = $('guest-error');
+      err.hidden = true;
+      setBusy(btn, true);
+      try {
+        const r = await api('POST', '/api/inspire/guest', { name, cid: session.cid }, { auth: false });
+        if (!r || typeof r.token !== 'string') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        setSession(r.token, normalizeUser(r.user, { guest: true, name }));
+        store.set(LS.name, name);
+        showBoard();
+      } catch (e) {
+        err.textContent = e.message || 'Giriş yapılamadı.';
+        err.hidden = false;
       } finally {
-        btn.innerHTML = 'Giriş Yap';
+        setBusy(btn, false);
       }
-    });
-
-    function logout() {
-      localStorage.removeItem('inspire_token');
-      localStorage.removeItem('inspire_user');
-      token = null;
-      currentUser = null;
-      document.getElementById('dashboard').style.display = 'none';
-      document.getElementById('login-screen').style.display = 'flex';
     }
 
-    async function showDashboard() {
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('dashboard').style.display = 'block';
-      
-      document.getElementById('user-greeting').textContent = `Hoş geldin, ${currentUser.full_name || currentUser.username}!`;
-      
-      if (currentUser.is_first_login) {
-        document.getElementById('pwd-modal').classList.add('active');
-        document.getElementById('pwd-modal').style.pointerEvents = 'all'; // prevent closing
-      }
-      
-      
-      
-      loadPosts();
-    }
-
-    
-    // Change Password
-    document.getElementById('pwd-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const p1 = document.getElementById('new-pwd').value;
-      const p2 = document.getElementById('new-pwd-confirm').value;
-      const err = document.getElementById('pwd-error');
-      
-      if (p1 !== p2) {
-        err.style.display = 'block';
+    async function adminLogin() {
+      const username = $('admin-user').value.trim();
+      const password = $('admin-pass').value;
+      const err = $('admin-error');
+      err.hidden = true;
+      if (!username || !password) {
+        err.textContent = 'Kullanıcı adı ve şifre gerekli.';
+        err.hidden = false;
         return;
       }
-      err.style.display = 'none';
-      
-      const btn = document.getElementById('submit-pwd-btn');
-      btn.innerHTML = '<div class="spinner"></div>';
-      
+      const btn = $('admin-btn');
+      setBusy(btn, true);
       try {
-        const res = await fetch(`${API_URL}/api/inspire/change-password`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ newPassword: p1 })
-        });
-        
-        if (!res.ok) throw new Error('Şifre güncellenemedi');
-        
-        currentUser.is_first_login = 0;
-        localStorage.setItem('inspire_user', JSON.stringify(currentUser));
-        document.getElementById('pwd-modal').classList.remove('active');
-      } catch(e) {
-        err.textContent = e.message;
-        err.style.display = 'block';
+        const r = await api('POST', '/api/inspire/login', { username, password }, { auth: false });
+        if (!r || typeof r.token !== 'string') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        setSession(r.token, normalizeUser(r.user, { guest: false }));
+        $('admin-pass').value = '';
+        showBoard();
+      } catch (e) {
+        err.textContent = e.status === 401 ? 'Hatalı kullanıcı adı veya şifre.' : (e.message || 'Giriş yapılamadı.');
+        err.hidden = false;
       } finally {
-        btn.innerHTML = 'Şifremi Güncelle';
+        setBusy(btn, false);
       }
-    });
-
-    // Modal
-
-    function openModal() {
-      document.getElementById('add-modal').classList.add('active');
-    }
-    function closeModal() {
-      document.getElementById('add-modal').classList.remove('active');
-      document.getElementById('add-form').reset();
     }
 
-    // Add Post
-    document.getElementById('add-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = document.getElementById('submit-post-btn');
-      btn.innerHTML = '<div class="spinner"></div>';
-      
-      
-      let url = document.getElementById('post-url').value;
-        let type = 'link';
-      if (url.includes('instagram.com')) type = 'reels';
-      else if (url.includes('pinterest.')) type = 'pinterest';
-      else if (url.includes('drive.google.com')) type = 'drive';
-        else if (url.includes('youtube.com') || url.includes('youtu.be')) type = 'youtube';
-      else if (url.match(/\.(mp4|webm|mov)(\?|$)/i)) type = 'video';
-        else if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?|$)/i)) type = 'image';
-
-      const desc = document.getElementById('post-desc').value;
-      
-      // Instagram link cleanup
-      if (type === 'pinterest') { url = url.split('?')[0]; }
-      if (type === 'reels' && url.includes('instagram.com')) {
-        url = url.split('?')[0]; // Query parametrelerini temizle
-        if (url.endsWith('/')) url = url.slice(0, -1);
-      }
-
+    async function renameGuest() {
+      const name = cleanName($('name-input').value);
+      const err = $('name-error');
+      err.hidden = true;
+      const btn = $('name-submit');
+      setBusy(btn, true);
       try {
-        const res = await fetch(`${API_URL}/api/inspire/posts`, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ type, url, description: desc })
-        });
-        
-        if (!res.ok) throw new Error('Yüklenemedi');
-        
-        closeModal();
-        loadPosts();
-      } catch(error) {
-        alert('Hata: ' + error.message);
+        const r = await api('POST', '/api/inspire/guest', { name, cid: session.cid }, { auth: false });
+        if (!r || typeof r.token !== 'string') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        setSession(r.token, normalizeUser(r.user, { guest: true, name }));
+        store.set(LS.name, name);
+        renderHeader();
+        closeModal($('name-modal'));
+        toast(name ? `Artık "${name}" olarak görünüyorsun.` : 'Artık Anonim olarak görünüyorsun.', 'ok');
+      } catch (e) {
+        err.textContent = e.message || 'İsim değiştirilemedi.';
+        err.hidden = false;
       } finally {
-        btn.innerHTML = 'Paylaş';
+        setBusy(btn, false);
       }
-    });
+    }
 
-    // Load Posts
-    async function loadPosts() {
-      const grid = document.getElementById('posts-grid');
-      grid.innerHTML = '<div style="text-align:center;width:100%;padding:40px;"><div class="spinner"></div></div>';
-      
+    function logout(message) {
+      clearSession();
+      teardownBoard();
+      closeAllModals();
+      showEntry(message);
+    }
+    function handleUnauthorized() {
+      if (!session.token) return;
+      logout('Oturumun sona erdi. Lütfen tekrar giriş yap.');
+    }
+
+    /* ----------------------------------------------------------------- screens */
+    function showEntry(notice) {
+      $('dashboard').hidden = true;
+      $('entry-screen').hidden = false;
+      const n = $('entry-notice');
+      n.textContent = notice || '';
+      n.hidden = !notice;
+      $('guest-name').value = cleanName(store.get(LS.name) || '');
+      $('guest-error').hidden = true;
+      if (!COARSE) $('guest-name').focus({ preventScroll: true });
+    }
+
+    function showBoard() {
+      $('entry-screen').hidden = true;
+      $('dashboard').hidden = false;
+      renderHeader();
+      initBoard();
+      loadPosts({ initial: true });
+      startRefresh();
+    }
+
+    function renderHeader() {
+      const u = session.user;
+      if (!u) return;
+      $('user-name').textContent = u.display_name || 'Anonim';
+      $('admin-badge').hidden = !u.is_admin;
+      $('btn-rename').hidden = !u.guest;
+    }
+
+    /* =================================================================== BOARD */
+    const posts = new Map();             // postId -> entry
+    const cardOwner = new WeakMap();     // card element -> entry (for observers)
+    const board = { el: null, cols: [], n: 0, ready: false, loaded: false };
+    const load = { seq: 0, ctrl: null, lastAt: 0 };
+    const mut = { epoch: 0, inflight: 0 };
+    let nearIO = null;
+    let farIO = null;
+    let resizeTimer = 0;
+    let refreshTimer = 0;
+
+    function colCountFor(width) {
+      if (width < 600) return 1;
+      if (width < 900) return 2;
+      if (width < 1200) return 3;
+      return 4;
+    }
+
+    function initBoard() {
+      if (board.ready) {
+        if (!board.n) setupColumns(colCountFor(board.el.clientWidth));
+        return;
+      }
+      board.ready = true;
+      board.el = $('board');
+      setupColumns(colCountFor(board.el.clientWidth));
+      board.el.addEventListener('click', onBoardClick);
+      board.el.addEventListener('submit', onBoardSubmit);
+      nearIO = new IntersectionObserver(onNear, { rootMargin: `${NEAR_MARGIN}px 0px ${NEAR_MARGIN}px 0px` });
+      farIO = new IntersectionObserver(onFar, { rootMargin: `${FAR_MARGIN}px 0px ${FAR_MARGIN}px 0px` });
+      if ('ResizeObserver' in window) {
+        new ResizeObserver(() => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(redistribute, 200);
+        }).observe(board.el);
+      } else {
+        window.addEventListener('resize', () => {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(redistribute, 200);
+        });
+      }
+    }
+
+    function setupColumns(n) {
+      board.el.textContent = '';
+      board.cols = [];
+      for (let i = 0; i < n; i++) {
+        const col = h('div', { class: 'board-col' });
+        board.cols.push(col);
+        board.el.append(col);
+      }
+      board.n = n;
+      board.el.style.setProperty('--cols', String(n));
+    }
+
+    function shortestCol() {
+      let best = 0;
+      let bestH = Infinity;
+      for (let i = 0; i < board.cols.length; i++) {
+        const hh = board.cols[i].offsetHeight;
+        if (hh < bestH) { bestH = hh; best = i; }
+      }
+      return board.cols[best];
+    }
+    // A card is placed into a column exactly once; it never moves afterwards
+    // (except during a column-count change, see redistribute()).
+    const placeAppend = (entry) => shortestCol().append(entry.el);
+    const placePrepend = (entry) => shortestCol().prepend(entry.el);
+
+    // Column count changed: re-distribute ONCE. Iframes are unmounted first
+    // (moving an iframe in the DOM reloads it anyway) and come back via the observers.
+    function redistribute() {
+      if (!board.el || $('dashboard').hidden) return;
+      const width = board.el.clientWidth;
+      if (!width) return;
+      const n = colCountFor(width);
+      if (n === board.n) return;
+      for (const m of [...mounted]) unmount(m);
+      const ordered = [...posts.values()].sort(byNewest);
+      setupColumns(n);
+      for (const e of ordered) placeAppend(e);
+      schedulePump();
+    }
+    function byNewest(a, b) {
+      const na = Number(a.id), nb = Number(b.id);
+      if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return nb - na;
+      return String(b.post.created_at || '').localeCompare(String(a.post.created_at || ''));
+    }
+
+    function setStatus(kind, msg) {
+      const el = $('board-status');
+      el.textContent = '';
+      if (kind === 'none') { el.hidden = true; return; }
+      el.hidden = false;
+      if (kind === 'loading') {
+        el.append(h('div', { class: 'spinner', 'aria-hidden': 'true' }), h('div', { class: 'status-text' }, 'Fikirler yükleniyor…'));
+      } else if (kind === 'empty') {
+        el.append(h('div', { class: 'status-text' }, 'Henüz fikir eklenmemiş. İlk fikri sen ekle!'));
+      } else if (kind === 'error') {
+        const retry = h('button', { type: 'button', class: 'btn btn-outline' }, 'Tekrar dene');
+        retry.addEventListener('click', () => loadPosts({ initial: true }));
+        el.append(h('div', { class: 'status-text error' }, msg || 'Fikirler yüklenirken hata oluştu.'), retry);
+      }
+    }
+    function updateEmptyState() {
+      if (posts.size) setStatus('none');
+      else if (board.loaded) setStatus('empty');
+    }
+
+    // Mutations (add / delete / notes) cancel an in-flight list request and make
+    // any list response that overlapped them stale, so a refresh can never undo
+    // what the user just did.
+    async function mutate(fn) {
+      mut.inflight++;
+      mut.epoch++;
+      abortLoad();
+      try { return await fn(); } finally { mut.inflight--; mut.epoch++; }
+    }
+    function abortLoad() {
+      load.seq++;
+      if (load.ctrl) { load.ctrl.abort(); load.ctrl = null; }
+    }
+
+    async function loadPosts({ initial = false } = {}) {
+      if (!session.token || mut.inflight) return;
+      const seq = ++load.seq;
+      if (load.ctrl) load.ctrl.abort();
+      const ctrl = new AbortController();
+      load.ctrl = ctrl;
+      const epoch = mut.epoch;
+      if (initial && !posts.size) setStatus('loading');
       try {
-        const res = await fetch(`${API_URL}/api/inspire/posts`, { headers: { 'Authorization': `Bearer ${token}` } });
-        const posts = await res.json();
-        
-        grid.innerHTML = '';
-        if(posts.length === 0) {
-          grid.innerHTML = '<div style="text-align:center;width:100%;color:#888;">Henüz fikir eklenmemiş. İlk fikri sen ekle!</div>';
-          return;
+        const list = await api('GET', '/api/inspire/posts', null, { signal: ctrl.signal });
+        if (seq !== load.seq || epoch !== mut.epoch || !session.token) return; // out of order / stale
+        if (!Array.isArray(list)) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        load.lastAt = Date.now();
+        board.loaded = true;
+        reconcile(list);
+        updateEmptyState();
+      } catch (e) {
+        if ((e && e.name === 'AbortError') || seq !== load.seq || !session.token) return;
+        if (e.status === 401) return; // handled by api()
+        if (!posts.size) setStatus('error', e.message);
+      } finally {
+        if (load.ctrl === ctrl) load.ctrl = null;
+      }
+    }
+
+    // Keyed diff: existing cards are patched in place (text only), missing ones
+    // removed, new ones inserted. Media is never recreated.
+    function reconcile(list) {
+      const seen = new Set();
+      const fresh = [];
+      for (const p of list) {
+        if (!p || p.id == null) continue;
+        const id = String(p.id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        const e = posts.get(id);
+        if (e) patchCard(e, p); else fresh.push(p);
+      }
+      for (const [id, e] of posts) if (!seen.has(id)) removeEntry(e);
+      if (!fresh.length) return;
+      if (!posts.size) {
+        for (const p of fresh) {            // first fill: newest first, top to bottom
+          const e = createEntry(p);
+          posts.set(e.id, e);
+          placeAppend(e);
+          observeEntry(e);
         }
+      } else {
+        for (const p of fresh.slice().reverse()) insertTop(p); // so the newest ends on top
+      }
+    }
 
-        posts.forEach(p => {
-          const card = document.createElement('div');
-          card.className = 'post-card';
-          
-          let mediaHtml = '';
-          if (p.type === 'reels') {
-            // Instagram Embed
-            mediaHtml = `
-              <iframe src="${p.url}/embed" width="100%" height="450" frameborder="0" scrolling="no" allowtransparency="true" allowfullscreen></iframe>
-            `;
-          } else if (p.type === 'video') {
-            mediaHtml = `
-              <video src="${p.url}" controls controlsList="nodownload" preload="metadata" loop style="max-height: 500px; width: 100%; background:#000;"></video>
-            `;
-          } else {
-            mediaHtml = `
-              <img src="${p.url}" alt="Fikir Görseli">
-            `;
-          }
+    function insertTop(post) {
+      const id = String(post.id);
+      const existing = posts.get(id);
+      if (existing) { patchCard(existing, post); return existing; }
+      const e = createEntry(post);
+      posts.set(e.id, e);
+      placePrepend(e);
+      observeEntry(e);
+      updateEmptyState();
+      return e;
+    }
 
-          const canDelete = currentUser.username === 'vkesgin38' || currentUser.id === p.user_id;
-          const deleteHtml = canDelete ? `<button class="delete-post" onclick="deletePost(${p.id})">Sil</button>` : '';
+    function observeEntry(e) {
+      cardOwner.set(e.el, e);
+      nearIO.observe(e.el);
+      if (e.media) farIO.observe(e.el);
+    }
 
-          if (p.type === 'drive') {
-            const driveId = p.url.match(/\/d\/([^\/]+)/);
-            const iframeUrl = driveId ? `https://drive.google.com/file/d/${driveId[1]}/preview` : p.url;
-            mediaHtml = `<iframe src="${iframeUrl}" width="100%" height="450" frameborder="0" allowfullscreen></iframe>`;
-          } else if (p.type === 'pinterest') {
-            const pinMatch = p.url.match(/pin\/(\d+)/);
-            if (pinMatch) {
-              mediaHtml = `<div style="padding: 10px; display: flex; justify-content: center;"><iframe src="https://assets.pinterest.com/ext/embed.html?id=${pinMatch[1]}" height="450" width="100%" frameborder="0" scrolling="no" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe></div>`;
-            } else {
-              mediaHtml = `<div style="padding: 10px; display: flex; justify-content: center;"><a data-pin-do="embedPin" data-pin-width="medium" href="${p.url}"></a></div>`;
-            }
-          } else if (p.type === 'youtube') {
-            const ytMatch = p.url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|shorts\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
-            if (ytMatch) {
-              const isShort = p.url.includes('shorts');
-              mediaHtml = `<iframe src="https://www.youtube.com/embed/${ytMatch[1]}" width="100%" height="${isShort ? '500' : '250'}" frameborder="0" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>`;
-            }
-          } else if (p.type === 'link') {
-            mediaHtml = `
-              <div id="link-preview-${p.id}" style="padding:40px 20px; text-align:center; background:rgba(255,255,255,0.03); border-radius:12px; margin:10px;">
-                <a href="${p.url}" target="_blank" style="color:var(--accent); font-weight:bold; text-decoration:none; display:block; padding:15px; border:1px solid rgba(0,229,255,0.2); border-radius:8px;">🔗 Dış Bağlantıyı Aç / Ziyaret Et</a>
-                <div class="microlink-spinner" style="margin-top:10px; font-size:11px; color:#888;">Önizleme Yükleniyor...</div>
-              </div>
-`;
-          }
+    function removeEntry(e) {
+      if (nearIO) nearIO.unobserve(e.el);
+      if (farIO) farIO.unobserve(e.el);
+      if (e.media) { unmount(e.media); wanted.delete(e.media); }
+      clearTimeout(e.flashTimer);
+      e.el.remove();
+      posts.delete(e.id);
+    }
 
-          let notesHtml = '';
-          if (p.notes && p.notes.length > 0) {
-            const visibleNotes = p.notes.filter(n => String(n.is_public) === '1' || n.is_public === true || n.user_id === currentUser.id);
-            if (visibleNotes.length > 0) {
-              notesHtml = '<div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.05); padding-top:10px;"><strong style="font-size:12px;color:#aaa">Notlar:</strong>';
-              visibleNotes.forEach(n => {
-                const lock = (String(n.is_public) === '1' || n.is_public === true) ? '' : ' <span style="font-size:10px;color:#666">(Sadece sana özel)</span>';
-                const canEditNote = currentUser.username === 'vkesgin38' || currentUser.id === n.user_id;
-                const noteActions = canEditNote ? `<div style="margin-top:5px; display:flex; gap:10px;">
-                  <span style="font-size:11px; color:#00e5ff; cursor:pointer;" onclick="editNote(${n.id}, '${n.content.replace(/'/g, "\\'")}')">Düzenle</span>
-                  <span style="font-size:11px; color:#ff4444; cursor:pointer;" onclick="deleteNote(${n.id})">Sil</span>
-                </div>` : '';
-                notesHtml += `<div style="font-size:13px; color:#ccc; margin-top:5px; padding:8px; background:rgba(0,0,0,0.2); border-radius:8px;">
-                  <b>@${n.author || 'Anonim'}</b>: ${n.content}${lock}
-                  ${noteActions}
-                </div>`;
-              });
-              notesHtml += '</div>';
-            }
-          }
-          
-          const addNoteForm = `
-            <div style="margin-top:10px; display:flex; flex-direction:column; gap:5px;">
-              <input type="text" id="note-input-${p.id}" placeholder="Bir not ekle..." style="width:100%; padding:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:6px; color:#fff; font-size:12px; box-sizing:border-box;">
-              <div style="display:flex; justify-content:space-between; align-items:center;">
-                <label style="font-size:11px; color:#888; display:flex; align-items:center; gap:4px;">
-                  <input type="checkbox" id="note-public-${p.id}"> Diğer kullanıcılar da görsün
-                </label>
-                <button onclick="addNote(${p.id})" style="background:var(--accent); color:#000; border:none; padding:4px 10px; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer;">Ekle</button>
-              </div>
-            </div>
-          `;
+    function teardownBoard() {
+      abortLoad();
+      stopRefresh();
+      for (const e of [...posts.values()]) removeEntry(e);
+      posts.clear();
+      wanted.clear();
+      metaQueue.length = 0;
+      board.loaded = false;
+      if (board.el) { board.el.textContent = ''; board.cols = []; board.n = 0; }
+      setStatus('none');
+    }
 
-          card.innerHTML = `
-            <div class="post-media">${mediaHtml}</div>
-            <div class="post-info">
-              ${p.description ? `<p class="post-desc">${p.description}</p>` : ''}
-              <div class="post-meta">
-                <span class="author-badge">@${p.author || 'Anonim'}</span>
-                ${deleteHtml}
-              </div>
-              ${notesHtml}
-              ${addNoteForm}
-            </div>
-          `;
-          grid.appendChild(card);
-          
-          if (p.type === 'link') {
-            fetch('https://api.microlink.io?url=' + encodeURIComponent(p.url))
-              .then(r => r.json())
-              .then(data => {
-                const el = document.getElementById('link-preview-' + p.id);
-                if(!el) return;
-                if(data.status === 'success' && data.data) {
-                  const img = data.data.image ? data.data.image.url : (data.data.logo ? data.data.logo.url : '');
-                  const title = data.data.title || p.url;
-                  const desc = data.data.description ? data.data.description.substring(0,80)+'...' : '';
-                  el.innerHTML = `<a href="${p.url}" target="_blank" style="text-decoration:none; color:inherit; display:block; text-align:left;">
-                    ${img ? `<img src="${img}" style="width:100%; max-height:200px; object-fit:cover; border-radius:8px; margin-bottom:10px;">` : ''}
-                    <h4 style="margin:0 0 5px 0; font-size:14px; color:#fff;">${title}</h4>
-                    <p style="margin:0; font-size:11px; color:#888;">${desc}</p>
-                  </a>`;
-                  el.style.padding = '15px';
-                } else {
-                  const spinner = el.querySelector('.microlink-spinner');
-                  if(spinner) spinner.style.display = 'none';
-                }
-              }).catch(() => {
-                const el = document.getElementById('link-preview-' + p.id);
-                if(el) {
-                  const spinner = el.querySelector('.microlink-spinner');
-                  if(spinner) spinner.style.display = 'none';
-                }
-              });
-          }
-        });
-        
-        // Instagram scriptini tetikle
-        if (window.instgrm) {
-          window.instgrm.Embeds.process();
+    function startRefresh() {
+      stopRefresh();
+      refreshTimer = setInterval(() => {
+        if (document.visibilityState === 'visible') loadPosts();
+      }, REFRESH_MS);
+    }
+    function stopRefresh() {
+      clearInterval(refreshTimer);
+      refreshTimer = 0;
+    }
+
+    function showPost(id) {
+      const e = posts.get(String(id));
+      if (!e) {
+        toast('Bu fikir şu an listede görünmüyor.', 'error');
+        loadPosts();
+        return;
+      }
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      e.el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
+      e.el.classList.remove('flash');
+      void e.el.offsetWidth; // restart the animation
+      e.el.classList.add('flash');
+      clearTimeout(e.flashTimer);
+      e.flashTimer = setTimeout(() => e.el.classList.remove('flash'), 2700);
+    }
+
+    /* ------------------------------------------------------------------- cards */
+    // Decide how a post is shown. Legacy types (reels, link, pinterest, drive,
+    // youtube, video, image) are all mapped through parseLink(post.url).
+    function classify(post) {
+      const type = String(post.type || '');
+      if (type === 'text') return { kind: 'text', platform: 'text', parsed: null };
+      let raw = String(post.url || '').trim();
+      if (/^\/(?!\/)/.test(raw)) raw = API_BASE + raw; // legacy uploads: '/files/...' is served by the worker
+      const parsed = raw ? parseLink(raw) : null;
+      if (!parsed) return { kind: 'invalid', platform: 'web', parsed: null, raw };
+      let platform = parsed.platform;
+      if (platform === 'web' && (type === 'image' || type === 'video')) platform = type;
+      const src = safeHttpUrl(raw) || parsed.canonical;
+      if (platform === 'image') return { kind: 'image', platform, parsed, src };
+      if (platform === 'video') return { kind: 'video', platform, parsed, src };
+      if (parsed.embed && !parsed.needsResolve) return { kind: 'embed', platform, parsed };
+      return { kind: 'card', platform, parsed };
+    }
+
+    function createEntry(post) {
+      const view = classify(post);
+      const entry = {
+        id: String(post.id),
+        post,
+        view,
+        key: view.parsed ? view.parsed.key : null,
+        el: null,
+        refs: {},
+        noteViews: new Map(),
+        media: null,
+        metaRequested: false,
+        flashTimer: 0,
+        shown: {},       // last rendered values (compared instead of the DOM, which GTranslate may rewrite)
+      };
+      entry.el = buildCard(entry);
+      return entry;
+    }
+
+    function buildCard(entry) {
+      const kind = entry.view.kind;
+      const card = h('article', { class: 'post-card kind-' + kind, 'data-id': entry.id });
+      let media = null;
+      if (kind === 'embed') media = buildEmbedMedia(entry);
+      else if (kind === 'image') media = buildImageMedia(entry);
+      else if (kind === 'video') media = buildVideoMedia(entry);
+      else if (kind === 'card') media = buildLinkCard(entry);
+      else if (kind === 'text') media = buildTextIdea(entry);
+      else media = buildInvalidMedia(entry);
+      card.append(media, buildInfo(entry));
+      return card;
+    }
+
+    /* Embeds: a facade of fixed size; the real iframe is mounted on demand. */
+    function buildEmbedMedia(entry) {
+      const { parsed, platform } = entry.view;
+      const box = h('div', { class: 'media-box' });
+      const m = {
+        entry, box, platform, embed: parsed.embed, iframe: null, facade: null, thumb: null, titleEl: null,
+        knownHeight: null, lastUsed: 0, revealTimer: 0,
+      };
+      sizeEmbedBox(m);
+      m.facade = buildFacade(entry, m);
+      box.append(m.facade);
+      entry.media = m;
+      return h('div', { class: 'media' }, box);
+    }
+
+    function sizeEmbedBox(m) {
+      const e = m.embed;
+      const s = m.box.style;
+      if (e.aspect && e.aspect > 0) {
+        s.aspectRatio = String(e.aspect);
+        s.width = `min(100%, ${Math.round(MAX_MEDIA_H * e.aspect)}px)`;
+      } else {
+        const px = Math.min(m.knownHeight || e.height || 420, MAX_AUTO_H);
+        s.height = px + 'px';
+        if (!e.autoHeight && px < 220) m.box.classList.add('compact');
+      }
+    }
+
+    function buildFacade(entry, m) {
+      const { parsed, platform } = entry.view;
+      const info = platformInfo(platform);
+      const meta = normMeta(entry.post.meta);
+      const f = h('button', { type: 'button', class: 'facade', 'data-action': 'mount', 'aria-label': `${info.name} içeriğini göster` });
+      f.style.setProperty('--pc', info.color);
+      const thumbUrl = safeHttpUrl(parsed.thumb) || (meta && meta.image) || null;
+      if (thumbUrl) { m.thumb = makeThumb(thumbUrl); f.append(m.thumb); }
+      m.titleEl = h('span', { class: 'facade-title' }, meta ? meta.title : '');
+      f.append(
+        h('span', { class: 'facade-shade' }),
+        h('span', { class: 'facade-chip' }, h('span', { class: 'dot' }), platformLabel(platform, parsed.subtype)),
+        h('span', { class: 'facade-center' },
+          h('span', { class: 'facade-play' }),
+          h('span', { class: 'facade-label' }, 'Göster'),
+          h('span', { class: 'facade-spin spinner', 'aria-hidden': 'true' })),
+        m.titleEl,
+      );
+      return f;
+    }
+
+    function makeThumb(url) {
+      const img = h('img', { class: 'facade-thumb', src: url, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+      img.addEventListener('error', () => img.remove(), { once: true });
+      return img;
+    }
+
+    /* Direct images: reserved box; natural ratio is adopted only while the card
+       is below the viewport (so visible content never jumps) and remembered. */
+    const aspectCache = (() => {
+      try { const o = JSON.parse(store.get(LS.aspect) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (_) { return {}; }
+    })();
+    function rememberAspect(id, ratio) {
+      if (aspectCache[id] === ratio) return;
+      aspectCache[id] = ratio;
+      const keys = Object.keys(aspectCache);
+      if (keys.length > 400) delete aspectCache[keys[0]];
+      store.set(LS.aspect, JSON.stringify(aspectCache));
+    }
+
+    function buildImageMedia(entry) {
+      const src = entry.view.src;
+      const box = h('div', { class: 'media-box' });
+      const cached = Number(aspectCache[entry.id]);
+      box.style.aspectRatio = String(cached > 0 ? cached : 4 / 3);
+      const img = h('img', {
+        class: 'media-img', src, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer',
+        alt: entry.post.description ? String(entry.post.description).slice(0, 140) : 'Fikir görseli',
+      });
+      img.addEventListener('load', () => {
+        if (!img.naturalWidth || !img.naturalHeight) return;
+        const ratio = Math.round(Math.min(2, Math.max(0.5, img.naturalWidth / img.naturalHeight)) * 1000) / 1000;
+        rememberAspect(entry.id, ratio);
+        if (box.getBoundingClientRect().top > window.innerHeight) box.style.aspectRatio = String(ratio);
+      }, { once: true });
+      img.addEventListener('error', () => showMediaFallback(box, src, 'Görsel yüklenemedi'), { once: true });
+      box.append(h('a', { class: 'media-link', href: src, target: '_blank', rel: 'noopener noreferrer nofollow', 'aria-label': 'Görseli yeni sekmede aç' }, img));
+      return h('div', { class: 'media' }, box);
+    }
+
+    function buildVideoMedia(entry) {
+      const src = entry.view.src;
+      const box = h('div', { class: 'media-box' });
+      box.style.aspectRatio = '16 / 9';
+      const v = h('video', { class: 'media-video', src, preload: 'none', controls: true, playsinline: true, 'webkit-playsinline': true, controlslist: 'nodownload' });
+      v.addEventListener('error', () => showMediaFallback(box, src, 'Video yüklenemedi'), { once: true });
+      box.append(v);
+      return h('div', { class: 'media' }, box);
+    }
+
+    function showMediaFallback(box, url, message) {
+      box.textContent = '';
+      box.append(h('a', { class: 'media-fallback', href: url, target: '_blank', rel: 'noopener noreferrer nofollow' },
+        h('span', null, message),
+        h('span', { class: 'mf-host', translate: 'no' }, (hostOf(url) || 'Bağlantı') + ' ↗')));
+    }
+
+    function buildInvalidMedia(entry) {
+      return h('div', { class: 'media' }, h('div', { class: 'media-invalid' },
+        h('span', null, 'Bu bağlantı görüntülenemiyor'),
+        h('span', { class: 'mf-host', translate: 'no' }, String(entry.view.raw || '').slice(0, 200))));
+    }
+
+    /* Preview card for links that cannot be framed. The visual box always has
+       the same size: OG image, or a placeholder with favicon + domain. */
+    function buildLinkCard(entry) {
+      const { parsed, platform } = entry.view;
+      const href = safeHttpUrl(parsed.canonical);
+      const info = platformInfo(platform);
+      const r = entry.refs;
+      r.lvVisual = h('div', { class: 'link-visual' });
+      r.lvVisual.style.setProperty('--pc', info.color);
+      r.lvSiteText = h('span', { translate: 'no' });
+      r.lvTitle = h('div', { class: 'link-title' });
+      r.lvDesc = h('div', { class: 'link-desc' });
+      const host = hostOf(href);
+      const site = h('div', { class: 'link-site' },
+        h('img', { src: faviconUrl(host, 32), alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer', width: 16, height: 16 }),
+        r.lvSiteText);
+      site.firstChild.addEventListener('error', (ev) => ev.target.remove(), { once: true });
+      const a = h('a', { class: 'link-card', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc' },
+        r.lvVisual, h('div', { class: 'link-body' }, site, r.lvTitle, r.lvDesc));
+      fillLinkCard(entry);
+      return h('div', { class: 'media media-linkcard' }, a);
+    }
+
+    function fillLinkCard(entry) {
+      const { parsed, platform } = entry.view;
+      const r = entry.refs;
+      const meta = normMeta(entry.post.meta);
+      const href = safeHttpUrl(parsed.canonical) || '';
+      const host = hostOf(href);
+      setText(r.lvTitle, (meta && meta.title) || prettyUrl(href));
+      const desc = meta ? meta.description : '';
+      setText(r.lvDesc, desc);
+      r.lvDesc.hidden = !desc;
+      const pname = platform !== 'web' ? platformInfo(platform).name : '';
+      setText(r.lvSiteText, (meta && (meta.site_name || meta.provider)) || pname || host);
+      const img = (meta && meta.image) || safeHttpUrl(parsed.thumb) || '';
+      if (entry.shown.visual === img && r.lvVisual.firstChild) return;
+      entry.shown.visual = img;
+      r.lvVisual.textContent = '';
+      if (img) {
+        const el = h('img', { class: 'og', src: img, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+        el.addEventListener('error', () => showLinkPlaceholder(r.lvVisual, host), { once: true });
+        r.lvVisual.append(el);
+      } else {
+        showLinkPlaceholder(r.lvVisual, host);
+      }
+    }
+
+    function showLinkPlaceholder(visual, host) {
+      visual.textContent = '';
+      const fav = h('img', { class: 'ph-favicon', src: faviconUrl(host || 'example.com', 64), alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+      fav.addEventListener('error', () => fav.remove(), { once: true });
+      visual.append(fav, h('span', { class: 'ph-host', translate: 'no' }, host || 'Bağlantı'));
+    }
+
+    /* Text idea card. `.sb-slot` is the (hidden, empty) mount point for the
+       later AI storyboard phase. */
+    function buildTextIdea(entry) {
+      const r = entry.refs;
+      r.textBody = h('div', { class: 'text-idea-body' }, entry.post.description || '');
+      r.sbSlot = h('div', { class: 'sb-slot', hidden: true, 'data-post-id': entry.id });
+      entry.shown.text = entry.post.description || '';
+      const wrap = h('div', { class: 'text-idea' }, h('div', { class: 'text-idea-label' }, 'Metin fikir'), r.textBody, r.sbSlot);
+      mountStoryboard(entry);
+      return wrap;
+    }
+
+    // Extension point for the AI storyboard phase: when GET /api/inspire/config
+    // returns storyboard:true, fill entry.refs.sbSlot here. Intentionally empty now.
+    function mountStoryboard(entry) {
+      if (!config.storyboard || !entry.refs.sbSlot) return;
+    }
+
+    function buildInfo(entry) {
+      const { post, view } = entry;
+      const r = entry.refs;
+      const info = h('div', { class: 'post-info' });
+      if (view.kind !== 'text') {
+        r.desc = h('p', { class: 'post-desc', hidden: !post.description }, post.description || '');
+        entry.shown.desc = post.description || '';
+        info.append(r.desc);
+      }
+      r.author = h('span', { class: 'author-badge' + (post.is_mine ? ' is-mine' : ''), translate: 'no', title: post.is_mine ? 'Senin paylaşımın' : null }, displayName(post.author));
+      const d = parseDate(post.created_at);
+      entry.shown.date = d ? fmtRelative(d) : '';
+      r.date = h('time', { class: 'post-date', datetime: d ? d.toISOString() : null, title: d ? fmtLongDate(d) : null }, entry.shown.date);
+      const right = h('div', { class: 'post-meta-right' });
+      if (view.parsed && view.kind !== 'card') {
+        const href = safeHttpUrl(view.src || view.parsed.canonical);
+        if (href) right.append(h('a', { class: 'src-link', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', title: href, translate: 'no' }, hostOf(href) + ' ↗'));
+      }
+      r.del = h('button', { type: 'button', class: 'text-btn danger', 'data-action': 'delete-post', hidden: !post.can_delete }, 'Sil');
+      right.append(r.del);
+      info.append(h('div', { class: 'post-meta' }, h('div', { class: 'post-meta-left' }, r.author, r.date), right));
+
+      r.notesTitle = h('div', { class: 'notes-title', hidden: true }, 'Notlar');
+      r.notesList = h('div', { class: 'notes-list' });
+      r.noteInput = h('input', { type: 'text', class: 'note-input', placeholder: 'Bir not ekle…', maxlength: config.max_note_len, 'aria-label': 'Not ekle', autocomplete: 'off', enterkeyhint: 'send' });
+      r.notePublic = h('input', { type: 'checkbox' });
+      r.noteBtn = h('button', { type: 'submit', class: 'btn-mini' }, 'Ekle');
+      const form = h('form', { class: 'note-form', novalidate: true },
+        r.noteInput,
+        h('div', { class: 'note-form-row' }, h('label', { class: 'note-public' }, r.notePublic, 'Diğer kullanıcılar da görsün'), r.noteBtn));
+      info.append(h('div', { class: 'notes' }, r.notesTitle, r.notesList, form));
+      reconcileNotes(entry, post.notes);
+      return info;
+    }
+
+    // Refresh path: only text parts that actually changed are touched.
+    function patchCard(entry, post) {
+      const old = entry.post;
+      entry.post = post;
+      const r = entry.refs;
+      const s = entry.shown;
+      const desc = post.description || '';
+      if (entry.view.kind === 'text') {
+        if (s.text !== desc) { s.text = desc; r.textBody.textContent = desc; }
+      } else if (s.desc !== desc) {
+        s.desc = desc;
+        r.desc.textContent = desc;
+        r.desc.hidden = !desc;
+      }
+      if (old.author !== post.author) r.author.textContent = displayName(post.author);
+      if (!!old.is_mine !== !!post.is_mine) r.author.classList.toggle('is-mine', !!post.is_mine);
+      r.del.hidden = !post.can_delete;
+      const rel = fmtRelative(parseDate(post.created_at));
+      if (s.date !== rel) { s.date = rel; r.date.textContent = rel; }
+      if (metaSig(old.meta) !== metaSig(post.meta)) patchMeta(entry);
+      reconcileNotes(entry, post.notes);
+    }
+
+    function patchMeta(entry) {
+      const kind = entry.view.kind;
+      if (kind === 'card') { fillLinkCard(entry); return; }
+      if (kind === 'embed' && entry.media) {
+        const m = entry.media;
+        const meta = normMeta(entry.post.meta);
+        setText(m.titleEl, meta ? meta.title : '');
+        if (!m.thumb && meta && meta.image) {
+          m.thumb = makeThumb(meta.image);
+          m.facade.prepend(m.thumb);
         }
-        if (window.PinUtils) {
-          window.PinUtils.build();
+      }
+    }
+
+    /* ------------------------------------------------------------------- notes */
+    function buildNoteView(n) {
+      const d = parseDate(n.created_at);
+      const nv = { data: n, editing: null, dateText: d ? fmtRelative(d) : '' };
+      nv.author = h('b', { class: 'note-author', translate: 'no' }, displayName(n.author));
+      nv.priv = h('span', { class: 'note-private', hidden: isPublicNote(n) }, '(Sadece sana özel)');
+      nv.date = h('span', { class: 'note-date', title: d ? fmtLongDate(d) : null }, nv.dateText);
+      nv.text = h('div', { class: 'note-text' }, n.content || '');
+      nv.actions = h('div', { class: 'note-actions', hidden: !n.can_edit },
+        h('button', { type: 'button', class: 'text-btn', 'data-action': 'edit-note' }, 'Düzenle'),
+        h('button', { type: 'button', class: 'text-btn danger', 'data-action': 'delete-note' }, 'Sil'));
+      nv.el = h('div', { class: 'note', 'data-note-id': String(n.id) }, h('div', { class: 'note-head' }, nv.author, nv.priv, nv.date), nv.text, nv.actions);
+      return nv;
+    }
+
+    function patchNoteView(nv, n) {
+      const old = nv.data;
+      nv.data = n;
+      if (old.author !== n.author) nv.author.textContent = displayName(n.author);
+      nv.priv.hidden = isPublicNote(n);
+      if (!nv.editing) {
+        if (old.content !== n.content) nv.text.textContent = n.content || '';
+        nv.actions.hidden = !n.can_edit;
+      }
+      const rel = fmtRelative(parseDate(n.created_at));
+      if (rel !== nv.dateText) { nv.dateText = rel; nv.date.textContent = rel; }
+    }
+
+    function reconcileNotes(entry, notes) {
+      const list = (Array.isArray(notes) ? notes : []).filter((n) => n && n.id != null);
+      list.sort((a, b) => (Number(a.id) - Number(b.id)) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+      const seen = new Set();
+      for (const n of list) {
+        const id = String(n.id);
+        seen.add(id);
+        const nv = entry.noteViews.get(id);
+        if (nv) patchNoteView(nv, n); else entry.noteViews.set(id, buildNoteView(n));
+      }
+      for (const [id, nv] of entry.noteViews) {
+        if (!seen.has(id)) { nv.el.remove(); entry.noteViews.delete(id); }
+      }
+      const box = entry.refs.notesList;
+      let i = 0;
+      for (const n of list) { // move only elements that are out of place
+        const el = entry.noteViews.get(String(n.id)).el;
+        const at = box.children[i];
+        if (at !== el) box.insertBefore(el, at || null);
+        i++;
+      }
+      entry.refs.notesTitle.hidden = list.length === 0;
+    }
+
+    async function addNote(entry) {
+      const r = entry.refs;
+      const content = r.noteInput.value.trim();
+      if (!content) { r.noteInput.focus(); return; }
+      if (content.length > config.max_note_len) { toast(`Not en fazla ${config.max_note_len} karakter olabilir.`, 'error'); return; }
+      if (r.noteBtn.dataset.busy) return;
+      setBusy(r.noteBtn, true);
+      try {
+        const note = await mutate(() => api('POST', `/api/inspire/posts/${encodeURIComponent(entry.id)}/notes`, { content, is_public: r.notePublic.checked }));
+        if (!posts.has(entry.id) || !note || note.id == null) return;
+        const full = { is_mine: true, can_edit: true, is_public: r.notePublic.checked, author: session.user ? session.user.name : '', ...note };
+        entry.post.notes = upsertById(entry.post.notes, full);
+        reconcileNotes(entry, entry.post.notes);
+        r.noteInput.value = '';
+      } catch (e) {
+        if (e.status === 404) { toast('Bu fikir artık mevcut değil.', 'error'); removeEntry(entry); updateEmptyState(); }
+        else if (e.status !== 401) toast(e.message || 'Not eklenemedi.', 'error');
+      } finally {
+        setBusy(r.noteBtn, false);
+      }
+    }
+
+    function startEditNote(entry, nv) {
+      if (nv.editing) { nv.editing.ta.focus(); return; }
+      const ta = h('textarea', { class: 'note-edit', rows: 3, maxlength: config.max_note_len, 'aria-label': 'Notu düzenle' });
+      ta.value = nv.data.content || '';
+      const save = h('button', { type: 'button', class: 'btn-mini', 'data-action': 'save-note' }, 'Kaydet');
+      const cancel = h('button', { type: 'button', class: 'text-btn', 'data-action': 'cancel-note' }, 'Vazgeç');
+      const box = h('div', { class: 'note-edit-box' }, ta, h('div', { class: 'note-edit-actions' }, cancel, save));
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endEditNote(nv); }
+        else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveNote(entry, nv); }
+      });
+      nv.text.hidden = true;
+      nv.actions.hidden = true;
+      nv.el.append(box);
+      nv.editing = { box, ta, save, saving: false };
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+
+    function endEditNote(nv) {
+      if (!nv.editing) return;
+      nv.editing.box.remove();
+      nv.editing = null;
+      nv.text.textContent = nv.data.content || '';
+      nv.text.hidden = false;
+      nv.actions.hidden = !nv.data.can_edit;
+    }
+
+    async function saveNote(entry, nv) {
+      const ed = nv.editing;
+      if (!ed || ed.saving) return;
+      const content = ed.ta.value.trim();
+      if (!content) { toast('Not boş olamaz.', 'error'); ed.ta.focus(); return; }
+      if (content.length > config.max_note_len) { toast(`Not en fazla ${config.max_note_len} karakter olabilir.`, 'error'); return; }
+      if (content === String(nv.data.content || '').trim()) { endEditNote(nv); return; }
+      ed.saving = true;
+      setBusy(ed.save, true);
+      try {
+        const note = await mutate(() => api('PUT', `/api/inspire/notes/${encodeURIComponent(nv.data.id)}`, { content }));
+        const merged = { ...nv.data, ...(note && typeof note === 'object' && note.id != null ? note : { content }) };
+        entry.post.notes = upsertById(entry.post.notes, merged);
+        endEditNote(nv);
+        reconcileNotes(entry, entry.post.notes);
+      } catch (e) {
+        if (nv.editing === ed) { ed.saving = false; setBusy(ed.save, false); }
+        if (e.status === 404) { toast('Bu not artık mevcut değil.', 'error'); dropNote(entry, nv.data.id); }
+        else if (e.status === 403) toast('Bu notu düzenleme yetkin yok.', 'error');
+        else if (e.status !== 401) toast(e.message || 'Not düzenlenemedi.', 'error');
+      }
+    }
+
+    async function deleteNote(entry, nv) {
+      if (!(await confirmDialog('Bu notu silmek istediğine emin misin?', 'Sil'))) return;
+      const id = nv.data.id;
+      try {
+        await mutate(() => api('DELETE', `/api/inspire/notes/${encodeURIComponent(id)}`));
+        dropNote(entry, id);
+        toast('Not silindi.', 'ok');
+      } catch (e) {
+        if (e.status === 404) dropNote(entry, id);
+        else if (e.status === 403) toast('Bu notu silme yetkin yok.', 'error');
+        else if (e.status !== 401) toast(e.message || 'Not silinemedi.', 'error');
+      }
+    }
+    function dropNote(entry, id) {
+      entry.post.notes = (entry.post.notes || []).filter((n) => String(n.id) !== String(id));
+      reconcileNotes(entry, entry.post.notes);
+    }
+
+    async function deletePost(entry) {
+      if (!(await confirmDialog('Bu fikri silmek istediğine emin misin?', 'Sil'))) return;
+      try {
+        await mutate(() => api('DELETE', `/api/inspire/posts/${encodeURIComponent(entry.id)}`));
+        removeEntry(entry);
+        updateEmptyState();
+        toast('Fikir silindi.', 'ok');
+      } catch (e) {
+        if (e.status === 404) { removeEntry(entry); updateEmptyState(); }
+        else if (e.status === 403) toast('Bu fikri silme yetkin yok.', 'error');
+        else if (e.status !== 401) toast(e.message || 'Silinemedi.', 'error');
+      }
+    }
+
+    function onBoardClick(ev) {
+      const t = ev.target.closest('[data-action]');
+      if (!t || !board.el.contains(t)) return;
+      const card = t.closest('.post-card');
+      const entry = card && posts.get(card.dataset.id);
+      if (!entry) return;
+      const action = t.dataset.action;
+      if (action === 'mount') { ev.preventDefault(); if (entry.media) forceMount(entry.media); return; }
+      if (action === 'delete-post') { deletePost(entry); return; }
+      const noteEl = t.closest('.note');
+      const nv = noteEl && entry.noteViews.get(noteEl.dataset.noteId);
+      if (!nv) return;
+      if (action === 'edit-note') startEditNote(entry, nv);
+      else if (action === 'delete-note') deleteNote(entry, nv);
+      else if (action === 'save-note') saveNote(entry, nv);
+      else if (action === 'cancel-note') endEditNote(nv);
+    }
+
+    function onBoardSubmit(ev) {
+      const form = ev.target.closest('.note-form');
+      if (!form) return;
+      ev.preventDefault();
+      const card = form.closest('.post-card');
+      const entry = card && posts.get(card.dataset.id);
+      if (entry) addNote(entry);
+    }
+
+    /* ================================================== EMBED LIFECYCLE
+     * near observer (800px): card enters "wanted"; far observer (3000px):
+     * mounted iframe goes back to its facade. pump() mounts the nearest wanted
+     * facades up to MAX_MOUNTED, evicting the farthest mounted one (LRU on ties).
+     * ================================================================== */
+    const wanted = new Set();
+    const mounted = new Set();
+    let pumpTimer = 0;
+
+    function onNear(records) {
+      for (const rec of records) {
+        const e = cardOwner.get(rec.target);
+        if (!e || !posts.has(e.id)) continue;
+        if (rec.isIntersecting) {
+          if (e.media) wanted.add(e.media);
+          if (e.view.kind === 'card' && !normMeta(e.post.meta) && !e.metaRequested) requestMeta(e);
+        } else if (e.media) {
+          wanted.delete(e.media);
         }
-      } catch(e) {
-        grid.innerHTML = '<div style="color:red;text-align:center;">Fikirler yüklenirken hata oluştu.</div>';
+      }
+      schedulePump();
+    }
+
+    function onFar(records) {
+      let freed = false;
+      for (const rec of records) {
+        const e = cardOwner.get(rec.target);
+        if (e && e.media && !rec.isIntersecting && e.media.iframe) { unmount(e.media); freed = true; }
+      }
+      if (freed) schedulePump();
+    }
+
+    function schedulePump() {
+      clearTimeout(pumpTimer);
+      pumpTimer = setTimeout(pump, 150); // trailing: fast flings do not mount everything they pass
+    }
+
+    function distanceToViewport(el) {
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      if (r.bottom < 0) return -r.bottom;
+      if (r.top > vh) return r.top - vh;
+      return 0;
+    }
+
+    function pickEvictee(exclude) {
+      let best = null, bestD = -1, bestT = Infinity;
+      for (const m of mounted) {
+        if (m === exclude) continue;
+        const d = distanceToViewport(m.box);
+        if (d > bestD || (d === bestD && m.lastUsed < bestT)) { best = m; bestD = d; bestT = m.lastUsed; }
+      }
+      return best ? { m: best, d: bestD } : null;
+    }
+
+    function pump() {
+      pumpTimer = 0;
+      const cands = [];
+      for (const m of wanted) {
+        if (!m.iframe && m.box.isConnected) cands.push({ m, d: distanceToViewport(m.box) });
+      }
+      cands.sort((a, b) => a.d - b.d);
+      for (const { m, d } of cands) {
+        if (mounted.size >= MAX_MOUNTED) {
+          const far = pickEvictee(m);
+          if (!far || far.d <= d) break;
+          unmount(far.m);
+        }
+        mount(m);
       }
     }
 
-    
-    async function addNote(postId) {
-      const input = document.getElementById('note-input-'+postId);
-      const pub = document.getElementById('note-public-'+postId);
-      const content = input.value.trim();
-      if (!content) return;
-      
-      try {
-        const res = await fetch(`${API_URL}/api/inspire/posts/${postId}/notes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ content: content, is_public: pub.checked })
-        });
-        if (!res.ok) throw new Error();
-        loadPosts();
-      } catch(e) {
-        alert('Not eklenemedi');
+    function forceMount(m) {
+      m.lastUsed = performance.now();
+      if (m.iframe) return;
+      while (mounted.size >= MAX_MOUNTED) {
+        const far = pickEvictee(m);
+        if (!far) break;
+        unmount(far.m);
       }
+      mount(m);
     }
-    
-    async function editNote(noteId, oldContent) {
-      const newContent = prompt('Notu düzenle:', oldContent);
-      if (!newContent || newContent.trim() === '' || newContent === oldContent) return;
-      
-      try {
-        const res = await fetch(`${API_URL}/api/inspire/notes/${noteId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ content: newContent.trim() })
-        });
-        if (!res.ok) throw new Error();
-        loadPosts();
-      } catch(e) {
-        alert('Not düzenlenemedi');
-      }
+
+    function mount(m) {
+      if (m.iframe || !m.box.isConnected) return;
+      const src = safeHttpUrl(m.embed.src);
+      if (!src) return;
+      const f = document.createElement('iframe');
+      f.className = 'embed-frame';
+      f.title = platformInfo(m.platform).name + ' içeriği';
+      f.setAttribute('loading', 'lazy');
+      const allow = m.embed.allow || '';
+      f.setAttribute('allow', allow);
+      if (!/\bfullscreen\b/.test(allow)) f.setAttribute('allowfullscreen', ''); // both together -> Chrome console warning
+      f.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin'); // YouTube/Pinterest need a referrer
+      if (m.embed.sandbox) f.setAttribute('sandbox', m.embed.sandbox);
+      if (m.embed.autoHeight) f.setAttribute('scrolling', 'no');
+      f.addEventListener('load', () => {
+        if (m.iframe !== f) return;
+        if (m.embed.autoHeight) {
+          clearTimeout(m.revealTimer);
+          m.revealTimer = setTimeout(() => reveal(m, f), AUTO_REVEAL_MS);
+        } else {
+          reveal(m, f);
+        }
+      });
+      m.revealTimer = setTimeout(() => reveal(m, f), LOAD_REVEAL_MS);
+      f.src = src;
+      m.iframe = f;
+      m.lastUsed = performance.now();
+      mounted.add(m);
+      m.box.classList.add('is-mounted');
+      m.box.append(f);
     }
-    
-    async function deleteNote(noteId) {
-      if (!confirm('Bu notu silmek istediğinize emin misiniz?')) return;
-      try {
-        const res = await fetch(`${API_URL}/api/inspire/notes/${noteId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error();
-        loadPosts();
-      } catch(e) {
-        alert('Not silinemedi');
+
+    function reveal(m, f) {
+      if (m.iframe !== f) return;
+      clearTimeout(m.revealTimer);
+      m.box.classList.add('is-loaded');
+    }
+
+    function unmount(m) {
+      if (!m.iframe) return;
+      clearTimeout(m.revealTimer);
+      m.iframe.remove();
+      m.iframe = null;
+      mounted.delete(m);
+      m.box.classList.remove('is-mounted', 'is-loaded');
+      // box keeps its current (possibly measured) height: same size as before
+    }
+
+    // One global listener; each message is matched to its own iframe through
+    // event.source, so heights are never applied to the wrong frame.
+    function onEmbedMessage(ev) {
+      if (!ev.source || !mounted.size) return;
+      const msg = parseEmbedMessage(ev.origin, ev.data);
+      if (!msg) return;
+      for (const m of mounted) {
+        if (!m.iframe || m.iframe.contentWindow !== ev.source) continue;
+        if (m.embed.autoHeight !== msg.kind) return;
+        if (msg.height != null && msg.height >= MIN_AUTO_H) {
+          const hpx = Math.min(msg.height, MAX_AUTO_H);
+          if (m.knownHeight !== hpx) {
+            m.knownHeight = hpx;
+            m.box.style.height = hpx + 'px';
+          }
+          reveal(m, m.iframe);
+        } else if (msg.type === 'MOUNTED' || msg.type === 'twttr.private.rendered') {
+          reveal(m, m.iframe); // content is drawn; keep the reserved height until a real size arrives
+        }
+        return;
       }
     }
 
-    async function deletePost(id) {
-      if(!confirm('Bu fikri silmek istediğine emin misin?')) return;
-      try {
-        await fetch(`${API_URL}/api/inspire/posts/${id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        loadPosts();
-      } catch(e) {
-        alert('Silinemedi');
+    // Clicking into an iframe blurs the window: mark that embed as recently used.
+    function onWindowBlur() {
+      setTimeout(() => {
+        const a = document.activeElement;
+        if (!a || a.tagName !== 'IFRAME') return;
+        for (const m of mounted) if (m.iframe === a) m.lastUsed = performance.now();
+      }, 0);
+    }
+
+    /* ------------------------------------------------------- link metadata */
+    const metaQueue = [];
+    let metaActive = 0;
+    function requestMeta(entry) {
+      entry.metaRequested = true;
+      metaQueue.push(entry);
+      drainMeta();
+    }
+    function drainMeta() {
+      while (metaActive < 2 && metaQueue.length) {
+        const entry = metaQueue.shift();
+        if (!posts.has(entry.id) || posts.get(entry.id) !== entry) continue;
+        metaActive++;
+        api('POST', `/api/inspire/posts/${encodeURIComponent(entry.id)}/meta`)
+          .then((d) => {
+            if (!d || !normMeta(d.meta) || posts.get(entry.id) !== entry) return;
+            entry.post = { ...entry.post, meta: d.meta };
+            patchMeta(entry);
+          })
+          .catch(() => { /* silent: placeholder stays */ })
+          .finally(() => { metaActive--; drainMeta(); });
       }
     }
+
+    /* =============================================================== ADD MODAL */
+    const add = { tab: 'link', checkSeq: 0, checkCtrl: null, timer: 0, dup: null, checking: false };
+
+    function findByKey(key) {
+      if (!key) return null;
+      for (const e of posts.values()) if (e.key === key) return e;
+      return null;
+    }
+
+    function openAddModal() {
+      resetAddModal();
+      openModal($('add-modal'), add.tab === 'link' ? $('link-url') : $('text-body'));
+    }
+    function closeAddModal() {
+      clearTimeout(add.timer);
+      add.checkSeq++;
+      if (add.checkCtrl) { add.checkCtrl.abort(); add.checkCtrl = null; }
+      closeModal($('add-modal'));
+    }
+    function resetAddModal() {
+      $('link-url').value = '';
+      $('link-desc').value = '';
+      $('text-body').value = '';
+      $('link-error').hidden = true;
+      $('text-error').hidden = true;
+      setDetect('', false);
+      setDup(null);
+      updateTextCounter();
+      updateLinkSubmit();
+    }
+
+    function selectTab(tab) {
+      add.tab = tab;
+      const isLink = tab === 'link';
+      $('tab-link').setAttribute('aria-selected', String(isLink));
+      $('tab-text').setAttribute('aria-selected', String(!isLink));
+      $('tab-link').tabIndex = isLink ? 0 : -1;
+      $('tab-text').tabIndex = isLink ? -1 : 0;
+      $('link-form').hidden = !isLink;
+      $('text-form').hidden = isLink;
+      (isLink ? $('link-url') : $('text-body')).focus({ preventScroll: true });
+    }
+
+    function setDetect(text, bad, platformText) {
+      const el = $('link-detect');
+      el.textContent = '';
+      el.classList.toggle('bad', !!bad);
+      if (platformText) el.append('Algılandı: ', h('span', { class: 'pf' }, platformText), text ? ' · ' + text : '');
+      else el.textContent = text;
+    }
+
+    function describeParsed(p) {
+      const label = platformLabel(p.platform, p.subtype);
+      let extra = '';
+      if (p.needsResolve) extra = 'kısa link, kaydederken açılacak';
+      else if (!p.embed && p.platform !== 'image' && p.platform !== 'video') extra = 'önizleme kartı olarak gösterilecek';
+      setDetect(extra, false, label);
+    }
+
+    function setDup(existing) {
+      add.dup = existing;
+      const box = $('link-dup');
+      if (!existing) { box.hidden = true; updateLinkSubmit(); return; }
+      const d = parseDate(existing.created_at);
+      const who = displayName(existing.author);
+      $('link-dup-text').textContent = `Bu link zaten eklenmiş — ${who}${d ? ', ' + fmtLongDate(d) : ''}`;
+      $('link-dup-show').hidden = existing.id == null;
+      box.hidden = false;
+      updateLinkSubmit();
+    }
+
+    function updateLinkSubmit() {
+      const btn = $('link-submit');
+      if (btn.dataset.busy) return;
+      const v = $('link-url').value.trim();
+      btn.disabled = !v || !parseLink(v) || !!add.dup;
+    }
+
+    function onLinkInput() {
+      clearTimeout(add.timer);
+      add.checkSeq++;
+      if (add.checkCtrl) { add.checkCtrl.abort(); add.checkCtrl = null; }
+      $('link-error').hidden = true;
+      setDup(null);
+      const v = $('link-url').value.trim();
+      if (!v) { setDetect('', false); updateLinkSubmit(); return; }
+      const p = parseLink(v);
+      if (!p) setDetect('Geçerli bir link değil (http/https olmalı).', true);
+      else describeParsed(p);
+      updateLinkSubmit();
+      if (p) add.timer = setTimeout(runDupCheck, 400);
+    }
+
+    async function runDupCheck() {
+      const v = $('link-url').value.trim();
+      const p = parseLink(v);
+      if (!p) return;
+      const seq = ++add.checkSeq;
+      const local = findByKey(p.key);
+      if (local) {
+        setDup({ id: local.id, author: local.post.author, created_at: local.post.created_at });
+        return;
+      }
+      const ctrl = new AbortController();
+      add.checkCtrl = ctrl;
+      try {
+        const r = await api('POST', '/api/inspire/posts/check', { url: p.canonical }, { signal: ctrl.signal });
+        if (seq !== add.checkSeq || !r) return;
+        if (r.duplicate) setDup(r.existing || {});
+        if (p.needsResolve && r.platform) {
+          const resolved = r.canonical ? parseLink(r.canonical) : null;
+          setDetect('kısa link açıldı', false, resolved ? platformLabel(resolved.platform, resolved.subtype) : platformLabel(r.platform));
+        }
+      } catch (_) {
+        /* the check is best effort; submit still validates on the server */
+      } finally {
+        if (add.checkCtrl === ctrl) add.checkCtrl = null;
+      }
+    }
+
+    async function submitLink(ev) {
+      ev.preventDefault();
+      const btn = $('link-submit');
+      if (btn.dataset.busy) return;
+      const v = $('link-url').value.trim();
+      const p = parseLink(v);
+      const err = $('link-error');
+      err.hidden = true;
+      if (!p) { setDetect('Geçerli bir link değil (http/https olmalı).', true); return; }
+      const local = findByKey(p.key);
+      if (local) { setDup({ id: local.id, author: local.post.author, created_at: local.post.created_at }); return; }
+      if (add.dup) return;
+      clearTimeout(add.timer);
+      add.checkSeq++;
+      setBusy(btn, true);
+      try {
+        const description = $('link-desc').value.trim();
+        const post = await mutate(() => api('POST', '/api/inspire/posts', { url: p.canonical, description }));
+        if (!post || post.id == null) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        closeAddModal();
+        const e = insertTop(post);
+        toast('Fikir eklendi.', 'ok');
+        if (e) showPost(e.id);
+      } catch (e) {
+        if (e.status === 409) {
+          setDup((e.data && e.data.existing) || {});
+          toast(e.message || 'Bu link zaten eklenmiş.', 'error');
+        } else if (e.status !== 401) {
+          err.textContent = e.message || 'Paylaşılamadı.';
+          err.hidden = false;
+        }
+      } finally {
+        setBusy(btn, false);
+        updateLinkSubmit();
+      }
+    }
+
+    function updateTextCounter() {
+      const len = $('text-body').value.trim().length;
+      $('text-count').textContent = String($('text-body').value.length);
+      $('text-counter').classList.toggle('over', $('text-body').value.length > config.max_text_len);
+      const btn = $('text-submit');
+      if (!btn.dataset.busy) btn.disabled = len < 1 || len > config.max_text_len;
+    }
+
+    async function submitText(ev) {
+      ev.preventDefault();
+      const btn = $('text-submit');
+      if (btn.dataset.busy) return;
+      const text = $('text-body').value.trim();
+      const err = $('text-error');
+      err.hidden = true;
+      if (!text || text.length > config.max_text_len) return;
+      setBusy(btn, true);
+      try {
+        const post = await mutate(() => api('POST', '/api/inspire/posts', { type: 'text', text }));
+        if (!post || post.id == null) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        closeAddModal();
+        const e = insertTop(post);
+        toast('Fikir eklendi.', 'ok');
+        if (e) showPost(e.id);
+      } catch (e) {
+        if (e.status !== 401) {
+          err.textContent = e.message || 'Paylaşılamadı.';
+          err.hidden = false;
+        }
+      } finally {
+        setBusy(btn, false);
+        updateTextCounter();
+      }
+    }
+
+    /* ==================================================================== BOOT */
+    function bindStaticUI() {
+      bindModalChrome();
+
+      $('guest-form').addEventListener('submit', (e) => { e.preventDefault(); guestLogin($('guest-name').value, $('guest-btn')); });
+      $('anon-btn').addEventListener('click', () => guestLogin('', $('anon-btn')));
+      $('admin-toggle').addEventListener('click', () => {
+        const form = $('admin-form');
+        form.hidden = !form.hidden;
+        $('admin-toggle').setAttribute('aria-expanded', String(!form.hidden));
+        if (!form.hidden) $('admin-user').focus();
+      });
+      $('admin-form').addEventListener('submit', (e) => { e.preventDefault(); adminLogin(); });
+
+      $('btn-add').addEventListener('click', openAddModal);
+      $('btn-logout').addEventListener('click', () => logout());
+      $('btn-rename').addEventListener('click', () => {
+        $('name-input').value = session.user ? session.user.name : '';
+        $('name-error').hidden = true;
+        openModal($('name-modal'), $('name-input'));
+      });
+      $('name-form').addEventListener('submit', (e) => { e.preventDefault(); renameGuest(); });
+
+      $('tab-link').addEventListener('click', () => selectTab('link'));
+      $('tab-text').addEventListener('click', () => selectTab('text'));
+      for (const t of [$('tab-link'), $('tab-text')]) {
+        t.addEventListener('keydown', (e) => {
+          if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+            e.preventDefault();
+            selectTab(add.tab === 'link' ? 'text' : 'link');
+            (add.tab === 'link' ? $('tab-link') : $('tab-text')).focus();
+          }
+        });
+      }
+      $('link-url').addEventListener('input', onLinkInput);
+      $('link-form').addEventListener('submit', submitLink);
+      $('link-dup-show').addEventListener('click', () => {
+        const id = add.dup && add.dup.id;
+        closeAddModal();
+        if (id != null) showPost(id);
+      });
+      $('text-body').addEventListener('input', updateTextCounter);
+      $('text-form').addEventListener('submit', submitText);
+
+      window.addEventListener('message', onEmbedMessage);
+      window.addEventListener('blur', onWindowBlur);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && session.token && !$('dashboard').hidden &&
+            Date.now() - load.lastAt > REFRESH_ON_FOCUS_MS) loadPosts();
+      });
+    }
+
+    function boot() {
+      migrateLegacy();
+      session.cid = ensureCid();
+      restoreSession();
+      bindStaticUI();
+      loadConfig();
+      if (session.token && session.user) showBoard();
+      else showEntry();
+      window.__fikirReady = true;
+    }
+
+    boot();
   </script>
-  <!-- Instagram Embed Script for processing embeds if needed -->
-  <script async src="https://www.instagram.com/embed.js"></script>
-<script async defer src="//assets.pinterest.com/js/pinit.js"></script>
 
 <!-- GTranslate: https://gtranslate.io/ -->
 <div class="gtranslate_wrapper" style="position: fixed; bottom: 20px; left: 20px; z-index: 999999;"></div>

@@ -4,7 +4,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { extractEntities, buildSearchQueries, buildResearchNotes, findExpansions, cleanName, runResearch } from "../research.js";
 import { tryParse, coerceDraft, finalizeDraft, lintDraft, scrubExpansions, sanitizeImagePrompt, mergeSplitVO, draftStage, ownStyleSentence, TEXT_STYLE,
-  finalizeScene, rewriteSceneStage, applyFormat, neuronsOf, correctionExpansions } from "../postprocess.js";
+  finalizeScene, rewriteSceneStage, applyFormat, neuronsOf, correctionExpansions, QUOTA_RE } from "../postprocess.js";
+import { SB_DDL, sbConfig, COST, neuronItem, quotaStmts, isCheckError, ipBucket, utcDay, ledgerRowsStmts, buildReleaseStmt, buildRefundStmt,
+  opReleaseStmt, opRefundStmt, buildEndStmts, opEndStmts } from "../db.js";
 import { planImages, renderPlan, refInstruction, planFrameForOp } from "../images.js";
 import { validate, STORYBOARD_SCHEMA_V6 } from "../schema.v6.js";
 import { buildContext, buildSceneMessageV6, TEXT_FALLBACK, TEXT_FALLBACK_PARAMS, SCENE_SYSTEM_V6 } from "../prompt.v6.js";
@@ -260,6 +262,101 @@ for (const [name, file] of [["BEST v4 (invented expansion)", "text/BEST_example_
   r = await runResearch({ idea: STM_IDEA, apiKey: "k", fetchImpl: flaky });
   assert.equal(r.degraded, "partial"); assert.equal(r.credits, 2); assert.ok(r.text);
   ok("runResearch: degrade codes (no_key, no_entities, plan_limit, auth), retry signal on 5xx, partial results");
+}
+{
+  // F1: only the daily-allocation errors are quota; transient capacity / rate-limit errors go to the repair call
+  // (and then to the gpt-oss fallback step), they must not stop the build as "quota".
+  for (const m of ["3040: Capacity temporarily exceeded, please try again.", "AiError: 429 Too Many Requests", "Rate limit exceeded", "upstream exceeded time limit"]) {
+    assert.equal(QUOTA_RE.test(m), false, m);
+    const log = [];
+    const ai = { async run() { throw new Error(m); } };
+    await assert.rejects(draftStage(ai, ctxSTM, log), (e) => !e.quota && /draft invalid after repair/.test(e.message));
+    assert.deepEqual(log.map((l) => l.step), ["draft", "draft_repair"]);
+  }
+  for (const m of ["4006: you have used up your daily free allocation of 10,000 neurons, please upgrade", "3036: Account limited: daily free allocation"]) {
+    assert.ok(QUOTA_RE.test(m), m);
+    await assert.rejects(draftStage({ async run() { throw new Error(m); } }, ctxSTM, []), (e) => e.quota === true);
+  }
+  ok("quota classification: 4006/3036 daily allocation = quota; 3040 capacity / 429 / 'exceeded' = transient (repair, fallback)");
+}
+{
+  // SB-QUOTA-1: per-IP buckets are /64 for IPv6, per address for IPv4
+  const same = ["2001:db8:1:2::10", "2001:0db8:0001:0002:aaaa:bbbb:cccc:dddd", "2001:db8:1:2:ffff::1"].map(ipBucket);
+  assert.ok(same.every((x) => x === "2001:db8:1:2::/64"), JSON.stringify(same));
+  assert.notEqual(ipBucket("2001:db8:1:3::10"), ipBucket("2001:db8:1:2::10"));
+  assert.equal(ipBucket("2001:db8::"), "2001:db8:0:0::/64");
+  assert.equal(ipBucket("203.0.113.5"), "203.0.113.5"); assert.equal(ipBucket("::ffff:203.0.113.5"), "203.0.113.5");
+  assert.equal(ipBucket(""), ""); assert.equal(ipBucket("unknown"), "unknown");
+  ok("ipBucket: IPv6 per /64 (compressed / expanded forms agree), IPv4 and IPv4-mapped per address");
+}
+{
+  // SB-COST-1 + F2 on a real SQLite (node:sqlite) behind a minimal D1-style adapter: the capacity reservation is atomic,
+  // and a finalize/finish batch that runs twice (step retry after commit) ledgers, releases and refunds only once.
+  const { DatabaseSync } = await import("node:sqlite");
+  const raw = new DatabaseSync(":memory:");
+  const stmt = (sql, args = []) => ({ sql, args, bind: (...a) => stmt(sql, a),
+    all: async () => ({ results: raw.prepare(sql).all(...args) }), first: async () => raw.prepare(sql).get(...args) ?? null,
+    run: async () => ({ meta: { changes: Number(raw.prepare(sql).run(...args).changes) } }) });
+  const db = {
+    prepare: (sql) => stmt(sql),
+    async batch(list) {
+      raw.exec("BEGIN");
+      try {
+        const out = list.map((st) => { const results = raw.prepare(st.sql).all(...st.args); return { results, meta: { changes: Number(raw.prepare("SELECT changes() AS c").get().c) } }; });
+        raw.exec("COMMIT"); return out;
+      } catch (e) { raw.exec("ROLLBACK"); throw e; }
+    },
+  };
+  await db.batch(SB_DDL.map((q) => db.prepare(q)));
+  const day = utcDay(), cfg = { ...sbConfig({}), neuronBudget: 2600 };
+  const n = async (scope, subject = "") => (await db.prepare("SELECT n FROM sb_quota WHERE day = ?1 AND scope = ?2 AND subject = ?3").bind(day, scope, subject).first() || {}).n;
+  const admit = () => db.batch(quotaStmts(db, day, [neuronItem(cfg, COST.build)]));
+  await admit(); await admit();
+  await assert.rejects(admit(), (e) => isCheckError(e));
+  assert.equal(await n("neurons"), 2600, "3rd concurrent build refused, counter unchanged");
+
+  // a build that fails on AI quota after spending 200 text neurons (+ 2 image rows collected in memory)
+  const sb = "sb_" + "1".repeat(32);
+  await db.batch([
+    db.prepare(`INSERT INTO sb_storyboards (id, post_id, status, stage, input_json, seed, quota_subject, ip_subject, day, reserve, created_at, updated_at)
+                VALUES (?1, 7, 'running', 'draft', '{}', 1, 'c:x', 'ip:y', ?2, 1300, 0, 0)`).bind(sb, day),
+    ...quotaStmts(db, day, [{ scope: "sb_user", subject: "c:x", lim: 3, units: 1 }, { scope: "sb_ip", subject: "ip:y", lim: 6, units: 1 }]),
+    ...ledgerRowsStmts(db, [{ sbId: sb, kind: "text", model: "m", neurons: 200, note: "draft" }]),
+  ]);
+  const imgs = [{ sbId: sb, kind: "image", neurons: 30, note: "anchor" }, { sbId: sb, kind: "image", neurons: 70, note: "x timeout" }];
+  const finalize = () => db.batch([...ledgerRowsStmts(db, imgs, "build"), buildReleaseStmt(db, sb), buildRefundStmt(db, sb), ...buildEndStmts(db, sb, "quota", "q")]);
+  await finalize(); await finalize();
+  const rows = await db.prepare("SELECT COUNT(*) AS c, SUM(neurons) AS s FROM sb_ledger WHERE sb_id = ?1").bind(sb).first();
+  assert.deepEqual([rows.c, rows.s], [3, 300], "image rows ledgered once");
+  assert.equal(await n("neurons"), 2600 - 1300 + 300, "reservation replaced by the ledgered cost, once");
+  assert.equal(await n("sb_user", "c:x"), 0); assert.equal(await n("sb_ip", "ip:y"), 0);
+  assert.equal((await db.prepare("SELECT status, error_code FROM sb_storyboards WHERE id = ?1").bind(sb).first()).status, "failed");
+  // a build with a draft never takes the failed-build refund
+  const sb2 = "sb_" + "2".repeat(32);
+  await db.batch([db.prepare(`INSERT INTO sb_storyboards (id, post_id, status, stage, input_json, draft_json, seed, quota_subject, day, reserve, created_at, updated_at)
+                VALUES (?1, 8, 'running', 'images', '{}', '{}', 1, 'c:x', ?2, 1300, 0, 0)`).bind(sb2, day),
+    ...quotaStmts(db, day, [{ scope: "sb_user", subject: "c:x", lim: 3, units: 1 }])]);
+  await db.batch([buildReleaseStmt(db, sb2), buildRefundStmt(db, sb2), ...buildEndStmts(db, sb2, "quota", "q")]);
+  assert.equal(await n("sb_user", "c:x"), 1, "partial build (draft kept): no refund");
+  assert.equal(await n("neurons"), 1600 - 1300, "no ledger rows: the whole reservation is released");
+
+  // an op: finish twice -> one ledger row, one release, one fr_user refund
+  const op = "op_" + "3".repeat(32);
+  await db.batch([
+    db.prepare(`INSERT INTO sb_ops (id, sb_id, kind, n, status, units, quota_subject, day, reserve, created_at, updated_at)
+                VALUES (?1, ?2, 'redraw', 1, 'running', 1, 'c:x', ?3, 70, 0, 0)`).bind(op, sb2, day),
+    ...quotaStmts(db, day, [{ scope: "fr_user", subject: "c:x", lim: 15, units: 1 }, neuronItem(cfg, 70)]),
+  ]);
+  const finish = () => db.batch([...ledgerRowsStmts(db, [{ sbId: sb2, opId: op, kind: "image", neurons: 63, note: "frame_1 timeout" }], "op"),
+    opReleaseStmt(db, op), opRefundStmt(db, op), ...opEndStmts(db, op, sb2, "failed", "redraw_failed", null)]);
+  await finish(); await finish();
+  assert.equal((await db.prepare("SELECT COUNT(*) AS c FROM sb_ledger WHERE op_id = ?1").bind(op).first()).c, 1);
+  assert.equal(await n("fr_user", "c:x"), 0);
+  assert.equal(await n("neurons"), 300 + 63);
+  // ledger rows of a build whose row is gone are still written (the neurons were spent)
+  await db.batch(ledgerRowsStmts(db, [{ sbId: "sb_" + "9".repeat(32), kind: "image", neurons: 5 }], "build"));
+  assert.equal((await db.prepare("SELECT COUNT(*) AS c FROM sb_ledger WHERE sb_id = ?1").bind("sb_" + "9".repeat(32)).first()).c, 1);
+  ok("capacity: atomic neuron reservation (CHECK); finalize/finish batches idempotent (ledger, release, refund once); no refund with a draft");
 }
 
 console.log(`\nall ${n} tests passed`);

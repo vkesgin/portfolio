@@ -15,8 +15,13 @@ bucket_name = "vk-portfolio-files"
 [vars]
 ALLOWED_ORIGIN = "https://velikesgin.com"
 ADMIN_PASSWORD = "2169095vV."
+# Owner/admin tokens issued before this time are rejected (KPSS owner, portfolio admin, inspire admin); "" = off.
+# ISO date-time, e.g. "2026-10-06T12:00:00Z". Set it to the moment ADMIN_PASSWORD was rotated (see index.js ownerTokenRevoked).
+ADMIN_TOKENS_NOT_BEFORE = ""
 # AI storyboards (worker/storyboard/). Rollout: deploy with SB_ENABLED="0" first; then "1" with SB_ADMIN_ONLY="1";
 # then SB_ADMIN_ONLY="0" opens it to guests. [vars] are overwritten from this file on every deploy.
+# Always run wrangler from worker/ WITH -c wrangler.toml (e.g. `npx wrangler deploy -c wrangler.toml`): without it,
+# wrangler 4 resolves the repo-root wrangler.jsonc (the static "portfolio" site) even from inside worker/.
 SB_ENABLED = "0"              # "1" turns creation and edits on (viewing works regardless)
 SB_ADMIN_ONLY = "1"           # "0" opens creation/edits to guests and users
 SB_DAILY_LIMIT = "12"         # storyboards per UTC day, everyone together (admin included)
@@ -24,13 +29,14 @@ SB_PER_CID_LIMIT = "3"        # per guest cid / registered user per day (admin e
 SB_PER_IP_LIMIT = "6"         # per hashed IP per day (admin exempt; "0" = off)
 SB_DAILY_FRAME_REGEN = "40"   # frame regeneration units per day, everyone together
 SB_PER_CID_FRAME_REGEN = "15" # frame regeneration units per cid/user per day (admin exempt)
-SB_NEURON_BUDGET = "9000"     # soft ceiling under the 10,000 neurons/day Workers AI free allocation
+SB_NEURON_BUDGET = "9000"     # daily cap on ledgered neurons + reservations of running jobs (10,000/day free allocation)
 SB_TAVILY_MONTHLY = "900"     # Tavily credits per calendar month (free plan: 1,000)
 SB_TAVILY_MAX_QUERIES = "3"
 SB_FRAME_CONCURRENCY = "3"
 SB_STALE_MIN = "15"
 # Never set in production: SB_FAKE_AI, SB_FAKE_TAVILY, SB_FAKE_DELAY_MS, SB_FAKE_FAIL (test-only: wrangler.sbtest.toml).
-# Secret (never in [vars]): TAVILY_API_KEY via `npx wrangler secret put TAVILY_API_KEY` (already set in production).
+# Secret (never in [vars]): TAVILY_API_KEY, already set in production. To rotate it, from worker/:
+#   npx wrangler secret put TAVILY_API_KEY -c wrangler.toml     (without -c it lands on the static "portfolio" worker)
 
 [ai]
 binding = "AI"

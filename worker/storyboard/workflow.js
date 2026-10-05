@@ -4,20 +4,21 @@
 // D1 is the source of truth for the UI; Workflows step results are only the engine's replay cache.
 //
 // D1 budget: the Free plan allows 50 D1 queries per invocation (each statement of a batch counts). A build instance
-// uses 1 (load) + 3 (research) + 3 (draft) + 2 per image + 5 (finalize) + 3 per older version = 37 for 8 frames
-// (11 images). Ledger rows are therefore collected from step results and written in bulk by the finalize step.
+// uses 1 (load) + 3 (research) + 3 (draft) + 2 per image + 5 (finalize, +1 refund) + 3 per older version = 37 for
+// 8 frames (11 images); +1 per timed-out image attempt (its ledger row). Ledger rows are therefore collected from step
+// results and written in bulk by the finalize step, in the same single batch that settles quota and status.
 import { WorkflowEntrypoint } from "cloudflare:workers";
 import { NonRetryableError } from "cloudflare:workflows";
 import { Buffer } from "node:buffer";
-import { draftStage, rewriteSceneStage, applyFormat, correctionExpansions } from "./postprocess.js";
+import { draftStage, rewriteSceneStage, applyFormat, correctionExpansions, QUOTA_RE } from "./postprocess.js";
 import { TEXT_FALLBACK, TEXT_FALLBACK_PARAMS, SCENE_FALLBACK_PARAMS, buildContext } from "./prompt.v6.js";
 import { planImages, planFrameForOp, kleinRun, IMG_MODEL } from "./images.js";
 import { runResearch } from "./research.js";
 import { createFakeAI } from "./fake-ai.js";
 import { FAKE_TAVILY } from "./fixtures.js";
 import {
-  sbConfig, now, utcDay, imageKey, seedFor, ledgerRowsStmts, textLedgerRows, tavilyCreditsThisMonth,
-  buildEndStmts, opEndStmts, deleteRowsStmts, deleteSbObjects,
+  sbConfig, now, utcDay, imageKey, seedFor, ledgerStmt, ledgerRowsStmts, textLedgerRows, tavilyCreditsThisMonth,
+  buildEndStmts, opEndStmts, buildReleaseStmt, opReleaseStmt, buildRefundStmt, opRefundStmt, deleteRowsStmts, deleteSbObjects,
 } from "./db.js";
 
 const STEP_DB = { retries: { limit: 3, delay: "2 seconds", backoff: "exponential" }, timeout: "1 minute" };
@@ -29,10 +30,13 @@ const KLEIN_TIMEOUT_MS = 100000;   // measured p90 47 s, max 85.7 s; a timed-out
 
 const errMsg = (e) => String((e && e.message) || e).slice(0, 300);
 // Our own marker ("QUOTA: ...", set by draftStage/rewriteSceneStage/renderImage). Never match generic words such as
-// "exceeded": a Workflows "exceeded CPU time" error must not be reported as an AI quota problem.
+// "exceeded": a Workflows "exceeded CPU time" error must not be reported as an AI quota problem. Raw Workers AI error
+// text is classified by QUOTA_RE (postprocess.js), the same narrow pattern for text and image calls.
 const isQuota = (e) => /QUOTA:/.test(errMsg(e));
-const AI_QUOTA_RE = /4006|3036|neurons|daily free allocation|quota/i;   // raw Workers AI error text for the image model
-const isGone = (e) => /\bgone\b/.test(errMsg(e));
+// The storyboard (or op) was deleted meanwhile: stop without spending more. A distinctive marker, so no model or
+// platform error text can be mistaken for it.
+const GONE = "SB_GONE: storyboard deleted";
+const isGone = (e) => /SB_GONE/.test(errMsg(e));
 const withTimeout = (p, ms) => { let t; return Promise.race([p, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`timeout ${ms}ms`)), ms); })]).finally(() => clearTimeout(t)); };
 
 function getAI(env) {
@@ -71,9 +75,10 @@ async function renderImage(env, ai, { sbId, opId = null, job, rev }) {
   const db = env.DB;
   const key = imageKey(sbId, job.id, rev);
   const claim = await db.prepare(
-    "UPDATE sb_images SET status = 'running', error = NULL, updated_at = ?3 WHERE sb_id = ?1 AND job = ?2 RETURNING r2_key"
+    `UPDATE sb_images SET status = 'running', error = NULL, updated_at = ?3
+     WHERE sb_id = ?1 AND job = ?2 AND EXISTS (SELECT 1 FROM sb_storyboards s WHERE s.id = ?1) RETURNING r2_key`
   ).bind(sbId, job.id, now()).first();
-  if (!claim) throw new NonRetryableError("gone");          // storyboard deleted meanwhile
+  if (!claim) throw new NonRetryableError(GONE);            // storyboard deleted meanwhile (or a leftover image row)
   const oldKey = claim.r2_key && claim.r2_key !== key ? claim.r2_key : null;
   let neurons = 0, ms = null;
   if (!(await env.STORAGE.head(key))) {                     // a previous attempt may have stored it already
@@ -87,8 +92,13 @@ async function renderImage(env, ai, { sbId, opId = null, job, rev }) {
     try {
       b64 = ai.image ? await ai.image(job) : await withTimeout(kleinRun(ai, { ...job, refs }), KLEIN_TIMEOUT_MS);
     } catch (e) {
-      // a timed-out call may still be billed: the failure step records job.neurons_est for it
-      if (AI_QUOTA_RE.test(errMsg(e))) throw new NonRetryableError(`QUOTA: ${errMsg(e)}`);
+      if (QUOTA_RE.test(errMsg(e))) throw new NonRetryableError(`QUOTA: ${errMsg(e)}`);
+      // A timed-out call may still be billed. Ledger THIS attempt now (not in the failure step): when the step retry
+      // then succeeds, its own row covers only the second call, and the capacity guard must see both.
+      if (/^timeout \d+ms$/.test(errMsg(e)) && !ai.fake) {
+        try { await ledgerStmt(db, { sbId, opId, kind: "image", model: IMG_MODEL, neurons: job.neurons_est, ms: now() - t0, note: `${job.id} timeout` }).run(); }
+        catch (_) { /* best effort */ }
+      }
       throw e;
     }
     ms = now() - t0;
@@ -100,7 +110,7 @@ async function renderImage(env, ai, { sbId, opId = null, job, rev }) {
   const res = await db.prepare(
     `UPDATE sb_images SET status = 'done', r2_key = ?3, rev = ?4, seed = ?5, width = ?6, height = ?7, error = NULL, updated_at = ?8
      WHERE sb_id = ?1 AND job = ?2`).bind(sbId, job.id, key, rev, job.seed, job.width, job.height, now()).run();
-  if (!res.meta || !res.meta.changes) { await env.STORAGE.delete(key); throw new NonRetryableError("gone"); }
+  if (!res.meta || !res.meta.changes) { await env.STORAGE.delete(key); throw new NonRetryableError(GONE); }
   if (oldKey) { try { await env.STORAGE.delete(oldKey); } catch (_) {} }
   return { job: job.id, key, ledger: { sbId, opId, kind: "image", model: IMG_MODEL, neurons, ms, note: job.id } };
 }
@@ -139,10 +149,13 @@ async function runBuild(env, step, sbId) {
   // 1. research (never fails the storyboard)
   let research = st.research;
   if (!research) {
+    // Credits are ledgered even if the storyboard was deleted meanwhile; then the build stops before the text model.
     const save = async (r) => {
-      const stmts = [db.prepare("UPDATE sb_storyboards SET research_json = ?2, stage = 'draft', updated_at = ?3 WHERE id = ?1").bind(sbId, JSON.stringify(r), now())];
+      const stmts = [db.prepare("UPDATE sb_storyboards SET research_json = ?2, stage = 'draft', updated_at = ?3 WHERE id = ?1 AND status IN ('queued','running') RETURNING id")
+        .bind(sbId, JSON.stringify(r), now())];
       if (r.credits && !cfg.fake) stmts.push(...ledgerRowsStmts(db, [{ sbId, kind: "tavily", credits: r.credits, note: r.queries.join(" | ") }]));
-      await db.batch(stmts);
+      const [upd] = await db.batch(stmts);
+      if (!(upd.results || []).length) throw new NonRetryableError(GONE);
       return r;
     };
     try {
@@ -157,8 +170,14 @@ async function runBuild(env, step, sbId) {
         })));
       });
     } catch (e) {
-      research = await step.do("research-failed", STEP_DB, () =>
-        save({ degraded: "error", text: null, credits: 0, queries: [], allowedExpansions: [], otherEntities: {}, sources: [], entities: null }));
+      if (isGone(e)) return { sbId, gone: true };
+      try {
+        research = await step.do("research-failed", STEP_DB, () =>
+          save({ degraded: "error", text: null, credits: 0, queries: [], allowedExpansions: [], otherEntities: {}, sources: [], entities: null }));
+      } catch (e2) {
+        if (isGone(e2)) return { sbId, gone: true };
+        throw e2;
+      }
     }
   }
 
@@ -179,23 +198,30 @@ async function runBuild(env, step, sbId) {
       const p = slimPlan(planImages(r.draft, { seed: st.seed }));
       const vals = p.jobs.map((_, i) => `(?1, ?${i * 5 + 3}, ?${i * 5 + 4}, ?${i * 5 + 5}, 'pending', 0, ?${i * 5 + 6}, ?${i * 5 + 7}, ?2)`).join(", ");
       const binds = p.jobs.flatMap((j) => [j.id, j.stage === "frames" ? "frame" : j.stage === "anchor" ? "anchor" : "ref", j.n || 0, j.width, j.height]);
-      await db.batch([
+      // Both writes apply only while the storyboard still exists and runs: a deleted storyboard must not get image rows
+      // back (renderImage would claim them). The text ledger rows are written either way (the neurons were spent).
+      const ACTIVE_SB = "EXISTS (SELECT 1 FROM sb_storyboards WHERE id = ?1 AND status IN ('queued','running'))";
+      const [upd] = await db.batch([
         db.prepare(`UPDATE sb_storyboards SET draft_json = ?2, lint_json = ?3, plan_json = ?4, title = ?5, aspect = ?6, text_model = ?7,
-                    stage = 'images', updated_at = ?8 WHERE id = ?1`).bind(sbId, JSON.stringify(r.draft),
+                    stage = 'images', updated_at = ?8 WHERE id = ?1 AND status IN ('queued','running') RETURNING id`).bind(sbId, JSON.stringify(r.draft),
           JSON.stringify({ coerced: r.coerced, fixes: r.lint.fixes, warnings: r.lint.warnings, total_duration_s: r.lint.total_duration_s, log }),
           JSON.stringify(p), String(r.draft.title).slice(0, 200), r.draft.aspect_ratio, log.length ? log[log.length - 1].model : null, now()),
-        db.prepare(`INSERT INTO sb_images (sb_id, job, kind, n, status, rev, width, height, updated_at) VALUES ${vals}
+        db.prepare(`INSERT INTO sb_images (sb_id, job, kind, n, status, rev, width, height, updated_at)
+                    SELECT * FROM (VALUES ${vals}) WHERE ${ACTIVE_SB}
                     ON CONFLICT(sb_id, job) DO NOTHING`).bind(sbId, now(), ...binds),
         ...(ai.fake ? [] : ledgerRowsStmts(db, textLedgerRows(sbId, null, log))),
       ]);
+      if (!(upd.results || []).length) throw new NonRetryableError(GONE);
       return { draft: r.draft, plan: p };
     };
     let out = null, fail = null;
     try { out = await step.do("draft", STEP_TEXT, draftStep(false)); }
     catch (e) {
+      if (isGone(e)) return { sbId, gone: true };
       fail = e;
       if (!isQuota(e)) {
-        try { out = await step.do("draft-fallback", STEP_TEXT_FB, draftStep(true)); fail = null; } catch (e2) { fail = e2; }
+        try { out = await step.do("draft-fallback", STEP_TEXT_FB, draftStep(true)); fail = null; }
+        catch (e2) { if (isGone(e2)) return { sbId, gone: true }; fail = e2; }
       }
     }
     if (!out) return finalizeBuild(env, step, sbId, isQuota(fail) ? "quota" : "draft_failed", errMsg(fail), ledger);
@@ -212,13 +238,11 @@ async function runBuild(env, step, sbId) {
       done.add(job.id);
       if (r.ledger.neurons || r.ledger.ms) ledger.push(r.ledger);
     } catch (e) {
-      if (isGone(e)) throw new NonRetryableError("gone");
+      if (isGone(e)) throw new NonRetryableError(GONE);
       if (isQuota(e)) quotaHit = true;
-      await step.do(`img-failed:${job.id}`, STEP_DB, async () => {
-        const stmts = [db.prepare("UPDATE sb_images SET status = 'failed', error = ?3, updated_at = ?4 WHERE sb_id = ?1 AND job = ?2 AND r2_key IS NULL")
-          .bind(sbId, job.id, isQuota(e) ? "quota" : errMsg(e).slice(0, 120), now())];
-        if (/timeout/.test(errMsg(e)) && !ai.fake) stmts.push(...ledgerRowsStmts(db, [{ sbId, kind: "image", model: IMG_MODEL, neurons: job.neurons_est, note: `${job.id} timeout` }]));
-        await db.batch(stmts);
+      await step.do(`img-failed:${job.id}`, STEP_DB, async () => {   // timed-out attempts were ledgered by renderImage
+        await db.prepare("UPDATE sb_images SET status = 'failed', error = ?3, updated_at = ?4 WHERE sb_id = ?1 AND job = ?2 AND r2_key IS NULL")
+          .bind(sbId, job.id, isQuota(e) ? "quota" : errMsg(e).slice(0, 120), now()).run();
         return true;
       });
     }
@@ -235,19 +259,23 @@ async function runBuild(env, step, sbId) {
   return finalizeBuild(env, step, sbId, quotaHit ? "quota" : null, quotaHit ? "Workers AI günlük kapasitesi doldu" : null, ledger);
 }
 
+// One batch, the step's only D1 call, so a retry can never repeat part of it: ledger rows, the neuron release and the
+// refund all apply only while the build is still queued/running (before buildEndStmts flips it), then the read-back.
+// Refund (per-user/IP, not global) only when the build fails for a platform reason (AI quota), not for draft_failed.
 async function finalizeBuild(env, step, sbId, code, msg, ledger) {
   const db = env.DB;
   const res = await step.do("finalize", STEP_DB, async () => {
-    await db.batch([...buildEndStmts(db, sbId, code, msg), ...ledgerRowsStmts(db, ledger)]);
-    const row = await db.prepare("SELECT status, post_id, version, day, quota_subject, ip_subject FROM sb_storyboards WHERE id = ?1").bind(sbId).first();
+    const out = await db.batch([
+      ...ledgerRowsStmts(db, ledger, "build"),
+      buildReleaseStmt(db, sbId),
+      ...(code === "quota" ? [buildRefundStmt(db, sbId)] : []),
+      ...buildEndStmts(db, sbId, code, msg),
+      db.prepare(`SELECT s.status, (SELECT json_group_array(o.id) FROM sb_storyboards o WHERE o.post_id = s.post_id AND o.version < s.version) AS older
+                  FROM sb_storyboards s WHERE s.id = ?1`).bind(sbId),
+    ]);
+    const row = (out[out.length - 1].results || [])[0];
     if (!row) return { status: "gone", older: [] };
-    if (row.status === "failed") {   // the user got nothing: give the per-user/IP storyboard back (the global counter stays)
-      await db.prepare("UPDATE sb_quota SET n = MAX(0, n - 1) WHERE day = ?1 AND ((scope = 'sb_user' AND subject = ?2) OR (scope = 'sb_ip' AND subject = ?3))")
-        .bind(row.day, row.quota_subject || "-", row.ip_subject || "-").run();
-      return { status: row.status, older: [] };
-    }
-    const { results } = await db.prepare("SELECT id FROM sb_storyboards WHERE post_id = ?1 AND version < ?2").bind(row.post_id, row.version).all();
-    return { status: row.status, older: (results || []).map((r) => r.id) };
+    return { status: row.status, older: row.status === "failed" ? [] : JSON.parse(row.older || "[]") };
   });
   if (res.older.length) {
     try {
@@ -282,12 +310,15 @@ async function runOp(env, step, opId) {
   const sbId = op.sb_id;
   const ai = getAI(env);
   const ledger = [];
+  // One batch (see finalizeBuild). A failed op gives the per-user frame units back (global counter stays), except a
+  // failed scene rewrite: its note text can force that failure.
   const end = (status, code, msg) => step.do("finish", STEP_DB, async () => {
-    await db.batch([...opEndStmts(db, opId, sbId, status, code, msg), ...ledgerRowsStmts(db, ledger)]);
-    if (status === "failed") {   // nothing produced: give the per-user frame units back (global counter stays)
-      await db.prepare(`UPDATE sb_quota SET n = MAX(0, n - (SELECT units FROM sb_ops WHERE id = ?1))
-                        WHERE scope = 'fr_user' AND (day, subject) = (SELECT day, quota_subject FROM sb_ops WHERE id = ?1)`).bind(opId).run();
-    }
+    await db.batch([
+      ...ledgerRowsStmts(db, ledger, "op"),
+      opReleaseStmt(db, opId),
+      ...(status === "failed" && code !== "scene_failed" ? [opRefundStmt(db, opId)] : []),
+      ...opEndStmts(db, opId, sbId, status, code, msg),
+    ]);
     return status;
   });
 
@@ -333,15 +364,13 @@ async function runOp(env, step, opId) {
       if (r.ledger.neurons || r.ledger.ms) ledger.push(r.ledger);
       if (countIt) ok++;
     } catch (e) {
-      if (isGone(e)) throw new NonRetryableError("gone");
+      if (isGone(e)) throw new NonRetryableError(GONE);
       if (countIt) failed++;
       if (isQuota(e)) quotaHit = true;
       const code = op.kind === "rewrite" ? "stale_image" : (isQuota(e) ? "quota" : "redraw_failed");
-      await step.do(`img-failed:${job.id}:r${rev}`, STEP_DB, async () => {
-        const stmts = [db.prepare("UPDATE sb_images SET status = CASE WHEN r2_key IS NULL THEN 'failed' ELSE 'done' END, error = ?3, updated_at = ?4 WHERE sb_id = ?1 AND job = ?2")
-          .bind(sbId, job.id, code, now())];
-        if (/timeout/.test(errMsg(e)) && !ai.fake) stmts.push(...ledgerRowsStmts(db, [{ sbId, opId, kind: "image", model: IMG_MODEL, neurons: job.neurons_est, note: `${job.id} timeout` }]));
-        await db.batch(stmts);
+      await step.do(`img-failed:${job.id}:r${rev}`, STEP_DB, async () => {   // timed-out attempts were ledgered by renderImage
+        await db.prepare("UPDATE sb_images SET status = CASE WHEN r2_key IS NULL THEN 'failed' ELSE 'done' END, error = ?3, updated_at = ?4 WHERE sb_id = ?1 AND job = ?2")
+          .bind(sbId, job.id, code, now()).run();
         return true;
       });
     }

@@ -5,9 +5,9 @@
 // deps = { db, ok(data, status), fail(status, error, message, extra), getActor(), readBody(), cleanText, postSelect, ownerParams, maxText,
 //          overLimit(actor) -> true when the caller is over the inspire rate limit (buckets 'sb' / 'sb_ip'), limited() -> 429 }
 import {
-  sbConfig, utcDay, now, filePath, SB_ID_RE, OP_ID_RE, newId, newSeed, COST, QUOTA_ERRORS, quotaItems, quotaStmts, refundStmts,
-  isCheckError, isUniqueError, whichQuota, quotaLeft, quotaSubject, ipSubject, capacityOk, SB_SUMMARY_SQL, summaryOut,
-  buildEndStmts, opEndStmts, startInstance, instanceStatus, terminateInstance, deleteSbObjects, deleteRowsStmts,
+  sbConfig, utcDay, now, filePath, SB_ID_RE, OP_ID_RE, newId, newSeed, COST, QUOTA_ERRORS, quotaItems, neuronItem, quotaStmts, refundStmts,
+  isCheckError, isUniqueError, whichQuota, quotaLeft, quotaSubject, ipSubject, SB_SUMMARY_SQL, summaryOut,
+  buildEndStmts, opEndStmts, buildRefundStmt, opRefundStmt, startInstance, instanceStatus, terminateInstance, deleteSbObjects, deleteRowsStmts,
   ensureStoryboardSchema,
 } from "./db.js";
 import { TEXT_MODEL } from "./prompt.v6.js";
@@ -19,7 +19,6 @@ const FORMATS = new Set(["auto", "16:9", "9:16"]);
 const MSG = {
   sb_disabled: "Storyboard özelliği şu an kapalı.",
   sb_admin_only: "Storyboard şimdilik yalnızca yönetici için açık.",
-  sb_capacity: "Yapay zekâ kapasitesi bugünlük doldu. Kota her gün 03:00'te (TSİ) yenilenir.",
   sb_busy: "Bu storyboard için devam eden bir işlem var. Bitince tekrar dene.",
   sb_unavailable: "Arka plan işi başlatılamadı. Biraz sonra tekrar dene.",
 };
@@ -118,22 +117,29 @@ async function startStoryboard(env, ctx, deps, request, actor, post, spec) {
   };
   if (!input.idea.trim()) return bad(400, "empty_text", "Fikir metni boş");
   const day = utcDay();
-  if (!(await capacityOk(db, cfg, COST.build, day))) return { ...bad(429, "sb_capacity", MSG.sb_capacity), left: await quotaLeft(db, cfg, actor, subject, day) };
   const reuseResearch = prev && prev.research_json && sameText(pin.idea, input.idea) && sameText(pin.brand, input.brand) && sameText(pin.place, input.place)
     ? prev.research_json : null;
   const ip = actor.isAdmin ? null : await ipSubject(request, env);
-  const items = quotaItems(cfg, actor, "sb", 1, subject, ip);
+  // Counters + the build's neuron reservation (capacity guard) are taken atomically with the insert.
+  const items = [...quotaItems(cfg, actor, "sb", 1, subject, ip), neuronItem(cfg, COST.build)];
   const sbId = newId("sb_");
   const t = now();
   const [cid, uid] = deps.ownerParams(actor);
+  // Earlier FAILED versions go in the same batch: a failed build has no draft and no images (it ends before the image
+  // stage), so nothing is lost, and a post keeps at most one failed version, always the latest (the board offers the
+  // previous finished version next to it, see SB_SUMMARY_SQL previous_id).
+  const failedOf = "SELECT id FROM sb_storyboards WHERE post_id = ?1 AND status = 'failed'";
   try {
     await db.batch([
       ...quotaStmts(db, day, items),
+      db.prepare(`DELETE FROM sb_images WHERE sb_id IN (${failedOf})`).bind(post.id),
+      db.prepare(`DELETE FROM sb_ops WHERE sb_id IN (${failedOf})`).bind(post.id),
+      db.prepare("DELETE FROM sb_storyboards WHERE post_id = ?1 AND status = 'failed'").bind(post.id),
       db.prepare(`INSERT INTO sb_storyboards (id, post_id, version, status, stage, input_json, research_json, seed, author_name, client_id, user_id,
-                    quota_subject, ip_subject, day, created_at, updated_at)
-                  VALUES (?1, ?2, ?3, 'queued', 'queued', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13)`)
+                    quota_subject, ip_subject, day, reserve, created_at, updated_at)
+                  VALUES (?1, ?2, ?3, 'queued', 'queued', ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?14, ?13, ?13)`)
         .bind(sbId, post.id, prev ? prev.version + 1 : 1, JSON.stringify(input), reuseResearch, newSeed(),
-          actor.guest ? actor.name : null, cid, uid, subject, ip, day, t),
+          actor.guest ? actor.name : null, cid, uid, subject, ip, day, t, items[items.length - 1].units),
     ]);
   } catch (e) {
     if (isUniqueError(e)) return bad(409, "sb_busy", MSG.sb_busy);
@@ -170,21 +176,28 @@ function publicDraft(d, admin) {
 }
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (_) { return ""; } };
 
+// A job whose instance is gone (stale) is a platform failure: a build that ends 'failed' gives the per-user/IP unit
+// back, a failed op its frame units (the refund statements run only while the row is still queued/running). The neuron
+// reservation is kept for the day (unknown real cost).
+const closeStaleBuild = (db, sbId, msg) => db.batch([buildRefundStmt(db, sbId), ...buildEndStmts(db, sbId, "stale", msg)]);
+const closeStaleOp = (db, opId, sbId, msg) => db.batch([opRefundStmt(db, opId), ...opEndStmts(db, opId, sbId, "failed", "stale", msg)]);
+const INSTANCE_ENDED = ["errored", "terminated", "unknown", "complete"];
+
 async function reconcileIfStale(env, db, cfg, sb, ops) {
   const old = now() - cfg.staleMs;
   let changed = false;
   if ((sb.status === "queued" || sb.status === "running") && sb.updated_at < old) {
     const st = await instanceStatus(env, sb.id);
-    if (["errored", "terminated", "unknown", "complete"].includes(st.status)) {
-      await db.batch(buildEndStmts(db, sb.id, "stale", st.error && st.error.message));
+    if (INSTANCE_ENDED.includes(st.status)) {
+      await closeStaleBuild(db, sb.id, st.error && st.error.message);
       changed = true;
     }
   }
   for (const o of ops) {
     if ((o.status === "queued" || o.status === "running") && o.updated_at < old) {
       const st = await instanceStatus(env, o.id);
-      if (["errored", "terminated", "unknown", "complete"].includes(st.status)) {
-        await db.batch(opEndStmts(db, o.id, sb.id, "failed", "stale", st.error && st.error.message));
+      if (INSTANCE_ENDED.includes(st.status)) {
+        await closeStaleOp(db, o.id, sb.id, st.error && st.error.message);
         changed = true;
       }
     }
@@ -319,17 +332,18 @@ export async function handleStoryboard(request, env, ctx, path, method, deps) {
     }
     const { results: act } = await db.prepare("SELECT n FROM sb_ops WHERE sb_id = ?1 AND status IN ('queued','running')").bind(sbId).all();
     if ((act || []).some((o) => o.n === 0 || kind === "resume" || o.n === n)) return fail(409, "sb_busy", MSG.sb_busy);
-    let units = 1;
-    if (kind === "resume") {
-      const r = await db.prepare("SELECT COUNT(*) AS c FROM sb_images WHERE sb_id = ?1 AND kind = 'frame' AND r2_key IS NULL").bind(sbId).first();
-      units = r ? r.c : 0;
+    let units = 1, refs = 0;
+    if (kind === "resume") {   // units = missing frames; missing anchor/references are redrawn too (not charged, but reserved)
+      const r = await db.prepare("SELECT COALESCE(SUM(kind = 'frame'), 0) AS frames, COALESCE(SUM(kind <> 'frame'), 0) AS refs FROM sb_images WHERE sb_id = ?1 AND r2_key IS NULL").bind(sbId).first();
+      units = r ? r.frames : 0;
+      refs = r ? r.refs : 0;
       if (!units) return fail(400, "nothing_to_resume", "Eksik kare yok");
     }
     const day = utcDay();
     const subject = quotaSubject(actor);
-    const cost = units * COST.frame + (kind === "rewrite" ? COST.scene : 0);
-    if (!(await capacityOk(db, cfg, cost, day))) return fail(429, "sb_capacity", MSG.sb_capacity, { left: await quotaLeft(db, cfg, actor, subject, day) });
-    const items = quotaItems(cfg, actor, "fr", units, subject, null);
+    // Frame-unit counters + the op's neuron reservation (capacity guard), atomically with the insert.
+    const reserve = units * COST.frame + refs * COST.ref + (kind === "rewrite" ? COST.scene : 0);
+    const items = [...quotaItems(cfg, actor, "fr", units, subject, null), neuronItem(cfg, reserve)];
     const opId = newId("op_");
     const t = now();
     const busyImg = kind === "resume"
@@ -338,8 +352,8 @@ export async function handleStoryboard(request, env, ctx, path, method, deps) {
     try {
       await db.batch([
         ...quotaStmts(db, day, items),
-        db.prepare(`INSERT INTO sb_ops (id, sb_id, kind, n, note, status, units, quota_subject, day, created_at, updated_at)
-                    VALUES (?1, ?2, ?3, ?4, ?5, 'queued', ?6, ?7, ?8, ?9, ?9)`).bind(opId, sbId, kind, n, note, units, subject, day, t),
+        db.prepare(`INSERT INTO sb_ops (id, sb_id, kind, n, note, status, units, quota_subject, day, reserve, created_at, updated_at)
+                    VALUES (?1, ?2, ?3, ?4, ?5, 'queued', ?6, ?7, ?8, ?10, ?9, ?9)`).bind(opId, sbId, kind, n, note, units, subject, day, t, items[items.length - 1].units),
         busyImg,
       ]);
     } catch (e) {
@@ -389,16 +403,28 @@ export async function sbScheduled(env) {
   ]);
   for (const sb of a.results || []) {
     const st = await instanceStatus(env, sb.id);
-    if (["errored", "terminated", "unknown", "complete"].includes(st.status)) await db.batch(buildEndStmts(db, sb.id, "stale", st.error && st.error.message));
+    if (INSTANCE_ENDED.includes(st.status)) await closeStaleBuild(db, sb.id, st.error && st.error.message);
   }
   for (const o of b.results || []) {
     const st = await instanceStatus(env, o.id);
-    if (["errored", "terminated", "unknown", "complete"].includes(st.status)) await db.batch(opEndStmts(db, o.id, o.sb_id, "failed", "stale", st.error && st.error.message));
+    if (INSTANCE_ENDED.includes(st.status)) await closeStaleOp(db, o.id, o.sb_id, st.error && st.error.message);
   }
-  // Orphans: storyboards whose post is gone (post deleted while R2 cleanup failed) -> rows + objects
-  const { results: orphans } = await db.prepare(
-    "SELECT id FROM sb_storyboards s WHERE NOT EXISTS (SELECT 1 FROM inspire_posts p WHERE p.id = s.post_id) LIMIT 5").all();
-  for (const o of orphans || []) { await db.batch(deleteRowsStmts(db, o.id)); await deleteSbObjects(env, o.id); }
+  // Orphans: storyboards whose post is gone (post deleted while R2 cleanup failed, or the user row was deleted and the
+  // post went with it), plus image/op rows left without a storyboard. A build may still be running: its instances are
+  // terminated first, so it cannot render into the prefix after it was cleared (its own D1 checks stop it otherwise).
+  const [o1, o2] = await db.batch([
+    db.prepare(`SELECT s.id, (SELECT json_group_array(o.id) FROM sb_ops o WHERE o.sb_id = s.id AND o.status IN ('queued','running')) AS ops
+                FROM sb_storyboards s WHERE NOT EXISTS (SELECT 1 FROM inspire_posts p WHERE p.id = s.post_id) LIMIT 5`),
+    db.prepare(`SELECT sb_id AS id FROM (SELECT sb_id FROM sb_images UNION SELECT sb_id FROM sb_ops) x
+                WHERE NOT EXISTS (SELECT 1 FROM sb_storyboards s WHERE s.id = x.sb_id) LIMIT 5`),
+  ]);
+  for (const o of o1.results || []) {
+    await terminateInstance(env, o.id);
+    for (const opId of JSON.parse(o.ops || "[]")) await terminateInstance(env, opId);
+    await db.batch(deleteRowsStmts(db, o.id));
+    await deleteSbObjects(env, o.id);
+  }
+  for (const o of o2.results || []) { await db.batch(deleteRowsStmts(db, o.id)); await deleteSbObjects(env, o.id); }
   const cutoff = utcDay(now() - 90 * 86400e3);
   await db.batch([
     db.prepare("DELETE FROM sb_quota WHERE day < ?1").bind(utcDay(now() - 7 * 86400e3)),

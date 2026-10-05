@@ -14,8 +14,11 @@ export function newSeed() { const a = new Uint32Array(1); crypto.getRandomValues
 // rev 0 = the build's seed (all build images share it, as in the prototype); every redraw gets a new deterministic seed.
 export const seedFor = (sbSeed, n, rev) => (rev === 0 ? sbSeed : ((sbSeed + rev * 7919 + n * 104729) % 2147483646) + 1);
 
-// Expected neuron cost, used only for the capacity guard (measured: build ~495 for 5 frames, worst case 8 frames ~700).
-export const COST = { build: 700, frame: 70, scene: 60 };
+// Neurons RESERVED per job by the capacity guard (sb_quota scope 'neurons', see neuronItem). Realistic worst cases, not
+// averages: a build is draft (gemma + repair, then gpt-oss + repair: ~710 text) + up to 8 frames x ~63 + anchor/refs ~90
+// = ~1,300 (measured: 637 for a 5-frame build with one repair); a frame ~63; a reference ~26-31; a scene rewrite ~80-210
+// measured, ~900 on the repair/fallback path. When the job ends the reservation is replaced by its ledgered cost.
+export const COST = { build: 1300, frame: 70, ref: 35, scene: 450 };
 
 export function sbConfig(env) {
   const int = (v, d) => { const n = Number.parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : d; };
@@ -62,6 +65,7 @@ export const SB_DDL = [
     quota_subject TEXT,
     ip_subject TEXT,
     day TEXT NOT NULL,
+    reserve INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
@@ -95,6 +99,7 @@ export const SB_DDL = [
     units INTEGER NOT NULL DEFAULT 1,
     quota_subject TEXT,
     day TEXT NOT NULL,
+    reserve INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
   )`,
@@ -126,7 +131,12 @@ export const SB_DDL = [
   `CREATE INDEX IF NOT EXISTS sb_ledger_day ON sb_ledger(day, kind)`,
 ];
 // Columns added after the first release go here: [table, column, type] (ALTER TABLE ADD COLUMN, like migrateInspireSchema).
-export const SB_ADD_COLUMNS = [];
+// reserve: neurons this job holds in sb_quota 'neurons' until it ends (also in CREATE TABLE; listed for tables made by
+// earlier test builds).
+export const SB_ADD_COLUMNS = [
+  ["sb_storyboards", "reserve", "INTEGER NOT NULL DEFAULT 0"],
+  ["sb_ops", "reserve", "INTEGER NOT NULL DEFAULT 0"],
+];
 
 let sbSchemaReady = null;
 export function ensureStoryboardSchema(env) {
@@ -149,13 +159,15 @@ async function migrateStoryboardSchema(env) {
 }
 
 // ---------------------------------------------------------------- quota (atomic: CHECK(n <= lim) aborts the whole D1 batch)
-// Scopes: 'sb' (global storyboards), 'sb_user', 'sb_ip', 'fr' (global frame units), 'fr_user'.
+// Scopes: 'sb' (global storyboards), 'sb_user', 'sb_ip', 'fr' (global frame units), 'fr_user',
+// 'neurons' (capacity guard: ledgered neurons of finished jobs + reservations of running ones, lim SB_NEURON_BUDGET).
 export const QUOTA_ERRORS = {
   sb: ["sb_daily_limit", "Bugünkü storyboard kotası doldu. Kota her gün 03:00'te (TSİ) yenilenir."],
   sb_user: ["sb_user_limit", "Bugünkü storyboard hakkın doldu. Yarın tekrar deneyebilirsin."],
   sb_ip: ["sb_ip_limit", "Bu bağlantıdan bugün çok fazla storyboard istendi. Yarın tekrar dene."],
   fr: ["sb_frame_limit", "Bugünkü yeniden çizim kotası doldu. Kota her gün 03:00'te (TSİ) yenilenir."],
   fr_user: ["sb_frame_user_limit", "Bugünkü yeniden çizim hakkın doldu. Yarın tekrar deneyebilirsin."],
+  neurons: ["sb_capacity", "Yapay zekâ kapasitesi bugünlük doldu. Kota her gün 03:00'te (TSİ) yenilenir."],
 };
 export function quotaItems(cfg, actor, kind, units, subject, ipSubject) {
   const items = [];
@@ -169,6 +181,9 @@ export function quotaItems(cfg, actor, kind, units, subject, ipSubject) {
   }
   return items;
 }
+// Capacity guard: the job's reservation goes into the same quota batch as its insert, so concurrent admissions cannot
+// overshoot SB_NEURON_BUDGET (the old read-then-insert check could). Admin is counted too.
+export const neuronItem = (cfg, reserve) => ({ scope: "neurons", subject: "", lim: cfg.neuronBudget, units: Math.max(0, Math.ceil(reserve)) });
 export const quotaStmts = (db, day, items) => items.map((it) => db.prepare(
   `INSERT INTO sb_quota (day, scope, subject, n, lim) VALUES (?1, ?2, ?3, ?4, ?5)
    ON CONFLICT(day, scope, subject) DO UPDATE SET n = n + excluded.n, lim = excluded.lim`
@@ -204,22 +219,25 @@ export async function quotaLeft(db, cfg, actor, subject, day = utcDay()) {
   };
 }
 export const quotaSubject = (actor) => (!actor || actor.isAdmin ? null : actor.guest ? `c:${actor.cid}` : `u:${actor.userId}`);
+// Per-IP buckets: an IPv6 client usually controls a whole /64, so IPv6 addresses count per /64 prefix; IPv4 per address.
+// Also used by the inspire rate limiter (worker/index.js inspireIpKey).
+export function ipBucket(ip) {
+  const s = String(ip || "").trim().toLowerCase();
+  if (!s.includes(":")) return s;                                          // IPv4 (or empty / 'unknown')
+  if (/^::ffff:\d{1,3}(?:\.\d{1,3}){3}$/.test(s)) return s.slice(7);        // IPv4-mapped
+  const parts = s.split("::");
+  if (parts.length > 2) return s;                                          // not an IPv6 address: as is
+  const groups = (x) => (x ? x.split(":") : []);
+  const head = groups(parts[0]), tail = parts.length === 2 ? groups(parts[1]) : [];
+  const width = (g) => g.reduce((k, x) => k + (x.includes(".") ? 2 : 1), 0);   // embedded IPv4 = 2 groups
+  const full = parts.length === 2 ? [...head, ...Array(Math.max(0, 8 - width(head) - width(tail))).fill("0"), ...tail] : head;
+  return full.slice(0, 4).map((x) => (Number.parseInt(x, 16) || 0).toString(16)).join(":") + "::/64";
+}
 export async function ipSubject(request, env) {
   const ip = request.headers.get("CF-Connecting-IP") || "";
   if (!ip) return null;
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${ip}|${env.JWT_SECRET || "secret"}|sb`));
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${ipBucket(ip)}|${env.JWT_SECRET || "secret"}|sb`));
   return "ip:" + [...new Uint8Array(buf).slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-// Soft capacity guard against the 10,000 neurons/day free allocation (ledger is an estimate for images).
-export async function capacityOk(db, cfg, cost, day = utcDay()) {
-  const r = await db.prepare(
-    `SELECT (SELECT COALESCE(SUM(neurons), 0) FROM sb_ledger WHERE day = ?1) AS used,
-            (SELECT COUNT(*) FROM sb_storyboards WHERE status IN ('queued','running')) AS builds,
-            (SELECT COALESCE(SUM(units), 0) FROM sb_ops WHERE status IN ('queued','running')) AS units`
-  ).bind(day).first();
-  const inflight = (r.builds || 0) * COST.build + (r.units || 0) * COST.frame;
-  return (r.used || 0) + inflight + cost <= cfg.neuronBudget;
 }
 
 // ---------------------------------------------------------------- ledger
@@ -231,7 +249,14 @@ export function ledgerStmt(db, { sbId = null, opId = null, kind, model = null, n
 // Multi-row INSERTs (11 rows x 9 = 99 binds per statement, under D1's 100 bound parameters). Inside a Workflow every
 // D1 statement counts against the Free plan's 50 D1 queries per invocation, so ledger rows are written in bulk.
 // rows: [{ sbId, opId, kind: 'text'|'image'|'tavily', model, neurons, credits, ms, note }]
-export function ledgerRowsStmts(db, rows) {
+// once: 'build' | 'op' makes the rows of a finalize/finish step idempotent: they are inserted only while that build/op
+// has not ended (or its row is gone), so a step retry after the batch committed cannot write them twice. Every row then
+// belongs to the same build (?2 = row 0's sb_id) or op (?3 = row 0's op_id).
+const LEDGER_ONCE = {
+  build: "WHERE NOT EXISTS (SELECT 1 FROM sb_storyboards WHERE id = ?2 AND status NOT IN ('queued','running'))",
+  op: "WHERE NOT EXISTS (SELECT 1 FROM sb_ops WHERE id = ?3 AND status NOT IN ('queued','running'))",
+};
+export function ledgerRowsStmts(db, rows, once = null) {
   const out = [];
   const list = (rows || []).filter(Boolean);
   for (let i = 0; i < list.length; i += 11) {
@@ -239,7 +264,8 @@ export function ledgerRowsStmts(db, rows) {
     const vals = chunk.map((_, k) => `(?${k * 9 + 1}, ?${k * 9 + 2}, ?${k * 9 + 3}, ?${k * 9 + 4}, ?${k * 9 + 5}, ?${k * 9 + 6}, ?${k * 9 + 7}, ?${k * 9 + 8}, ?${k * 9 + 9}, ${now()})`).join(", ");
     const binds = chunk.flatMap((r) => [utcDay(), r.sbId || null, r.opId || null, r.kind, r.model || null, +(r.neurons || 0), r.credits | 0,
       r.ms == null ? null : Math.round(r.ms), r.note ? String(r.note).slice(0, 200) : null]);
-    out.push(db.prepare(`INSERT INTO sb_ledger (day, sb_id, op_id, kind, model, neurons, credits, ms, note, created_at) VALUES ${vals}`).bind(...binds));
+    const cols = "INSERT INTO sb_ledger (day, sb_id, op_id, kind, model, neurons, credits, ms, note, created_at)";
+    out.push(db.prepare(once ? `${cols} SELECT * FROM (VALUES ${vals}) ${LEDGER_ONCE[once]}` : `${cols} VALUES ${vals}`).bind(...binds));
   }
   return out;
 }
@@ -252,8 +278,12 @@ export async function tavilyCreditsThisMonth(db) {
 }
 
 // ---------------------------------------------------------------- summaries (board cards)
+// previous_id: the newest finished (done/partial) older version, kept until a newer version finishes; the board offers it
+// when the latest version failed (e.g. a "Yorumu düzelt" rebuild).
 export const SB_SUMMARY_SQL = `
   SELECT s.id, s.post_id, s.version, s.status, s.stage, s.title, s.aspect, s.error_code, s.updated_at,
+    (SELECT p.id FROM sb_storyboards p WHERE p.post_id = s.post_id AND p.version < s.version AND p.status IN ('done','partial')
+      ORDER BY p.version DESC LIMIT 1) AS previous_id,
     (SELECT COUNT(*) FROM sb_images i WHERE i.sb_id = s.id AND i.kind = 'frame') AS frame_total,
     (SELECT COUNT(*) FROM sb_images i WHERE i.sb_id = s.id AND i.kind = 'frame' AND i.r2_key IS NOT NULL) AS frame_done,
     (SELECT COUNT(*) FROM sb_images i WHERE i.sb_id = s.id AND i.kind = 'frame' AND i.status IN ('pending','running')) AS frame_busy,
@@ -268,9 +298,41 @@ export function summaryOut(r) {
   return {
     id: r.id, version: r.version, status: r.status, stage: r.stage, title: r.title || null, aspect: r.aspect || null,
     frame_total: r.frame_total || 0, frame_done: r.frame_done || 0, frame_busy: r.frame_busy || 0,
-    thumbs, error_code: r.error_code || null, updated_at: r.updated_at,
+    thumbs, error_code: r.error_code || null, previous_id: r.previous_id || null, updated_at: r.updated_at,
   };
 }
+
+// ---------------------------------------------------------------- settling a job (finalize / finish / reconcile)
+// These must run in the SAME batch as, and BEFORE, the job's own status change (buildEndStmts / opEndStmts): each one
+// applies only while the job is still queued/running, so it happens exactly once even if the batch is retried.
+//
+// Capacity: the reservation is replaced by the job's ledgered cost (its rows must already be in sb_ledger or earlier
+// in the batch). Clamped to lim so the CHECK never fails here. Jobs that end without settling (deleted, reconciled as
+// stale) keep their reservation for that day: the safe direction, as their real cost is unknown.
+export const buildReleaseStmt = (db, sbId) => db.prepare(
+  `UPDATE sb_quota SET n = MIN(lim, MAX(0, CAST(ROUND(n - (SELECT reserve FROM sb_storyboards WHERE id = ?1)
+       + (SELECT COALESCE(SUM(neurons), 0) FROM sb_ledger WHERE sb_id = ?1 AND op_id IS NULL)) AS INTEGER)))
+   WHERE scope = 'neurons' AND subject = '' AND day = (SELECT day FROM sb_storyboards WHERE id = ?1)
+     AND EXISTS (SELECT 1 FROM sb_storyboards WHERE id = ?1 AND status IN ('queued','running'))`).bind(sbId);
+export const opReleaseStmt = (db, opId) => db.prepare(
+  `UPDATE sb_quota SET n = MIN(lim, MAX(0, CAST(ROUND(n - (SELECT reserve FROM sb_ops WHERE id = ?1)
+       + (SELECT COALESCE(SUM(neurons), 0) FROM sb_ledger WHERE op_id = ?1)) AS INTEGER)))
+   WHERE scope = 'neurons' AND subject = '' AND day = (SELECT day FROM sb_ops WHERE id = ?1)
+     AND EXISTS (SELECT 1 FROM sb_ops WHERE id = ?1 AND status IN ('queued','running'))`).bind(opId);
+// Per-user/IP storyboard refund for a build that is about to end 'failed' (no draft). Only for platform failures
+// (AI quota, stale instance): a draft_failed build is not refunded, since the idea text itself can force that failure
+// (and each attempt burns text neurons). The global counter is never refunded.
+export const buildRefundStmt = (db, sbId) => db.prepare(
+  `UPDATE sb_quota SET n = MAX(0, n - 1)
+   WHERE day = (SELECT day FROM sb_storyboards WHERE id = ?1)
+     AND ((scope = 'sb_user' AND subject = (SELECT quota_subject FROM sb_storyboards WHERE id = ?1))
+       OR (scope = 'sb_ip' AND subject = (SELECT ip_subject FROM sb_storyboards WHERE id = ?1)))
+     AND EXISTS (SELECT 1 FROM sb_storyboards WHERE id = ?1 AND status IN ('queued','running') AND draft_json IS NULL)`).bind(sbId);
+// Per-user frame-unit refund for an op that is about to end 'failed' (not used for scene_failed, same reason as above).
+export const opRefundStmt = (db, opId) => db.prepare(
+  `UPDATE sb_quota SET n = MAX(0, n - (SELECT units FROM sb_ops WHERE id = ?1))
+   WHERE scope = 'fr_user' AND (day, subject) = (SELECT day, quota_subject FROM sb_ops WHERE id = ?1)
+     AND EXISTS (SELECT 1 FROM sb_ops WHERE id = ?1 AND status IN ('queued','running'))`).bind(opId);
 
 // ---------------------------------------------------------------- terminal-state SQL shared by finalize, reconcile and ops
 // Build ended (normally or not): unfinished images fail; storyboard -> failed (no draft) | partial | done.
@@ -335,7 +397,8 @@ export async function deleteSbObjects(env, sbId) {
     cursor = l.truncated ? l.cursor : undefined;
   } while (cursor);
 }
-// Rows of a storyboard (all tables). Used by DELETE routes, post delete and version cleanup.
+// Rows of a storyboard (all tables). Used by DELETE routes, post delete, version cleanup and the cron orphan sweep.
+// A build/op that is still running keeps its neuron reservation for the day (see buildReleaseStmt).
 export const deleteRowsStmts = (db, sbId) => [
   db.prepare("DELETE FROM sb_images WHERE sb_id = ?1").bind(sbId),
   db.prepare("DELETE FROM sb_ops WHERE sb_id = ?1").bind(sbId),

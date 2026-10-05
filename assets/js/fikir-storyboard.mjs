@@ -7,7 +7,7 @@
  *         defer?(entry, key, fn) }  defer: fikir.html applyOrDefer (a card wholly above the viewport is re-rendered once it is in view)
  */
 
-const CSS_HREF = '/assets/css/fikir-storyboard.css?v=20261005';
+const CSS_HREF = '/assets/css/fikir-storyboard.css?v=20261006';
 const SHOT_TR = {
   extreme_wide: 'ÇOK GENİŞ PLAN', wide: 'GENİŞ PLAN', full: 'BOY PLAN', medium: 'ORTA PLAN', close_up: 'YAKIN PLAN',
   extreme_close_up: 'ÇOK YAKIN PLAN', aerial_drone: 'HAVADAN (DRONE)', pov: 'ÖZNEL KAMERA', over_the_shoulder: 'OMUZ ÜSTÜ',
@@ -16,7 +16,7 @@ const SHOT_TR = {
 const MOVE_TR = {
   static: 'SABİT', pan: 'PAN', tilt: 'TİLT', dolly_in: 'DOLLY İLERİ', dolly_out: 'DOLLY GERİ', tracking: 'TAKİP (TRAVELLING)',
   crane_up: 'VİNÇ YUKARI', crane_down: 'VİNÇ AŞAĞI', handheld: 'ELDE KAMERA', zoom_in: 'ZOOM İÇERİ', zoom_out: 'ZOOM DIŞARI',
-  orbit: 'ÇEVRİNME', drone_flyover: 'DRONE GEÇİŞİ',
+  orbit: 'ETRAFINDA DÖNÜŞ (ORBİT)', drone_flyover: 'DRONE GEÇİŞİ',   // 'çevrinme' would read as a pan/tilt
 };
 const CONF_TR = { high: 'yüksek', medium: 'orta', low: 'düşük' };
 const ERR_TR = {
@@ -64,11 +64,23 @@ export function createStoryboardUI(deps) {
 
   const cards = new Map();      // postId -> { entry, summary, sig, root }
   const watchers = new Map();   // sbId -> { subs:Set, timer, delay, sig, startedAt, fails, inflight }
-  const viewer = { el: null, sbId: null, data: null, sigs: new Map(), fixOpen: false, rewriteOpen: new Set() };
+  // rewriteDraft / fixDraft: text typed into the "Yeniden yaz" inputs / "Yorumu düzelt" box, kept across re-renders.
+  // focusNext: the field the user just opened ('fix' or a scene number); only that one is focused, once.
+  const viewer = { el: null, sbId: null, data: null, sigs: new Map(), fixOpen: false, rewriteOpen: new Set(),
+    rewriteDraft: new Map(), fixDraft: null, focusNext: null, printPending: false };
   const fileUrl = (path) => (path ? deps.safeHttpUrl(API_BASE + path) : null);
   const user = () => session.user;
   const left = () => (config.sb && config.sb.left) || null;
   const setLeft = (l) => { if (l && config.sb) { config.sb.left = l; refreshQuotaHints(); } };
+  // A job ended: the server may have given units back (failed build on AI quota, failed op), so re-read today's quota.
+  let leftReq = null;
+  function refreshLeft() {
+    if (!session.token || leftReq) return;
+    leftReq = api('GET', '/api/inspire/config')
+      .then((c) => { if (c && c.sb && c.sb.left) setLeft(c.sb.left); })
+      .catch(() => { /* keep the shown quota */ })
+      .finally(() => { leftReq = null; });
+  }
 
   function ensureCss() {
     if (document.querySelector('link[data-sb-css]')) return;
@@ -94,17 +106,19 @@ export function createStoryboardUI(deps) {
       title: full.draft ? full.draft.title : null, aspect: full.draft ? full.draft.aspect_ratio : null,
       frame_total: frames.length, frame_done: frames.filter((f) => f.path).length, frame_busy: frames.filter((f) => f.busy).length,
       thumbs: frames.filter((f) => f.path).slice(0, 4).map((f) => ({ n: f.n, path: f.path })),
-      error_code: full.error ? full.error.code : null, updated_at: full.updated_at,
+      error_code: full.error ? full.error.code : null, previous_id: full.previous_id || null, updated_at: full.updated_at,
     };
   }
   const isBusy = (s) => !!s && (ACTIVE(s.status) || s.frame_busy > 0);
-  function watch(sbId, cb) {
+  // active: whether the job is known to be running (true/false) or unknown (null); a running -> ended transition
+  // re-reads the quota (refreshLeft).
+  function watch(sbId, cb, active = null) {
     let w = watchers.get(sbId);
     if (!w) {
-      w = { subs: new Set(), timer: 0, delay: 2000, sig: '', startedAt: Date.now(), fails: 0, inflight: false };
+      w = { subs: new Set(), timer: 0, delay: 2000, sig: '', startedAt: Date.now(), fails: 0, inflight: false, active };
       watchers.set(sbId, w);
       schedule(sbId, 300);
-    }
+    } else if (active) w.active = true;
     w.subs.add(cb);
   }
   function unwatch(sbId, cb) {
@@ -141,7 +155,10 @@ export function createStoryboardUI(deps) {
     const changed = sig !== w.sig;
     w.sig = sig;
     for (const cb of [...w.subs]) cb(full, sbId);
-    if (!full.poll_ms) { clearTimeout(w.timer); if (!viewerShows(sbId)) watchers.delete(sbId); else w.delay = 0; return; }
+    const active = !!full.poll_ms;
+    if (w.active && !active) refreshLeft();
+    w.active = active;
+    if (!active) { clearTimeout(w.timer); if (!viewerShows(sbId)) watchers.delete(sbId); else w.delay = 0; return; }
     if (Date.now() - w.startedAt > POLL_GIVE_UP_MS) {
       for (const cb of [...w.subs]) cb({ ...full, _giveUp: true }, sbId);
       clearTimeout(w.timer); watchers.delete(sbId); return;
@@ -151,7 +168,7 @@ export function createStoryboardUI(deps) {
   }
   function kick(sbId) {   // after an action: poll soon even if the watcher was idle
     const w = watchers.get(sbId);
-    if (w) { w.startedAt = Date.now(); w.delay = 1500; schedule(sbId, 800); }
+    if (w) { w.startedAt = Date.now(); w.delay = 1500; w.active = true; schedule(sbId, 800); }
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') for (const id of watchers.keys()) schedule(id, 200);
@@ -170,7 +187,7 @@ export function createStoryboardUI(deps) {
     }
     c.entry = entry;
     renderCard(c);
-    if (isBusy(c.summary)) watch(c.summary.id, c.onData);
+    if (isBusy(c.summary)) watch(c.summary.id, c.onData, true);
   }
   function patch(entry, post) {
     const c = cards.get(entry.id);
@@ -193,15 +210,31 @@ export function createStoryboardUI(deps) {
     if (c.summary && (!s || s.id !== c.summary.id)) unwatch(c.summary.id, c.onData);
     c.summary = s;
     renderCard(c);
-    if (isBusy(s)) watch(s.id, c.onData);
+    if (isBusy(s)) watch(s.id, c.onData, true);
   }
   function onCardData(c, full, sbId) {
     if (!c.summary || c.summary.id !== sbId) return;
     if (!full) { setSummary(c, null); return; }
     c.summary = summarize(full);
     c.giveUp = !!full._giveUp;
+    renderCardLater(c);
+  }
+  // Card height changes wait while the card is wholly above the viewport (fikir.html applyOrDefer).
+  function renderCardLater(c) {
     if (typeof deps.defer === 'function') deps.defer(c.entry, 'sb', () => { if (cards.get(c.entry.id) === c) renderCard(c); });
     else renderCard(c);
+  }
+  // After a version was deleted: the card shows its previous finished version (or nothing).
+  async function showPrevious(c, prevId) {
+    let s = null;
+    if (prevId) { try { s = summarize(await api('GET', `/api/inspire/storyboards/${prevId}`)); } catch (_) { s = null; } }
+    if (cards.get(c.entry.id) === c) setSummary(c, s);
+  }
+  function focusCard(postId) {   // the button that opened the viewer may have been re-rendered meanwhile
+    if (document.activeElement && document.activeElement !== document.body) return;
+    const c = cards.get(String(postId));
+    const b = c && c.entry.refs.sbSlot.querySelector('[data-sb="open"], [data-sb="open-prev"], [data-sb="create"]');
+    if (b) b.focus({ preventScroll: true });
   }
   function track(entry, summary) {   // after a create from the add modal / "Storyboard oluştur" / "Yorumu düzelt"
     const c = cards.get(entry.id);
@@ -213,10 +246,22 @@ export function createStoryboardUI(deps) {
   function renderCard(c) {
     const { entry, summary: s } = c;
     const slot = entry.refs.sbSlot;
-    const sig = JSON.stringify([s, config.storyboard, entry.post.is_mine, user() && user().is_admin, left(), c.giveUp]);
+    // The quota only shows on the "Storyboard oluştur" card, so only that state depends on it.
+    const sig = JSON.stringify([s, config.storyboard, entry.post.is_mine, user() && user().is_admin, s ? null : left(), c.giveUp]);
     if (sig === c.sig) return;
     c.sig = sig;
     slot.textContent = '';
+    const mine = canCreateFor(entry.post);
+    if (s && s.status === 'failed' && !mine) {
+      // A failed build has no draft and only its owner can act on it: others see the previous version, if any.
+      if (!s.previous_id) { slot.hidden = true; return; }
+      slot.hidden = false;
+      slot.append(h('div', { class: 'sb-card' },
+        h('div', { class: 'sb-card-head' }, h('span', { class: 'sb-label' }, 'Storyboard')),
+        h('div', { class: 'sb-card-actions' },
+          h('button', { type: 'button', class: 'btn btn-primary btn-sm', 'data-sb': 'open-prev' }, 'Storyboard\'u aç'))));
+      return;
+    }
     if (!s) {
       if (!canCreateFor(entry.post)) { slot.hidden = true; return; }
       slot.hidden = false;
@@ -234,12 +279,15 @@ export function createStoryboardUI(deps) {
     if (s.title) body.push(h('div', { class: 'sb-title' }, s.title));
     if (ACTIVE(s.status)) body.push(stepsList(s));
     if (s.frame_total || ACTIVE(s.status)) body.push(thumbStrip(s));
-    if (s.status === 'failed') body.push(h('div', { class: 'sb-err' }, ERR_TR[s.error_code] || 'Storyboard oluşturulamadı.'));
-    else if (s.status === 'partial') body.push(h('div', { class: 'sb-hint' }, s.error_code === 'quota' ? ERR_TR.quota : `${s.frame_total - s.frame_done} kare çizilemedi.`));
+    if (s.status === 'failed') {
+      body.push(h('div', { class: 'sb-err' }, ERR_TR[s.error_code] || 'Storyboard oluşturulamadı.'));
+      if (s.previous_id) body.push(h('div', { class: 'sb-hint' }, 'Son sürüm oluşturulamadı; önceki sürüm duruyor.'));
+    } else if (s.status === 'partial') body.push(h('div', { class: 'sb-hint' }, s.error_code === 'quota' ? ERR_TR.quota : `${s.frame_total - s.frame_done} kare çizilemedi.`));
     if (c.giveUp) body.push(h('div', { class: 'sb-hint' }, 'Durum güncellenemiyor; sayfayı yenile.'));
     const actions = h('div', { class: 'sb-card-actions' });
     if (s.status !== 'failed' || s.title) actions.append(h('button', { type: 'button', class: 'btn btn-primary btn-sm', 'data-sb': 'open' }, 'Storyboard\'u aç'));
-    if (s.status === 'failed' && canCreateFor(entry.post)) actions.append(h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-sb': 'create' }, 'Tekrar dene'));
+    if (s.status === 'failed' && s.previous_id) actions.append(h('button', { type: 'button', class: 'btn btn-primary btn-sm', 'data-sb': 'open-prev' }, 'Önceki sürümü aç'));
+    if (s.status === 'failed' && mine) actions.append(h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-sb': 'create' }, 'Tekrar dene'));
     body.push(actions);
     slot.append(h('div', { class: 'sb-card' }, ...body));
   }
@@ -277,6 +325,7 @@ export function createStoryboardUI(deps) {
     if (!b) return;
     const act = b.dataset.sb;
     if (act === 'open' && c.summary) { openViewer(c.summary.id); return; }
+    if (act === 'open-prev' && c.summary && c.summary.previous_id) { openViewer(c.summary.previous_id); return; }
     if (act === 'create') startFor(c.entry, {}, b);
   }
   async function startFor(entry, body, btn) {
@@ -327,7 +376,7 @@ export function createStoryboardUI(deps) {
       form.hint.textContent = none ? 'Bugünkü storyboard hakkın doldu; fikir storyboard\'suz kaydedilir.' : quotaText('sb');
       form.hint.classList.toggle('none', none);
     }
-    for (const c of cards.values()) renderCard(c);
+    for (const c of cards.values()) renderCardLater(c);   // storyboard cards: unchanged signature, no re-render
     if (viewer.data) renderViewer(viewer.data);
   }
   function formSpec() {
@@ -372,7 +421,10 @@ export function createStoryboardUI(deps) {
   async function openViewer(sbId) {
     if (!viewer.el) buildViewer();
     if (viewer.sbId && viewer.sbId !== sbId) unwatch(viewer.sbId, onViewerData);
-    if (viewer.sbId !== sbId) { viewer.sigs.clear(); viewer.sheet.textContent = ''; viewer.data = null; viewer.fixOpen = false; viewer.rewriteOpen.clear(); }
+    if (viewer.sbId !== sbId) {
+      viewer.sigs.clear(); viewer.sheet.textContent = ''; viewer.data = null; viewer.fixOpen = false; viewer.rewriteOpen.clear();
+      viewer.rewriteDraft.clear(); viewer.fixDraft = null; viewer.focusNext = null;
+    }
     viewer.sbId = sbId;
     if (viewer.el.hidden) openModal(viewer.el, viewer.close);
     viewer.status.textContent = 'Yükleniyor…';
@@ -380,13 +432,14 @@ export function createStoryboardUI(deps) {
       const full = await api('GET', `/api/inspire/storyboards/${sbId}`);
       if (viewer.sbId !== sbId) return;
       renderViewer(full);
-      watch(sbId, onViewerData);
+      watch(sbId, onViewerData, !!full.poll_ms);
     } catch (e) {
       viewer.status.textContent = errText(e);
     }
   }
   function closeViewer() {
     if (!viewer.el || viewer.el.hidden) return;
+    const postId = viewer.data ? viewer.data.post_id : null;
     if (viewer.sbId) {
       unwatch(viewer.sbId, onViewerData);
       const w = watchers.get(viewer.sbId);
@@ -394,6 +447,7 @@ export function createStoryboardUI(deps) {
     }
     viewer.sbId = null;
     closeModal(viewer.el);
+    if (postId != null) focusCard(postId);
   }
 
   function renderViewer(full) {
@@ -408,13 +462,14 @@ export function createStoryboardUI(deps) {
       : full.status === 'partial' ? (full.error && full.error.code === 'quota' ? ERR_TR.quota : `${full.frame_total - full.frame_done} kare çizilemedi.`)
       : `Sürüm ${full.version}`;
     viewer.status.textContent = st;
-    const tbSig = JSON.stringify([canEdit, full.can_delete, full.status, full.frame_done, full.frame_total, busyOps.length, left()]);
+    const tbSig = JSON.stringify([canEdit, full.can_delete, full.status, full.frame_done, full.frame_total, busyOps.length, left(), full.previous_id]);
     if (viewer.sigs.get('tb') !== tbSig) {
       viewer.sigs.set('tb', tbSig);
       viewer.actions.textContent = '';
       if (d) viewer.actions.append(h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-sbv': 'print' }, 'Yazdır / PDF'));
       if (canEdit && d && !ACTIVE(full.status)) viewer.actions.append(h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-sbv': 'fix' }, 'Yorumu düzelt'));
       if (canEdit && d && full.status === 'partial' && !busyOps.length) viewer.actions.append(h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-sbv': 'resume' }, 'Eksik kareleri çiz'));
+      if (!d && full.status === 'failed' && full.previous_id) viewer.actions.append(h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-sbv': 'prev' }, 'Önceki sürümü aç'));
       if (canEdit && !d && full.status === 'failed') viewer.actions.append(h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-sbv': 'retry' }, 'Tekrar dene'));
       if (full.can_delete) viewer.actions.append(h('button', { type: 'button', class: 'btn btn-outline btn-sm', 'data-sbv': 'delete' }, 'Sil'));
     }
@@ -425,9 +480,9 @@ export function createStoryboardUI(deps) {
       if (viewer.sigs.get('sheet') !== sig) {
         viewer.sigs.clear(); viewer.sigs.set('sheet', sig); viewer.sigs.set('tb', tbSig);
         sheet.textContent = '';
-        sheet.append(h('h1', { id: 'sb-v-title' }, 'Storyboard'),
+        sheet.append(...[h('h1', { id: 'sb-v-title' }, 'Storyboard'),   // native append() would print a null as "null"
           ACTIVE(full.status) ? h('div', { class: 'sb-progress' }, stepsList(summarize(full))) : null,
-          h('p', { class: 'sb-empty-sheet' }, ACTIVE(full.status) ? 'Sahneler yazılıyor; metin hazır olunca burada görünecek.' : (ERR_TR[full.error && full.error.code] || 'Storyboard oluşturulamadı.')));
+          h('p', { class: 'sb-empty-sheet' }, ACTIVE(full.status) ? 'Sahneler yazılıyor; metin hazır olunca burada görünecek.' : (ERR_TR[full.error && full.error.code] || 'Storyboard oluşturulamadı.'))].filter(Boolean));
       }
       return;
     }
@@ -493,6 +548,7 @@ export function createStoryboardUI(deps) {
     const cols = tall ? 4 : 3;
     viewer.grid.style.setProperty('--sb-cols', String(cols));
     viewer.grid.style.setProperty('--sb-cols-m', tall ? '2' : '1');
+    viewer.grid.classList.toggle('tall', tall);
     const layoutSig = JSON.stringify([d.scenes.length, cols]);
     if (viewer.sigs.get('layout') !== layoutSig) {
       viewer.sigs.set('layout', layoutSig);
@@ -522,6 +578,9 @@ export function createStoryboardUI(deps) {
   }
   function renderScene(v, sc, fr, o) {
     const cell = v.cell;
+    const focused = document.activeElement;
+    const hadFocus = !!focused && focused.tagName === 'INPUT' && cell.contains(focused);
+    const caret = hadFocus ? [focused.selectionStart, focused.selectionEnd] : null;
     // keep the <img> element when the image did not change (no reload, no flicker)
     let img = v.img;
     const url = fileUrl(fr.path);
@@ -557,27 +616,39 @@ export function createStoryboardUI(deps) {
         h('button', { type: 'button', 'data-sbv': 'rewrite-open', 'data-n': sc.n, disabled: o.locked || noFrames, 'aria-expanded': String(o.open) }, 'Yeniden yaz')));
       if (o.open && !o.locked) {
         const input = h('input', { type: 'text', maxlength: 300, placeholder: 'Ne değişsin? Örn. kamera yerden baksın, fil daha küçük', 'aria-label': `Sahne ${sc.n} için not`, enterkeyhint: 'send' });
-        input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); viewer.rewriteOpen.delete(sc.n); renderViewer(viewer.data); } });
+        input.value = viewer.rewriteDraft.get(sc.n) || '';
+        input.addEventListener('input', () => viewer.rewriteDraft.set(sc.n, input.value));
+        input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeRewrite(sc.n); } });
         cell.append(h('form', { class: 'sb-rewrite', 'data-n': sc.n }, input,
           h('button', { type: 'submit' }, 'Yeniden yaz'), h('button', { type: 'button', class: 'sec', 'data-sbv': 'rewrite-cancel', 'data-n': sc.n }, 'Vazgeç')));
-        setTimeout(() => input.focus({ preventScroll: true }), 0);
+        if (hadFocus || viewer.focusNext === sc.n) {
+          if (viewer.focusNext === sc.n) viewer.focusNext = null;
+          setTimeout(() => {
+            if (!input.isConnected) return;
+            input.focus({ preventScroll: true });
+            if (caret) { try { input.setSelectionRange(caret[0], caret[1]); } catch (_) { /* ignore */ } }
+          }, 0);
+        }
       }
     }
   }
+  function closeRewrite(n) { viewer.rewriteOpen.delete(n); viewer.rewriteDraft.delete(n); renderViewer(viewer.data); }
   function renderFix(full) {
     const d = full.draft;
     const sig = JSON.stringify([viewer.fixOpen, full.can_edit, left() && left().storyboards]);
     if (viewer.sigs.get('fix') === sig) return;
     viewer.sigs.set('fix', sig);
     const box = viewer.fix;
+    const hadFocus = !!document.activeElement && box.contains(document.activeElement);
     box.textContent = '';
     box.hidden = !(viewer.fixOpen && full.can_edit);
     if (box.hidden) return;
     const lines = (d.interpretations || []).filter((it) => it.confidence !== 'high').map((it) => it.name)
       .filter((n, i, a) => a.indexOf(n) === i).map((n) => `${n} = `);
     const ta = h('textarea', { maxlength: 500, 'aria-label': 'Yorum düzeltmesi', placeholder: 'Örn. STM = Sayın Ticaret Merkezi (dükkânlardan oluşan proje)' });
-    ta.value = lines.join('\n');
-    ta.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); viewer.fixOpen = false; renderViewer(viewer.data); } });
+    ta.value = viewer.fixDraft != null ? viewer.fixDraft : lines.join('\n');
+    ta.addEventListener('input', () => { viewer.fixDraft = ta.value; });
+    ta.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); viewer.fixOpen = false; viewer.fixDraft = null; renderViewer(viewer.data); } });
     const l = left();
     const cost = l && l.per_user != null ? `Bugünkü storyboard hakkından 1 kullanır (kalan: ${l.storyboards}).` : 'Bugünkü genel storyboard kotasından 1 kullanır.';
     box.append(h('form', { class: 'sb-fix-form' },
@@ -586,7 +657,11 @@ export function createStoryboardUI(deps) {
       h('div', { class: 'sb-fix-actions' }, h('span', { class: 'sb-fix-hint' }, cost),
         h('button', { type: 'button', class: 'sec', 'data-sbv': 'fix-cancel' }, 'Vazgeç'),
         h('button', { type: 'submit', disabled: !!l && l.storyboards === 0 }, 'Düzelt ve yeniden oluştur'))));
-    setTimeout(() => { ta.focus({ preventScroll: true }); box.scrollIntoView({ block: 'nearest' }); }, 0);
+    const opened = viewer.focusNext === 'fix';
+    if (opened || hadFocus) {
+      if (opened) viewer.focusNext = null;
+      setTimeout(() => { if (!ta.isConnected) return; ta.focus({ preventScroll: true }); if (opened) box.scrollIntoView({ block: 'nearest' }); }, 0);
+    }
   }
 
   async function onViewerClick(ev) {
@@ -597,10 +672,11 @@ export function createStoryboardUI(deps) {
     const n = Number(b.dataset.n || 0);
     if (act === 'close') { closeViewer(); return; }
     if (act === 'print') { printSheet(); return; }
-    if (act === 'fix') { viewer.fixOpen = true; renderViewer(full); return; }
-    if (act === 'fix-cancel') { viewer.fixOpen = false; renderViewer(full); return; }
-    if (act === 'rewrite-open') { viewer.rewriteOpen.add(n); renderViewer(full); return; }
-    if (act === 'rewrite-cancel') { viewer.rewriteOpen.delete(n); renderViewer(full); return; }
+    if (act === 'fix') { viewer.fixOpen = true; viewer.fixDraft = null; viewer.focusNext = 'fix'; renderViewer(full); return; }
+    if (act === 'fix-cancel') { viewer.fixOpen = false; viewer.fixDraft = null; renderViewer(full); return; }
+    if (act === 'rewrite-open') { viewer.rewriteOpen.add(n); viewer.focusNext = n; renderViewer(full); return; }
+    if (act === 'rewrite-cancel') { closeRewrite(n); return; }
+    if (act === 'prev' && full.previous_id) { openViewer(full.previous_id); return; }
     if (act === 'redraw') { await runOp(b, `/api/inspire/storyboards/${full.id}/frames/${n}/redraw`, {}); return; }
     if (act === 'resume') { await runOp(b, `/api/inspire/storyboards/${full.id}/resume`, {}); return; }
     if (act === 'retry') {
@@ -616,8 +692,10 @@ export function createStoryboardUI(deps) {
         await api('DELETE', `/api/inspire/storyboards/${full.id}`);
         const c = cards.get(String(full.post_id));
         closeViewer();
-        if (c) setSummary(c, null);
         toast('Storyboard silindi.', 'ok');
+        if (c && c.summary && c.summary.id === full.id) await showPrevious(c, full.previous_id);   // the card falls back
+        else if (c && c.summary && c.summary.previous_id === full.id) setSummary(c, { ...c.summary, previous_id: null });
+        focusCard(full.post_id);
       } catch (e) { if (e.status !== 401) toast(errText(e), 'error'); }
     }
   }
@@ -632,7 +710,7 @@ export function createStoryboardUI(deps) {
       const note = f.querySelector('input').value.trim();
       if (note.length < 3) { toast('Notu biraz daha açık yaz (en az 3 karakter).', 'error'); return; }
       const okRun = await runOp(btn, `/api/inspire/storyboards/${full.id}/scenes/${n}/rewrite`, { note });
-      if (okRun) { viewer.rewriteOpen.delete(n); renderViewer(viewer.data); }
+      if (okRun) closeRewrite(n);
       return;
     }
     if (f.classList.contains('sb-fix-form')) {
@@ -641,7 +719,7 @@ export function createStoryboardUI(deps) {
       const entry = deps.posts.get(String(full.post_id));
       if (!entry) { toast('Fikir kartı bulunamadı; sayfayı yenile.', 'error'); return; }
       const s = await startFor(entry, { corrections }, btn);
-      if (s) { viewer.fixOpen = false; openViewer(s.id); toast('Storyboard düzeltmelerle yeniden oluşturuluyor.', 'ok'); }
+      if (s) { viewer.fixOpen = false; viewer.fixDraft = null; openViewer(s.id); toast('Storyboard düzeltmelerle yeniden oluşturuluyor.', 'ok'); }
     }
   }
   async function runOp(btn, path, body) {
@@ -651,7 +729,7 @@ export function createStoryboardUI(deps) {
       setLeft(r.left);
       kick(viewer.sbId);
       const c = cards.get(String(viewer.data.post_id));
-      if (c && c.summary) watch(c.summary.id, c.onData);
+      if (c && c.summary) watch(c.summary.id, c.onData, true);
       return true;
     } catch (e) {
       if (e && e.data && e.data.left) setLeft(e.data.left);
@@ -662,13 +740,22 @@ export function createStoryboardUI(deps) {
 
   /* ------------------------------------------------------------ print (A4 landscape, sheet only) */
   function printSheet() {
+    if (viewer.printPending) return;   // a second click while the frames are still loading
+    viewer.printPending = true;
     document.documentElement.classList.add('sb-print');
     const imgs = [...viewer.sheet.querySelectorAll('img')].filter((i) => !i.complete);
-    const go = () => window.print();
+    let t = 0;
+    const go = () => {   // exactly once: when every frame settled, or after 4 s with whatever has loaded
+      if (!viewer.printPending) return;
+      viewer.printPending = false;
+      clearTimeout(t);
+      window.print();
+    };
     if (!imgs.length) { go(); return; }
-    let left = imgs.length;
-    const t = setTimeout(go, 4000);
-    for (const i of imgs) i.addEventListener('load', () => { if (--left === 0) { clearTimeout(t); go(); } }, { once: true });
+    let waiting = imgs.length;
+    t = setTimeout(go, 4000);
+    const settled = () => { if (--waiting === 0) go(); };
+    for (const i of imgs) { i.addEventListener('load', settled, { once: true }); i.addEventListener('error', settled, { once: true }); }
   }
   window.addEventListener('beforeprint', () => { if (viewer.el && !viewer.el.hidden) document.documentElement.classList.add('sb-print'); });
   window.addEventListener('afterprint', () => document.documentElement.classList.remove('sb-print'));

@@ -66,12 +66,20 @@ await page.waitForFunction(() => !document.querySelector(".sb-rewrite"));
 assert.equal(await page.$eval("#sb-viewer", (e) => e.hidden), false);
 ok("Esc in the rewrite note closes the note, not the viewer");
 
-// redraw frame 1 from the viewer
+// redraw frame 1 from the viewer, while a half-typed "Yeniden yaz" note is open on scene 2
+await page.click('.sb-scene[data-n="2"] [data-sbv="rewrite-open"]');
+await page.waitForFunction(() => document.activeElement === document.querySelector('.sb-scene[data-n="2"] .sb-rewrite input'));
+await page.type('.sb-scene[data-n="2"] .sb-rewrite input', "kamera yerden baksın");
 const before = await page.$eval('.sb-scene[data-n="1"] img', (i) => i.src);
 await page.click('.sb-scene[data-n="1"] [data-sbv="redraw"]');
 await page.waitForFunction((b) => { const i = document.querySelector('.sb-scene[data-n="1"] img'); return i && i.src !== b && i.complete; }, { timeout: 30000 }, before);
 assert.match(await page.$eval('.sb-scene[data-n="1"] img', (i) => i.src), /frame_1\.r1\.jpg$/);
-ok("Yeniden çiz: frame 1 replaced by rev 1 without reopening");
+await new Promise((r) => setTimeout(r, 800));   // quota refresh after the op ended re-renders the scenes
+assert.equal(await page.$eval('.sb-scene[data-n="2"] .sb-rewrite input', (i) => i.value), "kamera yerden baksın", "note kept across re-renders");
+assert.equal(await page.evaluate(() => !!document.activeElement && !!document.activeElement.closest('.sb-scene[data-n="2"] .sb-rewrite')), false, "focus not pulled into the note");
+await page.click('.sb-scene[data-n="2"] [data-sbv="rewrite-cancel"]');
+await page.waitForFunction(() => !document.querySelector(".sb-rewrite"));
+ok("Yeniden çiz: frame 1 replaced by rev 1 without reopening; an open note on scene 2 keeps its text and does not steal focus");
 
 // print: A4 landscape PDF of the sheet only
 await page.evaluate(() => document.documentElement.classList.add("sb-print"));

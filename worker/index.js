@@ -2,6 +2,7 @@ import { parseLink, MAX_URL_LENGTH } from '../assets/js/fikir-url.mjs';
 import {
   handleStoryboard, sbConfigPayload, sbAttachSummaries, sbStartForNewPost, sbDeleteForPost, sbScheduled, ensureStoryboardSchema,
 } from './storyboard/routes.js';
+import { ipBucket } from './storyboard/db.js';
 // Cloudflare Workflows: the class named in wrangler.toml [[workflows]] class_name must be exported by the main module.
 export { StoryboardWorkflow } from './storyboard/workflow.js';
 
@@ -54,7 +55,23 @@ async function authMiddleware(request, env) {
   const auth = request.headers.get('Authorization') || '';
   const token = auth.replace('Bearer ', '');
   if (!token) return null;
-  return await verifyJWT(token, env.JWT_SECRET || 'secret');
+  const p = await verifyJWT(token, env.JWT_SECRET || 'secret');
+  return p && p.role === 'admin' && ownerTokenRevoked(p, env) ? null : p;
+}
+
+// Owner/admin tokens minted with ADMIN_PASSWORD carry no expiry (KPSS, portfolio admin) or last 30 days (inspire), so
+// rotating the password alone does not cut off a token minted with a leaked one. ADMIN_TOKENS_NOT_BEFORE (wrangler.toml
+// [vars]: ISO date-time such as "2026-10-06T12:00:00Z", or epoch seconds/ms) rejects every owner/admin token issued
+// before it: KPSS 'vkesgin38', portfolio admin {role:'admin'}, inspire admin. Unset/empty = off (no change). A value
+// that cannot be parsed rejects them all (fail closed) and logs an error. Other users' tokens are never affected.
+function ownerTokenRevoked(payload, env) {
+  const v = String(env.ADMIN_TOKENS_NOT_BEFORE || '').trim();
+  if (!v) return false;
+  const cutoff = /^\d+$/.test(v) ? (Number(v) > 1e12 ? Number(v) : Number(v) * 1000) : Date.parse(v);
+  if (!Number.isFinite(cutoff)) { console.error('ADMIN_TOKENS_NOT_BEFORE is not a date; owner/admin tokens rejected'); return true; }
+  const iat = Number(payload && payload.iat);
+  const iatMs = !Number.isFinite(iat) ? 0 : iat > 1e12 ? iat : iat * 1000;   // portfolio/KPSS/old inspire: ms, inspire: s
+  return iatMs < cutoff;
 }
 
 // KPSS JWT helpers
@@ -86,7 +103,8 @@ async function verifyKpssJWT(token, secret) {
 async function kpssAuth(request, env) {
   const token = (request.headers.get('Authorization') || '').replace('Bearer ', '');
   if (!token) return null;
-  return verifyKpssJWT(token, env.JWT_SECRET || 'secret');
+  const p = await verifyKpssJWT(token, env.JWT_SECRET || 'secret');
+  return p && p.username === KPSS_OWNER_USERNAME && ownerTokenRevoked(p, env) ? null : p;
 }
 // KPSS owner account: 'vkesgin38' authenticates with the CURRENT env.ADMIN_PASSWORD only (constant-time compare,
 // inspireSafeEqual), never with the password column of its kpss_users row. Older code copied ADMIN_PASSWORD into that
@@ -238,6 +256,7 @@ async function inspireActor(request, env) {
   if (!Number.isSafeInteger(userId) || userId <= 0) return null;
   const username = typeof p.username === 'string' ? p.username : '';
   if (username === INSPIRE_GUEST_USERNAME) return null;
+  if (username === INSPIRE_ADMIN_USERNAME && ownerTokenRevoked(p, env)) return null;   // see ADMIN_TOKENS_NOT_BEFORE
   return { guest: false, cid: null, userId, username, name: null, isAdmin: username === INSPIRE_ADMIN_USERNAME };
 }
 async function inspireSafeEqual(a, b) {
@@ -545,8 +564,9 @@ const INSPIRE_RATE_SQL = `INSERT INTO inspire_rate (k, n, reset) VALUES (?1, 1, 
   ON CONFLICT(k) DO UPDATE SET n = CASE WHEN reset <= ?3 THEN 1 ELSE n + 1 END,
                                reset = CASE WHEN reset <= ?3 THEN ?2 ELSE reset END
   RETURNING n`;
+// IPv6 counts per /64 (ipBucket): one client can rotate through a whole /64; IPv4 stays per address.
 async function inspireIpKey(request) {
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const ip = ipBucket(request.headers.get('CF-Connecting-IP') || 'unknown');
   const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('inspire-ip:' + ip)));
   return 'ip:' + [...d.subarray(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
@@ -944,8 +964,9 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
 
     // Feature flags / limits. `storyboard` = the storyboard creation UI may be shown to this caller;
     // `sb` carries the limits and (with a session) today's remaining quota. Auth is optional here and an
-    // invalid token is ignored (never 401).
+    // invalid token is ignored (never 401). Clients without "X-Fikir-Client: 2" get the Phase A answer (no `sb`).
     if (cleanPath === '/api/inspire/config' && method === 'GET') {
+      if (!sbClient) return json({ storyboard: false, max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT }, 200, origin);
       const actor = await inspireActor(request, env);
       const sb = sbReady ? await sbHook('config', () => sbConfigPayload(env, db, actor), null) : null;
       return json({ storyboard: !!(sb && sb.can_create), max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT, sb }, 200, origin);

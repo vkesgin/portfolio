@@ -36,7 +36,7 @@
 .sb-thumbs.tall { grid-template-columns: repeat(4, 1fr); }
 .sb-thumb { aspect-ratio: 16 / 9; background: #f4f4f4; border-radius: 4px; overflow: hidden; display: block; }
 .sb-thumbs.tall .sb-thumb { aspect-ratio: 9 / 16; }
-.sb-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sb-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; filter: grayscale(1); }   /* pencil sketches: a colour-drifted frame stays grey on the board too */
 .sb-thumb.ph { background: repeating-linear-gradient(135deg, #1d1d1d 0 6px, #222 6px 12px); }
 .sb-card-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sb-hint { font-size: 12px; color: #777; }
@@ -72,7 +72,8 @@
 .sb-grid { --sb-gap: 26px; }
 /* flex rows so a short last row is centred, as on the prototype sheet */
 .sb-row { display: flex; justify-content: center; gap: var(--sb-gap); }
-.sb-scene { flex: 0 0 calc((100% - (var(--sb-cols, 3) - 1) * var(--sb-gap)) / var(--sb-cols, 3)); min-width: 0; break-inside: avoid; page-break-inside: avoid; }
+.sb-scene { flex: 0 0 calc((100% - (var(--sb-cols, 3) - 1) * var(--sb-gap)) / var(--sb-cols, 3)); min-width: 0; break-inside: avoid; page-break-inside: avoid;
+  container-type: inline-size; }
 .sb-frame { position: relative; border: 2px solid var(--ink); background: #fafafa; aspect-ratio: 16 / 9; overflow: hidden; }
 .sb-frame img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .sb-badge { position: absolute; top: 0; left: 0; z-index: 1; background: var(--ink); color: #fff; font-weight: 700; font-size: 16px; min-width: 30px; height: 30px; display: grid; place-items: center; padding: 0 6px; }
@@ -87,6 +88,11 @@
 .sb-s-rows dt { font-weight: 700; color: var(--grey); font-size: 12px; padding-top: 1px; }
 .sb-s-rows dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 .sb-s-rows dd.soft { color: var(--grey); }
+/* narrow scenes (9:16 on phones, 4 columns at 900-1150 px): labels above the text instead of a 96 px label column */
+@container (max-width: 240px) {
+  .sb-s-rows { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
+  .sb-s-rows dt { padding-top: 5px; }
+}
 .sb-s-actions { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
 .sb-s-actions button, .sb-linkbtn { background: none; border: 0; padding: 0; color: #0a6b78; font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .sb-s-actions button:disabled { color: #aaa; cursor: default; text-decoration: none; }
@@ -133,6 +139,9 @@
   html.sb-print .sb-grid { gap: 5mm; --sb-gap: 5mm; }
   html.sb-print .sb-row { flex-wrap: nowrap !important; break-inside: avoid; page-break-inside: avoid; }
   html.sb-print .sb-scene { flex-basis: calc((100% - (var(--sb-cols, 3) - 1) * var(--sb-gap)) / var(--sb-cols, 3)) !important; }
+  /* 9:16: a full-width tall frame (~118 mm) leaves no room for the header on page 1 (the row moves to page 2);
+     a 46 mm wide frame (~82 mm tall) fits header + one row of four on an A4 landscape page, with ~15 mm to spare */
+  html.sb-print .sb-grid.tall .sb-frame { width: 46mm; max-width: 100%; margin-inline: auto; }
   html.sb-print .sb-s-title { font-size: 10.5pt; margin-top: 2mm; }
   html.sb-print .sb-s-shot { font-size: 7.5pt; }
   html.sb-print .sb-s-rows { font-size: 8pt; grid-template-columns: 19mm minmax(0, 1fr); gap: 0.6mm 2mm; }

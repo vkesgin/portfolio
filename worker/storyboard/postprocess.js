@@ -5,7 +5,11 @@ import { SYSTEM_PROMPT_V6, buildUserMessageV6, TEXT_MODEL, TEXT_PARAMS, TEXT_RAT
 
 // Pipeline-owned style sentence (the text model must not own the drawing style).
 export const TEXT_STYLE = "Rough grayscale graphite pencil storyboard sketch, loose confident lines, light hatching for shadows, plain white paper, no color, no text, no logos.";
-export const QUOTA_RE = /quota|neuron|daily|limit exceeded|exceeded|3036|4006|429|5035/i;
+// Raw Workers AI error text that means the DAILY neuron allocation is used up (4006 / 3036 "...daily free allocation of
+// 10,000 neurons..."). Deliberately narrow: transient capacity / rate-limit errors ("3040: Capacity temporarily exceeded",
+// HTTP 429) are not quota; they fall through to the repair call and the gpt-oss fallback. Shared with the image path
+// (workflow.js), so text and images classify the same way.
+export const QUOTA_RE = /4006|3036|neurons|daily free allocation|quota/i;
 
 // ------------------------------------------------------------------ 1. parse (fence strip, then {…} slice)
 export function tryParse(text) {

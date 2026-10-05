@@ -10,7 +10,9 @@ ui-src
 
 # The site is published from the repo root (wrangler.jsonc assets.directory "."), so
 # everything that is not a page or a page asset must be listed here (gitignore syntax,
-# a leading "/" anchors to the repo root). assets/js/fikir-url.mjs IS served (fikir.html imports it).
+# a leading "/" anchors to the repo root). assets/js/fikir-url.mjs IS served (fikir.html imports it), and so are
+# assets/js/fikir-storyboard.mjs + assets/css/fikir-storyboard.css (lazy-loaded by fikir.html). worker/storyboard/**
+# (AI storyboard backend) and tests/** (incl. tests/storyboard-e2e/) stay unpublished via /worker/ and /tests/ below.
 # Secrets / local config, anywhere
 .dev.vars*
 .env*

@@ -7,3 +7,19 @@ ui-src
 .wrangler
 *.tgz
 *.pack
+
+# Not part of the website: backend source/config, secrets, dev scripts
+worker
+.claude
+.dev.vars*
+wrangler.jsonc
+package.json
+package-lock.json
+*.py
+*.bak
+patch*.js
+fix*.js
+temp_script.js
+test.js
+microlink_test.json
+projects_all.json

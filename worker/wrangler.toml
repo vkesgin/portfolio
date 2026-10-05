@@ -14,7 +14,6 @@ bucket_name = "vk-portfolio-files"
 
 [vars]
 ALLOWED_ORIGIN = "https://velikesgin.com"
-ADMIN_PASSWORD = "2169095vV."
 # Owner/admin tokens issued before this time are rejected (KPSS owner, portfolio admin, inspire admin); "" = off.
 # ISO date-time, e.g. "2026-10-06T12:00:00Z". Set it to the moment ADMIN_PASSWORD was rotated (see index.js ownerTokenRevoked).
 ADMIN_TOKENS_NOT_BEFORE = ""

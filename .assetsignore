@@ -25,6 +25,7 @@ ui-src
 /.gitignore
 /package.json
 /package-lock.json
+/wrangler.jsonc
 # One-off scripts, backups, scratch data
 /patch*.js
 /fix*.js

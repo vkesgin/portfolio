@@ -22,7 +22,7 @@ ADMIN_TOKENS_NOT_BEFORE = "2026-10-06T06:16:00Z"
 # Always run wrangler from worker/ WITH -c wrangler.toml (e.g. `npx wrangler deploy -c wrangler.toml`): without it,
 # wrangler 4 resolves the repo-root wrangler.jsonc (the static "portfolio" site) even from inside worker/.
 SB_ENABLED = "1"              # "1" turns creation and edits on (viewing works regardless)
-SB_ADMIN_ONLY = "1"           # "0" opens creation/edits to guests and users
+SB_ADMIN_ONLY = "0"           # "0" opens creation/edits to guests and users
 SB_DAILY_LIMIT = "12"         # storyboards per UTC day, everyone together (admin included)
 SB_PER_CID_LIMIT = "3"        # per guest cid / registered user per day (admin exempt)
 SB_PER_IP_LIMIT = "6"         # per hashed IP per day (admin exempt; "0" = off)

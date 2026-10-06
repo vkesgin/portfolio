@@ -16,12 +16,12 @@ bucket_name = "vk-portfolio-files"
 ALLOWED_ORIGIN = "https://velikesgin.com"
 # Owner/admin tokens issued before this time are rejected (KPSS owner, portfolio admin, inspire admin); "" = off.
 # ISO date-time, e.g. "2026-10-06T12:00:00Z". Set it to the moment ADMIN_PASSWORD was rotated (see index.js ownerTokenRevoked).
-ADMIN_TOKENS_NOT_BEFORE = "2026-10-06T06:15:00Z"
+ADMIN_TOKENS_NOT_BEFORE = "2026-10-06T06:16:00Z"
 # AI storyboards (worker/storyboard/). Rollout: deploy with SB_ENABLED="0" first; then "1" with SB_ADMIN_ONLY="1";
 # then SB_ADMIN_ONLY="0" opens it to guests. [vars] are overwritten from this file on every deploy.
 # Always run wrangler from worker/ WITH -c wrangler.toml (e.g. `npx wrangler deploy -c wrangler.toml`): without it,
 # wrangler 4 resolves the repo-root wrangler.jsonc (the static "portfolio" site) even from inside worker/.
-SB_ENABLED = "0"              # "1" turns creation and edits on (viewing works regardless)
+SB_ENABLED = "1"              # "1" turns creation and edits on (viewing works regardless)
 SB_ADMIN_ONLY = "1"           # "0" opens creation/edits to guests and users
 SB_DAILY_LIMIT = "12"         # storyboards per UTC day, everyone together (admin included)
 SB_PER_CID_LIMIT = "3"        # per guest cid / registered user per day (admin exempt)

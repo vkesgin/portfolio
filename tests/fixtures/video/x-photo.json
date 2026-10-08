@@ -1,0 +1,1 @@
+{"__typename":"Tweet","id_str":"1900000000000000002","text":"Sadece fotoğraf","user":{"screen_name":"ornek_studio"},"mediaDetails":[{"type":"photo","media_url_https":"https://pbs.twimg.com/media/TestPhoto01.jpg","original_info":{"width":1200,"height":800}}]}

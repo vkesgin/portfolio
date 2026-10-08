@@ -8,6 +8,11 @@ import {
   inspireDecodeEntities, inspireAttrs, inspireMetaText, parseHead, wantsBody, scanBody, mergeCollected, collectFromScrape,
   extractMedia, isBlocked, isExpiringUrl, stableVariantFor, adapterFor, sanitizeMedia, sniffMagic, oembedMedia, sameSite,
 } from './inspire-media.js';
+import {
+  IG_UA, igRef, igResolve, igCheckEmbed, openMedia, openMuxed, contentDisposition, titleSlug, dlHint, dlAdapterFor,
+  adToCache, adFromCache, VIDEO_CACHE_DDL, vcGet, vcPut, vcFail, vcDefer, vcExtra, vcItemFresh, vcBackingOff, itemToCache, cacheToItem,
+} from './inspire-video.js';
+import { Budget, CRON_BUDGET, CRON_COSTS, CRON_IG, withBudget } from './budget.js';
 // Cloudflare Workflows: the class named in wrangler.toml [[workflows]] class_name must be exported by the main module.
 export { StoryboardWorkflow } from './storyboard/workflow.js';
 
@@ -201,6 +206,17 @@ const INSPIRE_LIMITS = {
                             // is skipped for the rest of the window (one challenge can be transient: Magnific blocked 1 of 4
                             // scrapes in the Phase D acceptance run). A 404 / empty page is never a strike.
   br_bpost: [1, 7 * 86400], // key '<host>:<post id>': the first bot wall of a post is its host's strike, repeats are not
+  // Downloads + Instagram copies (worker/inspire-video.js). The download link is opened as a navigation (no session).
+  dl_ip:    [40, 600],    // GET /posts/:id/download per IP / 10 min
+  dl_info_ip: [120, 600], // GET /posts/:id/download-info per IP / 10 min
+  ig_fetch: [20, 600],    // site-wide (key 'ig_fetch:all'): Instagram page + embed fetches by the worker / 10 min
+  igcopy:   [10, 3600],   // POST /posts/:id/ig-copy per cid or user / hour (bytes count into the upload quotas)
+  igcopy_ip: [20, 3600],
+  igcopy_lock: [1, 120],  // key '<post id>': one copy of a post at a time
+  igrep:    [10, 3600],   // POST /posts/:id/ig-blocked reports per cid or user / hour
+  igrep_ip: [30, 3600],
+  ad_fetch: [20, 600],    // site-wide, key '<adapter name>': platform page/API resolves for downloads (X, TikTok, ...) / 10 min
+  ad_rss:   [2, 60],      // site-wide (key 'all'): Reddit post feeds (Reddit allows ~1 request / minute / IP)
 };
 // Guest display names that would pass for the owner (compared after inspireFoldName()).
 const INSPIRE_RESERVED_NAMES = ['yonetici', 'admin', 'administrator', 'moderator', 'moderatör', 'site sahibi'];
@@ -366,16 +382,65 @@ async function inspireBody(request) {
 }
 
 // ── Schema (idempotent; runs once per isolate) ──
+// A cold isolate first runs one probe (inspireSchemaFast): when every table, added column and index is already there, the
+// migration is skipped (1 statement instead of ~27; D1 counts queries per invocation, see worker/budget.js). Cron runs
+// never migrate (inspireCronSchemaOk): the board's next request does.
 let inspireSchemaReady = null;
+let inspireSchemaDone = false;
 let inspireGuestId = null;
 function ensureInspireSchema(env) {
   if (!inspireSchemaReady) {
-    inspireSchemaReady = migrateInspireSchema(env).catch((e) => { inspireSchemaReady = null; throw e; });
+    inspireSchemaReady = migrateInspireSchema(env).then(() => { inspireSchemaDone = true; }, (e) => { inspireSchemaReady = null; throw e; });
   }
   return inspireSchemaReady;
 }
+// Columns added after a table's first release (ALTER TABLE ADD COLUMN in the migration; the probe checks them).
+// media: manual preview (Media JSON from PUT /media or an upload) or NULL; meta.media is the automatic one
+const INSPIRE_ADDED_COLUMNS = {
+  inspire_users: [['is_first_login', 'INTEGER DEFAULT 1']],
+  inspire_posts: [['author_name', 'TEXT'], ['client_id', 'TEXT'], ['url_key', 'TEXT'], ['meta', 'TEXT'], ['media', 'TEXT']],
+  inspire_notes: [['author_name', 'TEXT'], ['client_id', 'TEXT']],
+};
+const INSPIRE_TABLES = ['inspire_users', 'inspire_posts', 'inspire_notes', 'inspire_rate', 'inspire_media', 'inspire_quota', 'inspire_video_cache'];
+const INSPIRE_INDEXES = ['idx_inspire_posts_url_key', 'idx_inspire_notes_post', 'idx_inspire_media_post'];
+// Compiles only when every table and added column exists; LIMIT 0 reads no rows. ?1 = guest username, ?2 = owner username.
+const INSPIRE_SCHEMA_PROBE = `SELECT
+  (SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN (${INSPIRE_INDEXES.map((n) => `'${n}'`).join(', ')})) AS idx,
+  (SELECT id FROM inspire_users WHERE username = ?1) AS guest_id,
+  (SELECT full_name FROM inspire_users WHERE username = ?2) AS owner_name,
+  (SELECT COUNT(*) FROM inspire_users WHERE username = ?2 AND substr(password, 1, 1) <> '!') AS owner_pw,
+  EXISTS (SELECT 1 FROM inspire_posts WHERE url_key IS NULL AND url <> '') AS nokey,
+  (SELECT COUNT(*) FROM (SELECT 1${INSPIRE_TABLES.map((t, i) => (INSPIRE_ADDED_COLUMNS[t] || []).map(([c]) => `, t${i}.${c}`).join('')).join('')}
+     FROM ${INSPIRE_TABLES.map((t, i) => `${t} t${i}`).join(', ')} LIMIT 0)) AS probe`;
+// The owner logs in with ADMIN_PASSWORD only. A password stored in the owner's row (a copy written by the old first login,
+// or one set through change-password) must not remain a second credential.
+const inspireScrubOwnerStmt = (db) => db.prepare("UPDATE inspire_users SET password=?, is_first_login=0 WHERE username=? AND substr(password, 1, 1) <> '!'")
+  .bind(inspireUnusablePassword(), INSPIRE_ADMIN_USERNAME);
+// -> true when the schema is complete (and the per-isolate values are loaded), false when the migration must run.
+// backfill: also key rows still without url_key (requests; the cron leaves that to them).
+async function inspireSchemaFast(db, { backfill = true } = {}) {
+  let r;
+  try { r = await db.prepare(INSPIRE_SCHEMA_PROBE).bind(INSPIRE_GUEST_USERNAME, INSPIRE_ADMIN_USERNAME).first(); }
+  catch (e) { return false; }   // a table or column is missing
+  if (!r || Number(r.idx) !== INSPIRE_INDEXES.length || r.guest_id == null) return false;
+  if (Number(r.owner_pw) > 0) await inspireScrubOwnerStmt(db).run();
+  inspireGuestId = r.guest_id;
+  inspireAdminNameFolded = inspireFoldName(r.owner_name);
+  if (backfill && Number(r.nokey)) await inspireBackfillKeys(db);
+  return true;
+}
+// Cron runs: schema known in this isolate -> 0 statements, else the probe (1). Never the migration (requests keep their
+// own memo: a cron probe does not stand in for their backfill).
+let inspireCronSchemaSeen = false;
+async function inspireCronSchemaOk(env) {
+  if (inspireSchemaDone || inspireCronSchemaSeen) return true;
+  if (!(await inspireSchemaFast(env.DB, { backfill: false }))) { console.log('inspire cron: schema incomplete, skipped (the board\'s next request migrates it)'); return false; }
+  inspireCronSchemaSeen = true;
+  return true;
+}
 async function migrateInspireSchema(env) {
   const db = env.DB;
+  if (await inspireSchemaFast(db)) return;
   await db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS inspire_users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -430,14 +495,10 @@ async function migrateInspireSchema(env) {
       CONSTRAINT inspire_quota_cap CHECK (n <= lim),
       PRIMARY KEY (day, scope, subject)
     )`),
+    // Downloads / Instagram copies: resolved media links (kind 'ig'), embed checks ('ig_embed'), copy attempts ('ig_copy')
+    db.prepare(VIDEO_CACHE_DDL),
   ]);
-  const columns = {
-    inspire_users: [['is_first_login', 'INTEGER DEFAULT 1']],
-    // media: manual preview (Media JSON from PUT /media or an upload) or NULL; meta.media is the automatic one
-    inspire_posts: [['author_name', 'TEXT'], ['client_id', 'TEXT'], ['url_key', 'TEXT'], ['meta', 'TEXT'], ['media', 'TEXT']],
-    inspire_notes: [['author_name', 'TEXT'], ['client_id', 'TEXT']],
-  };
-  for (const [table, cols] of Object.entries(columns)) {
+  for (const [table, cols] of Object.entries(INSPIRE_ADDED_COLUMNS)) {
     let have = null;
     try {
       const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
@@ -448,7 +509,7 @@ async function migrateInspireSchema(env) {
       try { await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`).run(); } catch (e) {}
     }
   }
-  await db.batch([
+  await db.batch([   // INSPIRE_INDEXES
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_posts_url_key ON inspire_posts(url_key)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_notes_post ON inspire_notes(post_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_media_post ON inspire_media(post_id)'),
@@ -459,14 +520,14 @@ async function migrateInspireSchema(env) {
     .bind(INSPIRE_GUEST_USERNAME, inspireUnusablePassword()).run();
   const guest = await db.prepare('SELECT id FROM inspire_users WHERE username=?').bind(INSPIRE_GUEST_USERNAME).first();
   inspireGuestId = guest.id;
-  // The owner logs in with ADMIN_PASSWORD only. A password stored in the owner's row (a copy written by
-  // the old first login, or one set through change-password) must not remain a second credential.
-  await db.prepare("UPDATE inspire_users SET password=?, is_first_login=0 WHERE username=? AND substr(password, 1, 1) <> '!'")
-    .bind(inspireUnusablePassword(), INSPIRE_ADMIN_USERNAME).run();
+  await inspireScrubOwnerStmt(db).run();
   const owner = await db.prepare('SELECT full_name FROM inspire_users WHERE username=?').bind(INSPIRE_ADMIN_USERNAME).first();
   inspireAdminNameFolded = inspireFoldName(owner && owner.full_name);
   await db.prepare('DELETE FROM inspire_rate WHERE reset < ?').bind(Math.floor(Date.now() / 1000)).run();
-  // Backfill dedupe keys for legacy rows (old 'reels'/'link'/... types parse like any other link).
+  await inspireBackfillKeys(db);
+}
+// Dedupe keys for legacy rows (old 'reels'/'link'/... types parse like any other link).
+async function inspireBackfillKeys(db) {
   let lastId = 0;
   for (let round = 0; round < 100; round++) {
     const { results } = await db.prepare(
@@ -566,14 +627,19 @@ function inspireMediaOut(v) {
     return m ? sanitizeMedia(m, { allowFiles: true }) : null;
   });
 }
+// parseLink(url) memoized like the meta/media outputs (GET /posts computes the download hint of every post)
+const inspireParsedOut = (url) => (url ? inspireOutMemo('u', url, () => parseLink(url)) : null);
 function inspirePostOut(r, isAdmin, notes) {
   const stored = inspireMetaParse(r.meta);
+  const meta = inspireMetaOut(r.meta), media = inspireMediaOut(r.media);
   return {
     id: r.id, type: r.type, url: r.url || '', description: r.description || '', created_at: r.created_at,
     author: r.author || '', author_role: r.author_role || 'user', is_mine: !!r.is_mine, can_delete: !!r.is_mine || !!isAdmin,
-    meta: inspireMetaOut(r.meta), meta_failed: inspireMetaFresh(stored), meta_stale: inspireMetaStale(stored, r.type),
-    meta_pending: inspireMetaPendingSoon(stored), media: inspireMediaOut(r.media),
+    meta, meta_failed: inspireMetaFresh(stored), meta_stale: inspireMetaStale(stored, r.type),
+    meta_pending: inspireMetaPendingSoon(stored), media,
     can_edit_media: (!!r.is_mine || !!isAdmin) && inspireCardish(r.type),
+    // download hint (no network): {video: true|false|null (maybe), image: bool} or null; link = /api/inspire/posts/:id/download
+    dl: dlHint({ type: r.type, parsed: inspireParsedOut(r.url), media, meta }),
     notes: notes || [],
   };
 }
@@ -616,8 +682,8 @@ function inspireLegacyPost(post, actor) {
     ...post, type, url: inspireLegacyUrl(url), description: inspireLegacyText(post.description), author: inspireLegacyText(post.author),
     notes: post.notes.map((n) => ({ ...n, content: inspireLegacyText(n.content), author: inspireLegacyText(n.author), ...(n.is_mine && ownId ? { user_id: ownId } : {}) })),
   };
-  // media previews are current-board only
-  delete out.media; delete out.meta_stale; delete out.meta_pending; delete out.can_edit_media;
+  // media previews and downloads are current-board only
+  delete out.media; delete out.meta_stale; delete out.meta_pending; delete out.can_edit_media; delete out.dl;
   if (post.is_mine && ownId) out.user_id = ownId;
   return out;
 }
@@ -1222,21 +1288,32 @@ async function inspireL1(parsed, selfHost, { deadline = Date.now() + INSPIRE_PIP
 }
 
 // ── Atomic daily budgets (inspire_quota; same pattern as sb_quota, independent of the storyboard schema) ──
-const inspireQuotaStmt = (db, day, it) => db.prepare(
-  `INSERT INTO inspire_quota (day, scope, subject, n, lim) VALUES (?1, ?2, ?3, ?4, ?5)
-   ON CONFLICT(day, scope, subject) DO UPDATE SET n = n + excluded.n, lim = excluded.lim`
-).bind(day, it.scope, it.subject || '', it.units, it.lim);
-// All items or none: {ok: true} | {ok: false, scope} (that counter would overflow). Other D1 errors throw (fail closed).
+// One statement per reservation / refund however many counters it touches (D1 counts statements per invocation): the
+// items travel as one JSON array [[scope, subject, units, lim], ...] read with json_each.
+const inspireQuotaJson = (items) => JSON.stringify(items.map((it) => [it.scope, it.subject || '', it.units, it.lim]));
+const INSPIRE_QUOTA_ITEMS = `SELECT json_extract(value, '$[0]') AS scope, json_extract(value, '$[1]') AS subject,
+  json_extract(value, '$[2]') AS units, json_extract(value, '$[3]') AS lim FROM json_each(?2)`;
+// The upsert of every item: a CHECK(n <= lim) failure of any one aborts the whole statement (WHERE true: SQLite's
+// INSERT ... SELECT ... ON CONFLICT parsing rule).
+const INSPIRE_RESERVE_SQL = `INSERT INTO inspire_quota (day, scope, subject, n, lim)
+  SELECT ?1, scope, subject, units, lim FROM (${INSPIRE_QUOTA_ITEMS}) WHERE true
+  ON CONFLICT(day, scope, subject) DO UPDATE SET n = n + excluded.n, lim = excluded.lim`;
+// All items or none: {ok: true} | {ok: false, scope} (the first counter that would overflow). Other D1 errors throw (fail closed).
 async function inspireReserve(db, day, items) {
   if (!items.length) return { ok: true };
+  const list = inspireQuotaJson(items);
   try {
-    await db.batch(items.map((it) => inspireQuotaStmt(db, day, it)));
+    await db.prepare(INSPIRE_RESERVE_SQL).bind(day, list).run();
     return { ok: true };
   } catch (e) {
     if (!isCheckError(e)) throw e;
+    const { results } = await db.prepare(`SELECT scope, subject, n FROM inspire_quota WHERE day = ?1
+      AND (scope, subject) IN (SELECT scope, subject FROM (${INSPIRE_QUOTA_ITEMS}))`).bind(day, list).all();
+    const have = new Map((results || []).map((r) => [r.scope + '\n' + r.subject, Number(r.n) || 0]));
     for (const it of items) {
-      const r = await db.prepare('SELECT n FROM inspire_quota WHERE day=?1 AND scope=?2 AND subject=?3').bind(day, it.scope, it.subject || '').first();
-      if ((r ? r.n : 0) + it.units > it.lim) return { ok: false, scope: it.scope };
+      const k = it.scope + '\n' + (it.subject || '');
+      if ((have.get(k) || 0) + it.units > it.lim) return { ok: false, scope: it.scope };
+      have.set(k, (have.get(k) || 0) + it.units);   // the same counter twice in one reservation
     }
     return { ok: false, scope: items[0].scope };
   }
@@ -1244,8 +1321,9 @@ async function inspireReserve(db, day, items) {
 async function inspireRefund(db, day, items) {
   if (!items.length) return;
   try {
-    await db.batch(items.map((it) => db.prepare('UPDATE inspire_quota SET n = MAX(0, n - ?4) WHERE day=?1 AND scope=?2 AND subject=?3')
-      .bind(day, it.scope, it.subject || '', it.units)));
+    await db.prepare(`UPDATE inspire_quota SET n = MAX(0, n - (SELECT SUM(i.units) FROM (${INSPIRE_QUOTA_ITEMS}) i
+        WHERE i.scope = inspire_quota.scope AND i.subject = inspire_quota.subject))
+      WHERE day = ?1 AND (scope, subject) IN (SELECT scope, subject FROM (${INSPIRE_QUOTA_ITEMS}))`).bind(day, inspireQuotaJson(items)).run();
   } catch (e) { console.error('inspire quota refund', e && e.message); }
 }
 async function inspireAdjust(db, day, scope, subject, delta) {
@@ -1676,20 +1754,28 @@ async function inspireUpload(request, env, ctx, db, id, { fail, limited, origin 
   return json({ post: inspirePostOut(after, actor.isAdmin, []), quota }, 201, origin);
 }
 
-// Cron (every 15 min, next to sbScheduled): upload cleanup, quota pruning, due Browser Run retries (<= 3, 11 s apart).
-async function inspireScheduled(env) {
+// Cron "*/15" after sbScheduled (same invocation and budget, see cronMain): upload cleanup, quota + rate-counter pruning, then
+// due Browser Run retries of link previews (<= 3, 11 s apart: Free allows 1 Quick Action / 10 s), each only while its worst
+// case still fits the run's budget. Fixed part: probe (cold only) + 1 select + 1 R2 delete + 1 delete + 1 batch of 2.
+// A retry (inspireBrAndStore, mode cron): CRON_COSTS.brRetry (worker/budget.js).
+const INSPIRE_BR_RETRY_COST = CRON_COSTS.brRetry;
+async function inspireScheduled(env, budget = new Budget('inspire cron', {})) {
   inspireTestHooks(env);
-  await ensureInspireSchema(env);
+  if (!(await inspireCronSchemaOk(env))) return;
   const db = env.DB;
   const nowS = inspireNowS();
   const { results } = await db.prepare(`SELECT key FROM inspire_media WHERE state = 'orphan' OR (state = 'pending' AND created_at < ?1)
     OR post_id NOT IN (SELECT id FROM inspire_posts) LIMIT 100`).bind(nowS - 3600).all();
   const keys = (results || []).map((r) => r.key);
   const r2keys = keys.filter((k) => FILES_KEY_RE.test(k));
-  if (r2keys.length) await env.STORAGE.delete(r2keys);
-  if (keys.length) await db.batch(keys.map((k) => db.prepare('DELETE FROM inspire_media WHERE key=?').bind(k)));
-  await db.prepare('DELETE FROM inspire_quota WHERE day < ?').bind(utcDay(Date.now() - 7 * 86400e3)).run();
-  if (env.FIKIR_BR !== '1') return;
+  if (r2keys.length) await env.STORAGE.delete(r2keys);   // one call (<= 1000 keys)
+  if (keys.length) await db.prepare('DELETE FROM inspire_media WHERE key IN (SELECT value FROM json_each(?1))').bind(JSON.stringify(keys)).run();
+  // expired rate counters: here instead of in every cold isolate's migration
+  await db.batch([
+    db.prepare('DELETE FROM inspire_quota WHERE day < ?1').bind(utcDay(Date.now() - 7 * 86400e3)),
+    db.prepare('DELETE FROM inspire_rate WHERE reset < ?1').bind(nowS),
+  ]);
+  if (env.FIKIR_BR !== '1' || !budget.fits({ d1: 1 + INSPIRE_BR_RETRY_COST.d1, sub: INSPIRE_BR_RETRY_COST.sub })) return;
   // due rows only (rows waiting for UTC midnight must not crowd the due ones out of the LIMIT)
   const { results: rows } = await db.prepare(`SELECT id, url, meta FROM inspire_posts WHERE meta LIKE '%"pending":"br"%' AND json_valid(meta)
     AND COALESCE(json_extract(meta, '$.at'), 0) + COALESCE(json_extract(meta, '$.retry_s'), 0) <= ?1 ORDER BY id DESC LIMIT 10`).bind(nowS).all();
@@ -1699,13 +1785,646 @@ async function inspireScheduled(env) {
   });
   let ran = 0;
   for (const r of due) {
-    if (ran >= 3) break;
+    if (ran >= 3 || !budget.fits(INSPIRE_BR_RETRY_COST)) break;
     const parsed = r.url ? parseLink(r.url) : null;
     if (!parsed || !inspireNeedsCard(parsed)) continue;
     if (ran > 0) await inspireSleep(11000);   // Free: 1 Quick Action per 10 s
     ran++;
     await inspireBrAndStore(env, db, r.id, parsed.canonical, null, { mode: 'cron', wasPending: true });
   }
+}
+
+// ── Downloads + Instagram copies (worker/inspire-video.js) ──
+// GET /posts/:id/download streams the post's own media (never an arbitrary URL): our R2 copy/upload, the Instagram post
+// (resolved from its page, links cached in inspire_video_cache until they expire), a platform adapter, the link
+// preview's media (meta.media / meta.image) or a direct file link, each through the SSRF guard and a magic-byte check.
+// POST /posts/:id/ig-copy copies an Instagram video + poster into R2 (post.media, source 'instagram') so the board can
+// play reels whose embed only shows "Instagram'da İzle"; the cron finds those through the embed page and copies them.
+function inspireVideoConfig(env) {
+  const int = (v, d) => { const n = Number.parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : d; };
+  return {
+    dl: env.FIKIR_DL !== '0',
+    dlDaily: int(env.FIKIR_DL_DAILY, 1500),
+    dlMaxBytes: int(env.FIKIR_DL_MAX_MB, 200) * 1048576,
+    igCopy: env.FIKIR_IG_COPY !== '0',
+    igAuto: ['off', 'blocked', 'all'].includes(env.FIKIR_IG_AUTO) ? env.FIKIR_IG_AUTO : 'off',
+    igCopyDaily: int(env.FIKIR_IG_COPY_DAILY, 40),
+    igCopyMaxBytes: int(env.FIKIR_IG_COPY_MB, 40) * 1048576,
+    igFetchDaily: int(env.FIKIR_IG_FETCH_DAILY, 300),
+    igCronCopies: int(env.FIKIR_IG_CRON_COPIES, 1),   // per "7-59/15" run, each also gated by the run's budget
+    igCronChecks: int(env.FIKIR_IG_CRON_CHECKS, 2),
+    // platform adapters the downloads may use (YouTube / Vimeo never download: their adapters only say why)
+    adapters: new Set(String(env.FIKIR_DL_ADAPTERS == null ? 'x,pinterest,tiktok,facebook,reddit' : env.FIKIR_DL_ADAPTERS).split(',').map((x) => x.trim()).filter(Boolean)),
+    adFetchDaily: int(env.FIKIR_DL_AD_DAILY, 400),
+  };
+}
+const INSPIRE_IG_POSTER_MAX = 10 * 1048576;
+const INSPIRE_IG_SQL = `(p.type IN ('instagram', 'reels') OR p.url LIKE '%instagram.com/%')`;
+// links that can be an Instagram post (/p/, /reel/, /reels/, /tv/, also after a /<user>/); igRef() decides
+const INSPIRE_IG_POST_SQL = `(p.url LIKE '%/p/%' OR p.url LIKE '%/reel/%' OR p.url LIKE '%/reels/%' OR p.url LIKE '%/tv/%')`;
+const inspireHex32 = () => [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+// SSRF guard for downloads: the usual one plus plain DNS/IPv4 hosts only
+const inspireDlSafe = (selfHost) => (href) => { const u = inspireSafeURL(href, selfHost); return u && inspireHostOk(u.href) ? u : null; };
+const inspireBoardOrigin = (env) => (/^https:\/\/[a-z0-9.-]+$/i.test(String(env.ALLOWED_ORIGIN || '')) ? env.ALLOWED_ORIGIN : null);
+
+// Takes the site-wide Browser Run slot (1 call per 11 s, INSPIRE_LIMITS.br_slot). -> 0 (ours) | seconds until it frees up
+async function inspireBrSlot(db) {
+  const now = Math.floor(Date.now() / 1000);
+  try {
+    const row = await db.prepare(INSPIRE_RATE_SQL.replace(/RETURNING n$/, 'RETURNING n, reset')).bind('br_slot:all', now + INSPIRE_LIMITS.br_slot[1], now).first();
+    return row && row.n > INSPIRE_LIMITS.br_slot[0] ? Math.max(1, Number(row.reset) - now) : 0;
+  } catch (e) {
+    console.error('inspire br slot', e && e.message);
+    return 0;   // like inspireOverLimit: a rate-limit table error never blocks
+  }
+}
+// Browser Run Quick Action `content` (page HTML) for an Instagram page whose plain fetch had no post data. Same admission as
+// inspireBrRun: site-wide calls + ms, calls per post, the requesting IP's calls + ms, then the 1-per-10-s slot; a taken
+// slot is waited for once when it frees up within slotWaitMs.
+// -> html | null (Browser Run off / failed) | {refused: true, retry_s, site} (not admitted now; see igResolve)
+async function inspireBrContent(env, db, url, { postId = null, ipKey = null, slotWaitMs = 0 } = {}) {
+  if (env.FIKIR_BR !== '1' || !inspireBrAvailable(env)) return null;
+  const cfg = inspireMediaConfig(env);
+  const day = utcDay();
+  const items = [
+    { scope: 'br', subject: '', lim: cfg.brDaily, units: 1 },
+    { scope: 'br_ms', subject: '', lim: cfg.brMsDaily, units: 5000 },
+  ];
+  if (postId != null) items.push({ scope: 'br_post', subject: String(postId), lim: INSPIRE_BR_PER_POST, units: 1 });
+  if (ipKey) items.push({ scope: 'br_ip', subject: ipKey, lim: cfg.brPerIp, units: 1 }, { scope: 'br_ms_ip', subject: ipKey, lim: cfg.brMsPerIp, units: 5000 });
+  let q;
+  try { q = await inspireReserve(db, day, items); }
+  catch (e) { console.error('inspire ig br quota', e && e.message); return { refused: true, retry_s: 600, site: true }; }
+  if (!q.ok) {
+    // the site's daily Browser Run budget: until UTC midnight for every post; this post's / this IP's own: just them
+    const site = q.scope === 'br' || q.scope === 'br_ms';
+    return { refused: true, retry_s: site || q.scope === 'br_post' ? inspireSecondsToMidnight() : 3600, site };
+  }
+  let wait = await inspireBrSlot(db);
+  if (wait && wait * 1000 <= slotWaitMs) { await inspireSleep(wait * 1000 + 250); wait = await inspireBrSlot(db); }
+  if (wait) { await inspireRefund(db, day, items); return { refused: true, retry_s: wait, site: true }; }
+  let used = 0;
+  try {
+    const opts = {
+      url, userAgent: IG_UA, setExtraHTTPHeaders: { 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' },
+      gotoOptions: { waitUntil: 'domcontentloaded', timeout: 15000 }, rejectResourceTypes: ['image', 'font', 'stylesheet', 'media'],
+    };
+    const res = inspireFakeBr   // local tests only (see inspireTestHooks)
+      ? await fetch(`http://${inspireTestAllow}/__br/content`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opts) })
+      : await env.BROWSER.quickAction('content', opts);
+    used = Number(res.headers.get('X-Browser-Ms-Used')) || 0;
+    if (res.status === 429) { inspireDiscard(res); return { refused: true, retry_s: Math.max(60, Number(res.headers.get('Retry-After')) || 0), site: true }; }
+    if (!res.ok) { inspireDiscard(res); return null; }
+    const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+    const text = await inspireReadAll(res, 4 * 1024 * 1024, ct.includes('charset') ? ct : 'text/html; charset=utf-8');
+    if (!ct.includes('json')) return text;
+    const d = JSON.parse(text);
+    return d && d.success !== false && typeof d.result === 'string' ? d.result : null;
+  } catch (e) {
+    const msg = String(e && e.message || e);
+    if (/time limit exceeded/i.test(msg)) {   // the account's daily browser time is gone: stop until UTC midnight
+      try { await db.prepare("UPDATE inspire_quota SET n = lim WHERE day=?1 AND scope='br' AND subject=''").bind(day).run(); } catch (_) {}
+      return { refused: true, retry_s: inspireSecondsToMidnight(), site: true };
+    }
+    if (/\b429\b|too many requests|rate limit/i.test(msg)) return { refused: true, retry_s: 60, site: true };
+    console.error('inspire ig br', msg.slice(0, 300));
+    return null;
+  } finally {
+    for (const it of items.filter((x) => x.units === 5000)) await inspireAdjust(db, day, it.scope, it.subject, Math.round(used) - 5000);
+  }
+}
+// Instagram fetches by the worker (page or embed): site-wide 10-minute window + daily quota. -> null (ok) | error code
+async function inspireIgAdmit(env, db) {
+  if (await inspireOverLimit(db, [['ig_fetch', 'all']])) return 'busy';
+  try {
+    const q = await inspireReserve(db, utcDay(), [{ scope: 'ig_fetch', subject: '', lim: inspireVideoConfig(env).igFetchDaily, units: 1 }]);
+    return q.ok ? null : 'daily_limit';
+  } catch (e) { return 'quota_unavailable'; }
+}
+// The post's Instagram media: cached links while they last (>= 15 min left), else one resolve (plain fetch, then Browser Run
+// when allowed; a taken Browser Run slot is waited for up to slotWaitMs). Failures back off (10 min .. 24 h; removed posts
+// 7 days) so repeated clicks never hammer Instagram. "Busy" (Instagram fetch window / daily budget, Browser Run slot or
+// budget) is no failure of the post: never recorded, the caller says "try again later".
+// fresh: ignore a cached item (its CDN link just failed).
+// -> {ok: true, item, cached} | {ok: false, error} | {ok: false, error: 'busy', busy: true, retry_s, site}
+async function inspireIgItem(env, db, postId, ref, { ipKey = null, allowBR = true, fresh = false, slotWaitMs = 12000 } = {}) {
+  const row = await vcGet(db, postId, 'ig');
+  if (!fresh && row && vcItemFresh(row)) {
+    const it = cacheToItem(row, ref.code);
+    if (it) return { ok: true, item: it, cached: true };
+  }
+  if (!fresh && vcBackingOff(row)) return { ok: false, error: row.error || 'backoff', backoff: true };
+  const admit = await inspireIgAdmit(env, db);
+  if (admit) return { ok: false, error: 'busy', busy: true, retry_s: admit === 'busy' ? 600 : admit === 'daily_limit' ? inspireSecondsToMidnight() : 600, site: true, why: admit };
+  const r = await igResolve(ref, { brContent: allowBR ? (url) => inspireBrContent(env, db, url, { postId, ipKey, slotWaitMs }) : null });
+  console.log('inspire ig resolve', postId, r.ok ? 'ok via ' + r.via : r.busy ? `busy (Browser Run refused, retry in ${r.retry_s} s)` : 'failed ' + r.error);   // one Instagram page fetch (+ Browser Run)
+  if (r.busy) return { ok: false, error: 'busy', busy: true, retry_s: r.retry_s, site: r.site, why: 'br' };
+  try {
+    if (r.ok) {
+      const c = itemToCache(r.item);
+      await vcPut(db, postId, 'ig', { ...c, extra: { ...c.extra, via: r.via } });
+    } else await vcFail(db, postId, 'ig', r.error, { retry: r.retry });
+  } catch (e) { console.error('inspire ig cache', e && e.message); }
+  return r.ok ? { ok: true, item: r.item, cached: false, via: r.via } : { ok: false, error: r.error };
+}
+// Embed check of one post (cron, ig-blocked report): stores state blocked|ok|photo (re-checked after 30 days) or backs off.
+async function inspireIgEmbed(env, db, postId, ref) {
+  const prev = await vcGet(db, postId, 'ig_embed');
+  const keep = vcExtra(prev);
+  const admit = await inspireIgAdmit(env, db);
+  if (admit) return { state: keep.state || null, error: admit };
+  const r = await igCheckEmbed(ref, { referer: inspireBoardOrigin(env) });
+  try {
+    // a failed re-check keeps the last known state (a blocked reel stays queued for its copy)
+    if (r.status === 'unknown') await vcFail(db, postId, 'ig_embed', r.error || 'unknown', { extra: { ...keep, state: keep.state || 'unknown' } });
+    else await vcPut(db, postId, 'ig_embed', { retry_at: inspireNowS() + 30 * 86400, extra: { ...keep, state: r.status } });
+  } catch (e) { console.error('inspire ig embed store', e && e.message); }
+  return { state: r.status, error: r.error };
+}
+
+// Platform adapter fetches by the worker (X, Pinterest, TikTok, Facebook, Reddit): per-platform site-wide 10-minute
+// window (Reddit feeds also 2 / minute) + a daily quota. -> null (ok) | error code
+async function inspireAdAdmit(env, db, name, { feed = false } = {}) {
+  const pairs = [['ad_fetch', name]];
+  if (feed) pairs.push(['ad_rss', 'all']);
+  if (await inspireOverLimit(db, pairs)) return 'busy';
+  try {
+    const q = await inspireReserve(db, utcDay(), [{ scope: 'ad_fetch', subject: '', lim: inspireVideoConfig(env).adFetchDaily, units: 1 }]);
+    return q.ok ? null : 'daily_limit';
+  } catch (e) { return 'quota_unavailable'; }
+}
+// The post's media through its platform adapter: a cached result while its links last (kind 'ad'; links without expiry
+// 7 days; TikTok's cookie-bound links are never cached, so a video download resolves again), else one resolve. Failures
+// back off like Instagram's (removed / private / no video: 7 days). YouTube / Vimeo answer without a request.
+// needVideo: a cached row that only knows "there is a video" is not enough. fresh: ignore the cache (a link just failed).
+// meta: the post's link-preview meta (its media URLs can spare a platform request: Reddit's v.redd.it id).
+// -> AdResult (worker/inspire-video.js) + {cached}
+async function inspireAdItem(env, db, postId, ad, parsed, { needVideo = false, fresh = false, meta = null } = {}) {
+  if (ad.support === false) return { ...(await ad.resolve(parsed, {})), cached: false };
+  if (!inspireVideoConfig(env).adapters.has(ad.name)) return { ok: false, reason: 'disabled', image: null, cached: false };
+  const row = await vcGet(db, postId, 'ad');
+  const mine = row && vcExtra(row).ad === ad.name;
+  if (!fresh && mine && vcItemFresh(row)) {
+    const c = adFromCache(ad.name, row);
+    if (c && !(needVideo && c.ok && c.video && !c.video.url)) return { ...c, cached: true };
+  }
+  if (!fresh && mine && vcBackingOff(row)) return { ok: false, reason: row.error || 'backoff', image: null, cached: true, backoff: true };
+  const mm = meta && meta.media;
+  const deps = { timeoutMs: 8000, maxShort: 1080,
+    preview: { video: mm && mm.kind === 'video' ? mm.url : null, image: (mm && mm.poster) || (meta && meta.image) || null } };
+  const feed = typeof ad.feed === 'function' && ad.feed(parsed, deps);
+  const admit = await inspireAdAdmit(env, db, ad.name, { feed });
+  if (admit) return { ok: false, reason: 'busy', image: null, cached: false };
+  let r;
+  try { r = await ad.resolve(parsed, deps); }
+  catch (e) { console.error('inspire dl adapter', ad.name, e && e.message); r = { ok: false, reason: 'error', retry: 'soon', image: null }; }
+  try {
+    if (r.ok || r.reason === 'no_video') await vcPut(db, postId, 'ad', adToCache(ad.name, r));
+    else await vcFail(db, postId, 'ad', r.reason, { retry: r.retry, extra: { ad: ad.name } });
+  } catch (e) { console.error('inspire ad cache', e && e.message); }
+  console.log('inspire dl adapter', ad.name, postId, r.ok ? 'ok' : r.reason, r.ok && r.video ? (r.video.mux ? 'split' : 'progressive') : '', feed ? 'feed' : '');
+  return { ...r, cached: false };
+}
+// Turkish text for a reason a post's video cannot be downloaded (download-info, error page)
+const INSPIRE_DL_REASON_TR = {
+  not_supported: 'YouTube videoları buradan indirilemiyor (YouTube buna izin vermiyor). Kaynağında açabilirsin.',
+  drm: 'Vimeo bu videoyu şifreli (DRM) yayınlıyor; buradan indirilemiyor. Kaynağında açabilirsin.',
+  login_required: 'Bu video herkese açık değil (giriş gerekiyor); buradan indirilemiyor.',
+  not_found: 'Gönderi kaldırılmış ya da bulunamadı.',
+  no_video: 'Bu gönderide video yok.',
+  disabled: 'Bu platformdan indirme şu anda kapalı.',
+  busy: 'Bu platforma şu anda çok fazla istek yapıldı. Birkaç dakika sonra tekrar dene.',
+};
+
+// Failure page of a download link (opened as a navigation): tiny Turkish HTML, no scripts, every value escaped.
+function inspireDlErrorPage(env, status, message, source) {
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const src = typeof source === 'string' && /^https?:\/\//i.test(source) && inspireHostOk(source) ? source : null;
+  const board = inspireBoardOrigin(env);
+  const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>İndirilemedi</title><style>body{font:16px/1.5 system-ui,-apple-system,sans-serif;margin:0;padding:40px 16px;background:#0b0b0b;color:#eee}
+main{max-width:560px;margin:0 auto}h1{font-size:22px;margin:0 0 12px}a{color:#7cc4ff;overflow-wrap:anywhere}p{margin:0 0 12px}</style></head>
+<body><main><h1>İndirilemedi</h1><p>${esc(message)}</p>${src ? `<p>Kaynağında aç: <a href="${esc(src)}" rel="noopener noreferrer nofollow">${esc(src)}</a></p>` : ''}${board ? `<p><a href="${esc(board + '/fikir')}">Fikir Havuzu’na dön</a></p>` : ''}</main></body></html>`;
+  return new Response(html, { status, headers: {
+    'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
+    'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+  } });
+}
+function inspireDlResponse(body, { length = null, fixed = false, mime, ext, parts }) {
+  const h = new Headers({
+    'Content-Type': mime, 'Content-Disposition': contentDisposition(parts, ext), 'Cache-Control': 'private, no-store',
+    'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox", 'Referrer-Policy': 'no-referrer',
+    'Access-Control-Allow-Origin': '*', 'Access-Control-Expose-Headers': 'Content-Disposition, Content-Length',
+  });
+  let out = body;
+  if (length != null) {
+    h.set('Content-Length', String(length));
+    // a stream of known length goes through FixedLengthStream so the browser shows download progress
+    if (!fixed && body instanceof ReadableStream && typeof FixedLengthStream === 'function') out = body.pipeThrough(new FixedLengthStream(length));
+  }
+  return new Response(out, { status: 200, headers: h });
+}
+// Download ticket (?k= on the download link). A download is a navigation without the session, so download-info hands the
+// admin a link that skips the site-wide daily download budget (guests cannot use up the owner's downloads): HMAC
+// (JWT_SECRET) of post id + expiry, for that post only, valid 15 minutes. A missing / stale / wrong ticket is ignored.
+const INSPIRE_DL_TICKET_S = 900;
+async function inspireDlTicketSig(env, id, exp) {
+  const sig = await crypto.subtle.sign('HMAC', await inspireHmacKey(env.JWT_SECRET, 'sign'), new TextEncoder().encode(`fikir-dl:${id}:${exp}`));
+  return b64urlFromBytes(new Uint8Array(sig).subarray(0, 16));
+}
+async function inspireDlTicket(env, id) {
+  if (!env.JWT_SECRET) return null;
+  const exp = Math.floor(Date.now() / 1000) + INSPIRE_DL_TICKET_S;
+  return exp.toString(36) + '.' + await inspireDlTicketSig(env, id, exp);
+}
+async function inspireDlTicketOk(env, id, k) {
+  const m = /^([0-9a-z]{1,10})\.([A-Za-z0-9_-]{22})$/.exec(String(k || ''));
+  if (!m || !env.JWT_SECRET) return false;
+  const exp = parseInt(m[1], 36), now = Math.floor(Date.now() / 1000);
+  if (!(exp > now && exp <= now + INSPIRE_DL_TICKET_S + 60)) return false;
+  return inspireSafeEqual(m[2], await inspireDlTicketSig(env, id, exp));
+}
+const INSPIRE_DL_FILE_MIMES = { mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
+// GET /api/inspire/posts/:id/download?part=video|image|auto (default auto = the video, else the image)
+async function inspireDownload(request, env, ctx, db, id, { selfHost, origin }) {
+  const reqUrl = new URL(request.url);
+  const qp = reqUrl.searchParams.get('part');
+  const part = qp == null || qp === '' ? 'auto' : ['video', 'image', 'auto'].includes(qp) ? qp : null;
+  const accept = request.headers.get('Accept') || '';
+  const asJson = reqUrl.searchParams.get('format') === 'json' || (/application\/json/i.test(accept) && !/text\/html/i.test(accept));
+  let source = null;
+  const fail = (status, error, message, extra) => (asJson
+    ? json({ error, message, ...(source ? { source } : {}), ...(extra || {}) }, status, origin)
+    : inspireDlErrorPage(env, status, message, source));
+  if (!part) return fail(400, 'bad_request', 'Geçersiz istek (part=video|image)');
+  const cfg = inspireVideoConfig(env);
+  if (!cfg.dl) return fail(503, 'downloads_disabled', 'İndirme şu anda kapalı.');
+  const ipKey = await inspireIpKey(request);
+  if (await inspireOverLimit(db, [['dl_ip', ipKey]])) return fail(429, 'rate_limited', 'Çok fazla indirme isteği. Biraz bekleyip tekrar dene.');
+  const row = await db.prepare('SELECT id, type, url, description, media, meta FROM inspire_posts WHERE id=?').bind(id).first();
+  if (!row) return fail(404, 'not_found', 'Fikir bulunamadı.');
+  let parsed = row.url ? parseLink(row.url) : null;
+  source = parsed && inspireHostOk(parsed.canonical) ? parsed.canonical : null;
+  if (row.type === 'text') return fail(404, 'nothing_to_download', 'Bu fikir yalnızca metin; indirilecek video ya da görsel yok.');
+  if (parsed && parsed.needsResolve) {
+    // a short link the board could not resolve when it was added (pin.it, vm.tiktok.com, fb.watch, ...): once more
+    const again = await inspireParseInput(row.url, selfHost);
+    if (again && !again.needsResolve && inspireHostOk(again.canonical)) { parsed = again; source = again.canonical; }
+  }
+  // Site-wide daily budget (FIKIR_DL_DAILY) of downloads that fetch from elsewhere: taken before the first upstream request
+  // (Instagram / platform resolve, CDN or linked file) and refunded when nothing is served. Our own R2 files (copies,
+  // uploads) never count, nor does a link with the admin's ticket.
+  const day = utcDay();
+  const dayItem = [{ scope: 'dl', subject: '', lim: cfg.dlDaily, units: 1 }];
+  let dayState = (await inspireDlTicketOk(env, id, reqUrl.searchParams.get('k'))) ? 'exempt' : null;   // taken | exceeded | error
+  const takeDay = async () => {
+    if (dayState === null) {
+      try { dayState = (await inspireReserve(db, day, dayItem)).ok ? 'taken' : 'exceeded'; } catch (e) { dayState = 'error'; }
+    }
+    return dayState === 'taken' || dayState === 'exempt';
+  };
+  const media = inspireMediaOut(row.media), meta = inspireMetaOut(row.meta);
+  const ig = igRef(parsed);
+  const titleParts = ['fikir', id, titleSlug((meta && meta.title) || row.description || '')];
+  const safeURL = inspireDlSafe(selfHost);
+  let lastError = null, opens = 0, igRes = null, igRetried = false, adRes = null, adRetried = false, adReason = null;
+  const igParts = (it) => ['instagram', it && it.user, ig.code];
+  // R2 object (our upload / Instagram copy) of the wanted kind
+  const fromFiles = async (path, want, parts) => {
+    const key = path.slice('/files/'.length);
+    if (!FILES_KEY_RE.test(key)) return null;
+    const ext = key.slice(key.lastIndexOf('.') + 1);
+    const mime = INSPIRE_DL_FILE_MIMES[ext];
+    if (!mime || !mime.startsWith(want + '/')) return null;
+    const obj = await env.STORAGE.get(key);
+    if (!obj) { lastError = 'gone'; return null; }
+    return inspireDlResponse(obj.body, { length: obj.size, fixed: true, mime, ext, parts });
+  };
+  // headers: a platform CDN's Referer / cookie (TikTok), sent to that host only and never back to the client
+  const fromUrl = async (u, want, parts, headers = null) => {
+    if (typeof u !== 'string' || !u) return null;
+    if (u.startsWith('/files/')) return fromFiles(u, want, parts);
+    if (opens >= 4 || !(await takeDay())) return null;
+    opens++;
+    const r = await openMedia(u, { want, maxBytes: cfg.dlMaxBytes, safeURL, totalMs: 30 * 60e3, headers });
+    if (!r.ok) { lastError = r.error; return null; }
+    return inspireDlResponse(r.body, { length: r.length, fixed: r.fixed, mime: r.mime, ext: r.ext, parts });
+  };
+  // Reddit: picture + sound files joined into one MP4 on the fly (exact length known up front)
+  const fromMux = async (v, parts) => {
+    if (opens >= 4 || !(await takeDay())) return null;
+    opens++;
+    const r = await openMuxed(v.url, v.audio_url, { safeURL, maxBytes: cfg.dlMaxBytes });
+    if (!r.ok) { lastError = r.error; return null; }
+    return inspireDlResponse(r.body, { length: r.length, fixed: r.fixed, mime: r.mime, ext: r.ext, parts });
+  };
+  const tryWant = async (want) => {
+    let res;
+    // 1. stored media: R2 copy / upload, or a manual direct link
+    if (media) {
+      const u = want === 'video' ? (media.kind === 'video' ? media.url : null) : (media.kind === 'image' ? media.url : media.kind === 'video' ? media.poster : null);
+      const parts = media.source === 'instagram' && ig ? ['instagram', media.by, ig.code] : titleParts;
+      if (u && (res = await fromUrl(u, want, parts))) return res;
+    }
+    // 2. Instagram post (resolved once; a cached CDN link that fails is resolved again once). Instagram busy for a moment:
+    //    say so (429) rather than serve the poster in place of the video.
+    if (ig && (igRes || (await takeDay()))) {
+      if (!igRes) igRes = await inspireIgItem(env, db, id, ig, { ipKey });
+      for (;;) {
+        if (!igRes.ok) { lastError = 'ig_' + igRes.error; if (igRes.busy && want === 'video') return null; break; }
+        const it = igRes.item;
+        const u = want === 'video' ? (it.video && it.video.url) : (it.image && it.image.url);
+        if (!u) break;
+        if ((res = await fromUrl(u, want, igParts(it)))) return res;
+        if (igRetried || !igRes.cached || !/^(gone|upstream_4\d\d)$/.test(String(lastError))) break;
+        igRetried = true;
+        igRes = await inspireIgItem(env, db, id, ig, { ipKey, fresh: true });
+      }
+    }
+    // 3. platform adapter: X, Pinterest, TikTok, Facebook, Reddit (YouTube / Vimeo: no video, only why + a poster).
+    //    Resolved once (cached in inspire_video_cache 'ad'); a cached link that fails is resolved again once.
+    const ad = !ig ? dlAdapterFor(parsed) : null;
+    if (ad && (await takeDay())) {
+      const needVideo = want === 'video';
+      if (!adRes || (needVideo && adRes.ok && adRes.video && !adRes.video.url)) adRes = await inspireAdItem(env, db, id, ad, parsed, { needVideo, meta });
+      for (;;) {
+        if (!adRes.ok) adReason = adRes.reason;
+        const parts = [ad.name, adRes.by, adRes.id || parsed.id];
+        if (needVideo) {
+          const v = adRes.ok ? adRes.video : null;
+          if (!v || !v.url) break;
+          if ((res = v.mux === 'cmaf' && v.audio_url ? await fromMux(v, parts) : await fromUrl(v.url, 'video', parts, v.headers))) return res;
+        } else {
+          if (!adRes.image) break;
+          if ((res = await fromUrl(adRes.image.url, 'image', parts))) return res;
+        }
+        if (adRetried || !adRes.cached || !/^(gone|upstream_4\d\d)$/.test(String(lastError))) break;
+        adRetried = true;
+        adRes = await inspireAdItem(env, db, id, ad, parsed, { needVideo, fresh: true, meta });
+      }
+      // a platform busy for a few minutes: say so (429) rather than serve a lesser file (Reddit's preview is silent)
+      if (needVideo && adReason === 'busy') return null;
+    }
+    // 4. link preview media (meta.media; its poster / meta.image for images)
+    const mm = meta && meta.media;
+    if (mm) {
+      const u = want === 'video' ? (mm.kind === 'video' ? mm.url : null) : (mm.kind === 'image' ? mm.url : mm.kind === 'video' ? mm.poster : null);
+      if (u && (res = await fromUrl(u, want, titleParts))) return res;
+    }
+    // 5. the post link itself is a file / the page image
+    if (parsed && parsed.platform === want && (res = await fromUrl(parsed.canonical, want, titleParts))) return res;
+    if (want === 'image' && meta && meta.image && (res = await fromUrl(meta.image, want, titleParts))) return res;
+    return null;
+  };
+  try {
+    for (const want of part === 'auto' ? ['video', 'image'] : [part]) {
+      const res = await tryWant(want);
+      if (res) return res;
+      if (want === 'video' && ((igRes && igRes.busy) || adReason === 'busy')) break;   // 429 below, not the poster
+    }
+  } catch (e) {
+    console.error('inspire download', id, e && e.stack || e);
+    lastError = 'error';
+  }
+  if (dayState === 'taken') await inspireRefund(db, day, dayItem);
+  console.log('inspire download failed', id, part, lastError || '-', adReason || '-', dayState || '-');
+  if (dayState === 'exceeded') return fail(429, 'quota_exceeded', 'Bugünkü indirme sınırı doldu. Yarın tekrar dene ya da kaynağında aç.', { reset_at: nextResetIso() });
+  if (dayState === 'error') return fail(503, 'download_unavailable', 'İndirme şu anda yapılamıyor, biraz sonra tekrar dene.');
+  const what = part === 'video' ? 'videosu' : part === 'image' ? 'görseli' : 'videosu ya da görseli';
+  if (lastError === 'too_large') return fail(413, 'too_large', `Bu dosya çok büyük (en fazla ${Math.round(cfg.dlMaxBytes / 1048576)} MB).`);
+  if (igRes && igRes.busy) {
+    const s = igRes.retry_s, when = s <= 60 ? 'Birkaç saniye sonra tekrar dene' : s <= 1800 ? 'Birkaç dakika sonra tekrar dene' : 'Yarın tekrar dene';
+    return fail(429, 'busy', `Instagram’dan şu anda çok fazla istek yapıldı. ${when} ya da kaynağında aç.`, { reason: 'ig_busy', retry_s: s });
+  }
+  // platform adapter: why its video is not downloadable (YouTube, Vimeo, private / removed posts, ...)
+  if (adReason === 'busy') return fail(429, 'busy', INSPIRE_DL_REASON_TR.busy + ' Ya da kaynağında aç.', { reason: 'busy' });
+  if (adReason && part !== 'image' && INSPIRE_DL_REASON_TR[adReason]) {
+    return fail(adReason === 'disabled' ? 503 : 404, 'not_downloadable', INSPIRE_DL_REASON_TR[adReason], { reason: adReason });
+  }
+  if (adReason && !lastError) lastError = adReason;
+  return fail(lastError ? 502 : 404, 'not_downloadable', `Bu fikrin ${what} buradan indirilemedi.`, lastError ? { reason: String(lastError).slice(0, 40) } : null);
+}
+
+// Copies the Instagram post's video (+ poster) into R2 and stores it as post.media (source 'instagram'). Never replaces a
+// manual media; a post that already has a copy keeps it. Daily budgets by caller (`by`), like uploads:
+//   'cron'             site-wide copies (FIKIR_IG_COPY_DAILY) + the site-wide daily upload bytes
+//   'admin'            none (guests cannot use up the owner's copies)
+//   {subject, ip}      a guest / user: the site-wide ones, at most half of the copies for all guests together (the cron
+//                      and the admin keep the rest), and the per-cid/user + per-IP upload quotas (count and bytes)
+// The total storage cap applies to everyone. -> {status: 'copied'|'exists'|'manual'|'busy'|'ig_busy'|'quota'|'storage_full'|
+//    'disabled'|'no_video'|'too_large'|'resolve_failed'|'fetch_failed'|'not_found'|'error', media?, error?, via?, retry_s?, site?}
+// ig_busy: Instagram / Browser Run refused for now (inspireIgItem busy), not a failure of the post.
+// retryStale: a cached link that died is resolved again and reopened at once (requests); the cron (false) instead marks it
+// stale and fails softly, so the next run resolves it: one copy then stays within INSPIRE_IG_COPY_COST.
+async function inspireIgCopy(env, db, id, ref, { selfHost = null, ipKey = null, allowBR = true, by = 'cron', retryStale = true } = {}) {
+  const cfg = inspireVideoConfig(env);
+  if (!cfg.igCopy) return { status: 'disabled' };
+  const cur = await db.prepare('SELECT media FROM inspire_posts WHERE id=?').bind(id).first();
+  if (!cur) return { status: 'not_found' };
+  if (cur.media) {
+    const m = inspireMediaOut(cur.media);
+    return m && m.source === 'instagram' ? { status: 'exists', media: m } : { status: 'manual' };
+  }
+  // one copy of a post at a time: the counter row is the lock (expires after 120 s if this request dies), released below
+  if (await inspireOverLimit(db, [['igcopy_lock', String(id)]])) return { status: 'busy' };
+  try { return await inspireIgCopyLocked(env, db, id, ref, { selfHost, ipKey, allowBR, by, retryStale }); }
+  finally { try { await db.prepare('DELETE FROM inspire_rate WHERE k=?').bind('igcopy_lock:' + id).run(); } catch (e) {} }
+}
+async function inspireIgCopyLocked(env, db, id, ref, { selfHost, ipKey, allowBR, by, retryStale }) {
+  const cfg = inspireVideoConfig(env);
+  const mcfg = inspireMediaConfig(env);
+  const day = utcDay();
+  const guest = by && typeof by === 'object' ? by : null;
+  const items = by === 'admin' ? [] : [{ scope: 'ig_copy', subject: '', lim: cfg.igCopyDaily, units: 1 }];
+  if (guest) {
+    items.push({ scope: 'ig_copy', subject: 'guests', lim: Math.ceil(cfg.igCopyDaily / 2), units: 1 },
+      { scope: 'up_n', subject: guest.subject, lim: mcfg.upPerN, units: 1 }, { scope: 'up_n_ip', subject: guest.ip, lim: mcfg.upPerIpN, units: 1 });
+  }
+  let bytesItems = [], keys = [], rows = false;
+  const undo = async () => {
+    await inspireRefund(db, day, [...items, ...bytesItems]);
+    if (keys.length) { try { await env.STORAGE.delete(keys); } catch (e) {} }
+    if (rows) { try { await db.prepare('DELETE FROM inspire_media WHERE key IN (SELECT value FROM json_each(?1))').bind(JSON.stringify(keys)).run(); } catch (e) {} }
+  };
+  let q;
+  try { q = await inspireReserve(db, day, items); } catch (e) { return { status: 'error', error: 'quota_unavailable' }; }
+  if (!q.ok) return { status: 'quota' };
+  const safeURL = inspireDlSafe(selfHost);
+  let v = null;
+  try {
+    const busy = (r) => ({ status: 'ig_busy', retry_s: r.retry_s, site: r.site });
+    let res = await inspireIgItem(env, db, id, ref, { ipKey, allowBR });
+    if (!res.ok) { await undo(); return res.busy ? busy(res) : { status: 'resolve_failed', error: res.error }; }
+    if (!res.item.video) { await undo(); return { status: 'no_video' }; }
+    v = await openMedia(res.item.video.url, { want: 'video', maxBytes: cfg.igCopyMaxBytes, safeURL, totalMs: 120000 });
+    if (!v.ok && res.cached && /^(gone|upstream_4\d\d)$/.test(v.error) && !retryStale) {
+      try { await db.prepare("UPDATE inspire_video_cache SET expires_at = 1 WHERE post_id=?1 AND kind='ig'").bind(id).run(); } catch (e) {}
+    } else if (!v.ok && res.cached && /^(gone|upstream_4\d\d)$/.test(v.error)) {
+      res = await inspireIgItem(env, db, id, ref, { ipKey, allowBR, fresh: true });
+      if (!res.ok && res.busy) { await undo(); return busy(res); }
+      if (!res.ok || !res.item.video) { await undo(); return { status: 'resolve_failed', error: res.ok ? 'no_video' : res.error }; }
+      v = await openMedia(res.item.video.url, { want: 'video', maxBytes: cfg.igCopyMaxBytes, safeURL, totalMs: 120000 });
+    }
+    if (!v.ok) { await undo(); return { status: v.error === 'too_large' ? 'too_large' : 'fetch_failed', error: v.error }; }
+    const item = res.item;
+    let vBody = v.body, vLen = v.length;
+    if (vLen == null) { const buf = await new Response(v.body).arrayBuffer(); vBody = buf; vLen = buf.byteLength; }   // capped by openMedia
+    let pBuf = null, pExt = null, pMime = null;
+    if (item.image) {
+      const p = await openMedia(item.image.url, { want: 'image', maxBytes: INSPIRE_IG_POSTER_MAX, safeURL, totalMs: 30000 });
+      if (p.ok) { try { pBuf = await new Response(p.body).arrayBuffer(); pExt = p.ext; pMime = p.mime; } catch (e) { pBuf = null; } }
+    }
+    const total = vLen + (pBuf ? pBuf.byteLength : 0);
+    const bi = by === 'admin' ? [] : [{ scope: 'up_bytes_all', subject: '', lim: mcfg.upDailyBytes, units: total }];
+    if (guest) bi.push({ scope: 'up_bytes', subject: guest.subject, lim: mcfg.upPerBytes, units: total }, { scope: 'up_bytes_ip', subject: guest.ip, lim: mcfg.upPerIpBytes, units: total });
+    const q2 = await inspireReserve(db, day, bi);
+    if (!q2.ok) { if (vBody instanceof ReadableStream) vBody.cancel().catch(() => {}); await undo(); return { status: 'quota' }; }
+    bytesItems = bi;
+    const used = await db.prepare("SELECT COALESCE(SUM(bytes), 0) AS b FROM inspire_media WHERE state <> 'orphan'").first();
+    if (Number(used && used.b) + total > mcfg.upTotalBytes) { if (vBody instanceof ReadableStream) vBody.cancel().catch(() => {}); await undo(); return { status: 'storage_full' }; }
+    const vKey = `fikir/${id}/v-${inspireHex32()}.${v.ext}`;
+    const pKey = pBuf ? `fikir/${id}/p-${inspireHex32()}.${pExt}` : null;
+    keys = [vKey, pKey].filter(Boolean);
+    const nowS = inspireNowS();
+    await db.batch([
+      db.prepare("INSERT INTO inspire_media (key, post_id, slot, subject, mime, bytes, state, created_at) VALUES (?1, ?2, 'v', 'ig', ?3, ?4, 'pending', ?5)").bind(vKey, id, v.mime, vLen, nowS),
+      ...(pKey ? [db.prepare("INSERT INTO inspire_media (key, post_id, slot, subject, mime, bytes, state, created_at) VALUES (?1, ?2, 'p', 'ig', ?3, ?4, 'pending', ?5)").bind(pKey, id, pMime, pBuf.byteLength, nowS)] : []),
+    ]);
+    rows = true;
+    const meta = { cacheControl: 'public, max-age=31536000, immutable', contentDisposition: 'inline' };
+    const vPut = vBody instanceof ReadableStream && !v.fixed && typeof FixedLengthStream === 'function' ? vBody.pipeThrough(new FixedLengthStream(vLen)) : vBody;
+    await env.STORAGE.put(vKey, vPut, { httpMetadata: { contentType: v.mime, ...meta }, customMetadata: { post: String(id), source: 'instagram' } });
+    if (pKey) await env.STORAGE.put(pKey, pBuf, { httpMetadata: { contentType: pMime, ...meta }, customMetadata: { post: String(id), source: 'instagram' } });
+    const media = sanitizeMedia({
+      kind: 'video', url: '/files/' + vKey, poster: pKey ? '/files/' + pKey : null, w: item.w, h: item.h, mime: v.mime, bytes: vLen,
+      verified: true, autoplay: vLen <= AUTOPLAY_MAX_BYTES, source: 'instagram', by: item.user, caption: item.caption, audio: item.has_audio,
+    }, { allowFiles: true });
+    if (!media) { await undo(); return { status: 'error', error: 'media_invalid' }; }
+    const mediaJson = JSON.stringify(media), keysJson = JSON.stringify(keys);
+    // One transaction: rows live only while the post exists, media set only while it is still empty (a manual media set
+    // meanwhile wins), and rows whose post did not take the media are orphaned (the cron removes them).
+    const out = await db.batch([
+      db.prepare("UPDATE inspire_media SET state='live' WHERE key IN (SELECT value FROM json_each(?1)) AND state='pending' AND EXISTS (SELECT 1 FROM inspire_posts WHERE id=?2)").bind(keysJson, id),
+      db.prepare(`UPDATE inspire_posts SET media=?2 WHERE id=?1 AND media IS NULL AND
+        (SELECT COUNT(*) FROM inspire_media WHERE key IN (SELECT value FROM json_each(?3)) AND state='live') = ?4`).bind(id, mediaJson, keysJson, keys.length),
+      db.prepare("UPDATE inspire_media SET state='orphan' WHERE key IN (SELECT value FROM json_each(?1)) AND NOT EXISTS (SELECT 1 FROM inspire_posts WHERE id=?2 AND media=?3)").bind(keysJson, id, mediaJson),
+    ]);
+    if (!(out[1] && out[1].meta && out[1].meta.changes)) {
+      await undo();
+      const still = await db.prepare('SELECT media FROM inspire_posts WHERE id=?').bind(id).first();
+      return { status: still ? 'manual' : 'not_found' };
+    }
+    try { await vcPut(db, id, 'ig_copy', { url: media.url, poster: media.poster, width: media.w, height: media.h, bytes: vLen, extra: { via: res.via || 'cache' } }); } catch (e) {}
+    return { status: 'copied', media, via: res.via || 'cache' };
+  } catch (e) {
+    console.error('inspire ig copy', id, e && e.stack || e);
+    if (v && v.ok && v.body instanceof ReadableStream) v.body.cancel().catch(() => {});
+    await undo();
+    return { status: 'error', error: 'copy_failed' };
+  }
+}
+const INSPIRE_IGCOPY_ERR = {
+  disabled: [503, 'Instagram kopyalama şu anda kapalı'],
+  manual: [409, 'Bu fikre elle bir önizleme eklenmiş; Instagram kopyası onun yerine geçmez'],
+  busy: [409, 'Bu gönderi şu anda kopyalanıyor, biraz sonra tekrar bak'],
+  ig_busy: [429, 'Instagram’dan şu anda çok fazla istek yapıldı, biraz sonra tekrar dene'],
+  quota: [429, 'Bugünkü kopyalama sınırı doldu'],
+  storage_full: [507, 'Depolama alanı dolu, şimdilik kopyalanamıyor'],
+  no_video: [422, 'Bu Instagram gönderisinde video yok'],
+  too_large: [413, 'Video kopyalamak için çok büyük'],
+  resolve_failed: [502, 'Instagram gönderisine şu anda ulaşılamadı, biraz sonra tekrar dene'],
+  fetch_failed: [502, 'Video Instagram’dan alınamadı, biraz sonra tekrar dene'],
+  not_found: [404, 'Fikir bulunamadı'],
+  error: [500, 'Sunucu hatası, lütfen tekrar deneyin'],
+};
+
+// Cron "7-59/15" (its own invocation; budget CRON_BUDGET, see cronIg): R2 copies (<= igCronCopies, default 1) of Instagram
+// posts whose embed is blocked (FIKIR_IG_AUTO=blocked) or of every Instagram post (=all: blocked ones first; /p/ links
+// too, photos drop out through their embed state 'photo' or the resolver's no_video, 7 days), then embed checks
+// (<= igCronChecks, default 2). Each starts only when its worst case still fits the run's budget. Instagram requests 3 s
+// apart; a copy that needs Browser Run waits for its 1-per-11-s slot (inspireIgItem). Every row a loop passes over is
+// recorded (failure backoff or vcDefer) so it leaves the LIMIT window and cannot stall the queue.
+// Worst cases: CRON_COSTS (worker/budget.js; measured by tests/cron-budget.test.mjs). A cron copy never resolves a second
+// time in the same run (inspireIgCopy retryStale), which keeps it within CRON_COSTS.igCopy.
+const INSPIRE_IG_COPY_COST = CRON_COSTS.igCopy;
+const INSPIRE_IG_CHECK_COST = CRON_COSTS.igCheck;
+async function inspireIgScheduled(env, budget = new Budget('ig cron', {})) {
+  const cfg = inspireVideoConfig(env);
+  if (cfg.igAuto === 'off') return;
+  inspireTestHooks(env);
+  if (!(await inspireCronSchemaOk(env))) return;
+  const db = env.DB;
+  const nowS = inspireNowS();
+  await db.prepare('DELETE FROM inspire_video_cache WHERE post_id NOT IN (SELECT id FROM inspire_posts)').run();
+  let calls = 0;
+  const pace = async () => { if (calls++ > 0) await inspireSleep(3000); };
+  if (cfg.igCopy && cfg.igCronCopies > 0 && budget.fits({ d1: 1 + INSPIRE_IG_COPY_COST.d1, sub: INSPIRE_IG_COPY_COST.sub })) {
+    const embedIs = (st) => `EXISTS (SELECT 1 FROM inspire_video_cache e WHERE e.post_id = p.id AND e.kind = 'ig_embed' AND json_extract(e.extra, '$.state') = '${st}')`;
+    const want = cfg.igAuto === 'all' ? `NOT ${embedIs('photo')}` : embedIs('blocked');
+    const order = cfg.igAuto === 'all' ? `${embedIs('blocked')} DESC, p.id DESC` : 'p.id DESC';
+    const { results } = await db.prepare(`SELECT p.id, p.url FROM inspire_posts p WHERE p.media IS NULL AND ${INSPIRE_IG_SQL} AND ${INSPIRE_IG_POST_SQL} AND ${want}
+      AND NOT EXISTS (SELECT 1 FROM inspire_video_cache c WHERE c.post_id = p.id AND c.kind = 'ig_copy'
+        AND (COALESCE(c.retry_at, 0) > ?1 OR json_extract(c.extra, '$.removed') = 1))
+      ORDER BY ${order} LIMIT 10`).bind(nowS).all();
+    let done = 0;
+    for (const r of results || []) {
+      if (done >= cfg.igCronCopies) break;
+      const ref = igRef(r.url ? parseLink(r.url) : null);
+      if (!ref) {
+        if (!budget.fits({ d1: 1 })) break;
+        try { await vcDefer(db, r.id, 'ig_copy', 30 * 86400, 'not_post'); } catch (e) {}
+        continue;
+      }
+      if (!budget.fits(INSPIRE_IG_COPY_COST)) break;
+      await pace();
+      done++;
+      const res = await inspireIgCopy(env, db, r.id, ref, { allowBR: true, by: 'cron', retryStale: false });
+      console.log('inspire ig cron copy', r.id, res.status, res.error || (res.via ? 'via ' + res.via : '') || (res.retry_s ? `retry in ${res.retry_s} s` : ''));
+      if (['quota', 'storage_full', 'disabled'].includes(res.status)) break;
+      if (res.status === 'ig_busy') {
+        // not this post's failure: refused for every post (Instagram window / budget, Browser Run) -> the next run;
+        // only this post's own Browser Run budget is spent -> skip it until then
+        if (res.site) break;
+        try { await vcDefer(db, r.id, 'ig_copy', res.retry_s, 'busy'); } catch (e) {}
+        continue;
+      }
+      if (!['copied', 'exists', 'manual', 'busy'].includes(res.status)) {
+        try { await vcFail(db, r.id, 'ig_copy', res.error || res.status, { retry: res.status === 'no_video' ? 'gone' : 'soon' }); } catch (e) {}
+      }
+    }
+  }
+  if (cfg.igCronChecks > 0 && budget.fits({ d1: 1 + INSPIRE_IG_CHECK_COST.d1, sub: INSPIRE_IG_CHECK_COST.sub })) {
+    const { results } = await db.prepare(`SELECT p.id, p.url FROM inspire_posts p WHERE p.media IS NULL AND ${INSPIRE_IG_SQL} AND ${INSPIRE_IG_POST_SQL}
+      AND NOT EXISTS (SELECT 1 FROM inspire_video_cache e WHERE e.post_id = p.id AND e.kind = 'ig_embed' AND COALESCE(e.retry_at, 0) > ?1)
+      ORDER BY p.id DESC LIMIT 20`).bind(nowS).all();
+    let done = 0;
+    for (const r of results || []) {
+      if (done >= cfg.igCronChecks) break;
+      const ref = igRef(r.url ? parseLink(r.url) : null);
+      if (!ref) {
+        if (!budget.fits({ d1: 1 })) break;
+        try { await vcDefer(db, r.id, 'ig_embed', 30 * 86400, 'not_post'); } catch (e) {}
+        continue;
+      }
+      if (!budget.fits(INSPIRE_IG_CHECK_COST)) break;
+      await pace();
+      done++;
+      const res = await inspireIgEmbed(env, db, r.id, ref);
+      if (res.error === 'busy' || res.error === 'daily_limit') break;
+    }
+  }
+}
+
+// Cron Triggers (wrangler.toml [triggers]). Each fires its own invocation with its own Free-plan limits, so the work is split
+// by controller.cron and every run is metered (worker/budget.js: D1 statements and subrequests charged, hard caps
+// CRON_BUDGET). CRON_IG -> cronIg; CRON_MAIN and anything else (a manual /__scheduled run) -> cronMain.
+const SB_CRON_CAP = CRON_COSTS.sbShare;   // the storyboard reconcile's share of a main run (it goes first)
+async function cronMain(env, budget) {
+  try { await sbScheduled(env, { budget, cap: SB_CRON_CAP }); } catch (e) { console.error('sb cron', e && e.stack || e); }
+  try { await inspireScheduled(env, budget); } catch (e) { console.error('inspire cron', e && e.stack || e); }
+}
+async function cronIg(env, budget) {
+  try { await inspireIgScheduled(env, budget); } catch (e) { console.error('inspire ig cron', e && e.stack || e); }
 }
 
 // ── /api/inspire/* router. Every error is JSON {error, message} with CORS headers. ──
@@ -1749,9 +2468,11 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       if (!sbClient) return json({ storyboard: false, max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT }, 200, origin);
       const actor = await inspireActor(request, env);
       const sb = sbReady ? await sbHook('config', () => sbConfigPayload(env, db, actor), null) : null;
+      const vcfg = inspireVideoConfig(env);
       const media = {
         attach: true, uploads: inspireUploadsAllowed(env, actor), max_video_mb: INSPIRE_UP_VIDEO_MB, max_image_mb: INSPIRE_UP_IMAGE_MB,
         types: INSPIRE_UP_TYPES,
+        download: vcfg.dl, ig_copy: vcfg.igCopy && !!actor, ig_auto: vcfg.igAuto,   // GET /posts/:id/download, POST /posts/:id/ig-copy
       };
       return json({ storyboard: !!(sb && sb.can_create), max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT, sb, media }, 200, origin);
     }
@@ -2090,6 +2811,162 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       return json({ post: inspirePostOut(after, actor.isAdmin, []) }, 200, origin);
     }
 
+    // Download the post's own video / image as a file (opened as a link: no session; rate-limited per IP + per day).
+    // ?part=video|image|auto (default auto). Failure: a small Turkish HTML page (JSON with Accept: application/json or
+    // ?format=json) that links the source.
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/download$/)) && method === 'GET') {
+      return await inspireDownload(request, env, ctx, db, Number(m[1]), { selfHost, origin });
+    }
+    // What a download would give, without fetching anything (cached resolutions only):
+    // {id, platform, source, enabled, video, image, from, adapter, reason, message, copied, embed, url}
+    // url: the download link to open; with the admin's session it carries a 15-minute ticket (?k=) that skips the
+    // site-wide daily download budget (inspireDlTicket), so the response is then never cached.
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/download-info$/)) && method === 'GET') {
+      if (await inspireOverLimit(db, [['dl_info_ip', await inspireIpKey(request)]])) return limited();
+      const id = Number(m[1]);
+      const row = await db.prepare('SELECT id, type, url, media, meta FROM inspire_posts WHERE id=?').bind(id).first();
+      if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
+      const cfgV = inspireVideoConfig(env);
+      const actor = request.headers.get('Authorization') ? await inspireActor(request, env) : null;
+      const ticket = actor && actor.isAdmin ? await inspireDlTicket(env, id) : null;
+      const parsed = row.url ? parseLink(row.url) : null;
+      const media = inspireMediaOut(row.media), meta = inspireMetaOut(row.meta);
+      const hint = dlHint({ type: row.type, parsed, media, meta });
+      let video = hint ? hint.video : false, image = hint ? hint.image : false, reason = hint && hint.reason ? hint.reason : null;
+      let from = media ? (media.source === 'instagram' ? 'copy' : media.source === 'upload' ? 'upload' : 'manual') : null;
+      // a video from somewhere other than the platform adapter (stored media, link preview, direct file)
+      const otherVideo = !!((media && media.kind === 'video') || (meta && meta.media && meta.media.kind === 'video') || (parsed && parsed.platform === 'video'));
+      const ig = igRef(parsed);
+      const ad = !ig && parsed ? dlAdapterFor(parsed) : null;
+      let embed = null;
+      if (ig) {
+        const [igRow, emRow] = await Promise.all([vcGet(db, id, 'ig'), vcGet(db, id, 'ig_embed')]);
+        if (igRow && !igRow.error && igRow.resolved_at) { if (!(media && media.kind === 'video')) video = !!igRow.url; image = true; }
+        const st = emRow ? vcExtra(emRow).state : null;
+        embed = ['blocked', 'ok', 'photo'].includes(st) ? st : null;
+        if (embed === 'photo' && video === null) video = false;
+        if (!from) from = 'instagram';
+      } else if (ad && ad.support !== false) {
+        const stable = (r) => ['no_video', 'not_found', 'login_required', 'drm', 'not_supported', 'bad_input', 'disabled'].includes(r);
+        if (!cfgV.adapters.has(ad.name)) reason = 'disabled';
+        else {
+          const adRow = await vcGet(db, id, 'ad');
+          const x = adRow ? vcExtra(adRow) : {};
+          if (adRow && x.ad === ad.name && !adRow.error && adRow.resolved_at) {
+            if (!x.has_video) reason = 'no_video';
+            else if (!(media && media.kind === 'video')) video = true;
+            if (adRow.poster) image = true;
+          } else if (adRow && x.ad === ad.name && adRow.error && stable(adRow.error)) reason = adRow.error;
+        }
+        if (reason && stable(reason) && !otherVideo) video = false;
+        if (!from && video !== false) from = 'adapter';
+      }
+      if (!from) {
+        from = meta && meta.media ? 'link' : parsed && (parsed.platform === 'video' || parsed.platform === 'image') ? 'direct'
+          : ad && image ? 'adapter' : meta && meta.image ? 'link' : null;
+      }
+      if (video === true) reason = null;   // another source gives the video
+      const res = json({
+        id, platform: parsed ? parsed.platform : row.type, source: parsed && inspireHostOk(parsed.canonical) ? parsed.canonical : null,
+        enabled: cfgV.dl, video, image, from, adapter: ad ? ad.name : null, reason: reason || null,
+        message: reason && INSPIRE_DL_REASON_TR[reason] ? INSPIRE_DL_REASON_TR[reason] : null,
+        copied: !!(media && media.source === 'instagram'), embed,
+        url: `/api/inspire/posts/${id}/download` + (ticket ? '?k=' + ticket : ''),
+      }, 200, origin);
+      res.headers.set('Cache-Control', ticket ? 'private, no-store' : 'private, max-age=60');
+      res.headers.set('Vary', 'Authorization');
+      return res;
+    }
+
+    // Copy an Instagram post's video + poster into R2 so the board plays our copy (any board session; idempotent; guests
+    // within their daily upload quotas, see inspireIgCopy). Guests and users copy only a reel whose embed was found blocked
+    // (stored by ig-blocked / the cron); the admin copies any post, the post owner too while FIKIR_IG_AUTO=all (the cron
+    // copies every Instagram video then). DELETE removes the copy (post owner or admin) and keeps the cron from copying it
+    // again; after that only the post owner or the admin can copy it again.
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/ig-copy$/)) && (method === 'POST' || method === 'DELETE')) {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const id = Number(m[1]);
+      const [cid, uid] = inspireOwnerParams(actor);
+      const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+      if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
+      const ref = igRef(row.url ? parseLink(row.url) : null);
+      if (!ref) return fail(400, 'not_instagram', 'Bu fikir bir Instagram gönderisi değil');
+      const ipKey = await inspireIpKey(request);
+      if (await inspireOverLimit(db, [['igcopy', inspireActorKey(actor)], ['igcopy_ip', ipKey]])) return limited();
+      if (method === 'DELETE') {
+        if (!(row.is_mine || actor.isAdmin)) return fail(403, 'forbidden', 'Bu kopyayı kaldırma yetkin yok');
+        const cur = inspireMediaOut(row.media);
+        if (cur && cur.source === 'instagram') {
+          await db.batch([
+            db.prepare("UPDATE inspire_posts SET media=NULL WHERE id=?1 AND json_valid(media) AND json_extract(media, '$.source') = 'instagram'").bind(id),
+            db.prepare("UPDATE inspire_media SET state='orphan' WHERE post_id=?1 AND state='live' AND NOT EXISTS (SELECT 1 FROM inspire_posts WHERE id=?1 AND media IS NOT NULL)").bind(id),
+          ]);
+          if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(inspireDeleteOrphans(env, db, id).catch((e) => console.error('inspire media cleanup', e && e.message)));
+        }
+        try { await vcPut(db, id, 'ig_copy', { extra: { removed: 1 } }); } catch (e) {}
+        const after = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+        return json({ post: inspirePostOut(after, actor.isAdmin, []), removed: !!(cur && cur.source === 'instagram') }, 200, origin);
+      }
+      if (!(row.is_mine || actor.isAdmin) && !row.media && vcExtra(await vcGet(db, id, 'ig_copy')).removed) {
+        return fail(403, 'copy_removed', 'Bu fikrin Instagram kopyası kaldırılmış; yalnızca fikrin sahibi ya da yönetici yeniden kopyalayabilir');
+      }
+      if (!row.media && !actor.isAdmin && !(row.is_mine && inspireVideoConfig(env).igAuto === 'all')) {
+        const st = vcExtra(await vcGet(db, id, 'ig_embed')).state;   // a failed re-check keeps the last known state
+        if (st !== 'blocked') {
+          return fail(409, 'not_blocked', st === 'ok' ? 'Instagram bu videoyu burada oynatabiliyor; kopyalamaya gerek yok'
+            : st === 'photo' ? 'Bu gönderi bir fotoğraf; kopyalanacak bir video yok'
+            : 'Bu videonun burada oynayıp oynamadığı henüz kontrol edilmedi; önce “Oynamıyor mu?” ile kontrol et', { state: st || 'unknown' });
+        }
+      }
+      const r = await inspireIgCopy(env, db, id, ref, { selfHost, ipKey: actor.isAdmin ? null : ipKey,
+        by: actor.isAdmin ? 'admin' : { subject: inspireActorKey(actor), ip: ipKey } });
+      if (r.status === 'copied' || r.status === 'exists') {
+        const after = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+        if (!after) return fail(404, 'not_found', 'Fikir bulunamadı');
+        return json({ post: inspirePostOut(after, actor.isAdmin, []), copied: r.status === 'copied', already: r.status === 'exists' }, r.status === 'copied' ? 201 : 200, origin);
+      }
+      const e = INSPIRE_IGCOPY_ERR[r.status] || INSPIRE_IGCOPY_ERR.error;
+      const errCode = r.status === 'manual' ? 'has_manual_media' : r.status === 'busy' ? 'in_progress' : r.status === 'quota' ? 'quota_exceeded' : r.status;
+      return fail(e[0], errCode, e[1], r.status === 'quota' ? { reset_at: nextResetIso() } : r.status === 'ig_busy' ? { retry_s: r.retry_s }
+        : r.error ? { reason: String(r.error).slice(0, 40) } : null);
+    }
+
+    // "This reel does not play here" report from the board (a board session, like the ig-copy it leads to): answers the
+    // stored embed state (the cron re-checks every 30 days; a failed re-check keeps the last known state). The server
+    // fetches the embed page only for a post never checked (failures back off), or, at most once a day, when the post's
+    // owner or the admin reports a reel the last check found playable, so reports cannot spend the Instagram fetch budget
+    // that downloads and copies share. A confirmed block is copied by the board (POST ig-copy) or the cron (FIKIR_IG_AUTO).
+    // -> {state: 'blocked'|'ok'|'photo'|'unknown'|'copied', queued: bool}
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/ig-blocked$/)) && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      if (await inspireOverLimit(db, [['igrep', inspireActorKey(actor)], ['igrep_ip', await inspireIpKey(request)]])) return limited();
+      const id = Number(m[1]);
+      const [cid, uid] = inspireOwnerParams(actor);
+      const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+      if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
+      const ref = igRef(row.url ? parseLink(row.url) : null);
+      if (!ref) return fail(400, 'not_instagram', 'Bu fikir bir Instagram gönderisi değil');
+      const media = inspireMediaOut(row.media);
+      if (media && media.source === 'instagram') return json({ state: 'copied', queued: false, media }, 200, origin);
+      const prev = await vcGet(db, id, 'ig_embed');
+      const last = vcExtra(prev).state;
+      let state = ['blocked', 'ok', 'photo'].includes(last) ? last : null;
+      const recheck = !state || (state === 'ok' && (row.is_mine || actor.isAdmin) && inspireNowS() - Number(prev.resolved_at || 0) > 86400);
+      if (recheck && !vcBackingOff(prev)) {
+        const r = await inspireIgEmbed(env, db, id, ref);
+        if (r.state && r.state !== 'unknown') state = r.state;
+      }
+      try {
+        await db.prepare(`UPDATE inspire_video_cache SET extra = json_set(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END,
+          '$.reports', COALESCE(json_extract(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END, '$.reports'), 0) + 1, '$.reported_at', ?2)
+          WHERE post_id=?1 AND kind='ig_embed'`).bind(id, inspireNowS()).run();
+      } catch (e) {}
+      const cfgV = inspireVideoConfig(env);
+      return json({ state: state || 'unknown', queued: state === 'blocked' && cfgV.igAuto !== 'off' && cfgV.igCopy && !media }, 200, origin);
+    }
+
     // Upload a preview file (raw body, streamed to R2; type from the magic bytes): ?part=video|image|poster[&w=&h=]
     if (isUpload) {
       return await inspireUpload(request, env, ctx, db, Number(cleanPath.split('/')[4]), { fail, limited, origin });   // await: errors reach the catch below
@@ -2222,11 +3099,14 @@ async function uiAuth(request, env) {
 }
 
 export default {
-  // Cron (wrangler.toml [triggers]): reconcile stuck storyboard jobs, sweep orphans, prune old quota/ledger rows;
-  // Fikir Havuzu media: upload cleanup, inspire_quota pruning, due Browser Run retries.
+  // Cron Triggers (wrangler.toml [triggers]): CRON_MAIN = stale storyboard jobs, orphan sweep, quota/ledger/rate pruning, upload
+  // cleanup, due Browser Run retries of link previews; CRON_IG = Instagram embed checks + R2 copies. One budget per run.
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(sbScheduled(env).catch((e) => console.error('sb cron', e && e.stack || e)));
-    ctx.waitUntil(inspireScheduled(env).catch((e) => console.error('inspire cron', e && e.stack || e)));
+    const task = controller && controller.cron === CRON_IG ? 'ig' : 'main';
+    const budget = new Budget('cron ' + task, CRON_BUDGET);
+    ctx.waitUntil(withBudget(budget, env, (menv) => (task === 'ig' ? cronIg(menv, budget) : cronMain(menv, budget)))
+      .catch((e) => console.error('cron ' + task, e && e.stack || e))
+      .finally(() => console.log(`cron ${task}: ${budget.describe()}`)));
   },
   async fetch(request, env, ctx) {
     const url    = new URL(request.url);

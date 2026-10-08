@@ -139,13 +139,34 @@ export const SB_ADD_COLUMNS = [
   ["sb_ops", "reserve", "INTEGER NOT NULL DEFAULT 0"],
 ];
 
+// A cold isolate first runs one probe: every table, added column and index present -> the migration is skipped
+// (1 statement instead of ~14; D1 counts queries per invocation, see worker/budget.js). Cron runs never migrate.
+const SB_TABLES = SB_DDL.map((s) => /^CREATE TABLE IF NOT EXISTS (\w+)/.exec(s)).filter(Boolean).map((m) => m[1]);
+const SB_INDEXES = SB_DDL.map((s) => /^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS (\w+)/.exec(s)).filter(Boolean).map((m) => m[1]);
+const SB_SCHEMA_PROBE = `SELECT
+  (SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN (${SB_INDEXES.map((n) => `'${n}'`).join(", ")})) AS idx,
+  (SELECT COUNT(*) FROM (SELECT 1${SB_ADD_COLUMNS.map(([t, c]) => `, t${SB_TABLES.indexOf(t)}.${c}`).join("")}
+     FROM ${SB_TABLES.map((t, i) => `${t} t${i}`).join(", ")} LIMIT 0)) AS probe`;
+async function sbSchemaFast(db) {
+  try { const r = await db.prepare(SB_SCHEMA_PROBE).first(); return !!r && Number(r.idx) === SB_INDEXES.length; }
+  catch (_) { return false; }   // a table or column is missing
+}
 let sbSchemaReady = null;
+let sbSchemaDone = false;
+let sbCronSchemaSeen = false;
 export function ensureStoryboardSchema(env) {
-  if (!sbSchemaReady) sbSchemaReady = migrateStoryboardSchema(env).catch((e) => { sbSchemaReady = null; throw e; });
+  if (!sbSchemaReady) sbSchemaReady = migrateStoryboardSchema(env).then(() => { sbSchemaDone = true; }, (e) => { sbSchemaReady = null; throw e; });
   return sbSchemaReady;
+}
+// Cron runs: known in this isolate -> 0 statements, else the probe (1); false = incomplete (the board's next request migrates)
+export async function storyboardSchemaOk(env) {
+  if (sbSchemaDone || sbCronSchemaSeen) return true;
+  sbCronSchemaSeen = await sbSchemaFast(env.DB);
+  return sbCronSchemaSeen;
 }
 async function migrateStoryboardSchema(env) {
   const db = env.DB;
+  if (await sbSchemaFast(db)) return;
   await db.batch(SB_DDL.map((s) => db.prepare(s)));
   const byTable = new Map();
   for (const [t, c, type] of SB_ADD_COLUMNS) { if (!byTable.has(t)) byTable.set(t, []); byTable.get(t).push([c, type]); }

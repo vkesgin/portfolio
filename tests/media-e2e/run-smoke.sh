@@ -5,11 +5,12 @@
 # (default $TMPDIR/fikir-media-e2e), never in the repo. Never uses port 8765.
 #   MEDIA_E2E_PORT=8799 MEDIA_E2E_CONFIG=wrangler.toml  runs the production config instead; the test values
 #   (127.0.0.1 ALLOWED_ORIGIN, fetch allow, fake Browser Run, caps) are then passed with --var, nothing is edited.
+#   MEDIA_E2E_FXPORT=<port> moves the fixture server (default 4742; the fetch allow follows it via --var).
 R="${0:A:h:h:h}"                      # repo root
 HERE="${0:A:h}"
 OUT="${MEDIA_E2E_OUT:-${TMPDIR:-/tmp}/fikir-media-e2e}"
 PORT="${MEDIA_E2E_PORT:-8821}"
-FXPORT=4742
+FXPORT="${MEDIA_E2E_FXPORT:-4742}"
 CONFIG="${MEDIA_E2E_CONFIG:-wrangler.mediatest.toml}"
 [[ "$PORT" == 8765 || "$FXPORT" == 8765 ]] && { echo "never 8765"; exit 1; }
 if [[ "$CONFIG" == wrangler.toml ]]; then DB=vk-portfolio; else DB=vk-portfolio-mediatest; fi
@@ -24,6 +25,7 @@ for MODE in $MODES; do
   STATE="$OUT/state-$MODE"; rm -rf "$STATE"; mkdir -p "$STATE"
   curl -s -X POST "http://127.0.0.1:$FXPORT/__br/reset" >/dev/null
   VARS=()
+  [[ "$FXPORT" != 4742 && "$CONFIG" != wrangler.toml ]] && VARS+=(--var INSPIRE_TEST_FETCH_ALLOW:127.0.0.1:$FXPORT)
   if [[ "$CONFIG" == wrangler.toml ]]; then
     VARS+=(--var ALLOWED_ORIGIN:http://127.0.0.1:4741 --var INSPIRE_TEST_FETCH_ALLOW:127.0.0.1:$FXPORT --var INSPIRE_FAKE_BR:1
            --var FIKIR_BR:1 --var FIKIR_BR_DAILY:3 --var FIKIR_BR_PER_CID:2 --var FIKIR_BR_PER_IP:3 --var FIKIR_MEDIA_UPLOADS:all
@@ -38,7 +40,7 @@ for MODE in $MODES; do
     --show-interactive-dev-session=false $VARS > "$OUT/logs/worker-$MODE.log" 2>&1 &
   WPID=$!
   for i in {1..60}; do grep -q "Ready on" "$OUT/logs/worker-$MODE.log" && break; sleep 1; done
-  MEDIA_E2E_STATE="$STATE" MEDIA_E2E_CONFIG="$CONFIG" MEDIA_E2E_DB="$DB" node "$HERE/media-smoke.mjs" "http://127.0.0.1:$PORT" "$MODE" || RC=1
+  MEDIA_E2E_STATE="$STATE" MEDIA_E2E_CONFIG="$CONFIG" MEDIA_E2E_DB="$DB" MEDIA_E2E_FX="http://127.0.0.1:$FXPORT" node "$HERE/media-smoke.mjs" "http://127.0.0.1:$PORT" "$MODE" || RC=1
   kill $WPID 2>/dev/null; sleep 1; pkill -P $WPID 2>/dev/null
   for i in {1..20}; do lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null || break; sleep 0.5; done
   for pid in $(lsof -nP -t -iTCP:$PORT -sTCP:LISTEN 2>/dev/null); do kill $pid; done

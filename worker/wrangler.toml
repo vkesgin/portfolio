@@ -49,6 +49,21 @@ FIKIR_UP_PER_IP_N = "20"       # uploads per IP per UTC day (guest cids are clie
 FIKIR_UP_PER_IP_MB = "200"
 FIKIR_UP_DAILY_MB = "1000"     # all guest/user uploads per UTC day
 FIKIR_UP_TOTAL_MB = "6000"     # lead: set after checking current vk-portfolio-files usage (R2 Free 10 GB)
+# Downloads + Instagram copies (worker/inspire-video.js): GET /api/inspire/posts/:id/download, POST .../ig-copy, cron.
+FIKIR_DL = "1"                 # "0" turns the download links off
+FIKIR_DL_DAILY = "1500"        # downloads that fetch from elsewhere per UTC day, whole site (our R2 copies/uploads and the
+                               # admin's ticketed links do not count; plus 40 per IP / 10 min in code)
+FIKIR_DL_MAX_MB = "200"        # largest file a download streams through
+FIKIR_IG_COPY = "1"            # "0" turns R2 copies of Instagram videos off (route and cron)
+FIKIR_IG_AUTO = "blocked"      # cron: off | blocked (copy reels whose embed shows "Instagram'da İzle") | all (every Instagram video, /p/ links too, blocked first; ~6 MB each)
+FIKIR_IG_COPY_DAILY = "40"     # R2 copies per UTC day by the cron + guests (guests together at most half; admin exempt). Bytes count
+                               # into FIKIR_UP_DAILY_MB (not the admin's) and FIKIR_UP_TOTAL_MB; a guest's copies also into FIKIR_UP_PER_CID_* / _PER_IP_*
+FIKIR_IG_COPY_MB = "40"        # largest Instagram video copied
+FIKIR_IG_FETCH_DAILY = "300"   # Instagram page + embed fetches by the worker per UTC day (plus 20 per 10 min in code)
+FIKIR_IG_CRON_COPIES = "1"     # copies per Instagram cron run ("7-59/15", every 15 min; each also gated by the run's D1/subrequest budget)
+FIKIR_IG_CRON_CHECKS = "2"     # embed checks per Instagram cron run (same gate)
+FIKIR_DL_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # platforms whose videos downloads resolve (drop one to turn it off; YouTube/Vimeo cannot be downloaded)
+FIKIR_DL_AD_DAILY = "400"      # platform page/API fetches for downloads per UTC day (plus 20 per platform / 10 min in code)
 # Never set in production: INSPIRE_TEST_FETCH_ALLOW, INSPIRE_FAKE_BR (test-only: wrangler.mediatest.toml).
 # Never set in production: SB_FAKE_AI, SB_FAKE_TAVILY, SB_FAKE_DELAY_MS, SB_FAKE_FAIL (test-only: wrangler.sbtest.toml).
 # Secret (never in [vars]): TAVILY_API_KEY, already set in production. To rotate it, from worker/:
@@ -65,5 +80,10 @@ name = "vk-storyboard"              # account-unique, <= 64 chars
 binding = "STORYBOARD_WF"           # env.STORYBOARD_WF
 class_name = "StoryboardWorkflow"   # exported from index.js; same script, so no script_name
 
+# scheduled() dispatches on controller.cron (worker/budget.js CRON_MAIN / CRON_IG); each trigger is its own invocation with
+# its own Workers Free limits (50 D1 queries, 50 external subrequests, 10 ms CPU), and every run is metered to stay under
+# 40 D1 statements / 35 subrequests (tests/cron-budget.test.mjs). Free allows 5 Cron Triggers per ACCOUNT: this worker uses 2.
+#   "*/15 * * * *"     stale storyboard jobs, orphan sweep, quota/ledger/rate pruning, upload cleanup, link-preview Browser Run retries
+#   "7-59/15 * * * *"  Instagram embed checks + R2 copies of blocked reels (FIKIR_IG_AUTO), minutes 7/22/37/52
 [triggers]
-crons = ["*/15 * * * *"]            # scheduled(): stale storyboard jobs, orphan sweep, quota/ledger pruning
+crons = ["*/15 * * * *", "7-59/15 * * * *"]

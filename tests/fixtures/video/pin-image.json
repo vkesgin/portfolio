@@ -1,0 +1,1 @@
+{"resource_response":{"status":"success","code":0,"message":"ok","endpoint_name":"v3_get_pin","data":{"id":"100000000000000003","title":"Görsel pin","pinner":{"username":"ornekpinner"},"videos":null,"story_pin_data":null,"images":{"orig":{"width":736,"height":1104,"url":"https://i.pinimg.com/originals/11/22/33/112233aabbccddeeff00112233445566.jpg"}}}}}

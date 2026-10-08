@@ -1,0 +1,36 @@
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" mediaPresentationDuration="PT16.139292S" minBufferTime="PT4S" profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" type="static">
+  <Period duration="PT16.139292S" id="0">
+    <AdaptationSet contentType="video" id="1" maxHeight="1554" maxWidth="1080">
+      <Representation bandwidth="388588" codecs="avc1.4d401e" height="388" width="270" id="5" mimeType="video/mp4">
+        <BaseURL>CMAF_270.mp4</BaseURL>
+        <SegmentBase indexRange="893-984" timescale="15360"><Initialization range="0-892" /></SegmentBase>
+      </Representation>
+      <Representation bandwidth="2180000" codecs="avc1.4d401f" height="1036" width="720" id="6" mimeType="video/mp4">
+        <BaseURL>CMAF_720.mp4</BaseURL>
+        <SegmentBase indexRange="893-984" timescale="15360"><Initialization range="0-892" /></SegmentBase>
+      </Representation>
+      <Representation bandwidth="4100000" codecs="avc1.640028" height="1554" width="1080" id="7" mimeType="video/mp4">
+        <BaseURL>CMAF_1080.mp4</BaseURL>
+        <SegmentBase indexRange="893-984" timescale="15360"><Initialization range="0-892" /></SegmentBase>
+      </Representation>
+      <Representation bandwidth="8100000" codecs="avc1.640033" height="2072" width="1440" id="8" mimeType="video/mp4">
+        <BaseURL>CMAF_1440.mp4</BaseURL>
+        <SegmentBase indexRange="893-984" timescale="15360"><Initialization range="0-892" /></SegmentBase>
+      </Representation>
+      <Representation bandwidth="1" codecs="avc1.640033" height="999" width="999" id="9" mimeType="video/mp4">
+        <BaseURL>../escape.mp4</BaseURL>
+        <SegmentBase indexRange="893-984" timescale="15360"><Initialization range="0-892" /></SegmentBase>
+      </Representation>
+    </AdaptationSet>
+    <AdaptationSet contentType="audio" id="2">
+      <Representation bandwidth="66000" codecs="mp4a.40.2" id="10" mimeType="audio/mp4">
+        <BaseURL>CMAF_AUDIO_64.mp4</BaseURL>
+        <SegmentBase indexRange="893-984" timescale="15360"><Initialization range="0-892" /></SegmentBase>
+      </Representation>
+      <Representation bandwidth="131000" codecs="mp4a.40.2" id="11" mimeType="audio/mp4">
+        <BaseURL>CMAF_AUDIO_128.mp4</BaseURL>
+        <SegmentBase indexRange="893-984" timescale="15360"><Initialization range="0-892" /></SegmentBase>
+      </Representation>
+    </AdaptationSet>
+  </Period>
+</MPD>

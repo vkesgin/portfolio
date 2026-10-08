@@ -8,7 +8,7 @@ import {
   sbConfig, utcDay, now, filePath, SB_ID_RE, OP_ID_RE, newId, newSeed, COST, QUOTA_ERRORS, quotaItems, neuronItem, quotaStmts, refundStmts,
   isCheckError, isUniqueError, whichQuota, quotaLeft, quotaSubject, ipSubject, SB_SUMMARY_SQL, summaryOut, provisionalAspect,
   buildEndStmts, opEndStmts, buildRefundStmt, opRefundStmt, startInstance, instanceStatus, terminateInstance, deleteSbObjects, deleteRowsStmts,
-  ensureStoryboardSchema,
+  ensureStoryboardSchema, storyboardSchemaOk,
 } from "./db.js";
 import { TEXT_MODEL } from "./prompt.v6.js";
 import { IMG_MODEL } from "./images.js";
@@ -399,8 +399,17 @@ export async function handleStoryboard(request, env, ctx, path, method, deps) {
 }
 
 // ---------------------------------------------------------------- cron (every 15 min): stale jobs + housekeeping
-export async function sbScheduled(env) {
-  await ensureStoryboardSchema(env);
+// budget (worker/budget.js; the cron passes its metered env, which charges every call): a unit starts only when its worst
+// case fits under `cap` (this task's share of the invocation) with room left for the orphan queries and the pruning at the
+// end. What does not fit waits for the next run (stale jobs and orphans are not time-critical). Without a budget the
+// schema is migrated and every unit runs (no caller does that today).
+// Worst cases: stale build = Workflows get + status, 1 batch of 3; stale op = get + status, batch of 4; orphan storyboard =
+// get + terminate per instance + R2 list + delete, batch of 3; loose rows = R2 list + delete, batch of 3.
+const SB_COST = { stale: { d1: 3, sub: 2 }, staleOp: { d1: 4, sub: 2 }, orphan: (ops) => ({ d1: 3, sub: 4 + 2 * ops }), loose: { d1: 3, sub: 2 } };
+export async function sbScheduled(env, { budget = null, cap = null } = {}) {
+  if (!budget) await ensureStoryboardSchema(env);
+  else if (!(await storyboardSchemaOk(env))) { console.log("sb cron: schema incomplete, skipped (the board's next request migrates it)"); return; }
+  const fits = (cost, tail) => !budget || budget.fits({ d1: cost.d1 + tail, sub: cost.sub }, cap);
   const db = env.DB, cfg = sbConfig(env);
   const old = now() - cfg.staleMs;
   const [a, b] = await db.batch([
@@ -408,10 +417,12 @@ export async function sbScheduled(env) {
     db.prepare("SELECT id, sb_id, status, updated_at FROM sb_ops WHERE status IN ('queued','running') AND updated_at < ?1 ORDER BY updated_at LIMIT 10").bind(old),
   ]);
   for (const sb of a.results || []) {
+    if (!fits(SB_COST.stale, 4)) break;
     const st = await instanceStatus(env, sb.id);
     if (INSTANCE_ENDED.includes(st.status)) await closeStaleBuild(db, sb.id, st.error && st.error.message);
   }
   for (const o of b.results || []) {
+    if (!fits(SB_COST.staleOp, 4)) break;
     const st = await instanceStatus(env, o.id);
     if (INSTANCE_ENDED.includes(st.status)) await closeStaleOp(db, o.id, o.sb_id, st.error && st.error.message);
   }
@@ -425,12 +436,18 @@ export async function sbScheduled(env) {
                 WHERE NOT EXISTS (SELECT 1 FROM sb_storyboards s WHERE s.id = x.sb_id) LIMIT 5`),
   ]);
   for (const o of o1.results || []) {
+    const ops = JSON.parse(o.ops || "[]");
+    if (!fits(SB_COST.orphan(ops.length), 2)) break;
     await terminateInstance(env, o.id);
-    for (const opId of JSON.parse(o.ops || "[]")) await terminateInstance(env, opId);
+    for (const opId of ops) await terminateInstance(env, opId);
     await db.batch(deleteRowsStmts(db, o.id));
     await deleteSbObjects(env, o.id);
   }
-  for (const o of o2.results || []) { await db.batch(deleteRowsStmts(db, o.id)); await deleteSbObjects(env, o.id); }
+  for (const o of o2.results || []) {
+    if (!fits(SB_COST.loose, 2)) break;
+    await db.batch(deleteRowsStmts(db, o.id));
+    await deleteSbObjects(env, o.id);
+  }
   const cutoff = utcDay(now() - 90 * 86400e3);
   await db.batch([
     db.prepare("DELETE FROM sb_quota WHERE day < ?1").bind(utcDay(now() - 7 * 86400e3)),

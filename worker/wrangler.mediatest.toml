@@ -28,7 +28,7 @@ binding = "STORYBOARD_WF"
 class_name = "StoryboardWorkflow"
 
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/15 * * * *", "7-59/15 * * * *"]   # same as wrangler.toml (scheduled() dispatches on controller.cron)
 
 [vars]
 ALLOWED_ORIGIN = "http://127.0.0.1:4741"

@@ -26,7 +26,7 @@ export const MEDIA_MIMES = new Set([
 export const FILES_PATH_RE = /^\/files\/fikir\/\d{1,15}\/[vip]-[0-9a-f]{32}\.(mp4|webm|mov|jpg|png|webp|gif)$/;
 export const FILES_KEY_RE = /^fikir\/\d{1,15}\/[vip]-[0-9a-f]{32}\.(mp4|webm|mov|jpg|png|webp|gif)$/;
 const MEDIA_KINDS = new Set(['video', 'image', 'hls', 'player']);
-const SOURCE_RE = /^(og|ld|html|inline|oembed|br|manual|upload|bookmarklet|adapter:[a-z0-9_]{1,30})$/;
+const SOURCE_RE = /^(og|ld|html|inline|oembed|br|manual|upload|bookmarklet|instagram|adapter:[a-z0-9_]{1,30})$/;
 
 /* ------------------------------------------------------------------ text helpers (moved from index.js) */
 
@@ -913,6 +913,13 @@ export function sanitizeMedia(obj, { allowFiles = false, nowS } = {}) {
   out.verified = obj.verified === true;
   if (obj.play_at_source === true) out.play_at_source = true;
   if (typeof obj.source === 'string' && SOURCE_RE.test(obj.source)) out.source = obj.source;
+  // R2 copy of an Instagram post (worker/inspire-video.js): credit + caption for the card (plain text, rendered as text)
+  if (out.source === 'instagram') {
+    if (typeof obj.by === 'string' && /^[A-Za-z0-9._]{1,30}$/.test(obj.by)) out.by = obj.by;
+    const cap = typeof obj.caption === 'string' ? Array.from(obj.caption.replace(/[\u0000-\u0008\u000B-\u001F\u007F\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '').trim()) : [];
+    if (cap.length) out.caption = cap.slice(0, 500).join('');
+    if (typeof obj.audio === 'boolean') out.audio = obj.audio;
+  }
   return JSON.stringify(out).length <= MAX_MEDIA_JSON ? out : null;
 }
 const MP4_BRANDS = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'M4VH', 'M4VP', 'dash', 'MSNV']);

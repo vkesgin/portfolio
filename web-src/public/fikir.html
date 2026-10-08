@@ -372,6 +372,42 @@
       .pv-btn:hover, .pv-chip:hover { background: rgba(0, 229, 255, 0.28); }
     }
 
+    /* Instagram post played from our R2 copy (post.media.source 'instagram'): credit line, the preview video, the caption
+       (plain text, collapsible). "Oynamıyor mu?" under an Instagram embed asks the server to check / copy it. */
+    .media.media-igcopy { display: block; background: var(--card-bg); }
+    .ig-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px;
+      padding: 8px var(--pad); font-size: 12px; color: var(--muted);
+    }
+    .ig-by { display: flex; align-items: center; gap: 6px; min-width: 0; color: #ddd; font-weight: 600; }
+    .ig-by .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--pc, #E1306C); flex: none; }
+    /* narrow column: "· Instagram" gives way first (the user name never shrinks while it has room), then the user name */
+    .ig-user, .ig-site { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ig-user { flex: none; max-width: calc(100% - 14px); }
+    .ig-site { flex: 0 1 auto; color: var(--muted); font-weight: 500; }
+    .ig-open { flex: none; color: var(--accent); text-decoration: none; font-weight: 600; white-space: nowrap; padding: 4px 0; }
+    @media (hover: hover) { .ig-open:hover { text-decoration: underline; text-underline-offset: 3px; } }
+    .ig-cap { padding: 12px var(--pad) 0; }
+    .ig-cap .clamp { --clamp-h: 104px; }
+    .ig-caption { font-size: 13px; line-height: 1.55; color: #bdbdbd; }
+    .media.media-ig { flex-wrap: wrap; }
+    .ig-help { flex: 1 0 100%; display: flex; justify-content: flex-end; padding: 6px var(--pad) 0; background: var(--card-bg); }
+    .ig-help .text-btn { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; min-height: 22px; }
+    .ig-help .text-btn .spinner { width: 11px; height: 11px; border-width: 2px; }
+    @media (hover: hover) { .ig-help .text-btn:hover { color: var(--accent); } }
+
+    /* "İndir": download of a card's video / image (GET …/download-info, then the file), in the meta row */
+    .dl-btn {
+      display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 3px 11px 3px 9px; border-radius: 999px;
+      border: 1px solid var(--border-strong); background: rgba(255, 255, 255, 0.04); color: #d0d0d0;
+      font: inherit; font-size: 12px; font-weight: 600; line-height: 1; cursor: pointer; white-space: nowrap; justify-content: center;
+    }
+    .dl-btn svg { width: 14px; height: 14px; flex: none; }
+    .dl-btn .spinner { width: 12px; height: 12px; border-width: 2px; border-top-color: var(--accent); flex: none; }
+    .dl-btn[aria-busy="true"] { color: var(--accent); border-color: rgba(0, 229, 255, 0.45); cursor: progress; }
+    .dl-btn .dl-label { font-variant-numeric: tabular-nums; }
+    @media (hover: hover) { .dl-btn:not([aria-busy="true"]):hover { color: var(--accent); border-color: rgba(0, 229, 255, 0.5); background: rgba(0, 229, 255, 0.08); } }
+
     /* Text idea card: [AI storyboard carousel] + label + idea text + storyboard info (assets/js/fikir-storyboard.mjs) */
     .text-idea { padding: var(--pad) var(--pad) 0; background: linear-gradient(160deg, rgba(0, 229, 255, 0.09), rgba(0, 229, 255, 0) 60%); }
     .post-card.has-sb-media .text-idea { background: none; }
@@ -636,6 +672,8 @@
       .clamp-btn, .btn-sm, .btn-mini { min-height: 40px; }
       .pv-btn:not(.pv-play) { width: 40px; height: 40px; }
       .pv-chip { min-height: 40px; padding: 8px 14px; }
+      .dl-btn { min-height: 40px; padding: 6px 15px 6px 13px; font-size: 13px; }
+      .ig-open { padding: 11px 0; margin: -11px 0; }
       .text-btn { position: relative; min-width: 40px; }   /* a short label ("Sil") still gets a 40px wide box */
       .text-btn::after { content: ''; position: absolute; inset: -12px -8px; }
       .src-link { padding: 11px 0; margin: -11px 0; }   /* overflow: hidden (ellipsis) would clip a pseudo hit area */
@@ -903,7 +941,11 @@
     // Server-driven feature flags (GET /api/inspire/config). `storyboard` = the storyboard
     // creation UI may be shown to this user; `sb` = limits + today's remaining quota (null before login).
     // `media` = media previews may be attached ({attach, uploads, max_video_mb, max_image_mb, types}) or null.
-    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null, media: null };
+    // `video` = downloads / Instagram copies (config.media.download, ig_copy, ig_auto). Both default to on (the server's
+    // defaults), so cards built before the config arrives do not change height when it does; "off" hides "İndir" /
+    // "Oynamıyor mu?" again. ig_copy is taken only from a config loaded with the session (without one it is always false).
+    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null, media: null, video: videoDefaults() };
+    function videoDefaults() { return { download: true, ig_copy: true, ig_auto: 'off' }; }
     const SB_MODULE = '/assets/js/fikir-storyboard.mjs?v=20261008';
     window.fikirConfig = config;
 
@@ -1075,6 +1117,8 @@
       const moving = kind === 'video' || kind === 'hls';
       let w = dimOk(x.w), hh = dimOk(x.h);
       if (!w || !hh) w = hh = null;   // a ratio needs both
+      const source = typeof x.source === 'string' ? x.source.slice(0, 40) : '';
+      const ig = source === 'instagram';   // our R2 copy of an Instagram post: credit, caption (plain text), sound flag
       return {
         kind, url,
         poster: moving ? mediaUrl(x.poster) : null,
@@ -1082,7 +1126,10 @@
         w, h: hh,
         autoplay: kind === 'video' ? x.autoplay !== false : x.autoplay === true,
         play_at_source: x.play_at_source === true,
-        source: typeof x.source === 'string' ? x.source.slice(0, 40) : '',
+        source,
+        by: ig && typeof x.by === 'string' && /^[A-Za-z0-9._]{1,30}$/.test(x.by) ? x.by : '',
+        caption: ig && typeof x.caption === 'string' ? x.caption.trim().slice(0, 600) : '',
+        audio: typeof x.audio === 'boolean' ? x.audio : null,
       };
     }
     const mediaSig = (post) => JSON.stringify([normMeta(post.meta), normMedia(post.media)]);
@@ -1290,11 +1337,18 @@
     async function loadConfig() {
       try {
         // With a session the server adds today's remaining storyboard quota; it never answers 401 here.
-        const c = await api('GET', '/api/inspire/config', null, { auth: !!session.token });
+        const authed = !!session.token;
+        const c = await api('GET', '/api/inspire/config', null, { auth: authed });
         if (c && typeof c === 'object') {
           if (typeof c.storyboard === 'boolean') config.storyboard = c.storyboard;
           config.sb = c.sb && typeof c.sb === 'object' ? c.sb : null;
           config.media = normMediaConfig(c.media);
+          const vm = c.media && typeof c.media === 'object' ? c.media : {};
+          config.video = {
+            download: vm.download !== false,
+            ig_copy: authed && session.token ? vm.ig_copy === true : config.video.ig_copy,
+            ig_auto: ['off', 'blocked', 'all'].includes(vm.ig_auto) ? vm.ig_auto : 'off',
+          };
           for (const k of ['max_note_len', 'max_text_len']) {
             if (Number.isInteger(c[k]) && c[k] > 0 && c[k] <= 100000) config[k] = c[k];
           }
@@ -1307,6 +1361,7 @@
       mediaPicker.refreshAvailability();
       $('bm-hint').hidden = !config.media || COARSE;
       refreshAddMediaUI();
+      for (const e of posts.values()) refreshCardActions(e);   // "İndir" / "Oynamıyor mu?" follow the flags
       if (sbUI) sbUI.configChanged();
       else if (config.storyboard) ensureStoryboardUI();
     }
@@ -1501,6 +1556,7 @@
       config.storyboard = false;   // per-user flags; the next login reloads them (showBoard -> loadConfig)
       config.sb = null;
       config.media = null;
+      config.video = videoDefaults();
       teardownBoard();
       closeAllModals();
       showEntry(message);
@@ -1843,7 +1899,8 @@
 
     function removeEntry(e) {
       if (sbUI) sbUI.unmount(e);
-      if (clampRO) for (const c of [e.refs.textClamp, e.refs.descClamp]) if (c) clampRO.unobserve(c.body);
+      if (clampRO) for (const c of [e.refs.textClamp, e.refs.descClamp, e.refs.capClamp]) if (c) clampRO.unobserve(c.body);
+      clearTimeout(e.igPollTimer);
       if (nearIO) nearIO.unobserve(e.el);
       if (farIO) farIO.unobserve(e.el);
       if (deferredEntries.delete(e) && viewIO) viewIO.unobserve(e.el);
@@ -1920,6 +1977,15 @@
       if (platform === 'image') return { kind: 'image', platform, parsed, src };
       if (platform === 'video') return { kind: 'video', platform, parsed, src };
       const meta = normMeta(post.meta);
+      // Instagram post with our R2 copy (blocked embed "Instagram'da İzle", or copied by the cron): played here with the
+      // preview video; a copy that fails to load in this browser falls back to Instagram's embed.
+      const copy = platform === 'instagram' ? igCopyOf(post) : null;
+      if (copy && !(bad && bad.has(copy.url))) {
+        const plan = previewPlan(copy, null, true);
+        if (plan && plan.type === 'video') {
+          return { kind: 'igcopy', platform, parsed, plan, copy: { by: copy.by, caption: copy.caption, audio: copy.audio } };
+        }
+      }
       // a private Drive/Docs file only frames Google's "refused to connect" page: preview card instead
       if (parsed.embed && !parsed.needsResolve && !(meta && meta.login_wall)) return { kind: 'embed', platform, parsed };
       // Link card ("base" card: media previews may replace its visual). bad = media URLs that failed to load here.
@@ -1964,9 +2030,18 @@
       const poster = media.poster || (meta && meta.image) || null;
       return poster ? { type: 'image', url: poster, ...dims, atSource: true } : null;
     }
+    // post.media of an Instagram copy (worker: inspireIgCopy) as normMedia() output, else null
+    function igCopyOf(post) {
+      const m = normMedia(post.media);
+      return m && m.source === 'instagram' && m.kind === 'video' ? m : null;
+    }
+    // Instagram links the server can check / copy (worker igRef: reel, p, tv with a shortcode)
+    const IG_POST_KINDS = new Set(['reel', 'p', 'tv']);
+    const isIgPost = (view) => !!(view && view.platform === 'instagram' && view.parsed && IG_POST_KINDS.has(view.parsed.subtype) && view.parsed.id);
     // Compared on refresh: the card's media block is rebuilt only when this changes.
     function viewSig(view) {
       if (view.kind === 'card') return JSON.stringify(['card', view.plan]);
+      if (view.kind === 'igcopy') return JSON.stringify(['igcopy', view.plan, view.copy]);
       if (view.kind === 'embed') return JSON.stringify(['embed', view.parsed.embed.src]);
       return view.kind;
     }
@@ -2002,6 +2077,7 @@
       else if (kind === 'image') media = buildImageMedia(entry);
       else if (kind === 'video') media = buildVideoMedia(entry);
       else if (kind === 'card') media = buildLinkCard(entry);
+      else if (kind === 'igcopy') media = buildIgCopyMedia(entry);
       else if (kind === 'text') media = buildTextIdea(entry);
       else media = buildInvalidMedia(entry);
       card.append(...[].concat(media), buildInfo(entry));
@@ -2023,7 +2099,13 @@
       m.facade = buildFacade(entry, m);
       box.append(m.facade);
       entry.media = m;
-      return h('div', { class: 'media' }, box);
+      entry.refs.igHelp = null;
+      if (!isIgPost(entry.view)) return h('div', { class: 'media' }, box);
+      // Instagram reel / post: "Oynamıyor mu?" (shown while copies are on, see refreshCardActions)
+      const btn = h('button', { type: 'button', class: 'text-btn', 'data-action': 'ig-blocked' }, 'Oynamıyor mu?');
+      entry.refs.igHelp = h('div', { class: 'ig-help', hidden: !igHelpShown(entry) }, btn);
+      entry.refs.igHelpBtn = btn;
+      return h('div', { class: 'media media-ig' }, box, entry.refs.igHelp);
     }
 
     function sizeEmbedBox(m) {
@@ -2223,7 +2305,10 @@
       else if (!cur || Math.abs(Math.log(r / cur)) > 0.15) box.classList.add('fit-contain');
     }
 
-    function buildPreviewVideo(entry, plan, href) {
+    // opts.open: the "↗ Kaynakta aç" corner link (the Instagram copy has its own link in the credit line);
+    // opts.sound: the sound button (a copy known to be silent has none)
+    function buildPreviewVideo(entry, plan, href, opts = {}) {
+      const { open = true, sound = true } = opts;
       const box = h('div', { class: 'media-box preview is-video', 'data-action': 'pv-toggle' });
       sizePreviewBox(box, previewRatio(entry, plan));
       if (plan.poster) {
@@ -2238,9 +2323,9 @@
       };
       m.playBtn = h('button', { type: 'button', class: 'pv-btn pv-play', 'data-action': 'pv-play', 'aria-label': 'Oynat', hidden: canAutoplay(m) }, '▶');
       m.pauseBtn = h('button', { type: 'button', class: 'pv-btn pv-pause', 'data-action': 'pv-pause', 'aria-label': 'Duraklat', title: 'Duraklat', hidden: true });
-      m.soundBtn = h('button', { type: 'button', class: 'pv-btn pv-sound', 'data-action': 'pv-sound', 'aria-label': 'Sesi aç', title: 'Sesi aç', translate: 'no' }, '🔇');
+      m.soundBtn = h('button', { type: 'button', class: 'pv-btn pv-sound', 'data-action': 'pv-sound', 'aria-label': 'Sesi aç', title: 'Sesi aç', translate: 'no', hidden: !sound }, '🔇');
       box.append(m.playBtn, m.pauseBtn, m.soundBtn,
-        h('a', { class: 'pv-btn pv-open', 'data-action': 'pv-open', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', 'aria-label': 'Kaynakta aç', title: 'Kaynakta aç' }, '↗'));
+        open && href ? h('a', { class: 'pv-btn pv-open', 'data-action': 'pv-open', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', 'aria-label': 'Kaynakta aç', title: 'Kaynakta aç' }, '↗') : null);
       entry.media = m;
       pvOwner.set(box, m);
       return box;
@@ -2287,6 +2372,27 @@
       } else {
         showLinkPlaceholder(r.lvVisual, host);
       }
+    }
+
+    /* Instagram post played from our R2 copy: "@user · Instagram" + "Instagram'da aç ↗", the preview video (poster, muted
+       autoplay while visible, shares the mount cap, ⏸ / sound), then the post's caption (plain text, collapsible). The
+       video box is sized from media.w/h before anything loads. */
+    function buildIgCopyMedia(entry) {
+      const { parsed, plan, copy } = entry.view;
+      const r = entry.refs;
+      const href = safeHttpUrl(parsed.canonical);
+      // "@user · Instagram": a long user name is shortened (…), the site name stays
+      const by = h('span', { class: 'ig-by', translate: 'no' }, h('span', { class: 'dot' }),
+        copy.by ? h('span', { class: 'ig-user' }, '@' + copy.by) : null, copy.by ? ' ' : null,   // the space: for text / screen readers (flex gap draws it)
+        h('span', { class: 'ig-site' }, (copy.by ? '· ' : '') + 'Instagram'));
+      const head = h('div', { class: 'ig-head' }, by,
+        href ? h('a', { class: 'ig-open', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc' }, "Instagram'da aç ↗") : null);
+      head.style.setProperty('--pc', platformInfo('instagram').color);
+      const box = buildPreviewVideo(entry, plan, href, { open: false, sound: copy.audio !== false });
+      const wrap = h('div', { class: 'media media-igcopy' }, head, h('div', { class: 'media-stage' }, box));
+      r.capClamp = copy.caption ? buildClamp(entry, 'cap', 'ig-caption', copy.caption, { plain: true }) : null;
+      if (r.capClamp) wrap.append(h('div', { class: 'ig-cap' }, r.capClamp.wrap));
+      return wrap;
     }
 
     function showLinkPlaceholder(visual, host) {
@@ -2348,22 +2454,23 @@
     const clampRO = 'ResizeObserver' in window ? new ResizeObserver((records) => {
       for (const rec of records) { const c = clampOf.get(rec.target); if (c) measureClamp(c); }
     }) : null;
-    function setRich(el, text) {
+    function setRich(el, text, plain = false) {
       el.textContent = '';
       const v = String(text || '');
-      if (mdLib) {
+      if (mdLib && !plain) {
         try { el.classList.remove('plain'); el.append(mdLib.renderMarkdown(mdLib.parseMarkdown(v), h)); return; } catch (err) { console.error('markdown', err); el.textContent = ''; }
       }
       el.classList.add('plain');
       el.textContent = v;
     }
-    function buildClamp(entry, field, cls, text) {
+    // opts.plain: plain text, no Markdown (an Instagram caption)
+    function buildClamp(entry, field, cls, text, opts = {}) {
       const key = entry.id + ':' + field;
       const body = h('div', { class: 'rich ' + cls });
       const box = h('div', { class: 'clamp-box', id: `clamp-${entry.id}-${field}` }, body);
       const btn = h('button', { type: 'button', class: 'clamp-btn', 'data-action': 'clamp', 'data-field': field, 'aria-expanded': 'false', 'aria-controls': box.id, hidden: true }, 'Daha fazla göster');
-      const c = { key, wrap: h('div', { class: 'clamp', hidden: !text }, box, btn), box, body, btn, long: false };
-      setRich(body, text);
+      const c = { key, wrap: h('div', { class: 'clamp', hidden: !text }, box, btn), box, body, btn, long: false, plain: opts.plain === true };
+      setRich(body, text, c.plain);
       setClampOpen(c, clampOpen.has(key));
       clampOf.set(body, c);
       if (clampRO) clampRO.observe(body);
@@ -2383,7 +2490,7 @@
     }
     function setClampText(c, text) {
       c.wrap.hidden = !text;
-      setRich(c.body, text);   // the ResizeObserver re-measures it
+      setRich(c.body, text, c.plain);   // the ResizeObserver re-measures it
     }
     function measureClamp(c) {
       if (!c.body.isConnected || c.wrap.hidden) return;
@@ -2404,7 +2511,7 @@
     // User toggle. Collapsing a card whose top was scrolled past (reading the long text) brings its top back into view;
     // only this card's column changes height.
     function toggleClamp(entry, field) {
-      const c = field === 'text' ? entry.refs.textClamp : entry.refs.descClamp;
+      const c = field === 'text' ? entry.refs.textClamp : field === 'cap' ? entry.refs.capClamp : entry.refs.descClamp;
       if (!c) return;
       const open = !c.wrap.classList.contains('is-open');
       setClampOpen(c, open);
@@ -2437,8 +2544,12 @@
       }
       // Owner / admin of a link card: attach, replace or remove its media preview (#media-modal)
       r.mediaBtn = h('button', { type: 'button', class: 'text-btn', 'data-action': 'media-edit', hidden: true }, 'Önizleme ekle');
+      // Post owner / admin of an Instagram card played from our copy: remove the copy (back to Instagram's embed)
+      r.copyDel = h('button', { type: 'button', class: 'text-btn', 'data-action': 'ig-copy-del', hidden: true }, 'Kopyayı kaldır');
       r.del = h('button', { type: 'button', class: 'text-btn danger', 'data-action': 'delete-post', hidden: !post.can_delete }, 'Sil');
-      right.append(r.mediaBtn, r.del);
+      r.dlBtn = buildDlButton();
+      right.prepend(r.dlBtn);
+      right.append(r.mediaBtn, r.copyDel, r.del);
       info.append(h('div', { class: 'post-meta' }, h('div', { class: 'post-meta-left' }, r.author, roleBadge(post), r.date), right));
 
       r.notesTitle = h('div', { class: 'notes-title', hidden: true }, 'Notlar');
@@ -2452,7 +2563,80 @@
       info.append(h('div', { class: 'notes' }, r.notesTitle, r.notesList, form));
       reconcileNotes(entry, post.notes);
       updateMediaControls(entry);
+      updateCardActions(entry);
       return info;
+    }
+
+    /* Card actions that follow the post (dl hint, can_delete, a copy) and the server flags (config.video): "İndir",
+       "Kopyayı kaldır", "Oynamıyor mu?"; the source link is hidden while the copy's credit line carries it. */
+    function dlShown(entry) {
+      const dl = entry.post.dl;
+      return config.video.download !== false && !!dl && typeof dl === 'object' && (dl.video !== false || dl.image === true);
+    }
+    const igHelpShown = (entry) => config.video.ig_copy === true && entry.view.kind === 'embed' && isIgPost(entry.view) && !igCopyOf(entry.post);
+    function cardActionState(entry) {
+      const r = entry.refs;
+      return [
+        [r.dlBtn, !dlShown(entry)],
+        [r.copyDel, !(entry.view.kind === 'igcopy' && entry.post.can_delete)],
+        [r.srcLink, entry.view.kind === 'igcopy'],
+        [r.igHelp, !igHelpShown(entry)],
+      ].filter(([el]) => !!el);
+    }
+    function updateCardActions(entry) {
+      for (const [el, hide] of cardActionState(entry)) if (el.hidden !== hide) el.hidden = hide;
+      const b = entry.refs.dlBtn;
+      if (b && !b.hidden && !b.dataset.busy) {
+        const dl = entry.post.dl || {};
+        const label = dl.video === true ? 'Videoyu indir' : dl.video === false ? 'Görseli indir' : 'Videoyu ya da görseli indir';
+        if (b.title !== label) { b.title = label; b.setAttribute('aria-label', label); }
+      }
+    }
+    function svgIcon(paths) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(NS, 'svg');
+      for (const [k, v] of [['viewBox', '0 0 24 24'], ['fill', 'none'], ['stroke', 'currentColor'], ['stroke-width', '2.2'],
+        ['stroke-linecap', 'round'], ['stroke-linejoin', 'round'], ['aria-hidden', 'true'], ['focusable', 'false']]) svg.setAttribute(k, v);
+      for (const d of paths) { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); svg.append(p); }
+      return svg;
+    }
+    function buildDlButton() {
+      const b = h('button', { type: 'button', class: 'dl-btn', 'data-action': 'download', hidden: true },
+        svgIcon(['M12 4v11', 'M7 10.5l5 5 5-5', 'M5 20h14']), h('span', { class: 'dl-label' }, 'İndir'));
+      return b;
+    }
+    // Busy look of "İndir": spinner in place of the icon, "%42" while the file arrives. The button keeps its width (the
+    // meta row never re-wraps) and its focus (aria-disabled, not disabled).
+    function setDlBusy(b, busy) {
+      if (!b) return;
+      const label = b.querySelector('.dl-label');
+      if (busy) {
+        if (b.dataset.busy) return;
+        b.dataset.busy = '1';
+        b.style.minWidth = b.offsetWidth ? b.offsetWidth + 'px' : '';
+        b.setAttribute('aria-busy', 'true');
+        b.setAttribute('aria-disabled', 'true');
+        const svg = b.querySelector('svg');
+        if (svg) svg.replaceWith(h('span', { class: 'spinner', 'aria-hidden': 'true' }));
+      } else {
+        if (!b.dataset.busy) return;
+        delete b.dataset.busy;
+        b.style.minWidth = '';
+        b.removeAttribute('aria-busy');
+        b.removeAttribute('aria-disabled');
+        const sp = b.querySelector('.spinner');
+        if (sp) sp.replaceWith(svgIcon(['M12 4v11', 'M7 10.5l5 5 5-5', 'M5 20h14']));
+        if (label) setText(label, 'İndir');
+      }
+    }
+    function setDlProgress(b, frac) {
+      const label = b && b.dataset.busy && b.querySelector('.dl-label');
+      if (label) setText(label, frac == null ? 'İndir' : '%' + Math.min(100, Math.max(0, Math.round(frac * 100))));
+    }
+    // Flags changed (config loaded): only cards whose buttons change are touched, through applyOrDefer (a button that
+    // appears may wrap the meta row: height change).
+    function refreshCardActions(entry) {
+      if (cardActionState(entry).some(([el, hide]) => el.hidden !== hide)) applyOrDefer(entry, 'actions', () => updateCardActions(entry));
     }
 
     // Media controls of a link card: the info-row button, the "+ Önizleme ekle" chip, the "preparing" label.
@@ -2505,6 +2689,7 @@
       if (s.date !== rel) { s.date = rel; r.date.textContent = rel; }
       reconcileNotes(entry, post.notes);
       updateMediaControls(entry);
+      updateCardActions(entry);
       if (entry.view.kind === 'text') {
         if (sbUI) sbUI.patch(entry, post);
         else { reserveSbMedia(entry); if (post.storyboard) ensureStoryboardUI(); }
@@ -2513,9 +2698,10 @@
 
     // Late or refreshed metadata / media. The media block is rebuilt only when what it shows changes
     // (a found or attached video, a private Drive file ...); otherwise texts are patched in place.
+    const SWAPPABLE = new Set(['card', 'embed', 'igcopy']);   // kinds whose media block swapMedia() may replace
     function patchMeta(entry, above) {
       const kind = entry.view.kind;
-      if (kind !== 'card' && kind !== 'embed') return;
+      if (!SWAPPABLE.has(kind)) return;
       const meta = normMeta(entry.post.meta);
       if (viewSig(classify(entry.post, entry.badMedia)) !== entry.shown.viewSig) {
         applyOrDefer(entry, 'media', () => swapMedia(entry), above);
@@ -2540,7 +2726,7 @@
       if (!posts.has(entry.id) || posts.get(entry.id) !== entry) return;
       const view = classify(entry.post, entry.badMedia);
       const sig = viewSig(view);
-      if (sig === entry.shown.viewSig || (view.kind !== 'card' && view.kind !== 'embed')) return;
+      if (sig === entry.shown.viewSig || !SWAPPABLE.has(view.kind) || !SWAPPABLE.has(entry.view.kind)) return;
       const old = entry.media;
       const userStarted = !!(old && old.type === 'video' && old.user);   // a tapped video that failed: its fallback plays too
       if (old) {
@@ -2549,22 +2735,30 @@
         if (playIO && old.type === 'video') playIO.unobserve(old.box);
       }
       if (farIO) farIO.unobserve(entry.el);
+      const r = entry.refs;
+      if (r.capClamp && clampRO) clampRO.unobserve(r.capClamp.body);
+      r.capClamp = null; r.igHelp = null; r.igHelpBtn = null;
       entry.media = null;
       entry.view = view;
       entry.shown.viewSig = sig;
-      const media = view.kind === 'embed' ? buildEmbedMedia(entry) : buildLinkCard(entry);
-      if (view.kind === 'embed') { entry.refs.lvVisual = null; entry.refs.pvChip = null; entry.refs.pvPending = null; }
+      const media = view.kind === 'embed' ? buildEmbedMedia(entry) : view.kind === 'igcopy' ? buildIgCopyMedia(entry) : buildLinkCard(entry);
+      if (view.kind !== 'card') { r.lvVisual = null; r.pvChip = null; r.pvPending = null; }
       const prev = entry.el.querySelector(':scope > .media');
       if (prev) prev.replaceWith(media); else entry.el.prepend(media);
       entry.el.classList.toggle('kind-embed', view.kind === 'embed');
       entry.el.classList.toggle('kind-card', view.kind === 'card');
+      entry.el.classList.toggle('kind-igcopy', view.kind === 'igcopy');
       entry.el.classList.toggle('has-media', !!view.plan);
       if (view.kind === 'embed' && view.page && !entry.refs.srcLink) {   // the page's own player: keep a link to the page
         const href = safeHttpUrl(view.page.canonical);
         const right = entry.el.querySelector('.post-meta-right');
-        if (href && right) right.prepend(entry.refs.srcLink = h('a', { class: 'src-link', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', title: href, translate: 'no' }, hostOf(href) + ' ↗'));
+        if (href && right) {
+          entry.refs.srcLink = h('a', { class: 'src-link', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', title: href, translate: 'no' }, hostOf(href) + ' ↗');
+          if (entry.refs.dlBtn && entry.refs.dlBtn.parentNode === right) entry.refs.dlBtn.after(entry.refs.srcLink); else right.prepend(entry.refs.srcLink);
+        }
       }
       updateMediaControls(entry);
+      updateCardActions(entry);
       if (entry.media) {
         if (userStarted && entry.media.type === 'video') entry.media.user = true;
         farIO.observe(entry.el);
@@ -2751,6 +2945,9 @@
       if (action === 'clamp') { toggleClamp(entry, t.dataset.field); return; }
       if (action === 'delete-post') { deletePost(entry); return; }
       if (action === 'media-edit') { openMediaModal(entry); return; }
+      if (action === 'download') { downloadPost(entry); return; }
+      if (action === 'ig-blocked') { igNotPlaying(entry); return; }
+      if (action === 'ig-copy-del') { removeIgCopy(entry); return; }
       if (action === 'pv-open') return;   // plain link to the source page
       const pm = entry.media && entry.media.type === 'video' ? entry.media : null;
       if (pm && (action === 'pv-play' || action === 'pv-pause' || action === 'pv-sound' || action === 'pv-toggle')) {
@@ -4046,6 +4243,242 @@
           setProgress($('media-progress'), null);
           updateMediaSave();
         }
+      }
+    }
+
+    /* ============================================== DOWNLOADS + INSTAGRAM COPIES
+     * "İndir": GET …/download-info (no network on the server; with the session the owner's link carries a ticket that
+     * skips the daily budget), then the file itself is fetched with format=json: a refusal (rate limit, Instagram busy,
+     * a failed upstream) comes back as JSON and is shown as a Turkish toast; the board never navigates away. The bytes
+     * are collected into a Blob (progress on the button) and saved through a temporary <a download> on a blob: URL (same
+     * origin, so the download attribute and the server's file name apply; iOS Safari 13+ asks before saving it into
+     * Files). A file bigger than DL_BLOB_MAX is not buffered: that request is cancelled and the same link is opened as a
+     * navigation instead (Content-Disposition: attachment, so the board stays where it is).
+     * ================================================================== */
+    const DL_BLOB_MAX = (COARSE ? 120 : 400) * 1048576;
+    const DL_EXT = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+    const dlRunning = new Set();   // post ids with a download in progress (one per card)
+
+    async function downloadPost(entry) {
+      const btn = entry.refs.dlBtn;
+      if (!btn || btn.hidden || dlRunning.has(entry.id)) return;
+      dlRunning.add(entry.id);
+      setDlBusy(btn, true);
+      try {
+        const info = await api('GET', `/api/inspire/posts/${encodeURIComponent(entry.id)}/download-info`);
+        if (!info || typeof info !== 'object') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        if (info.enabled === false) { toast('İndirme şu anda kapalı.', 'error'); return; }
+        if (info.video === false && !info.image) {
+          toast(info.message || 'Bu fikirde indirilecek bir video ya da görsel yok.', 'error', 6500);
+          return;
+        }
+        // a known video: only the video (never its poster in its place); "maybe": the video, else the image
+        const part = info.video === true ? 'video' : info.video === false ? 'image' : 'auto';
+        if (info.video === false && info.message) toast(`${info.message} Kapak görseli indiriliyor.`, 'info', 6500);
+        await fetchDownload(entry, btn, info, part);
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;
+        if (e && e.status === 404 && e.code === 'not_found' && posts.get(entry.id) === entry) {
+          toast('Bu fikir artık mevcut değil.', 'error');
+          removeEntry(entry);
+          updateEmptyState();
+          return;
+        }
+        if (!e || e.status !== 401) toast(dlErrorText(e), 'error', 7000);
+      } finally {
+        dlRunning.delete(entry.id);
+        setDlBusy(btn, false);
+      }
+    }
+
+    // The download link of download-info (…/download[?k=ticket]) with part= / format=json; another shape: the plain link.
+    function dlLink(entry, info, part, asJson) {
+      const raw = info && typeof info.url === 'string' ? info.url : '';
+      const m = /^\/api\/inspire\/posts\/(\d{1,15})\/download(?:\?k=[A-Za-z0-9._-]{1,80})?$/.exec(raw);
+      const path = m && m[1] === entry.id ? raw : `/api/inspire/posts/${encodeURIComponent(entry.id)}/download`;
+      let u;
+      try { u = new URL(API_BASE + path); } catch (_) { return null; }
+      if (part !== 'auto') u.searchParams.set('part', part);
+      if (asJson) u.searchParams.set('format', 'json');
+      return safeHttpUrl(u.href);
+    }
+
+    async function fetchDownload(entry, btn, info, part) {
+      const url = dlLink(entry, info, part, true);
+      if (!url) throw new ApiError(0, 'bad_url', 'İndirme bağlantısı geçersiz.');
+      const ctrl = new AbortController();
+      let res;
+      try {
+        // a plain GET without credentials or custom headers: no preflight; the file answers with Access-Control-Allow-Origin: *
+        res = await fetch(url, { signal: ctrl.signal, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' });
+      } catch (e) {
+        throw new ApiError(0, 'network', 'Sunucuya ulaşılamadı. Bağlantını kontrol et.');
+      }
+      if (!res.ok) {
+        let d = null;
+        try { d = JSON.parse(await res.text()); } catch (_) { d = null; }
+        if (!d || typeof d !== 'object') d = null;
+        throw new ApiError(res.status, d && d.error, (d && typeof d.message === 'string' && d.message) || defaultError(res.status), d);
+      }
+      const len = Number(res.headers.get('Content-Length')) || 0;
+      const type = (res.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+      const name = dlFileName(res.headers.get('Content-Disposition'), entry, type);
+      const viaLink = () => { ctrl.abort(); openDownload(dlLink(entry, info, part, false)); toast('İndirme başladı.', 'ok'); };
+      if (!res.body || typeof res.body.getReader !== 'function' || len > DL_BLOB_MAX) { viaLink(); return; }
+      const reader = res.body.getReader();
+      const chunks = [];
+      let got = 0, shown = -1;
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          got += value.byteLength;
+          if (got > DL_BLOB_MAX) { viaLink(); return; }   // unknown size that turned out big
+          const pct = len ? Math.floor((got * 100) / len) : -1;
+          if (pct !== shown) { shown = pct; setDlProgress(btn, len ? got / len : null); }
+        }
+      } catch (e) {
+        throw new ApiError(0, 'network', 'İndirme yarıda kesildi. Bağlantını kontrol edip tekrar dene.');
+      }
+      if (len && got !== len) throw new ApiError(0, 'network', 'İndirme yarıda kesildi. Tekrar dene.');
+      saveBlob(new Blob(chunks, { type: type || 'application/octet-stream' }), name);
+    }
+
+    // File name from Content-Disposition (filename* first), cleaned; else fikir-<id>.<ext>
+    function dlFileName(cd, entry, type) {
+      const v = String(cd || '');
+      let name = '';
+      const star = /filename\*\s*=\s*(?:UTF-8|utf-8)''([^;]+)/.exec(v);
+      if (star) { try { name = decodeURIComponent(star[1].trim().replace(/^"|"$/g, '')); } catch (_) { name = ''; } }
+      if (!name) { const q = /filename\s*=\s*"([^"]*)"/i.exec(v) || /filename\s*=\s*([^;]+)/i.exec(v); if (q) name = q[1].trim(); }
+      name = name.replace(/[\u0000-\u001f\u007f-\u009f/\\:*?"<>|]+/g, '-').replace(/^[\s.-]+/, '').slice(0, 120);
+      return name || `fikir-${entry.id}.${DL_EXT[type] || 'bin'}`;
+    }
+    function saveBlob(blob, name) {
+      const href = URL.createObjectURL(blob);
+      const a = h('a', { download: name, rel: 'noopener', hidden: true });
+      a.href = href;   // blob: URL made here (h() takes http(s) only)
+      document.body.append(a);
+      a.click();
+      a.remove();
+      // the browser reads the blob after the click; iOS Safari only once the user answers its download prompt
+      setTimeout(() => URL.revokeObjectURL(href), (COARSE ? 10 : 2) * 60000);
+    }
+    // Navigation download (big files): attachment, so the board stays; the download attribute is ignored cross-origin.
+    function openDownload(url) {
+      if (!url) return;
+      const a = h('a', { href: url, download: '', rel: 'noopener', hidden: true });
+      document.body.append(a);
+      a.click();
+      a.remove();
+    }
+
+    // Turkish text of a download / copy error: Instagram busy with a wait time, else the server's message.
+    function dlErrorText(e) {
+      const d = (e && e.data && typeof e.data === 'object') ? e.data : {};
+      const s = Number(d.retry_s);
+      if (e && e.status === 429 && (d.reason === 'ig_busy' || e.code === 'ig_busy') && s > 0) return `Instagram şu an meşgul, ~${fmtSecs(s)} sonra tekrar dene.`;
+      return (e && e.message) || 'İşlem yapılamadı. Lütfen tekrar dene.';
+    }
+    function fmtSecs(sec) {
+      const s = Math.max(1, Math.round(Number(sec) || 0));
+      if (s < 90) return `${s} sn`;
+      if (s < 5400) return `${Math.round(s / 60)} dk`;
+      return `${Math.round(s / 3600)} sa`;
+    }
+
+    /* "Oynamıyor mu?" under an Instagram embed (copies on, no copy yet; session required): the server answers the embed
+       state it knows (it checks the embed page itself only for an unchecked post, or for the post owner / admin at most
+       once a day). Blocked ("Instagram'da İzle"): the video is copied into our storage now (POST ig-copy, which copies
+       only blocked reels for guests / users) and the card switches to the copy. A copy already running elsewhere: polled
+       through download-info. */
+    async function igNotPlaying(entry) {
+      const btn = entry.refs.igHelpBtn;
+      if (!btn || btn.dataset.busy || !igHelpShown(entry)) return;
+      const id = entry.id;
+      const path = `/api/inspire/posts/${encodeURIComponent(id)}`;
+      const still = () => posts.get(id) === entry;
+      igHelpBusy(btn, 'Kontrol ediliyor…');
+      try {
+        const r = await api('POST', path + '/ig-blocked');
+        if (!still()) return;
+        const state = r && r.state;
+        if (state === 'copied' && r.media) {
+          patchCard(entry, { ...entry.post, media: r.media });
+          toast('Bu videonun kopyası varmış; artık burada oynuyor.', 'ok');
+          return;
+        }
+        if (state === 'blocked') {
+          igHelpBusy(btn, 'Kopyalanıyor…');
+          try {
+            const c = await mutate(() => api('POST', path + '/ig-copy'));
+            if (c && c.post) applyServerPost(c.post);
+            toast(c && c.already ? 'Bu videonun kopyası zaten varmış; artık burada oynuyor.'
+              : 'Instagram bu videoyu burada oynatmıyor; kopyasını aldık, artık burada oynuyor.', 'ok', 5000);
+          } catch (e) {
+            if (e.status === 401) return;
+            if (e.status === 409 && e.code === 'in_progress') {
+              toast('Bu video şu anda kopyalanıyor; hazır olunca burada oynayacak.', 'info', 6000);
+              pollIgCopy(entry);
+              return;
+            }
+            const transient = ['ig_busy', 'resolve_failed', 'fetch_failed', 'rate_limited'].includes(e.code);
+            toast(dlErrorText(e) + (transient && r.queued ? ' Video sıraya alındı; otomatik olarak kopyalanacak.' : ''), 'error', 7000);
+          }
+          return;
+        }
+        if (state === 'ok') toast("Instagram'a göre bu video burada oynatılabiliyor. Açılmıyorsa sayfayı yenile ya da Instagram'da aç.", 'info', 7000);
+        else if (state === 'photo') toast('Bu gönderi bir fotoğraf; oynatılacak bir video yok.', 'info', 6000);
+        else toast('Şu an kontrol edilemedi. Biraz sonra tekrar dene.', 'error', 6000);
+      } catch (e) {
+        if (e.status !== 401) toast(e.message || 'Şu an kontrol edilemedi. Biraz sonra tekrar dene.', 'error');
+      } finally {
+        igHelpIdle(btn);
+      }
+    }
+    function igHelpBusy(btn, text) {
+      if (!btn.dataset.busy) { btn.dataset.busy = '1'; btn.dataset.label = btn.textContent; }
+      btn.setAttribute('aria-busy', 'true');
+      btn.setAttribute('aria-disabled', 'true');
+      btn.textContent = '';
+      btn.append(h('span', { class: 'spinner', 'aria-hidden': 'true' }), text);
+    }
+    function igHelpIdle(btn) {
+      if (!btn.dataset.busy) return;
+      btn.textContent = btn.dataset.label || 'Oynamıyor mu?';
+      delete btn.dataset.busy;
+      btn.removeAttribute('aria-busy');
+      btn.removeAttribute('aria-disabled');
+    }
+    // A copy made by another request (the cron, another visitor): download-info says so (copied), then the list
+    // refresh patches the card (keyed; only its media block changes).
+    function pollIgCopy(entry, n = 0) {
+      clearTimeout(entry.igPollTimer);
+      if (n >= 8) return;
+      entry.igPollTimer = setTimeout(async () => {
+        if (posts.get(entry.id) !== entry || entry.view.kind === 'igcopy') return;
+        try {
+          const info = await api('GET', `/api/inspire/posts/${encodeURIComponent(entry.id)}/download-info`);
+          if (info && info.copied) { loadPosts(); return; }
+        } catch (_) { /* next try */ }
+        pollIgCopy(entry, n + 1);
+      }, 8000);
+    }
+
+    // Post owner / admin: back to Instagram's embed (the cron does not copy it again).
+    async function removeIgCopy(entry) {
+      if (!(await confirmDialog('Instagram kopyası kaldırılsın mı? Kart yeniden Instagram oynatıcısını gösterir; video otomatik olarak yeniden kopyalanmaz.', 'Kaldır'))) return;
+      try {
+        const res = await mutate(() => api('DELETE', `/api/inspire/posts/${encodeURIComponent(entry.id)}/ig-copy`));
+        if (res && res.post) applyServerPost(res.post);
+        toast(res && res.removed ? 'Kopya kaldırıldı.' : 'Kaldırılacak bir kopya yoktu.', 'ok');
+      } catch (e) {
+        if (e.status === 404 && e.code === 'not_found') {
+          toast('Bu fikir artık mevcut değil.', 'error');
+          if (posts.get(entry.id) === entry) { removeEntry(entry); updateEmptyState(); }
+        } else if (e.status === 403) toast(e.message || 'Bu kopyayı kaldırma yetkin yok.', 'error');
+        else if (e.status !== 401) toast(e.message || 'Kopya kaldırılamadı.', 'error');
       }
     }
 

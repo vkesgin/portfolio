@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const BASE = process.argv[2] || 'http://127.0.0.1:8821';
 const MODE = process.argv[3] || 'main';
-const FXB = 'http://127.0.0.1:4742';
+const FXB = process.env.MEDIA_E2E_FX || 'http://127.0.0.1:4742';   // run-smoke.sh: MEDIA_E2E_FXPORT
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WORKER = path.join(HERE, '../../worker');
 const FX = path.join(HERE, '../fixtures/media');
@@ -63,6 +63,14 @@ function d1(sql) {
   const out = execFileSync('npx', ['-y', 'wrangler@4', 'd1', 'execute', DB, '--local', '-c', CONFIG, '--persist-to', STATE, '--json', '--command', sql],
     { cwd: WORKER, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   return JSON.parse(out.slice(out.indexOf('[')))[0].results;
+}
+// the legacy seed names the fixture server's default host: a moved fixture server (MEDIA_E2E_FX) gets a rewritten copy
+function seedFile(file) {
+  const host = new URL(FXB).host;
+  if (host === '127.0.0.1:4742') return file;
+  const out = path.join(STATE, path.basename(file));
+  fs.writeFileSync(out, fs.readFileSync(file, 'utf8').replaceAll('127.0.0.1:4742', host));
+  return out;
 }
 function d1File(file) {
   execFileSync('npx', ['-y', 'wrangler@4', 'd1', 'execute', DB, '--local', '-c', CONFIG, '--persist-to', STATE, '--file', file],
@@ -133,13 +141,16 @@ const ADM = await admin();
 if (MODE === 'main') {
   const A = await guest('Ayşe'), B = await guest('Burak');
   r = await call('GET', '/api/inspire/config', null, A.token);
-  assert.deepEqual(r.data.media, { attach: true, uploads: true, max_video_mb: 25, max_image_mb: 10,
+  // download / Instagram-copy flags (worker/inspire-video.js) ride on the same block
+  const { download, ig_copy, ig_auto, ...upMedia } = r.data.media;
+  assert.deepEqual(upMedia, { attach: true, uploads: true, max_video_mb: 25, max_image_mb: 10,
     types: ['video/mp4', 'video/webm', 'video/quicktime', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'] });
+  assert.equal(download, true); assert.equal(ig_copy, true); assert.ok(['off', 'blocked', 'all'].includes(ig_auto), ig_auto);
   r = await call('GET', '/api/inspire/config', null, null, { legacy: true });
   assert.equal(r.data.media, undefined);
   ok('config: media block for the current board only');
 
-  d1File(path.join(HERE, 'seed-legacy.sql'));
+  d1File(seedFile(path.join(HERE, 'seed-legacy.sql')));
   const seeded = Object.fromEntries(d1("SELECT id, url FROM inspire_posts WHERE client_id = 'legacyseedcid0000000001'").map((x) => [x.url, x.id]));
 
   // 10. 64 KB precheck still applies to JSON routes

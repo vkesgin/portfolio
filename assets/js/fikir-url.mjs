@@ -984,6 +984,24 @@ export function parseLink(input) {
 }
 
 /**
+ * Media kind of a direct file URL from its path extension: 'video' (.mp4 .webm .mov .m4v), 'image' (.jpg .jpeg .png
+ * .gif .webp .avif), 'hls' (.m3u8) or null (anything else, including .svg). Accepts absolute http(s) URLs and
+ * site-relative paths ("/files/..."); no network, no content sniffing.
+ */
+export function mediaKindOf(url) {
+  if (typeof url !== 'string' || !url) return null;
+  let u;
+  try { u = new URL(url, url.startsWith('/') ? 'https://media.invalid' : undefined); } catch { return null; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+  const path = safeDecode(u.pathname);
+  if (/\.svgz?$/i.test(path)) return null;
+  if (/\.m3u8$/i.test(path)) return 'hls';
+  if (VIDEO_EXT.test(path)) return 'video';
+  if (IMAGE_EXT.test(path)) return 'image';
+  return null;
+}
+
+/**
  * Remove tracking parameters (and a non-route #fragment) from a URL.
  * Returns the cleaned absolute URL string, or null if the input is not an http(s) URL.
  * Remaining query parameters keep their original order and encoding.

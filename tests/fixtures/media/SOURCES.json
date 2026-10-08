@@ -1,0 +1,243 @@
+[
+ {
+  "file": "magnific-video.rendered.html",
+  "source_url": "https://www.magnific.com/premium-video/assembling-burger-beef-burger-ingredients-falling-landing-bun-one-by-one-slow-motion_4720543",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>; JSON-LD reduced to the VideoObject/ImageObject fields the extractor reads (@type, @id/url, name, contentUrl, embedUrl, encodingFormat, thumbnailUrl, width, height) and the containers pointing at them; the main <video>/<source> and 2 related <video> tags (src/poster/type/size attributes only); a ~600-byte __NEXT_DATA__ excerpt with the related clip preview URLs. No scripts, styles or page body."
+ },
+ {
+  "file": "magnific-security-filter.html",
+  "source_url": "https://www.magnific.com/premium-video/assembling-burger-beef-burger-ingredients-falling-landing-bun-one-by-one-slow-motion_4720543",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "only the challenge <title> (the extractor test needs the title marker); status in this entry. No page body.",
+  "status": 403
+ },
+ {
+  "file": "br-scrape-magnific.json",
+  "source_url": "https://www.magnific.com/premium-video/assembling-burger-beef-burger-ingredients-falling-landing-bun-one-by-one-slow-motion_4720543",
+  "fetched": "2026-10-06",
+  "via": "br-scrape",
+  "trim": "Quick Action scrape JSON in the original shape, reduced to the fields collectFromScrape reads (title text, og/twitter meta attributes, <video>/<source> src/poster/type/size, JSON-LD media objects as above); meta.headers reduced to content-type.",
+  "ms_used": "2569.7109375"
+ },
+ {
+  "file": "br-scrape-datadome.json",
+  "source_url": "https://www.shutterstock.com/video/clip-28759981-slow-motion-finishing-fast-food-burger-top",
+  "fetched": "2026-10-06",
+  "via": "br-scrape",
+  "trim": "Quick Action scrape JSON reduced as above: status 403 and the bare-host title; meta.headers reduced to content-type (no cookies)."
+ },
+ {
+  "file": "vecteezy-video.parts.html",
+  "source_url": "https://www.vecteezy.com/video/66110223-incredible-chicago-skyline-at-chicago-illinois-in-united-states-awesome-background",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "three parts (head tags without </head> | main <video>/<source> | JSON-LD media object), each a minimal excerpt as above; the tests pad them to the original offsets (head end ~410 KB, <video> ~565 KB, VideoObject ~672 KB)."
+ },
+ {
+  "file": "envato-video.html",
+  "source_url": "https://elements.envato.com/spaceship-flies-over-the-planet-earth-YFQBF4B",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>; JSON-LD reduced to the VideoObject/ImageObject fields the extractor reads (@type, @id/url, name, contentUrl, embedUrl, encodingFormat, thumbnailUrl, width, height) and the containers pointing at them; the main <video> and 3 related <video>/<source> tags (src/poster/type/size only)."
+ },
+ {
+  "file": "mixkit-video.html",
+  "source_url": "https://mixkit.co/free-stock-video/going-down-a-curved-highway-through-a-mountain-range-41576/",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>; JSON-LD reduced to the VideoObject/ImageObject fields the extractor reads (@type, @id/url, name, contentUrl, embedUrl, encodingFormat, thumbnailUrl, width, height) and the containers pointing at them."
+ },
+ {
+  "file": "coverr-video.html",
+  "source_url": "https://coverr.co/videos/a-guy-attaches-his-smartphone-to-an-e-scooter-9wpldqh5k0",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>; JSON-LD reduced to the VideoObject/ImageObject fields the extractor reads (@type, @id/url, name, contentUrl, embedUrl, encodingFormat, thumbnailUrl, width, height) and the containers pointing at them."
+ },
+ {
+  "file": "depositphotos-video.html",
+  "source_url": "https://depositphotos.com/video/harbor-scene-mykonos-greece-shot-8mm-film-white-structures-lining-844514178.html",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>."
+ },
+ {
+  "file": "giphy.html",
+  "source_url": "https://giphy.com/gifs/cat-cute-roll-around-3ohhwijdF7bBRguliw",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>."
+ },
+ {
+  "file": "tenor.html",
+  "source_url": "https://tenor.com/view/imgur-funny-moments-gif-25163619",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>; JSON-LD reduced to the VideoObject/ImageObject fields the extractor reads (@type, @id/url, name, contentUrl, embedUrl, encodingFormat, thumbnailUrl, width, height) and the containers pointing at them."
+ },
+ {
+  "file": "imgur-gallery.html",
+  "source_url": "https://imgur.com/gallery/W2oXv0u",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>."
+ },
+ {
+  "file": "flickr-photo.html",
+  "source_url": "https://www.flickr.com/photos/183785896@N02/53155964113",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>; JSON-LD reduced to the VideoObject/ImageObject fields the extractor reads (@type, @id/url, name, contentUrl, embedUrl, encodingFormat, thumbnailUrl, width, height) and the containers pointing at them."
+ },
+ {
+  "file": "tumblr-www.html",
+  "source_url": "https://www.tumblr.com/dogpuppy/829462614184706048",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>."
+ },
+ {
+  "file": "cnn-video.html",
+  "source_url": "https://www.cnn.com/2026/09/28/science/video/spacex-starship-unprecedented-test-digvid",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>; JSON-LD reduced to the VideoObject/ImageObject fields the extractor reads (@type, @id/url, name, contentUrl, embedUrl, encodingFormat, thumbnailUrl, width, height) and the containers pointing at them (the VideoObject sat at 479 KB in the original head)."
+ },
+ {
+  "file": "reddit-embed.html",
+  "source_url": "https://embed.reddit.com/r/oddlysatisfying/comments/1wtxix8/?embed=true",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "<title> + one <shreddit-player> with only its src (HLS playlist URL) and poster attributes."
+ },
+ {
+  "file": "reddit-embed-img.html",
+  "source_url": "https://embed.reddit.com/r/EarthPorn/comments/1wwbnul/?embed=true",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "<title> + one <shreddit-screenview-data> holding only the post id, the i.redd.it image URL and the post type."
+ },
+ {
+  "file": "behance-embed.html",
+  "source_url": "https://www.behance.net/embed/project/118046015?ilo0=1",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "<title> + one <img> whose srcset lists the project cover URLs (404/808/max_808, webp). No page body."
+ },
+ {
+  "file": "apple-article.html",
+  "source_url": "https://www.apple.com/iphone/",
+  "fetched": "2026-10-06",
+  "via": "chrome",
+  "trim": "minimal excerpt: <title>, og:/twitter: <meta> needed by the extractor (no descriptions), canonical/image_src/oEmbed <link>."
+ },
+ {
+  "file": "blocked-pexels-just-a-moment.html",
+  "source_url": "https://www.pexels.com/photo/lake-and-mountain-under-white-sky-443446/",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "challenge markers only: the \"Just a moment...\" <title> and a /cdn-cgi/challenge-platform script reference; status/headers of the real response in this entry. No tokens or inline scripts.",
+  "status": 403,
+  "headers": {
+   "content-type": "text/html; charset=UTF-8",
+   "cf-mitigated": "challenge",
+   "server": "cloudflare"
+  }
+ },
+ {
+  "file": "blocked-storyblocks-awswaf.html",
+  "source_url": "https://www.storyblocks.com/video/stock/stocks-and-shares-market-trading-hpmddl7cxj1nbyneu",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "challenge marker only: an awswaf challenge.js script reference (host/token replaced by example values); status/headers of the real response in this entry.",
+  "status": 202,
+  "headers": {
+   "server": "awselb/2.0",
+   "x-amzn-waf-action": "challenge",
+   "content-type": "text/html; charset=UTF-8"
+  }
+ },
+ {
+  "file": "blocked-shutterstock-datadome.html",
+  "source_url": "https://www.shutterstock.com/video/clip-1104381001-slow-motion-speed-b-roll-scene-raindrops-falling",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "challenge markers only: the bare-host <title>, the \"enable JS\" line and the captcha-delivery.com script reference; no DataDome cid/cookie values; status/headers in this entry.",
+  "status": 403,
+  "headers": {
+   "server": "CloudFront",
+   "content-type": "text/html;charset=utf-8",
+   "x-datadome": "protected"
+  }
+ },
+ {
+  "file": "blocked-trendyol-empty.html",
+  "source_url": "https://www.trendyol.com/p-a-aksesuar/minimal-kalp-detayli-halhal-p-118385965",
+  "fetched": "2026-10-06",
+  "via": "plain",
+  "trim": "none (the real response body was empty); status/headers in this entry.",
+  "status": 403,
+  "headers": {
+   "server": "cloudflare"
+  }
+ },
+ {
+  "file": "synthetic-pexels.html",
+  "source_url": "https://www.pexels.com/video/making-a-cheese-burger-sandwich-4139325/",
+  "fetched": "2026-10-06",
+  "via": "synthetic",
+  "trim": "hand-written: \\u002F-escaped VideoObject (UHD contentUrl) + inline sd_960 rendition, modelled on the Pexels video page"
+ },
+ {
+  "file": "synthetic-related-vos.html",
+  "source_url": "https://www.example-stock.com/clips/ocean-waves-at-sunset",
+  "fetched": "2026-10-06",
+  "via": "synthetic",
+  "trim": "hand-written: 3 VideoObjects, the page's own one is WebPage.mainEntity"
+ },
+ {
+  "file": "synthetic-listing.html",
+  "source_url": "https://www.videvo.net/stock-video-footage/",
+  "fetched": "2026-10-06",
+  "via": "synthetic",
+  "trim": "hand-written: 20 <video> tags of unrelated clips (the Videvo item -> listing redirect)"
+ },
+ {
+  "file": "clip.webm",
+  "source_url": "make-clip.mjs",
+  "fetched": "2026-10-06",
+  "via": "synthetic",
+  "trim": "2 s 160x90 canvas clip (MediaRecorder vp8)"
+ },
+ {
+  "file": "clip.mp4",
+  "source_url": "make-clip.mjs",
+  "fetched": "2026-10-06",
+  "via": "synthetic",
+  "trim": "2 s 160x90 canvas clip (MediaRecorder avc1, isom brand)"
+ },
+ {
+  "file": "poster.png",
+  "source_url": "synthetic",
+  "fetched": "2026-10-06",
+  "via": "synthetic",
+  "trim": "32x18 solid PNG"
+ },
+ {
+  "file": "poster.jpg",
+  "source_url": "poster.png",
+  "fetched": "2026-10-06",
+  "via": "synthetic",
+  "trim": "poster.png converted with sips"
+ },
+ {
+  "file": "sniff/",
+  "source_url": "synthetic",
+  "fetched": "2026-10-06",
+  "via": "synthetic",
+  "trim": "64-byte heads: ok.* accepted (jpg/png/gif/webp/mp4 isom/mov qt/webm), bad* rejected (svg/html/xml/pdf/zip/heic/avif/3gp/empty/short)"
+ }
+]

@@ -33,12 +33,32 @@ SB_TAVILY_MONTHLY = "900"     # Tavily credits per calendar month (free plan: 1,
 SB_TAVILY_MAX_QUERIES = "3"
 SB_FRAME_CONCURRENCY = "3"
 SB_STALE_MIN = "15"
+# Fikir Havuzu media previews (worker/inspire-media.js). Rollout: deploy with FIKIR_BR="0" + FIKIR_MEDIA_UPLOADS="admin";
+# then FIKIR_MEDIA_UPLOADS="all" after the owner checks; then FIKIR_BR="1" after the production check of Browser Run usage.
+FIKIR_BR = "0"                 # "1" enables the Browser Run fallback (rollout step 3)
+FIKIR_BR_DAILY = "100"         # Browser Run calls per UTC day, whole site
+FIKIR_BR_MS_DAILY = "300000"   # browser ms per UTC day (Free allowance 600000)
+FIKIR_BR_PER_CID = "15"        # per post author (guest cid / user) per UTC day, charged when the author asks (admin exempt)
+FIKIR_BR_PER_IP = "20"         # per requesting IP per UTC day (admin exempt; the cron is not charged)
+FIKIR_BR_MS_PER_CID = "60000"  # browser ms per post author per UTC day (admin exempt)
+FIKIR_BR_MS_PER_IP = "60000"   # browser ms per requesting IP per UTC day (admin exempt)
+FIKIR_MEDIA_UPLOADS = "admin"  # off | admin | users | all
+FIKIR_UP_PER_CID_N = "10"      # uploads per cid/user per UTC day (admin exempt from all upload caps but FIKIR_UP_TOTAL_MB)
+FIKIR_UP_PER_CID_MB = "100"
+FIKIR_UP_PER_IP_N = "20"       # uploads per IP per UTC day (guest cids are client-chosen)
+FIKIR_UP_PER_IP_MB = "200"
+FIKIR_UP_DAILY_MB = "1000"     # all guest/user uploads per UTC day
+FIKIR_UP_TOTAL_MB = "6000"     # lead: set after checking current vk-portfolio-files usage (R2 Free 10 GB)
+# Never set in production: INSPIRE_TEST_FETCH_ALLOW, INSPIRE_FAKE_BR (test-only: wrangler.mediatest.toml).
 # Never set in production: SB_FAKE_AI, SB_FAKE_TAVILY, SB_FAKE_DELAY_MS, SB_FAKE_FAIL (test-only: wrangler.sbtest.toml).
 # Secret (never in [vars]): TAVILY_API_KEY, already set in production. To rotate it, from worker/:
 #   npx wrangler secret put TAVILY_API_KEY -c wrangler.toml     (without -c it lands on the static "portfolio" worker)
 
 [ai]
 binding = "AI"
+
+[browser]
+binding = "BROWSER"            # Browser Run (Free: 10 min/day). Used only as a fallback for pages whose plain fetch is blocked.
 
 [[workflows]]
 name = "vk-storyboard"              # account-unique, <= 64 chars

@@ -1,8 +1,13 @@
-import { parseLink, MAX_URL_LENGTH } from '../assets/js/fikir-url.mjs';
+import { parseLink, MAX_URL_LENGTH, mediaKindOf } from '../assets/js/fikir-url.mjs';
 import {
   handleStoryboard, sbConfigPayload, sbAttachSummaries, sbStartForNewPost, sbDeleteForPost, sbScheduled, ensureStoryboardSchema,
 } from './storyboard/routes.js';
-import { ipBucket } from './storyboard/db.js';
+import { ipBucket, utcDay, nextResetIso, isCheckError } from './storyboard/db.js';
+import {
+  META_V, MAX_HEAD_BYTES, MAX_PAGE_BYTES, AUTOPLAY_MAX_BYTES, FILES_KEY_RE, MEDIA_MIMES,
+  inspireDecodeEntities, inspireAttrs, inspireMetaText, parseHead, wantsBody, scanBody, mergeCollected, collectFromScrape,
+  extractMedia, isBlocked, isExpiringUrl, stableVariantFor, adapterFor, sanitizeMedia, sniffMagic, oembedMedia, sameSite,
+} from './inspire-media.js';
 // Cloudflare Workflows: the class named in wrangler.toml [[workflows]] class_name must be exported by the main module.
 export { StoryboardWorkflow } from './storyboard/workflow.js';
 
@@ -144,7 +149,6 @@ const INSPIRE_MAX_BODY       = 64 * 1024;
 const INSPIRE_FETCH_TIMEOUT_MS = 5000;   // per hop
 const INSPIRE_FETCH_BUDGET_MS  = 8000;   // whole redirect chain
 const INSPIRE_MAX_HOPS         = 5;
-const INSPIRE_MAX_HTML_BYTES   = 512 * 1024;
 const INSPIRE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
 // Platforms that never embed (or embed poorly) and always need a preview card; other platforms get a
 // best-effort background fetch. Direct image/video files need no metadata.
@@ -157,10 +161,22 @@ const INSPIRE_GENERIC_TITLES = new Set([
   'soundcloud', 'login', 'log in', 'sign in', 'sign up', 'just a moment...', 'access denied', 'attention required! | cloudflare',
   'error', 'forbidden', 'page not found', '404 not found', 'not found',
 ]);
+// Uploaded previews (POST /posts/:id/media/upload): caps per file; the type comes from the magic bytes only.
+const INSPIRE_UP_VIDEO_MB = 25;
+const INSPIRE_UP_IMAGE_MB = 10;
+const INSPIRE_UP_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+// Per-isolate cache of POST /preview results (key: canonical URL, 10 min); POST /posts reuses it instead of refetching.
+const INSPIRE_PREVIEW_TTL_MS = 10 * 60e3;
 // GET /api/inspire/posts page size (newest first, ?before=<id> cursor; X-Fikir-Next names the next cursor)
 const INSPIRE_PAGE_SIZE = 200;
 // A failed preview fetch is stored as meta '{"failed":1,"at":<s>}' and not retried before this
 const INSPIRE_META_RETRY_S = 2 * 24 * 60 * 60;
+// Browser Run found the page removed (404/410): that post is not retried before this (owner's ?force=1 still can)
+const INSPIRE_BR_GONE_RETRY_S = 30 * 24 * 60 * 60;
+// Browser Run calls per post per UTC day (create + retries + owner refreshes): a page that keeps failing costs <= 3 calls a day
+const INSPIRE_BR_PER_POST = 3;
+// The board shows "Önizleme hazırlanıyor…" (meta_pending) only while the Browser Run attempt is due within this many seconds
+const INSPIRE_PENDING_NEAR_S = 120;
 // Rate limits: bucket -> [max requests, window seconds]. Counted in D1 (inspire_rate), fixed windows.
 const INSPIRE_LIMITS = {
   guest:    [30, 600],    // guest tokens per IP / 10 min
@@ -174,6 +190,17 @@ const INSPIRE_LIMITS = {
   fetch_ip: [30, 60],     // /posts/:id/meta calls that fetch a third-party page, per IP / minute
   sb:       [30, 600],    // storyboard create / redraw / rewrite / resume / delete per cid or user / 10 min
   sb_ip:    [60, 600],    //   (cost is capped separately by the daily sb_quota counters)
+  preview:  [20, 60],     // add-modal live previews (POST /preview) per cid or user / minute
+  preview_ip: [40, 60],
+  media:    [30, 3600],   // PUT/DELETE /posts/:id/media and /meta?force=1 per cid or user / hour
+  media_ip: [60, 3600],
+  upload:   [12, 3600],   // POST /posts/:id/media/upload per cid or user / hour (bytes are capped by inspire_quota)
+  upload_ip: [24, 3600],
+  br_slot:  [1, 11],      // site-wide Browser Run slot (key 'br_slot:all'): Free allows 1 Quick Action per 10 s
+  br_block: [3, 7 * 86400], // bot-walled Browser Run scrapes per host / 7 days (at most one per post, see br_bpost); at 3 the host
+                            // is skipped for the rest of the window (one challenge can be transient: Magnific blocked 1 of 4
+                            // scrapes in the Phase D acceptance run). A 404 / empty page is never a strike.
+  br_bpost: [1, 7 * 86400], // key '<host>:<post id>': the first bot wall of a post is its host's strike, repeats are not
 };
 // Guest display names that would pass for the owner (compared after inspireFoldName()).
 const INSPIRE_RESERVED_NAMES = ['yonetici', 'admin', 'administrator', 'moderator', 'moderatör', 'site sahibi'];
@@ -382,10 +409,32 @@ async function migrateInspireSchema(env) {
       n INTEGER NOT NULL,
       reset INTEGER NOT NULL
     )`),
+    // Uploaded preview files in R2 (key fikir/<postId>/<slot>-<32hex>.<ext>); state pending (upload in flight) | live | orphan
+    db.prepare(`CREATE TABLE IF NOT EXISTS inspire_media (
+      key TEXT PRIMARY KEY,
+      post_id INTEGER NOT NULL,
+      slot TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      mime TEXT NOT NULL,
+      bytes INTEGER NOT NULL,
+      state TEXT NOT NULL DEFAULT 'pending',
+      created_at INTEGER NOT NULL
+    )`),
+    // Atomic daily budgets (same pattern as sb_quota: CHECK(n <= lim) aborts the whole D1 batch)
+    db.prepare(`CREATE TABLE IF NOT EXISTS inspire_quota (
+      day TEXT NOT NULL,
+      scope TEXT NOT NULL,
+      subject TEXT NOT NULL DEFAULT '',
+      n INTEGER NOT NULL,
+      lim INTEGER NOT NULL,
+      CONSTRAINT inspire_quota_cap CHECK (n <= lim),
+      PRIMARY KEY (day, scope, subject)
+    )`),
   ]);
   const columns = {
     inspire_users: [['is_first_login', 'INTEGER DEFAULT 1']],
-    inspire_posts: [['author_name', 'TEXT'], ['client_id', 'TEXT'], ['url_key', 'TEXT'], ['meta', 'TEXT']],
+    // media: manual preview (Media JSON from PUT /media or an upload) or NULL; meta.media is the automatic one
+    inspire_posts: [['author_name', 'TEXT'], ['client_id', 'TEXT'], ['url_key', 'TEXT'], ['meta', 'TEXT'], ['media', 'TEXT']],
     inspire_notes: [['author_name', 'TEXT'], ['client_id', 'TEXT']],
   };
   for (const [table, cols] of Object.entries(columns)) {
@@ -402,6 +451,7 @@ async function migrateInspireSchema(env) {
   await db.batch([
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_posts_url_key ON inspire_posts(url_key)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_notes_post ON inspire_notes(post_id)'),
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_media_post ON inspire_media(post_id)'),
   ]);
   // Reserved owner row for guest content (user_id is NOT NULL + FK). Its password can never be used:
   // /api/inspire/login rejects this username.
@@ -440,7 +490,7 @@ async function migrateInspireSchema(env) {
 const INSPIRE_ROLE_SQL = (t) => `CASE WHEN ${t}.client_id IS NOT NULL OR u.username = '${INSPIRE_GUEST_USERNAME}' THEN 'guest'
       WHEN u.username = '${INSPIRE_ADMIN_USERNAME}' THEN 'admin' ELSE 'user' END AS author_role`;
 const INSPIRE_POST_SELECT = `
-  SELECT p.id, p.type, p.url, p.description, p.created_at, p.meta, p.url_key,
+  SELECT p.id, p.type, p.url, p.description, p.created_at, p.meta, p.media, p.url_key,
     COALESCE(p.author_name,
       CASE WHEN u.username = '__guest__' THEN '' ELSE COALESCE(NULLIF(u.full_name, ''), u.username) END, '') AS author,
     ${INSPIRE_ROLE_SQL('p')},
@@ -467,17 +517,64 @@ function inspireMetaParse(v) {
   try { const m = JSON.parse(v); return m && typeof m === 'object' && !Array.isArray(m) ? m : null; } catch { return null; }
 }
 const inspireMetaFailed = (m) => !!(m && m.failed);
-// Negative cache entry still fresh (no new fetch until it expires)
-const inspireMetaFresh = (m) => inspireMetaFailed(m) && Math.floor(Date.now() / 1000) - Number(m.at || 0) < INSPIRE_META_RETRY_S;
+const inspireNowS = () => Math.floor(Date.now() / 1000);
+// Link posts that show a preview card (and may carry media): card platforms and legacy 'link' rows.
+const inspireCardish = (type) => INSPIRE_CARD_PLATFORMS.has(type) || type === 'link';
+// meta v2 (worker/inspire-media.js): {v:2, title, description, image, site_name, provider, image_w?, image_h?, media?, via,
+// checked}. Failure / negative cache: '{"failed":1,"at":<s>,"v":2[,"retry_s":<n>][,"pending":"br"]}' (must start with
+// {"failed": - the UPDATEs below test it with LIKE). pending:"br" = a Browser Run attempt is queued (it may also sit on a
+// client or partial meta). v1 rows (no `v`) stay readable and are refreshed once (meta_stale).
+// Negative cache entry still fresh (no new fetch until it expires); v1 failures are retried once.
+const inspireMetaFresh = (m) => inspireMetaFailed(m) && (Number(m.v) || 1) >= 2 && !m.pending &&
+  inspireNowS() - Number(m.at || 0) < (Number(m.retry_s) || INSPIRE_META_RETRY_S);
+const inspireMetaStale = (m, type) => inspireCardish(type) && !!m && (Number(m.v) || 1) < 2;
+const inspireMetaPending = (m) => !!(m && m.pending === 'br');
+// Pending and due within INSPIRE_PENDING_NEAR_S (or overdue): the board shows "preparing" only then. A post that waits for
+// UTC midnight (daily budget spent) or an hour (per-IP cap) looks like a plain card meanwhile; the cron still retries it.
+const inspireMetaPendingSoon = (m) => inspireMetaPending(m) &&
+  Number(m.at || 0) + Number(m.retry_s || 0) - inspireNowS() <= INSPIRE_PENDING_NEAR_S;
+// Output of stored meta/media JSON goes through sanitizeMedia again; results are memoized per stored string (per
+// isolate, bounded) so a board of 200 posts does not re-parse every URL on every GET. Callers never mutate them.
+const inspireOutCache = new Map();
+function inspireOutMemo(kind, v, fn) {
+  if (typeof v !== 'string' || !v) return fn();
+  const k = kind + v;
+  let out = inspireOutCache.get(k);
+  if (out === undefined) {
+    out = fn();
+    if (inspireOutCache.size >= 2000) inspireOutCache.delete(inspireOutCache.keys().next().value);
+    inspireOutCache.set(k, out);
+  }
+  return out;
+}
 function inspireMetaOut(v) {
-  const m = inspireMetaParse(v);
-  return m && !inspireMetaFailed(m) ? m : null;
+  return inspireOutMemo('m', v, () => {
+    const m = inspireMetaParse(v);
+    if (!m || inspireMetaFailed(m)) return null;
+    const { pending, at, retry_s, checked, ...out } = m;
+    if (out.media !== undefined) {
+      const md = sanitizeMedia(out.media);
+      if (md) out.media = md; else delete out.media;
+    }
+    return out;
+  });
+}
+// Manual media column (owner/admin attach or upload) -> Media or null
+function inspireMediaOut(v) {
+  return inspireOutMemo('x', v, () => {
+    const m = inspireMetaParse(v);
+    return m ? sanitizeMedia(m, { allowFiles: true }) : null;
+  });
 }
 function inspirePostOut(r, isAdmin, notes) {
+  const stored = inspireMetaParse(r.meta);
   return {
     id: r.id, type: r.type, url: r.url || '', description: r.description || '', created_at: r.created_at,
     author: r.author || '', author_role: r.author_role || 'user', is_mine: !!r.is_mine, can_delete: !!r.is_mine || !!isAdmin,
-    meta: inspireMetaOut(r.meta), meta_failed: inspireMetaFresh(inspireMetaParse(r.meta)), notes: notes || [],
+    meta: inspireMetaOut(r.meta), meta_failed: inspireMetaFresh(stored), meta_stale: inspireMetaStale(stored, r.type),
+    meta_pending: inspireMetaPendingSoon(stored), media: inspireMediaOut(r.media),
+    can_edit_media: (!!r.is_mine || !!isAdmin) && inspireCardish(r.type),
+    notes: notes || [],
   };
 }
 function inspireNoteOut(n, isAdmin) {
@@ -519,6 +616,8 @@ function inspireLegacyPost(post, actor) {
     ...post, type, url: inspireLegacyUrl(url), description: inspireLegacyText(post.description), author: inspireLegacyText(post.author),
     notes: post.notes.map((n) => ({ ...n, content: inspireLegacyText(n.content), author: inspireLegacyText(n.author), ...(n.is_mine && ownId ? { user_id: ownId } : {}) })),
   };
+  // media previews are current-board only
+  delete out.media; delete out.meta_stale; delete out.meta_pending; delete out.can_edit_media;
   if (post.is_mine && ownId) out.user_id = ownId;
   return out;
 }
@@ -604,11 +703,24 @@ function inspireIsPrivateIPv4(host) {
     (a === 198 && b === 51 && c === 100) ||
     (a === 203 && b === 0 && c === 113);
 }
+// Local-test hooks (tests/media-e2e). Honoured only when the var is set AND ALLOWED_ORIGIN is a 127.0.0.1 origin, i.e. a
+// local `wrangler dev` with worker/wrangler.mediatest.toml; never set in worker/wrangler.toml (a unit test checks it).
+//   INSPIRE_TEST_FETCH_ALLOW = "127.0.0.1:<port>"  the SSRF guard lets exactly this host:port through (fixture server)
+//   INSPIRE_FAKE_BR = "1"                          Browser Run = POST http://<that host:port>/__br/scrape (fake)
+let inspireTestAllow = '';
+let inspireFakeBr = false;
+function inspireTestHooks(env) {
+  const local = /^http:\/\/127\.0\.0\.1(:\d{1,5})?$/.test(String(env.ALLOWED_ORIGIN || ''));
+  const allow = String(env.INSPIRE_TEST_FETCH_ALLOW || '').trim();
+  inspireTestAllow = local && /^127\.0\.0\.1:\d{1,5}$/.test(allow) ? allow : '';
+  inspireFakeBr = !!inspireTestAllow && env.INSPIRE_FAKE_BR === '1';
+}
 // URL object if it may be fetched server-side, else null. Blocks non-http(s), credentials, odd ports,
 // IPv6 literals, private/loopback IPv4, localhost and internal suffixes, and this worker's own hosts.
 function inspireSafeURL(href, selfHost) {
   let u;
   try { u = new URL(href); } catch { return null; }
+  if (inspireTestAllow && u.protocol === 'http:' && u.host === inspireTestAllow && !u.username && !u.password) return u;
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
   if (u.username || u.password) return null;
   if (u.port && !['80', '443', '8080', '8443'].includes(u.port)) return null;
@@ -636,7 +748,24 @@ function inspireIsLoginURL(u) {
   return u.hostname === 'accounts.google.com' ||
     /\/(accounts\/login|login|signin|sign-in|sign_in|ServiceLogin)(\/|$)/i.test(u.pathname);
 }
-// Reads at most maxBytes (stops early after </head>) and decodes with the declared charset.
+// Concatenates chunks (at most maxBytes) and decodes them with the declared charset (Content-Type, else <meta charset>).
+function inspireDecode(chunks, total, maxBytes, contentType) {
+  const buf = new Uint8Array(Math.min(total, maxBytes));
+  let off = 0;
+  for (const c of chunks) {
+    const take = Math.min(c.byteLength, buf.length - off);
+    buf.set(c.subarray(0, take), off);
+    off += take;
+    if (off >= buf.length) break;
+  }
+  let charset = (/charset\s*=\s*["']?([\w-]+)/i.exec(contentType || '') || [])[1];
+  if (!charset) charset = (/<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(inspireLatin1(buf.subarray(0, 4096))) || [])[1];
+  let decoder;
+  try { decoder = new TextDecoder(charset || 'utf-8'); } catch { decoder = new TextDecoder('utf-8'); }
+  return decoder.decode(buf);
+}
+// Reads at most maxBytes (stops early after </head>) and decodes with the declared charset. Short-link resolution and
+// Pinterest oEmbed (64 KB).
 async function inspireReadText(res, maxBytes, contentType) {
   if (!res.body) return '';
   const reader = res.body.getReader();
@@ -653,96 +782,59 @@ async function inspireReadText(res, maxBytes, contentType) {
   } finally {
     reader.cancel().catch(() => {});
   }
-  const buf = new Uint8Array(Math.min(total, maxBytes));
-  let off = 0;
-  for (const c of chunks) {
-    const take = Math.min(c.byteLength, buf.length - off);
-    buf.set(c.subarray(0, take), off);
-    off += take;
-    if (off >= buf.length) break;
-  }
-  let charset = (/charset\s*=\s*["']?([\w-]+)/i.exec(contentType || '') || [])[1];
-  if (!charset) charset = (/<meta[^>]+charset\s*=\s*["']?([\w-]+)/i.exec(inspireLatin1(buf.subarray(0, 4096))) || [])[1];
-  let decoder;
-  try { decoder = new TextDecoder(charset || 'utf-8'); } catch { decoder = new TextDecoder('utf-8'); }
-  return decoder.decode(buf);
+  return inspireDecode(chunks, total, maxBytes, contentType);
 }
-const INSPIRE_ENTITIES = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '\u2013', mdash: '\u2014', hellip: '\u2026',
-  lsquo: '\u2018', rsquo: '\u2019', ldquo: '\u201C', rdquo: '\u201D', laquo: '\u00AB', raquo: '\u00BB', bull: '\u2022',
-  middot: '\u00B7', copy: '\u00A9', reg: '\u00AE', trade: '\u2122', euro: '\u20AC', pound: '\u00A3', deg: '\u00B0', times: '\u00D7',
-  ccedil: '\u00E7', Ccedil: '\u00C7', ouml: '\u00F6', Ouml: '\u00D6', uuml: '\u00FC', Uuml: '\u00DC', scedil: '\u015F',
-  Scedil: '\u015E', gbreve: '\u011F', Gbreve: '\u011E', inodot: '\u0131', imath: '\u0131', Idot: '\u0130', acirc: '\u00E2',
-  Acirc: '\u00C2', icirc: '\u00EE', ucirc: '\u00FB', eacute: '\u00E9', egrave: '\u00E8', aacute: '\u00E1', agrave: '\u00E0',
-  iacute: '\u00ED', oacute: '\u00F3', uacute: '\u00FA', ntilde: '\u00F1', auml: '\u00E4', Auml: '\u00C4', szlig: '\u00DF',
-};
-function inspireDecodeEntities(s) {
-  return String(s).replace(/&(#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z][A-Za-z0-9]{1,31});?/g, (m, e) => {
-    if (e[0] === '#') {
-      const cp = e[1] === 'x' || e[1] === 'X' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
-      return cp > 0 && cp <= 0x10FFFF && !(cp >= 0xD800 && cp <= 0xDFFF) ? String.fromCodePoint(cp) : m;
+// Reads up to maxBytes without stopping at </head> (adapter pages, oEmbed JSON, Browser Run JSON).
+async function inspireReadAll(res, maxBytes, contentType) {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.byteLength;
     }
-    return Object.prototype.hasOwnProperty.call(INSPIRE_ENTITIES, e) ? INSPIRE_ENTITIES[e] : m;
-  });
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  return inspireDecode(chunks, total, maxBytes, contentType);
 }
-function inspireAttrs(s) {
-  const out = Object.create(null);
-  const re = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
-  let m;
-  while ((m = re.exec(s))) {
-    const k = m[1].toLowerCase();
-    if (!(k in out)) out[k] = m[2] ?? m[3] ?? m[4] ?? '';
-  }
-  return out;
-}
-function inspireMetaText(s, max) {
-  if (s == null) return null;
-  let t = inspireDecodeEntities(s);
-  // Some sites (LinkedIn) double-encode: content="Microsoft&amp;#39;s" -> decode once more.
-  if (/&(#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|amp|quot|apos|lt|gt|nbsp);/.test(t)) t = inspireDecodeEntities(t);
-  t = t
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/[\u0000-\u001F\u007F-\u009F\u202A-\u202E\u2066-\u2069\uFEFF]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  if (!t) return null;
-  const chars = Array.from(t);
-  if (chars.length > max) t = chars.slice(0, max - 1).join('').trimEnd() + '\u2026';
-  return t;
-}
-// OpenGraph / Twitter-card / <title> from the document head.
-function inspireParseHead(html, pageUrl) {
-  const end = html.search(/<\/head\s*>|<body[\s>]/i);
-  const head = end > 0 ? html.slice(0, end) : html;
-  const metas = Object.create(null);
-  const metaRe = /<meta\b([^>]*)>/gi;
-  let m;
-  while ((m = metaRe.exec(head))) {
-    const a = inspireAttrs(m[1]);
-    const key = (a.property || a.name || a.itemprop || '').toLowerCase().trim();
-    if (key && a.content != null && a.content.trim() && !(key in metas)) metas[key] = a.content;
-  }
-  let imageSrc = null;
-  const linkRe = /<link\b([^>]*)>/gi;
-  while ((m = linkRe.exec(head))) {
-    const a = inspireAttrs(m[1]);
-    if (/(^|\s)image_src(\s|$)/i.test(a.rel || '') && a.href) { imageSrc = a.href; break; }
-  }
-  const pick = (...keys) => { for (const k of keys) if (metas[k]) return metas[k]; return null; };
-  const titleTag = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head);
-  let image = null;
-  const rawImage = pick('og:image:secure_url', 'og:image', 'og:image:url', 'twitter:image', 'twitter:image:src') || imageSrc;
-  if (rawImage) {
-    try {
-      const iu = new URL(inspireDecodeEntities(rawImage.trim()), pageUrl);
-      if ((iu.protocol === 'https:' || iu.protocol === 'http:') && iu.href.length <= 2048) image = iu.href;
-    } catch (e) {}
-  }
+// HTML reader in two phases: `head` = everything up to the chunk that contains </head> (cap MAX_HEAD_BYTES, as before);
+// more(maxTotal) keeps reading to maxTotal bytes in all and decodes every byte once; close() cancels the body.
+async function inspireOpenHtml(res, ct) {
+  const reader = res.body ? res.body.getReader() : null;
+  const chunks = [];
+  let total = 0, done = !reader, closed = false, tail = '';
+  const close = () => { if (!closed && reader) { closed = true; reader.cancel().catch(() => {}); } };
+  try {
+    while (!done && total < MAX_HEAD_BYTES) {
+      const r = await reader.read();
+      if (r.done) { done = true; break; }
+      chunks.push(r.value);
+      total += r.value.byteLength;
+      const s = tail + inspireLatin1(r.value);
+      if (/<\/head\s*>/i.test(s)) break;
+      tail = s.slice(-16);
+    }
+  } catch (e) { close(); throw e; }
+  const head = inspireDecode(chunks, total, MAX_HEAD_BYTES, ct);
   return {
-    title: inspireMetaText(pick('og:title', 'twitter:title') ?? (titleTag ? titleTag[1] : null), 200),
-    description: inspireMetaText(pick('og:description', 'twitter:description', 'description'), 400),
-    image,
-    site_name: inspireMetaText(pick('og:site_name', 'application-name'), 100),
+    head,
+    async more(maxTotal) {
+      try {
+        while (!done && !closed && total < maxTotal) {
+          const r = await reader.read();
+          if (r.done) { done = true; break; }
+          chunks.push(r.value);
+          total += r.value.byteLength;
+        }
+      } finally { close(); }
+      return inspireDecode(chunks, total, maxTotal, ct);
+    },
+    close,
   };
 }
 // Pinterest pin pages carry their OpenGraph tags ~1.2MB deep in the body (past the read limit); the
@@ -780,27 +872,29 @@ async function inspireFetchPinterestMeta(pinUrl, selfHost) {
     clearTimeout(timer);
   }
 }
-// Fetch preview metadata for a link. Returns {title, description, image, site_name, provider} or null.
-// A private Google Drive/Docs file (redirect to accounts.google.com) returns {..., login_wall: true}.
-async function inspireFetchMeta(href, selfHost) {
-  let provider;
-  try { provider = new URL(href).hostname.toLowerCase().replace(/^www\./, ''); } catch { return null; }
-  const pl = parseLink(href);
-  if (pl && pl.platform === 'pinterest' && pl.subtype === 'pin' && pl.id) return inspireFetchPinterestMeta(pl.canonical, selfHost);
+const inspireProviderOf = (href) => { try { return new URL(href).hostname.toLowerCase().replace(/^www\./, ''); } catch { return null; } };
+// One page fetch for a link preview: SSRF guard on every hop, <= INSPIRE_MAX_HOPS redirects, INSPIRE_FETCH_BUDGET_MS.
+// -> { outcome: 'ok'|'blocked'|'error', meta: {title, description, image, site_name, image_w?, image_h?, login_wall?}|null,
+//      collected (parseHead [+ scanBody] structure, only with wantMedia), finalUrl, html (fullPage only), direct (media) }
+// outcome 'blocked' = bot wall / challenge (401/403/429/503, cf-mitigated, DataDome, AWS WAF, challenge title/body):
+// the Browser Run fallback may try it. The outcome itself is never stored.
+async function inspireFetchPage(href, selfHost, { wantMedia = false, deadline = Date.now() + INSPIRE_FETCH_BUDGET_MS, fullPage = false } = {}) {
+  const err = (outcome = 'error') => ({ outcome, meta: null, collected: null, finalUrl: href });
   let current = href;
-  const deadline = Date.now() + INSPIRE_FETCH_BUDGET_MS;
+  const end = Math.min(deadline, Date.now() + INSPIRE_FETCH_BUDGET_MS);
   for (let hop = 0; hop <= INSPIRE_MAX_HOPS; hop++) {
     const u = inspireSafeURL(current, selfHost);
-    if (!u) return null;
+    if (!u) return err();
     if (hop > 0 && inspireIsLoginURL(u)) {
       return u.hostname === 'accounts.google.com'
-        ? { title: null, description: null, image: null, site_name: null, provider, login_wall: true }
-        : null;
+        ? { outcome: 'ok', meta: { title: null, description: null, image: null, site_name: null, login_wall: true }, collected: null, finalUrl: u.href }
+        : err();
     }
-    const wait = Math.min(INSPIRE_FETCH_TIMEOUT_MS, deadline - Date.now());
-    if (wait <= 0) return null;
+    const wait = Math.min(INSPIRE_FETCH_TIMEOUT_MS, end - Date.now());
+    if (wait <= 0) return err();
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), wait);
+    let doc = null;
     try {
       const res = await fetch(u.href, {
         method: 'GET', redirect: 'manual', signal: ctrl.signal,
@@ -808,18 +902,64 @@ async function inspireFetchMeta(href, selfHost) {
       });
       const loc = res.status >= 300 && res.status < 400 ? res.headers.get('Location') : null;
       if (loc) { inspireDiscard(res); current = new URL(loc, u.href).href; continue; }
-      if (!res.ok) { inspireDiscard(res); return null; }
+      if (!res.ok) { inspireDiscard(res); return err(isBlocked({ status: res.status, headers: res.headers }) ? 'blocked' : 'error'); }
+      if (res.status === 202 && res.headers.get('x-amzn-waf-action') != null) { inspireDiscard(res); return err('blocked'); }
       const ct = (res.headers.get('Content-Type') || '').toLowerCase();
-      if (ct.startsWith('image/')) {
+      if (ct.startsWith('image/') && !ct.includes('svg')) {
         inspireDiscard(res);
-        return { title: null, description: null, image: u.href, site_name: null, provider };
+        return { outcome: 'ok', meta: { title: null, description: null, image: u.href, site_name: null }, collected: null, finalUrl: u.href,
+          direct: { mv: 1, kind: 'image', url: u.href, mime: ct.split(';')[0].trim(), autoplay: false, verified: true, source: 'inline' } };
       }
-      if (ct && !ct.includes('html') && !ct.includes('xml')) { inspireDiscard(res); return null; }
-      const html = await inspireReadText(res, INSPIRE_MAX_HTML_BYTES, ct);
-      const head = inspireParseHead(html, u.href);
+      if (ct.startsWith('video/') || /application\/(vnd\.apple|x-)mpegurl/.test(ct)) {
+        inspireDiscard(res);
+        const kind = ct.startsWith('video/') ? 'video' : 'hls';
+        return { outcome: 'ok', meta: { title: null, description: null, image: null, site_name: null }, collected: null, finalUrl: u.href,
+          direct: { mv: 1, kind, url: u.href, mime: ct.split(';')[0].trim(), autoplay: kind === 'video', verified: true, source: 'inline' } };
+      }
+      if (ct && !ct.includes('html') && !ct.includes('xml')) { inspireDiscard(res); return err(); }
+      doc = await inspireOpenHtml(res, ct);
+      let text = doc.head;
+      if (fullPage) text = await doc.more(MAX_HEAD_BYTES);
+      const head = parseHead(text, u.href);
+      if (isBlocked({ status: res.status, headers: res.headers, html: text, title: head.docTitle || head.title })) return err('blocked');
       if (head.title && INSPIRE_GENERIC_TITLES.has(head.title.toLowerCase())) head.title = null;
-      if (!head.title && !head.description && !head.image) return null;
-      return { ...head, provider };
+      let collected = head;
+      if (wantMedia && !fullPage && wantsBody(head, u.href)) collected = mergeCollected(head, scanBody(await doc.more(MAX_PAGE_BYTES), u.href, head));
+      const image = head.image && !isExpiringUrl(head.image) ? head.image : null;
+      const meta = { title: head.title, description: head.description, image, site_name: head.site_name };
+      if (image && head.imageW && head.imageH && head.imageW <= 10000 && head.imageH <= 10000) { meta.image_w = head.imageW; meta.image_h = head.imageH; }
+      return { outcome: 'ok', meta: meta.title || meta.description || meta.image ? meta : null, collected: wantMedia ? collected : null, finalUrl: u.href, html: fullPage ? text : undefined };
+    } catch (e) {
+      return err();
+    } finally {
+      clearTimeout(timer);
+      if (doc) doc.close();
+    }
+  }
+  return err();
+}
+// Small official fetch (adapter `post` page, oEmbed JSON): SSRF guard on every hop, <= 2 redirects, 4 s, maxBytes.
+// -> parsed JSON (json: true; requires a JSON content type) | text | null
+async function inspireFetchSmall(href, selfHost, { json = false, maxBytes = 64 * 1024, deadline = Date.now() + 4000 } = {}) {
+  let current = href;
+  const end = Math.min(deadline, Date.now() + 4000);
+  for (let hop = 0; hop <= 2; hop++) {
+    const u = inspireSafeURL(current, selfHost);
+    if (!u) return null;
+    const wait = end - Date.now();
+    if (wait <= 0) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), wait);
+    try {
+      const res = await fetch(u.href, { method: 'GET', redirect: 'manual', signal: ctrl.signal,
+        headers: inspireFetchHeaders(json ? 'application/json' : 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8') });
+      const loc = res.status >= 300 && res.status < 400 ? res.headers.get('Location') : null;
+      if (loc) { inspireDiscard(res); current = new URL(loc, u.href).href; continue; }
+      const ct = (res.headers.get('Content-Type') || '').toLowerCase();
+      if (!res.ok || (json ? !ct.includes('json') : !(ct.includes('html') || ct.includes('xml')))) { inspireDiscard(res); return null; }
+      const text = await inspireReadAll(res, maxBytes, ct);
+      if (!json) return text;
+      try { return JSON.parse(text); } catch { return null; }
     } catch (e) {
       return null;
     } finally {
@@ -827,6 +967,47 @@ async function inspireFetchMeta(href, selfHost) {
     }
   }
   return null;
+}
+// Range probe of a media URL: GET bytes=0-0, redirect manual (<= 3 hops, SSRF guard on each), 3 s, body discarded.
+// -> { ok: true (media content type; kind/mime/bytes) | false (html, 404/410, svg, unsafe redirect: try the next one)
+//          | null (401/403/429/5xx/timeout: keep it unverified, the viewer's browser may still play it), reason, status }
+async function inspireProbeMedia(url, selfHost, deadline = Date.now() + 3000) {
+  let current = url;
+  for (let hop = 0; hop <= 3; hop++) {
+    const u = inspireSafeURL(current, selfHost);
+    if (!u || !inspireHostOk(u.href)) return { ok: false, reason: 'unsafe' };
+    const wait = Math.min(3000, deadline - Date.now());
+    if (wait <= 0) return { ok: null, reason: 'timeout' };
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), wait);
+    try {
+      const res = await fetch(u.href, { method: 'GET', redirect: 'manual', signal: ctrl.signal, headers: { ...inspireFetchHeaders('*/*'), Range: 'bytes=0-0' } });
+      inspireDiscard(res);
+      const loc = res.status >= 300 && res.status < 400 ? res.headers.get('Location') : null;
+      if (loc) { current = new URL(loc, u.href).href; continue; }
+      if (res.status === 404 || res.status === 410) return { ok: false, reason: 'gone', status: res.status };
+      if (res.status !== 200 && res.status !== 206) return { ok: null, reason: 'denied', status: res.status };
+      let ct = (res.headers.get('Content-Type') || '').toLowerCase().split(';')[0].trim();
+      if (ct === 'application/mp4') ct = 'video/mp4';   // S3-hosted previews (Envato Elements) are served as application/mp4
+      let kind = null;
+      if (ct.includes('svg')) return { ok: false, reason: 'svg', status: res.status };
+      if (ct.startsWith('video/')) kind = 'video';
+      else if (/mpegurl/.test(ct)) kind = 'hls';
+      else if (ct.startsWith('image/')) kind = 'image';
+      else if (/^(application|binary)\/octet-stream$/.test(ct)) kind = mediaKindOf(u.href);
+      if (!kind) return { ok: false, reason: 'not_media', status: res.status };
+      let bytes = null;
+      const cr = /\/(\d+)\s*$/.exec(res.headers.get('Content-Range') || '');
+      if (cr) bytes = Number(cr[1]);
+      else if (res.status === 200 && res.headers.get('Content-Length')) bytes = Number(res.headers.get('Content-Length'));
+      return { ok: true, kind, mime: ct, bytes: Number.isSafeInteger(bytes) ? bytes : null, status: res.status, finalUrl: u.href };
+    } catch (e) {
+      return { ok: null, reason: 'timeout' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { ok: false, reason: 'redirects' };
 }
 function inspireRefreshTarget(html, base) {
   const re = /<meta\b([^>]*)>/gi;
@@ -892,6 +1073,7 @@ async function inspireResolveLink(href, selfHost) {
 // Per-isolate caches (best effort; isolates are short-lived).
 const inspireResolveCache = new Map();
 const inspireMetaAttempts = new Map();
+const inspirePreviewCache = new Map();   // canonical -> L1 result {meta, outcome} (POST /preview, reused by POST /posts)
 function inspireCacheGet(map, key) {
   const e = map.get(key);
   if (!e) return undefined;
@@ -922,21 +1104,619 @@ function inspireNeedsCard(p) {
   if (p.platform === 'image' || p.platform === 'video') return false;
   return INSPIRE_CARD_PLATFORMS.has(p.platform) || !p.embed;
 }
-const inspireMetaFailure = () => JSON.stringify({ failed: 1, at: Math.floor(Date.now() / 1000) });
-// Fetch + store preview metadata; a failure is stored too (negative cache, see INSPIRE_META_RETRY_S).
-async function inspireStoreMeta(db, id, href, selfHost) {
-  const meta = await inspireFetchMeta(href, selfHost);
-  await db.prepare(`UPDATE inspire_posts SET meta=? WHERE id=? AND (meta IS NULL OR meta LIKE '{"failed":%')`)
-    .bind(meta ? JSON.stringify(meta) : inspireMetaFailure(), id).run();
-  return meta;
+const inspireMetaFailure = (extra) => JSON.stringify({ failed: 1, at: inspireNowS(), v: META_V, ...(extra || {}) });
+const INSPIRE_PIPELINE_MS = 10000;   // L1 budget (page + oEmbed/adapter + probes); create stays synchronous within it
+
+// ── Media previews (meta v2): L1 = adapters + plain fetch + extraction + oEmbed + probe (worker/inspire-media.js);
+// L2 = Browser Run fallback, only when the plain fetch was blocked; L3 = manual media column (PUT /media, uploads).
+function inspireMetaV2(base, media, via, provider) {
+  const m = {
+    v: META_V, title: base.title || null, description: base.description || null, image: base.image || null,
+    site_name: base.site_name || null, provider: provider || null,
+  };
+  if (base.login_wall) m.login_wall = true;
+  if (m.image && base.image_w && base.image_h) { m.image_w = base.image_w; m.image_h = base.image_h; }
+  const md = media ? sanitizeMedia(media) : null;
+  if (md) m.media = md;
+  m.via = via;
+  m.checked = inspireNowS();
+  return m.title || m.description || m.image || m.media || m.login_wall ? m : null;
+}
+// Probes candidates in priority order (<= 3 probes in all, shared with the `small` / poster variants). A probe that
+// rejects (html, 404, unsafe redirect) moves on; an inconclusive one (403, timeout) keeps the candidate unverified.
+async function inspireChooseMedia(cands, selfHost, deadline) {
+  let probes = 0;
+  const canProbe = () => probes < 3 && Date.now() < deadline;
+  const probe = (u) => { probes++; return inspireProbeMedia(u, selfHost, Math.min(deadline, Date.now() + 3000)); };
+  for (const c of cands) {
+    if (!c || !c.url) continue;
+    if (c.kind === 'player') return { ...c, autoplay: false, verified: true };
+    const m = { ...c, verified: false };
+    if (canProbe()) {
+      const r = await probe(m.url);
+      if (r.ok === false) continue;
+      if (r.ok) {
+        if (r.kind !== m.kind) continue;   // e.g. an "image" candidate that is really a video file
+        m.verified = true;
+        if (r.bytes != null) m.bytes = r.bytes;
+        if (MEDIA_MIMES.has(r.mime)) m.mime = r.mime;
+      }
+    }
+    if (m.kind === 'video') m.autoplay = !(m.bytes > AUTOPLAY_MAX_BYTES);
+    if (m.small) {
+      if (!canProbe()) delete m.small;
+      else { const r = await probe(m.small); if (r.ok !== true || r.kind !== 'video') delete m.small; }
+    }
+    if (m._posterFallback) {
+      if (!canProbe()) m.poster = m._posterFallback;
+      else { const r = await probe(m.poster); if (r.ok === false || (r.ok && r.kind !== 'image')) m.poster = m._posterFallback; }
+      delete m._posterFallback;
+    }
+    return m;
+  }
+  return null;
+}
+// L1 for a link: adapter.pre -> plain page fetch (head; body scan for video-looking pages) -> extraction -> oEmbed
+// discovery (same site) -> adapter.post -> probe. Never Browser Run.
+// -> { meta: v2 object | null, outcome: 'ok' | 'blocked' | 'error' | 'skipped' (adapter without a page fetch) }
+async function inspireL1(parsed, selfHost, { deadline = Date.now() + INSPIRE_PIPELINE_MS } = {}) {
+  const href = parsed.canonical;
+  const provider = inspireProviderOf(href);
+  if (parsed.platform === 'pinterest' && parsed.subtype === 'pin' && parsed.id) {
+    const pm = await inspireFetchPinterestMeta(parsed.canonical, selfHost);
+    return { meta: pm ? inspireMetaV2(pm, null, 'plain', 'pinterest.com') : null, outcome: pm ? 'ok' : 'error' };
+  }
+  const wantMedia = inspireNeedsCard(parsed);
+  const ad = wantMedia ? adapterFor(href) : null;
+  const src = ad ? `adapter:${ad.name}` : null;
+  const cands = [];
+  if (ad && ad.pre) {
+    for (const v of ad.pre.video || []) cands.push({ kind: 'video', url: v, poster: ad.pre.poster || null, source: src });
+    if (ad.pre.image) cands.push({ kind: 'image', url: ad.pre.image, source: src });
+  }
+  let page = { outcome: 'skipped', meta: null, collected: null, finalUrl: href };
+  if (!(ad && ad.skipPage)) {
+    page = await inspireFetchPage((ad && ad.pageUrl) || href, selfHost,
+      { wantMedia, deadline: Math.min(deadline, Date.now() + INSPIRE_FETCH_BUDGET_MS), fullPage: !!(ad && ad.fullPage) });
+  }
+  const base = { title: null, description: null, image: null, site_name: null, ...(page.meta || {}) };
+  if (!wantMedia) return { meta: inspireMetaV2(base, null, 'plain', provider), outcome: page.outcome };
+  if (page.direct) cands.push(page.direct);
+  let ex = null;
+  if (page.collected) {
+    ex = extractMedia(page.collected, page.finalUrl, { imageMedia: !!(ad && ad.imageMedia) });
+    if (ex.media) cands.push(ex.media);
+  }
+  if (ad && ad.extract && page.html) {
+    const r = ad.extract(page.html);
+    for (const v of r.video || []) cands.push({ kind: 'video', url: v, poster: r.poster || null, source: src });
+    if (r.image) cands.push({ kind: 'image', url: r.image, source: src });
+    if (r.title && !base.title) base.title = r.title;
+    if (r.poster && !base.image) base.image = r.poster;
+  }
+  if (ex && ex.imageMedia) cands.push(ex.imageMedia);
+  const head = page.collected;
+  if (!cands.length && head && head.oembedHref && sameSite(head.oembedHref, page.finalUrl)) {
+    const o = oembedMedia(await inspireFetchSmall(head.oembedHref, selfHost, { json: true, maxBytes: 64 * 1024, deadline }));
+    if (o.imageMedia) cands.push(o.imageMedia);
+    else if (o.playerUrl) cands.push({ kind: 'player', url: o.playerUrl, source: 'oembed' });
+    if (o.thumb && !base.image) base.image = o.thumb;
+    if (o.title && !base.title) base.title = o.title;
+  }
+  if (!cands.length && ad && ad.post) {
+    const body = await inspireFetchSmall(ad.post.url, selfHost, { json: ad.post.type === 'json', maxBytes: ad.post.maxBytes, deadline });
+    const r = body != null ? ad.post.parse(body) : {};
+    if (r.image) cands.push({ kind: 'image', url: r.image, source: src });
+    if (r.thumb && !base.image) base.image = r.thumb;
+    if (r.title && !base.title) base.title = r.title;
+  }
+  const media = await inspireChooseMedia(cands, selfHost, deadline);
+  if (media) {
+    const exm = ex && ex.media;
+    if (!media.w && exm && exm.w && exm.h && exm.kind === media.kind) { media.w = exm.w; media.h = exm.h; }
+    if (!media.w && media.kind === 'image' && media.url === base.image && base.image_w) { media.w = base.image_w; media.h = base.image_h; }
+    if ((media.kind === 'video' || media.kind === 'hls') && !media.poster && base.image) media.poster = base.image;
+  }
+  const via = page.outcome === 'skipped' || (media && String(media.source || '').startsWith('adapter:')) ? 'adapter' : 'plain';
+  return { meta: inspireMetaV2(base, media, via, provider), outcome: page.outcome };
+}
+
+// ── Atomic daily budgets (inspire_quota; same pattern as sb_quota, independent of the storyboard schema) ──
+const inspireQuotaStmt = (db, day, it) => db.prepare(
+  `INSERT INTO inspire_quota (day, scope, subject, n, lim) VALUES (?1, ?2, ?3, ?4, ?5)
+   ON CONFLICT(day, scope, subject) DO UPDATE SET n = n + excluded.n, lim = excluded.lim`
+).bind(day, it.scope, it.subject || '', it.units, it.lim);
+// All items or none: {ok: true} | {ok: false, scope} (that counter would overflow). Other D1 errors throw (fail closed).
+async function inspireReserve(db, day, items) {
+  if (!items.length) return { ok: true };
+  try {
+    await db.batch(items.map((it) => inspireQuotaStmt(db, day, it)));
+    return { ok: true };
+  } catch (e) {
+    if (!isCheckError(e)) throw e;
+    for (const it of items) {
+      const r = await db.prepare('SELECT n FROM inspire_quota WHERE day=?1 AND scope=?2 AND subject=?3').bind(day, it.scope, it.subject || '').first();
+      if ((r ? r.n : 0) + it.units > it.lim) return { ok: false, scope: it.scope };
+    }
+    return { ok: false, scope: items[0].scope };
+  }
+}
+async function inspireRefund(db, day, items) {
+  if (!items.length) return;
+  try {
+    await db.batch(items.map((it) => db.prepare('UPDATE inspire_quota SET n = MAX(0, n - ?4) WHERE day=?1 AND scope=?2 AND subject=?3')
+      .bind(day, it.scope, it.subject || '', it.units)));
+  } catch (e) { console.error('inspire quota refund', e && e.message); }
+}
+async function inspireAdjust(db, day, scope, subject, delta) {
+  if (!delta) return;
+  try {
+    await db.prepare('UPDATE inspire_quota SET n = MAX(0, MIN(lim, n + ?4)) WHERE day=?1 AND scope=?2 AND subject=?3')
+      .bind(day, scope, subject || '', Math.round(delta)).run();
+  } catch (e) { console.error('inspire quota adjust', e && e.message); }
+}
+function inspireMediaConfig(env) {
+  const int = (v, d) => { const n = Number.parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : d; };
+  return {
+    br: env.FIKIR_BR === '1',
+    brDaily: int(env.FIKIR_BR_DAILY, 100),
+    brMsDaily: int(env.FIKIR_BR_MS_DAILY, 300000),
+    brPerCid: int(env.FIKIR_BR_PER_CID, 15),
+    brPerIp: int(env.FIKIR_BR_PER_IP, 20),
+    brMsPerCid: int(env.FIKIR_BR_MS_PER_CID, 60000),
+    brMsPerIp: int(env.FIKIR_BR_MS_PER_IP, 60000),
+    uploads: ['off', 'admin', 'users', 'all'].includes(env.FIKIR_MEDIA_UPLOADS) ? env.FIKIR_MEDIA_UPLOADS : 'off',
+    upPerN: int(env.FIKIR_UP_PER_CID_N, 10),
+    upPerBytes: int(env.FIKIR_UP_PER_CID_MB, 100) * 1048576,
+    upPerIpN: int(env.FIKIR_UP_PER_IP_N, 20),
+    upPerIpBytes: int(env.FIKIR_UP_PER_IP_MB, 200) * 1048576,
+    upDailyBytes: int(env.FIKIR_UP_DAILY_MB, 1000) * 1048576,
+    upTotalBytes: int(env.FIKIR_UP_TOTAL_MB, 6000) * 1048576,
+  };
+}
+const inspireSecondsToMidnight = () => { const d = new Date(); d.setUTCHours(24, 0, 0, 0); return Math.max(60, Math.ceil((d.getTime() - Date.now()) / 1000)); };
+const inspireSleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ── Stored meta writes (rules: never downgrade good data; failures must keep starting with {"failed":) ──
+// Good meta replaces: nothing, a failure, any v1 row, client meta, a row waiting for Browser Run, or anything with force.
+// A failure (or pending marker) replaces a failure / nothing; on a good or client row it only stamps v:2 + checked
+// (and sets or clears the pending fields), so a refetch can never wipe an old title.
+async function inspireWriteMeta(db, id, obj, { force = false } = {}) {
+  const text = JSON.stringify(obj);
+  if (!obj.failed) {
+    return db.prepare(`UPDATE inspire_posts SET meta=?2 WHERE id=?1 AND (meta IS NULL OR meta LIKE '{"failed":%' OR ?3 = 1 OR
+      CASE WHEN json_valid(meta) THEN COALESCE(json_extract(meta, '$.v'), 1) < 2 OR json_extract(meta, '$.via') = 'client'
+        OR json_extract(meta, '$.pending') = 'br' ELSE 1 END)`).bind(id, text, force ? 1 : 0).run();
+  }
+  return db.batch([
+    db.prepare(`UPDATE inspire_posts SET meta=?2 WHERE id=?1 AND (meta IS NULL OR meta LIKE '{"failed":%' OR NOT json_valid(meta))`).bind(id, text),
+    db.prepare(`UPDATE inspire_posts SET meta = CASE WHEN ?3 = 1
+        THEN json_set(meta, '$.v', 2, '$.checked', ?2, '$.pending', 'br', '$.at', ?2, '$.retry_s', ?4)
+        ELSE json_set(json_remove(meta, '$.pending', '$.retry_s', '$.at'), '$.v', 2, '$.checked', ?2) END
+      WHERE id=?1 AND meta IS NOT NULL AND meta NOT LIKE '{"failed":%' AND json_valid(meta)`)
+      .bind(id, Number(obj.at) || inspireNowS(), obj.pending === 'br' ? 1 : 0, Number(obj.retry_s) || 0),
+  ]);
+}
+
+// ── L2: Browser Run fallback (Quick Action `scrape`), only for pages whose plain fetch was blocked ──
+const INSPIRE_BR_SKIP = /(^|\.)(shutterstock\.com|adobe\.com|123rf\.com|dreamstime\.com)$/;
+const INSPIRE_BR_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
+const INSPIRE_BR_ELEMENTS = [
+  { selector: 'title' }, { selector: 'meta[property^="og:"]' },
+  { selector: 'meta[property^="twitter:"]' }, { selector: 'meta[name^="twitter:"]' },
+  { selector: 'meta[name="description"]' }, { selector: 'link[rel="canonical"]' },
+  { selector: 'video' }, { selector: 'video source' }, { selector: 'script[type="application/ld+json"]' },
+];
+let inspireBrNoBinding = false;
+function inspireBrAvailable(env) {
+  if (inspireFakeBr) return true;
+  if (env.BROWSER && typeof env.BROWSER.quickAction === 'function') return true;
+  if (!inspireBrNoBinding) { inspireBrNoBinding = true; console.log('inspire: env.BROWSER.quickAction is missing; the Browser Run fallback is off'); }
+  return false;
+}
+// Flag + binding + skip list + 7-day "this host challenged Browser Run" memory (3 strikes; no counters are touched).
+async function inspireBrPossible(env, db, href) {
+  if (env.FIKIR_BR !== '1' || !inspireBrAvailable(env)) return false;
+  let host;
+  try { host = new URL(href).hostname.toLowerCase(); } catch { return false; }
+  if (INSPIRE_BR_SKIP.test(host)) return false;
+  return (await inspireRateCount(db, 'br_block', host)) < INSPIRE_LIMITS.br_block[0];
+}
+// Site-wide Browser Run budget left today? (only for /preview's br_possible; admission itself is inspireReserve)
+async function inspireBrBudgetLeft(env, db) {
+  const cfg = inspireMediaConfig(env);
+  try {
+    const { results } = await db.prepare("SELECT scope, n FROM inspire_quota WHERE day=?1 AND subject='' AND scope IN ('br', 'br_ms')").bind(utcDay()).all();
+    const by = Object.fromEntries((results || []).map((r) => [r.scope, Number(r.n) || 0]));
+    return (by.br || 0) + 1 <= cfg.brDaily && (by.br_ms || 0) + 5000 <= cfg.brMsDaily;
+  } catch (e) { return true; }
+}
+async function inspireBrCall(env, href) {
+  const opts = {
+    url: href,
+    userAgent: INSPIRE_BR_UA,   // required: Browser Run's default UA gets a 403 from Magnific; its signed bot headers stay
+    setExtraHTTPHeaders: { 'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' },
+    gotoOptions: { waitUntil: 'domcontentloaded', timeout: 15000 },
+    waitForTimeout: 1500,
+    rejectResourceTypes: ['image', 'font', 'stylesheet', 'media'],
+    elements: INSPIRE_BR_ELEMENTS,
+  };
+  if (inspireFakeBr) {   // local tests only (see inspireTestHooks)
+    const r = await fetch(`http://${inspireTestAllow}/__br/scrape`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(opts) });
+    if (r.status === 599) throw new Error((await r.text()) || 'fake Browser Run error');
+    return r;
+  }
+  return env.BROWSER.quickAction('scrape', opts);
+}
+// Admission (daily quotas, then the slot) + one scrape + the same extraction/probe as L1. Never throws.
+// Quotas: site-wide calls + browser ms; calls per post; and, when given, the post author's calls + ms (author = its quota
+// subject 'c:<cid>' | 'u:<id>', only when the author makes the request) and the requesting IP's calls + ms (ipKey). The
+// cron and the admin pass neither. Browser ms are reserved at 5000 per scope and corrected to X-Browser-Ms-Used.
+// -> {status: 'ok', meta} | {status: 'pending', retry_s} | {status: 'failed', retry_s?} | {status: 'blocked', retry_s}
+//    | {status: 'refused', scope, retry_s} (a per-post / author / IP cap; nothing was called)
+async function inspireBrRun(env, db, href, selfHost, { postId = null, author = null, ipKey = null } = {}) {
+  if (!(await inspireBrPossible(env, db, href)) || !inspireSafeURL(href, selfHost)) return { status: 'failed' };
+  const host = new URL(href).hostname.toLowerCase();
+  const cfg = inspireMediaConfig(env);
+  const day = utcDay();
+  const items = [
+    { scope: 'br', subject: '', lim: cfg.brDaily, units: 1 },
+    { scope: 'br_ms', subject: '', lim: cfg.brMsDaily, units: 5000 },
+  ];
+  if (postId != null) items.push({ scope: 'br_post', subject: String(postId), lim: INSPIRE_BR_PER_POST, units: 1 });
+  if (author) items.push({ scope: 'br_user', subject: author, lim: cfg.brPerCid, units: 1 }, { scope: 'br_ms_user', subject: author, lim: cfg.brMsPerCid, units: 5000 });
+  if (ipKey) items.push({ scope: 'br_ip', subject: ipKey, lim: cfg.brPerIp, units: 1 }, { scope: 'br_ms_ip', subject: ipKey, lim: cfg.brMsPerIp, units: 5000 });
+  const msScopes = items.filter((it) => it.units === 5000);
+  let q;
+  try { q = await inspireReserve(db, day, items); } catch (e) { console.error('inspire br quota', e && e.message); return { status: 'failed', retry_s: 600 }; }
+  // site-wide budget spent: wait for UTC midnight (the cron retries); a per-post / author / IP cap: refused (the caller decides)
+  if (!q.ok) {
+    if (q.scope === 'br' || q.scope === 'br_ms') return { status: 'pending', retry_s: inspireSecondsToMidnight() };
+    return { status: 'refused', scope: q.scope, retry_s: q.scope === 'br_post' ? inspireSecondsToMidnight() : 3600 };
+  }
+  // the slot after the quotas: a refused request never holds it (Free allows 1 Quick Action per 10 s)
+  if (await inspireOverLimit(db, [['br_slot', 'all']])) { await inspireRefund(db, day, items); return { status: 'pending', retry_s: 15 }; }
+  let used = 0, data = null;
+  try {
+    const res = await inspireBrCall(env, href);
+    used = Number(res.headers.get('X-Browser-Ms-Used')) || 0;
+    if (res.status === 429) { inspireDiscard(res); return { status: 'pending', retry_s: Math.max(60, Number(res.headers.get('Retry-After')) || 0) }; }
+    if (!res.ok) { inspireDiscard(res); return { status: 'failed', retry_s: 600 }; }
+    try { data = JSON.parse(await inspireReadAll(res, 2 * 1024 * 1024, 'application/json; charset=utf-8')); } catch { data = null; }
+  } catch (e) {
+    const msg = String(e && e.message || e);
+    if (/time limit exceeded/i.test(msg)) {   // the account's daily browser time is gone: stop until UTC midnight
+      try { await db.prepare("UPDATE inspire_quota SET n = lim WHERE day=?1 AND scope='br' AND subject=''").bind(day).run(); } catch (_) {}
+      return { status: 'pending', retry_s: inspireSecondsToMidnight() };
+    }
+    if (/\b429\b|too many requests|rate limit/i.test(msg)) return { status: 'pending', retry_s: 60 };
+    console.error('inspire br', msg.slice(0, 300));
+    return { status: 'failed', retry_s: 600 };
+  } finally {
+    for (const it of msScopes) await inspireAdjust(db, day, it.scope, it.subject, Math.round(used) - 5000);
+  }
+  if (!data || data.success === false) return { status: 'failed', retry_s: 600 };
+  const col = collectFromScrape(data, href);
+  // A bot wall: one strike for the host per post (3 different posts in 7 days turn Browser Run off for that host); this post
+  // is retried after 6 h (a later /meta runs L1 + Browser Run again while the host has < 3 strikes).
+  if (col.blocked) {
+    if (postId == null || !(await inspireOverLimit(db, [['br_bpost', `${host}:${postId}`]]))) await inspireOverLimit(db, [['br_block', host]]);
+    return { status: 'blocked', retry_s: 6 * 3600 };
+  }
+  // Not a strike: a removed page fails this post for 30 days; another 4xx is a plain failure, a 5xx is retried after 6 h.
+  if (col.gone) return { status: 'failed', retry_s: INSPIRE_BR_GONE_RETRY_S };
+  if (col.status >= 400) return col.status >= 500 ? { status: 'failed', retry_s: 6 * 3600 } : { status: 'failed' };
+  const ex = extractMedia(col, col.finalUrl);
+  const media = await inspireChooseMedia([ex.media, ex.imageMedia].filter(Boolean), selfHost, Date.now() + 9000);
+  if (media) media.source = 'br';
+  const base = {
+    title: col.title && !INSPIRE_GENERIC_TITLES.has(col.title.toLowerCase()) ? col.title : null,
+    description: col.description, image: ex.image, site_name: col.site_name,
+  };
+  if (base.image && col.imageW && col.imageH && col.imageW <= 10000 && col.imageH <= 10000) { base.image_w = col.imageW; base.image_h = col.imageH; }
+  const meta = inspireMetaV2(base, media, 'br', inspireProviderOf(href));
+  return meta ? { status: 'ok', meta } : { status: 'failed' };
+}
+// opts: mode 'create' | 'refresh' | 'cron'; author / ipKey as in inspireBrRun; wasPending = the row was already waiting for
+// Browser Run (the cron, or a /meta poll of a due pending row).
+async function inspireBrAndStore(env, db, id, href, selfHost, { mode = 'refresh', author = null, ipKey = null, wasPending = false } = {}) {
+  let r;
+  try { r = await inspireBrRun(env, db, href, selfHost, { postId: id, author, ipKey }); }
+  catch (e) { console.error('inspire br run', e && e.stack || e); r = { status: 'failed', retry_s: 600 }; }
+  // Refused by a per-post / author / IP cap: a new post gets a plain failure (nobody queues unlimited jobs); a post that was
+  // already waiting keeps waiting (the cron, which has no author / IP caps, or another viewer runs it within ~10 min; after
+  // its 3 calls of the day: from UTC midnight); any other post is retried later (1 h, or midnight).
+  if (r.status === 'refused') {
+    if (mode === 'create') r = { status: 'failed' };
+    else if (wasPending) r = { status: 'pending', retry_s: r.scope === 'br_post' ? r.retry_s : 600 };
+    else r = { status: 'failed', retry_s: r.retry_s };
+  }
+  const at = inspireNowS();
+  try {
+    if (r.status === 'ok') await inspireWriteMeta(db, id, r.meta);
+    else if (r.status === 'pending') await inspireWriteMeta(db, id, { failed: 1, at, v: META_V, retry_s: r.retry_s, pending: 'br' });
+    else await inspireWriteMeta(db, id, { failed: 1, at, v: META_V, ...(r.retry_s ? { retry_s: r.retry_s } : {}) });
+  } catch (e) { console.error('inspire br store', e && e.message); }
+  return r;
+}
+// POST /meta refresh (v1 row, failure past its retry time, nothing stored yet, or ?force=1): L1, then Browser Run inline
+// when the page was blocked and no media was found. The result is written with the rules of inspireWriteMeta.
+async function inspireRefresh(env, db, id, parsed, selfHost, { author = null, ipKey = null, force = false } = {}) {
+  const l1 = await inspireL1(parsed, selfHost);
+  const blocked = inspireNeedsCard(parsed) && !(l1.meta && l1.meta.media) && l1.outcome === 'blocked';
+  if (blocked && await inspireBrPossible(env, db, parsed.canonical)) {
+    const at = inspireNowS();
+    if (l1.meta) await inspireWriteMeta(db, id, { ...l1.meta, pending: 'br', at, retry_s: 15 }, { force });
+    else await inspireWriteMeta(db, id, { failed: 1, at, v: META_V, retry_s: 15, pending: 'br' });
+    return inspireBrAndStore(env, db, id, parsed.canonical, selfHost, { mode: 'refresh', author, ipKey });
+  }
+  if (l1.meta) await inspireWriteMeta(db, id, l1.meta, { force });
+  else await inspireWriteMeta(db, id, { failed: 1, at: inspireNowS(), v: META_V });
+  return null;
+}
+
+// ── L3: manual media (owner/admin): a direct media URL (PUT /media, or `media` with a new post) ──
+const INSPIRE_MEDIA_ERR = {
+  invalid_media_url: [400, 'Geçerli bir http(s) video/görsel linki girin'],
+  not_media: [422, 'Bu link bir video/görsel dosyasına gitmiyor. Sayfa linki yerine doğrudan .mp4/.jpg linkini yapıştır'],
+  unsupported_type: [422, 'Bu dosya türü desteklenmiyor (SVG vb.)'],
+  expiring_url: [422, 'Bu link kısa süre sonra geçersiz olacak (süreli imzalı link). Dosyayı indirip yükle'],
+  unverifiable: [422, 'Bu linke ulaşılamadı. Linki kontrol et veya dosyayı yükle'],
+};
+const inspireMediaErr = (code) => ({ status: INSPIRE_MEDIA_ERR[code][0], error: code, message: INSPIRE_MEDIA_ERR[code][1] });
+function inspireCleanInputUrl(v, selfHost) {
+  if (typeof v !== 'string') return { error: 'invalid_media_url' };
+  const s = v.trim();
+  if (!s || s.length > 2048 || !/^https?:\/\//i.test(s)) return { error: 'invalid_media_url' };
+  const u = inspireSafeURL(s, selfHost);
+  if (!u || !inspireHostOk(u.href) || u.href.length > 2048) return { error: 'invalid_media_url' };
+  if (/\.svgz?$/i.test(u.pathname)) return { error: 'unsupported_type' };
+  // an expiring signed link with a stable public twin (Magnific free-video preview from the bookmarklet): the twin, probed next
+  if (isExpiringUrl(u.href)) { const st = stableVariantFor(u.href); return st ? { url: st } : { error: 'expiring_url' }; }
+  return { url: u.href };
+}
+// d = {url, poster?, kind?, w?, h?} -> {media} | {status, error, message}. The URL is probed (Range 0-0).
+async function inspireCheckMediaInput(d, selfHost, source, deadline = Date.now() + 6000) {
+  if (!d || typeof d !== 'object' || Array.isArray(d)) return inspireMediaErr('invalid_media_url');
+  const c = inspireCleanInputUrl(d.url, selfHost);
+  if (c.error) return inspireMediaErr(c.error);
+  let poster = null;
+  if (d.poster != null && d.poster !== '') {
+    const p = inspireCleanInputUrl(d.poster, selfHost);
+    if (p.error) return inspireMediaErr(p.error === 'expiring_url' ? 'expiring_url' : p.error);
+    const pk = mediaKindOf(p.url);
+    if (pk && pk !== 'image') return inspireMediaErr('invalid_media_url');
+    poster = p.url;
+  }
+  const given = ['video', 'image', 'hls'].includes(d.kind) ? d.kind : null;
+  const r = await inspireProbeMedia(c.url, selfHost, deadline);
+  if (r.ok === false) return inspireMediaErr(r.reason === 'not_media' ? 'not_media' : r.reason === 'svg' ? 'unsupported_type' : 'unverifiable');
+  const kind = r.ok ? r.kind : (mediaKindOf(c.url) || given);
+  if (!kind) return inspireMediaErr('unverifiable');
+  const bytes = r.ok && r.bytes != null ? r.bytes : undefined;
+  const media = sanitizeMedia({
+    kind, url: c.url, poster, w: d.w, h: d.h, mime: r.ok ? r.mime : undefined, bytes,
+    autoplay: kind === 'video' && !(bytes > AUTOPLAY_MAX_BYTES), verified: r.ok === true, source,
+  });
+  return media ? { media } : inspireMediaErr('invalid_media_url');
+}
+const inspireUploadsAllowed = (env, actor) => {
+  const mode = inspireMediaConfig(env).uploads;
+  return !!actor && (mode === 'all' || (mode === 'users' && !actor.guest) || (mode === 'admin' && actor.isAdmin));
+};
+// /files/<key> paths of a Media object (url, poster, small) that point at our uploads
+const inspireMediaKeys = (m) => (m ? [m.url, m.poster, m.small] : []).filter((u) => typeof u === 'string' && u.startsWith('/files/'))
+  .map((u) => u.slice('/files/'.length)).filter((k) => FILES_KEY_RE.test(k));
+// Deletes this post's orphaned upload objects (after the D1 update that orphaned them succeeded).
+async function inspireDeleteOrphans(env, db, postId) {
+  const { results } = await db.prepare("SELECT key FROM inspire_media WHERE post_id=?1 AND state='orphan' LIMIT 100").bind(postId).all();
+  const keys = (results || []).map((r) => r.key).filter((k) => FILES_KEY_RE.test(k));
+  if (!keys.length) return;
+  await env.STORAGE.delete(keys);
+  await db.batch(keys.map((k) => db.prepare("DELETE FROM inspire_media WHERE key=?1 AND state='orphan'").bind(k)));
+}
+
+// POST /api/inspire/posts/:id/media/upload?part=video|image|poster[&w=&h=] (raw body, Content-Length required).
+// Check order: auth, uploads flag vs role, post + ownership + card platform, length/caps, rate limits, daily quotas +
+// total storage, magic bytes, streamed R2 put (FixedLengthStream: a short or long body fails), then one D1 batch.
+// Any failure after the reservation refunds it and removes the object and its row.
+async function inspireUpload(request, env, ctx, db, id, { fail, limited, origin }) {
+  // A refusal of a body of allowed size reads (discards) the rest of it first, so the client gets the JSON error instead
+  // of a connection reset mid-upload (the upload modal shows the message). Bodies over the 25 MB cap are not read.
+  const declared = Number(request.headers.get('Content-Length'));
+  const drain = async (reader) => {
+    if (!request.body || !(declared > 0 && declared <= INSPIRE_UP_VIDEO_MB * 1048576)) return;
+    let r = reader;
+    try {
+      if (!r) r = request.body.getReader();
+      for (;;) { const { done } = await r.read(); if (done) break; }
+    } catch (e) {}
+  };
+  const refuse = async (...a) => { await drain(); return fail(...a); };
+  const actor = await inspireActor(request, env);
+  if (!actor) return refuse(401, 'unauthorized', 'Önce giriş yapın');
+  if (!inspireUploadsAllowed(env, actor)) return refuse(403, 'uploads_disabled', 'Dosya yükleme şu anda kapalı');
+  const q = new URL(request.url).searchParams;
+  const part = q.get('part');
+  if (!['video', 'image', 'poster'].includes(part)) return refuse(400, 'bad_request', 'Geçersiz istek');
+  const [cid, uid] = inspireOwnerParams(actor);
+  const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+  if (!row) return refuse(404, 'not_found', 'Fikir bulunamadı');
+  if (!(row.is_mine || actor.isAdmin)) return refuse(403, 'forbidden', 'Bu fikrin önizlemesini değiştirme yetkin yok');
+  if (row.type === 'text') return refuse(400, 'not_link_post', 'Metin fikirlere önizleme eklenemez');
+  if (!inspireCardish(row.type)) return refuse(409, 'has_player', 'Bu link zaten kendi oynatıcısıyla gösteriliyor');
+  const lenHeader = request.headers.get('Content-Length');
+  const len = Number(lenHeader);
+  if (!lenHeader || !/^\d{1,12}$/.test(lenHeader.trim()) || !Number.isSafeInteger(len) || len <= 0 || !request.body) {
+    return refuse(411, 'length_required', 'Dosya boyutu (Content-Length) gerekli');
+  }
+  const cap = (part === 'video' ? INSPIRE_UP_VIDEO_MB : INSPIRE_UP_IMAGE_MB) * 1048576;
+  if (len > cap) return refuse(413, 'file_too_large', 'Video en fazla 25 MB, görsel en fazla 10 MB olabilir');
+  const current = inspireMediaOut(row.media);
+  if (part === 'poster' && !(current && current.kind === 'video')) return refuse(409, 'no_video', 'Kapak görseli yalnızca yüklenmiş/eklenmiş bir videoya eklenebilir');
+  const ipKey = await inspireIpKey(request);
+  if (await inspireOverLimit(db, [['upload', inspireActorKey(actor)], ['upload_ip', ipKey]])) { await drain(); return limited(); }
+  const cfg = inspireMediaConfig(env);
+  const day = utcDay();
+  const subject = actor.isAdmin ? 'admin' : inspireActorKey(actor);
+  // Daily quotas: per guest cid / user, per IP (cids are client-chosen) and site-wide. The admin is exempt from all of
+  // them (guests cannot use up the owner's uploads); the total-storage check below applies to everyone.
+  const items = actor.isAdmin ? [] : [
+    { scope: 'up_bytes_all', subject: '', lim: cfg.upDailyBytes, units: len },
+    { scope: 'up_n', subject, lim: cfg.upPerN, units: 1 }, { scope: 'up_bytes', subject, lim: cfg.upPerBytes, units: len },
+    { scope: 'up_n_ip', subject: ipKey, lim: cfg.upPerIpN, units: 1 }, { scope: 'up_bytes_ip', subject: ipKey, lim: cfg.upPerIpBytes, units: len },
+  ];
+  let q1;
+  try { q1 = await inspireReserve(db, day, items); }
+  catch (e) { console.error('inspire upload quota', e && e.message); return refuse(503, 'upload_unavailable', 'Yükleme şu anda yapılamıyor, biraz sonra tekrar dene'); }
+  if (!q1.ok) return refuse(429, 'quota_exceeded', 'Bugünkü yükleme hakkın doldu', { reset_at: nextResetIso() });
+  let reader = null, key = null, rowInserted = false;
+  const undo = async () => {
+    await inspireRefund(db, day, items);
+    if (key) { try { await env.STORAGE.delete(key); } catch (e) {} }
+    if (rowInserted) { try { await db.prepare('DELETE FROM inspire_media WHERE key=?').bind(key).run(); } catch (e) {} }
+  };
+  try {
+    const used = await db.prepare("SELECT COALESCE(SUM(bytes), 0) AS b FROM inspire_media WHERE state <> 'orphan'").first();
+    if (Number(used && used.b) + len > cfg.upTotalBytes) { await undo(); return refuse(507, 'storage_full', 'Depolama alanı dolu, şimdilik dosya yüklenemiyor'); }
+    reader = request.body.getReader();
+    let head = new Uint8Array(0);
+    while (head.length < 64) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const merged = new Uint8Array(head.length + value.byteLength);
+      merged.set(head); merged.set(value, head.length);
+      head = merged;
+    }
+    const sniff = sniffMagic(head.subarray(0, 64));
+    const wantKind = part === 'video' ? 'video' : 'image';
+    if (!sniff || sniff.kind !== wantKind) {
+      await drain(reader);
+      await undo();
+      return fail(415, 'unsupported_media_type', 'Desteklenmeyen dosya türü. MP4, WebM, MOV, JPG, PNG, WebP veya GIF yükle');
+    }
+    const hex = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const slot = part === 'video' ? 'v' : part === 'image' ? 'i' : 'p';
+    key = `fikir/${id}/${slot}-${hex}.${sniff.ext}`;
+    await db.prepare("INSERT INTO inspire_media (key, post_id, slot, subject, mime, bytes, state, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'pending', ?7)")
+      .bind(key, id, slot, subject, sniff.mime, len, inspireNowS()).run();
+    rowInserted = true;
+    const { readable, writable } = new FixedLengthStream(len);
+    const w = writable.getWriter();
+    const pump = (async () => {
+      let n = head.length;
+      if (n > len) throw new Error('upload longer than Content-Length');
+      await w.write(head);
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        n += value.byteLength;
+        if (n > len) throw new Error('upload longer than Content-Length');
+        await w.write(value);
+      }
+      await w.close();
+    })();
+    pump.catch((e) => { try { w.abort(e).catch(() => {}); } catch (_) {} });
+    await Promise.all([pump, env.STORAGE.put(key, readable, {
+      httpMetadata: { contentType: sniff.mime, cacheControl: 'public, max-age=31536000, immutable', contentDisposition: 'inline' },
+      customMetadata: { post: String(id) },
+    })]);
+  } catch (e) {
+    if (reader) reader.cancel().catch(() => {});
+    await undo();
+    return fail(400, 'upload_incomplete', 'Yükleme yarıda kesildi, tekrar dene');
+  }
+  const path = '/files/' + key;
+  const dimsQ = (v) => { const n = Number.parseInt(v, 10); return Number.isFinite(n) && n >= 1 && n <= 10000 ? n : null; };
+  const w = dimsQ(q.get('w')), h = dimsQ(q.get('h'));
+  const sniffMime = key.endsWith('.mp4') ? 'video/mp4' : key.endsWith('.webm') ? 'video/webm' : key.endsWith('.mov') ? 'video/quicktime'
+    : key.endsWith('.jpg') ? 'image/jpeg' : key.endsWith('.png') ? 'image/png' : key.endsWith('.webp') ? 'image/webp' : 'image/gif';
+  let media;
+  if (part === 'video') {
+    media = { kind: 'video', url: path, poster: current && current.kind === 'video' ? current.poster || null : null, w, h, mime: sniffMime, bytes: len,
+      verified: true, autoplay: len <= AUTOPLAY_MAX_BYTES, source: 'upload' };
+  } else if (part === 'image') {
+    media = { kind: 'image', url: path, w, h, mime: sniffMime, bytes: len, verified: true, autoplay: false, source: 'upload' };
+  } else {
+    media = { ...current, poster: path };
+  }
+  media = sanitizeMedia(media, { allowFiles: true });
+  // One transaction, all conditional on this upload's row still being 'pending' and the post still existing: a post deleted
+  // (or a row swept by the cron) while the body streamed changes nothing here, and the object is removed below.
+  const liveSql = "EXISTS (SELECT 1 FROM inspire_media WHERE key=?3 AND state='live')";
+  let committed = false;
+  try {
+    const res = await db.batch([
+      db.prepare("UPDATE inspire_media SET state='live' WHERE key=?1 AND state='pending' AND EXISTS (SELECT 1 FROM inspire_posts WHERE id=?2)").bind(key, id),
+      db.prepare(`UPDATE inspire_posts SET media=?2 WHERE id=?1 AND ${liveSql}`).bind(id, JSON.stringify(media), key),
+      db.prepare(`UPDATE inspire_media SET state='orphan' WHERE post_id=?1 AND state='live' AND key NOT IN (SELECT value FROM json_each(?2)) AND ${liveSql}`)
+        .bind(id, JSON.stringify(inspireMediaKeys(media)), key),
+    ]);
+    committed = !!(res[1] && res[1].meta && res[1].meta.changes);
+  } catch (e) {
+    console.error('inspire upload commit', e && e.message);
+    await undo();
+    return fail(500, 'server_error', 'Sunucu hatası, lütfen tekrar deneyin');
+  }
+  if (!committed) {
+    await undo();
+    const still = await db.prepare('SELECT 1 FROM inspire_posts WHERE id=?').bind(id).first();
+    return still ? fail(400, 'upload_incomplete', 'Yükleme yarıda kesildi, tekrar dene') : fail(404, 'not_found', 'Fikir bulunamadı');
+  }
+  if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(inspireDeleteOrphans(env, db, id).catch((e) => console.error('inspire media cleanup', e && e.message)));
+  let quota = { uploads_left: null, mb_left: null, reset_at: nextResetIso() };
+  if (!actor.isAdmin) {
+    const rows = await db.prepare("SELECT scope, n, lim FROM inspire_quota WHERE day=?1 AND subject=?2 AND scope IN ('up_n', 'up_bytes')").bind(day, subject).all();
+    const by = Object.fromEntries((rows.results || []).map((r) => [r.scope, r]));
+    if (by.up_n) quota.uploads_left = Math.max(0, by.up_n.lim - by.up_n.n);
+    if (by.up_bytes) quota.mb_left = Math.max(0, Math.floor((by.up_bytes.lim - by.up_bytes.n) / 1048576));
+  }
+  const after = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+  if (!after) return fail(404, 'not_found', 'Fikir bulunamadı');   // deleted right after the commit (its delete removes the object)
+  return json({ post: inspirePostOut(after, actor.isAdmin, []), quota }, 201, origin);
+}
+
+// Cron (every 15 min, next to sbScheduled): upload cleanup, quota pruning, due Browser Run retries (<= 3, 11 s apart).
+async function inspireScheduled(env) {
+  inspireTestHooks(env);
+  await ensureInspireSchema(env);
+  const db = env.DB;
+  const nowS = inspireNowS();
+  const { results } = await db.prepare(`SELECT key FROM inspire_media WHERE state = 'orphan' OR (state = 'pending' AND created_at < ?1)
+    OR post_id NOT IN (SELECT id FROM inspire_posts) LIMIT 100`).bind(nowS - 3600).all();
+  const keys = (results || []).map((r) => r.key);
+  const r2keys = keys.filter((k) => FILES_KEY_RE.test(k));
+  if (r2keys.length) await env.STORAGE.delete(r2keys);
+  if (keys.length) await db.batch(keys.map((k) => db.prepare('DELETE FROM inspire_media WHERE key=?').bind(k)));
+  await db.prepare('DELETE FROM inspire_quota WHERE day < ?').bind(utcDay(Date.now() - 7 * 86400e3)).run();
+  if (env.FIKIR_BR !== '1') return;
+  // due rows only (rows waiting for UTC midnight must not crowd the due ones out of the LIMIT)
+  const { results: rows } = await db.prepare(`SELECT id, url, meta FROM inspire_posts WHERE meta LIKE '%"pending":"br"%' AND json_valid(meta)
+    AND COALESCE(json_extract(meta, '$.at'), 0) + COALESCE(json_extract(meta, '$.retry_s'), 0) <= ?1 ORDER BY id DESC LIMIT 10`).bind(nowS).all();
+  const due = (rows || []).filter((r) => {
+    const mm = inspireMetaParse(r.meta);
+    return inspireMetaPending(mm) && Number(mm.at || 0) + Number(mm.retry_s || 0) <= nowS;
+  });
+  let ran = 0;
+  for (const r of due) {
+    if (ran >= 3) break;
+    const parsed = r.url ? parseLink(r.url) : null;
+    if (!parsed || !inspireNeedsCard(parsed)) continue;
+    if (ran > 0) await inspireSleep(11000);   // Free: 1 Quick Action per 10 s
+    ran++;
+    await inspireBrAndStore(env, db, r.id, parsed.canonical, null, { mode: 'cron', wasPending: true });
+  }
 }
 
 // ── /api/inspire/* router. Every error is JSON {error, message} with CORS headers. ──
 async function handleInspire(request, env, ctx, cleanPath, method, origin) {
   const fail = (status, error, message, extra) => json({ error, message, ...(extra || {}) }, status, origin);
   const limited = () => fail(429, 'rate_limited', 'Çok fazla istek. Biraz bekleyip tekrar dene.');
+  inspireTestHooks(env);
+  // Raw file uploads stream past the 64 KB JSON cap (their own Content-Length caps apply); every other route keeps it.
+  const isUpload = method === 'POST' && /^\/api\/inspire\/posts\/\d{1,15}\/media\/upload$/.test(cleanPath);
   try {
-    if ((method === 'POST' || method === 'PUT') && Number(request.headers.get('Content-Length') || 0) > INSPIRE_MAX_BODY) {
+    if (!isUpload && (method === 'POST' || method === 'PUT') && Number(request.headers.get('Content-Length') || 0) > INSPIRE_MAX_BODY) {
       return fail(413, 'payload_too_large', 'İstek çok büyük');
     }
     await ensureInspireSchema(env);
@@ -969,7 +1749,11 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       if (!sbClient) return json({ storyboard: false, max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT }, 200, origin);
       const actor = await inspireActor(request, env);
       const sb = sbReady ? await sbHook('config', () => sbConfigPayload(env, db, actor), null) : null;
-      return json({ storyboard: !!(sb && sb.can_create), max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT, sb }, 200, origin);
+      const media = {
+        attach: true, uploads: inspireUploadsAllowed(env, actor), max_video_mb: INSPIRE_UP_VIDEO_MB, max_image_mb: INSPIRE_UP_IMAGE_MB,
+        types: INSPIRE_UP_TYPES,
+      };
+      return json({ storyboard: !!(sb && sb.can_create), max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT, sb, media }, 200, origin);
     }
 
     // Guest session: a name (or nothing = Anonim) + a client-generated id. No password.
@@ -1097,8 +1881,10 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       const author = await inspireAuthorName(db, actor);
       if (author === null) return fail(401, 'unauthorized', 'Oturum geçersiz, tekrar giriş yapın');
       const [cid, uid] = inspireOwnerParams(actor);
-      if (await inspireOverLimit(db, [['post', inspireActorKey(actor)], ['post_ip', await inspireIpKey(request)]])) return limited();
+      const ipKey = await inspireIpKey(request);
+      if (await inspireOverLimit(db, [['post', inspireActorKey(actor)], ['post_ip', ipKey]])) return limited();
       let type, storedUrl, description, urlKey = null, shortKey = null, metaJson = null, parsed = null, metaLater = false;
+      let mediaJson = null, mediaError = null, brPending = false;
       if (d.type === 'text') {
         const text = cleanInspireText(d.text);
         if (!text) return fail(400, 'empty_text', 'Fikir metni boş olamaz');
@@ -1121,25 +1907,52 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
         }
         type = parsed.platform; storedUrl = parsed.canonical; urlKey = keys[0]; shortKey = keys[1];
         if (inspireNeedsCard(parsed)) {
-          const meta = await inspireFetchMeta(parsed.canonical, selfHost);
-          metaJson = meta ? JSON.stringify(meta) : inspireMetaFailure();
+          // Optional manual media (add modal / bookmarklet): validated + probed like PUT /media. A rejected one is
+          // reported as media_error and never fails the post. Ignored for embeds and direct image/video posts.
+          let clientImage = null;
+          if (inspireCardish(type) && d.media != null) {
+            const r = await inspireCheckMediaInput(d.media, selfHost, d.via === 'bookmarklet' ? 'bookmarklet' : 'manual');
+            if (r.media) {
+              mediaJson = JSON.stringify(r.media);
+              clientImage = r.media.kind === 'image' ? r.media.url : r.media.poster || null;
+            } else mediaError = { error: r.error, message: r.message };
+          }
+          // L1 synchronously (the add modal's /preview result is reused); Browser Run never runs on the response path.
+          let l1 = inspireCacheGet(inspirePreviewCache, parsed.canonical);
+          if (!l1) {
+            l1 = await inspireL1(parsed, selfHost);
+            inspireCacheSet(inspirePreviewCache, parsed.canonical, l1, INSPIRE_PREVIEW_TTL_MS);
+          }
+          const meta = l1.meta;
+          brPending = !(meta && meta.media) && l1.outcome === 'blocked' && await inspireBrPossible(env, db, parsed.canonical);
+          const pend = brPending ? { pending: 'br', at: inspireNowS(), retry_s: 20 } : null;
+          const clientTitle = inspireMetaText(typeof d.title === 'string' ? d.title.slice(0, 1000) : null, 200);
+          if (meta) metaJson = JSON.stringify(pend ? { ...meta, ...pend } : meta);
+          else if (clientTitle || clientImage) {
+            metaJson = JSON.stringify({ v: META_V, via: 'client', title: clientTitle, image: clientImage, provider: inspireProviderOf(parsed.canonical), ...(pend || {}) });
+          } else metaJson = pend ? inspireMetaFailure({ retry_s: 20, pending: 'br' }) : inspireMetaFailure();
         } else if (parsed.platform !== 'image' && parsed.platform !== 'video') {
           metaLater = true;   // embeddable: metadata is only a fallback, fetch it after responding
         }
       }
       // Conditional insert closes the race between two simultaneous adds of the same link (either key form).
       const ins = await db.prepare(
-        `INSERT INTO inspire_posts (user_id, type, url, description, author_name, client_id, url_key, meta)
-         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+        `INSERT INTO inspire_posts (user_id, type, url, description, author_name, client_id, url_key, meta, media)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?10
          WHERE ?7 IS NULL OR NOT EXISTS (SELECT 1 FROM inspire_posts WHERE url_key IN (?7, ?9))`
-      ).bind(actor.guest ? inspireGuestId : actor.userId, type, storedUrl, description, author, cid, urlKey, metaJson, shortKey).run();
+      ).bind(actor.guest ? inspireGuestId : actor.userId, type, storedUrl, description, author, cid, urlKey, metaJson, shortKey, mediaJson).run();
       if (!ins.meta || !ins.meta.changes) {
         const dup = await inspireFindDuplicate(db, [urlKey, shortKey]);
         return fail(409, 'duplicate', 'Bu link zaten eklenmiş', { existing: dup ? inspireDupOut(dup) : null });
       }
       const id = ins.meta.last_row_id;
       if (metaLater && ctx && typeof ctx.waitUntil === 'function') {
-        ctx.waitUntil(inspireStoreMeta(db, id, parsed.canonical, selfHost).catch(() => {}));
+        ctx.waitUntil(inspireL1(parsed, selfHost)
+          .then((r) => inspireWriteMeta(db, id, r.meta || { failed: 1, at: inspireNowS(), v: META_V })).catch(() => {}));
+      }
+      if (brPending && ctx && typeof ctx.waitUntil === 'function') {
+        ctx.waitUntil(inspireBrAndStore(env, db, id, parsed.canonical, selfHost,
+          { mode: 'create', author: actor.isAdmin ? null : inspireActorKey(actor), ipKey: actor.isAdmin ? null : ipKey }));
       }
       const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
       // Text ideas (current board only) always carry a `storyboard` key; starting one never fails the post itself.
@@ -1154,24 +1967,39 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
           sbExtra = { storyboard: null, storyboard_error: { error: 'sb_unavailable', message: 'Storyboard başlatılamadı. Karttaki düğmeyle tekrar dene.' } };
         }
       }
-      return json({ ...inspirePostOut(row, actor.isAdmin, []), ...sbExtra }, 201, origin);
+      return json({ ...inspirePostOut(row, actor.isAdmin, []), ...sbExtra, ...(mediaError ? { media_error: mediaError } : {}) }, 201, origin);
     }
 
-    // Fetch + store preview metadata for an existing post whose meta is still empty (idempotent).
-    // A recent failure is answered from the negative cache without fetching again.
+    // Preview metadata for an existing post: returns a stored good v2 meta as is; otherwise (nothing yet, v1 row, failure
+    // past its retry time, Browser Run due) fetches once more. ?force=1 (owner/admin) refetches regardless of the
+    // negative cache and may replace a good meta, but never bypasses the Browser Run quotas.
+    // -> {meta: MetaV2|null, media: Media|null, pending?: true, retry_after?: s}
     if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/meta$/)) && method === 'POST') {
       const actor = await inspireActor(request, env);
       if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
       const id = Number(m[1]);
-      const row = await db.prepare('SELECT id, url, meta FROM inspire_posts WHERE id=?').bind(id).first();
+      const force = new URL(request.url).searchParams.get('force') === '1';
+      const [cid, uid] = inspireOwnerParams(actor);
+      const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
       if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
+      const nowS = inspireNowS();
+      const answer = (r, extra) => json({ meta: inspireMetaOut(r.meta), media: inspireMediaOut(r.media), ...(extra || {}) }, 200, origin);
+      const pendingExtra = (mm) => ({ pending: true, retry_after: Math.max(1, Number(mm.at || 0) + Number(mm.retry_s || 0) - nowS) });
       const stored = inspireMetaParse(row.meta);
-      if (stored && !inspireMetaFailed(stored)) return json({ meta: stored }, 200, origin);
-      if (inspireMetaFresh(stored)) return json({ meta: null }, 200, origin);
+      if (force) {
+        if (!(row.is_mine || actor.isAdmin)) return fail(403, 'forbidden', 'Bu fikrin önizlemesini değiştirme yetkin yok');
+        if (await inspireOverLimit(db, [['media', inspireActorKey(actor)], ['media_ip', await inspireIpKey(request)]])) return limited();
+      } else {
+        if (stored && !inspireMetaFailed(stored) && !inspireMetaPending(stored) && !inspireMetaStale(stored, row.type)) return answer(row);
+        if (inspireMetaFresh(stored)) return answer(row);
+        if (inspireMetaPending(stored) && Number(stored.at || 0) + Number(stored.retry_s || 0) > nowS) return answer(row, pendingExtra(stored));
+      }
       let parsed = row.url ? parseLink(row.url) : null;
-      if (!parsed || parsed.platform === 'image' || parsed.platform === 'video') return json({ meta: null }, 200, origin);
-      if (inspireCacheGet(inspireMetaAttempts, id) !== undefined) return json({ meta: null }, 200, origin);
-      if (await inspireOverLimit(db, [['fetch_ip', await inspireIpKey(request)]])) return limited();
+      if (!parsed || parsed.platform === 'image' || parsed.platform === 'video') return answer(row);
+      if (!force) {
+        if (inspireCacheGet(inspireMetaAttempts, id) !== undefined) return answer(row, inspireMetaPending(stored) ? { pending: true, retry_after: 15 } : null);
+        if (await inspireOverLimit(db, [['fetch_ip', await inspireIpKey(request)]])) return limited();
+      }
       inspireCacheSet(inspireMetaAttempts, id, true, 10 * 60e3);
       if (parsed.needsResolve) {
         // Row saved as an unresolved short link (pin.it, vm.tiktok.com, ...): store the real link and key once.
@@ -1181,8 +2009,90 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
           parsed = resolved;
         }
       }
-      const meta = await inspireStoreMeta(db, id, parsed.canonical, selfHost);
-      return json({ meta: meta || null }, 200, origin);
+      // Browser Run quotas: the requesting IP always (admin exempt); the per-user caps only when the author asks (a viewer's
+      // own posts never block someone else's preview, and a viewer never spends the author's allowance)
+      const brWho = { author: row.is_mine && !actor.isAdmin ? inspireActorKey(actor) : null, ipKey: actor.isAdmin ? null : await inspireIpKey(request) };
+      if (!force && inspireMetaPending(stored)) {
+        // L1 already found the page blocked: only the Browser Run attempt is due (inline when admitted)
+        await inspireBrAndStore(env, db, id, parsed.canonical, selfHost, { mode: 'refresh', ...brWho, wasPending: true });
+      } else {
+        await inspireRefresh(env, db, id, parsed, selfHost, { ...brWho, force });
+      }
+      const after = await db.prepare('SELECT meta, media FROM inspire_posts WHERE id=?').bind(id).first();
+      if (!after) return fail(404, 'not_found', 'Fikir bulunamadı');
+      const am = inspireMetaParse(after.meta);
+      if (inspireMetaPending(am)) {
+        inspireMetaAttempts.delete(id);   // the client polls again after retry_after
+        return answer(after, pendingExtra(am));
+      }
+      return answer(after);
+    }
+
+    // Add-modal live preview: L1 only (adapters, plain fetch, oEmbed, probe), never Browser Run. Results are cached per
+    // canonical URL for 10 minutes and reused by POST /posts.
+    if (cleanPath === '/api/inspire/preview' && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const d = await inspireBody(request);
+      if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
+      const raw = typeof d.url === 'string' ? d.url.trim() : '';
+      if (!raw || raw.length > MAX_URL_LENGTH) return fail(400, 'invalid_url', 'Geçerli bir http(s) linki girin');
+      if (await inspireOverLimit(db, [['preview', inspireActorKey(actor)], ['preview_ip', await inspireIpKey(request)]])) return limited();
+      const parsed = await inspireParseInput(raw, selfHost);
+      if (!parsed || !inspireHostOk(parsed.canonical)) return fail(400, 'invalid_url', 'Geçerli bir http(s) linki girin');
+      const kind = parsed.platform === 'image' ? 'image' : parsed.platform === 'video' ? 'video' : inspireNeedsCard(parsed) ? 'card' : 'embed';
+      const out = { platform: parsed.platform, canonical: parsed.canonical, kind, outcome: 'skipped', meta: null, br_possible: false };
+      if (kind !== 'card') return json(out, 200, origin);
+      let l1 = inspireCacheGet(inspirePreviewCache, parsed.canonical);
+      if (!l1) {
+        l1 = await inspireL1(parsed, selfHost);
+        inspireCacheSet(inspirePreviewCache, parsed.canonical, l1, INSPIRE_PREVIEW_TTL_MS);
+      }
+      const meta = l1.meta ? inspireMetaOut(JSON.stringify(l1.meta)) : null;
+      out.meta = meta;
+      if (meta && meta.media) out.outcome = 'media';
+      else if (l1.outcome === 'blocked') {
+        out.outcome = 'blocked';
+        out.br_possible = await inspireBrPossible(env, db, parsed.canonical) && await inspireBrBudgetLeft(env, db);
+      } else out.outcome = meta ? 'card' : 'none';
+      return json(out, 200, origin);
+    }
+
+    // Manual preview media for a link post (owner or inspire admin): PUT = attach/replace a direct media URL,
+    // DELETE = remove it (uploaded objects are deleted after the D1 update).
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/media$/)) && (method === 'PUT' || method === 'DELETE')) {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      const id = Number(m[1]);
+      const [cid, uid] = inspireOwnerParams(actor);
+      const row = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+      if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
+      if (!(row.is_mine || actor.isAdmin)) return fail(403, 'forbidden', 'Bu fikrin önizlemesini değiştirme yetkin yok');
+      if (row.type === 'text') return fail(400, 'not_link_post', 'Metin fikirlere önizleme eklenemez');
+      if (!inspireCardish(row.type)) return fail(409, 'has_player', 'Bu link zaten kendi oynatıcısıyla gösteriliyor');
+      if (await inspireOverLimit(db, [['media', inspireActorKey(actor)], ['media_ip', await inspireIpKey(request)]])) return limited();
+      let media = null;
+      if (method === 'PUT') {
+        const d = await inspireBody(request);
+        if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
+        const r = await inspireCheckMediaInput(d, selfHost, 'manual');
+        if (!r.media) return fail(r.status, r.error, r.message);
+        media = r.media;
+      }
+      const keep = inspireMediaKeys(media);
+      await db.batch([
+        db.prepare('UPDATE inspire_posts SET media=?2 WHERE id=?1').bind(id, media ? JSON.stringify(media) : null),
+        db.prepare(`UPDATE inspire_media SET state='orphan' WHERE post_id=?1 AND state='live' AND key NOT IN (SELECT value FROM json_each(?2))`)
+          .bind(id, JSON.stringify(keep)),
+      ]);
+      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(inspireDeleteOrphans(env, db, id).catch((e) => console.error('inspire media cleanup', e && e.message)));
+      const after = await db.prepare(`${INSPIRE_POST_SELECT} WHERE p.id = ?3`).bind(cid, uid, id).first();
+      return json({ post: inspirePostOut(after, actor.isAdmin, []) }, 200, origin);
+    }
+
+    // Upload a preview file (raw body, streamed to R2; type from the magic bytes): ?part=video|image|poster[&w=&h=]
+    if (isUpload) {
+      return await inspireUpload(request, env, ctx, db, Number(cleanPath.split('/')[4]), { fail, limited, origin });   // await: errors reach the catch below
     }
 
     // Add a note to a post
@@ -1224,9 +2134,13 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       await db.batch([
         ...(sbDel ? sbDel.stmts : []),
         db.prepare('DELETE FROM inspire_notes WHERE post_id=?').bind(id),
+        // uploaded previews (R2 below). An upload still streaming keeps its 'pending' row: its commit finds no post and
+        // removes the object itself; the cron sweeps the row if that request died.
+        db.prepare("UPDATE inspire_media SET state='orphan' WHERE post_id=? AND state='live'").bind(id),
         db.prepare('DELETE FROM inspire_posts WHERE id=?').bind(id),
       ]);
       if (sbDel && ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(sbDel.cleanup().catch((e) => console.error('sb cleanup', e && e.message)));
+      if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(inspireDeleteOrphans(env, db, id).catch((e) => console.error('inspire media cleanup', e && e.message)));
       return json({ ok: true }, 200, origin);
     }
 
@@ -1308,9 +2222,11 @@ async function uiAuth(request, env) {
 }
 
 export default {
-  // Cron (wrangler.toml [triggers]): reconcile stuck storyboard jobs, sweep orphans, prune old quota/ledger rows.
+  // Cron (wrangler.toml [triggers]): reconcile stuck storyboard jobs, sweep orphans, prune old quota/ledger rows;
+  // Fikir Havuzu media: upload cleanup, inspire_quota pruning, due Browser Run retries.
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(sbScheduled(env).catch((e) => console.error('sb cron', e && e.stack || e)));
+    ctx.waitUntil(inspireScheduled(env).catch((e) => console.error('inspire cron', e && e.stack || e)));
   },
   async fetch(request, env, ctx) {
     const url    = new URL(request.url);
@@ -1375,41 +2291,65 @@ export default {
     }
 
     // === PUBLIC: Dosya serve ===
+    // R2 objects, Range-capable (video seeking). fikir/ keys (Fikir Havuzu uploads) must match the server-generated
+    // pattern and are served sandboxed (CSP sandbox, nosniff, inline) so an uploaded file can never run as a page.
     if (path.startsWith('/files/')) {
-      const key = path.replace('/files/', '');
-      const obj = await env.STORAGE.get(key);
-      if (!obj) return new Response('Not Found', { status: 404 });
-
-      const baseHeaders = new Headers();
-      obj.writeHttpMetadata(baseHeaders);
-      baseHeaders.set('Cache-Control', 'public, max-age=31536000');
-      // PUBLIC dosyalar — tüm originlere izin ver (CORS bloğunu önler)
-      baseHeaders.set('Access-Control-Allow-Origin', '*');
-      baseHeaders.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-      baseHeaders.set('Accept-Ranges', 'bytes');
-      if (obj.size != null) baseHeaders.set('Content-Length', String(obj.size));
-
-      // Range request — video seeking/streaming icin kritik
-      const rangeHeader = request.headers.get('Range');
-      if (rangeHeader && obj.size) {
-        const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-        if (match) {
-          const start = parseInt(match[1]);
-          const end   = match[2] ? parseInt(match[2]) : obj.size - 1;
-          const clampedEnd = Math.min(end, obj.size - 1);
-          const rangedObj = await env.STORAGE.get(key, {
-            range: { offset: start, length: clampedEnd - start + 1 }
-          });
-          if (rangedObj) {
-            const rh = new Headers(baseHeaders);
-            rh.set('Content-Range',  `bytes ${start}-${clampedEnd}/${obj.size}`);
-            rh.set('Content-Length', String(clampedEnd - start + 1));
-            return new Response(rangedObj.body, { status: 206, headers: rh });
+      try {
+        const key = path.replace('/files/', '');
+        const isFikir = key.startsWith('fikir/');
+        if (isFikir && !FILES_KEY_RE.test(key)) return new Response('Not Found', { status: 404 });
+        const rangeHeader = request.headers.get('Range');
+        const range = rangeHeader ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim()) : null;
+        const head = range ? await env.STORAGE.head(key) : null;
+        if (range && !head) return new Response('Not Found', { status: 404 });
+        const headers = (obj) => {
+          const h = new Headers();
+          obj.writeHttpMetadata(h);
+          h.set('Cache-Control', 'public, max-age=31536000');
+          // PUBLIC dosyalar — tüm originlere izin ver (CORS bloğunu önler)
+          h.set('Access-Control-Allow-Origin', '*');
+          h.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+          h.set('Accept-Ranges', 'bytes');
+          h.set('X-Content-Type-Options', 'nosniff');
+          if (obj.httpEtag) h.set('ETag', obj.httpEtag);
+          if (isFikir) {
+            h.set('Content-Security-Policy', "default-src 'none'; sandbox");
+            h.set('Content-Disposition', 'inline');
+            h.set('Cross-Origin-Resource-Policy', 'cross-origin');
+            h.set('Cache-Control', 'public, max-age=31536000, immutable');
           }
+          return h;
+        };
+        if (range && head.size > 0 && (range[1] !== '' || range[2] !== '')) {
+          const size = head.size;
+          let start, end;
+          if (range[1] === '') {   // bytes=-N: the last N bytes
+            const n = Number(range[2]);
+            if (!(n > 0)) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}`, 'Access-Control-Allow-Origin': '*' } });
+            start = Math.max(0, size - n); end = size - 1;
+          } else {
+            start = Number(range[1]);
+            end = range[2] !== '' ? Math.min(Number(range[2]), size - 1) : size - 1;
+          }
+          if (!Number.isSafeInteger(start) || start >= size || end < start) {
+            return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}`, 'Access-Control-Allow-Origin': '*' } });
+          }
+          const rangedObj = await env.STORAGE.get(key, range[1] === '' ? { range: { suffix: end - start + 1 } } : { range: { offset: start, length: end - start + 1 } });
+          if (!rangedObj) return new Response('Not Found', { status: 404 });
+          const rh = headers(rangedObj);
+          rh.set('Content-Range', `bytes ${start}-${end}/${size}`);
+          rh.set('Content-Length', String(end - start + 1));
+          return new Response(rangedObj.body, { status: 206, headers: rh });
         }
+        const obj = await env.STORAGE.get(key);
+        if (!obj) return new Response('Not Found', { status: 404 });
+        const bh = headers(obj);
+        if (obj.size != null) bh.set('Content-Length', String(obj.size));
+        return new Response(obj.body, { headers: bh });
+      } catch (e) {
+        console.error('files', e && e.message);
+        return new Response('Server Error', { status: 500 });
       }
-
-      return new Response(obj.body, { headers: baseHeaders });
     }
 
     // === PUBLIC: Key-Value (Ayarlar) ===

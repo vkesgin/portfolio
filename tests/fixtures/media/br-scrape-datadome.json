@@ -1,0 +1,39 @@
+{
+ "success": true,
+ "result": [
+  {
+   "selector": "meta[property^=\"og:\"]",
+   "results": []
+  },
+  {
+   "selector": "video",
+   "results": []
+  },
+  {
+   "selector": "video source",
+   "results": []
+  },
+  {
+   "selector": "script[type=\"application/ld+json\"]",
+   "results": []
+  },
+  {
+   "selector": "title",
+   "results": [
+    {
+     "attributes": [],
+     "text": "shutterstock.com",
+     "html": "shutterstock.com"
+    }
+   ]
+  }
+ ],
+ "meta": {
+  "status": 403,
+  "title": "",
+  "finalUrl": "https://www.shutterstock.com/video/clip-28759981-slow-motion-finishing-fast-food-burger-top",
+  "headers": {
+   "content-type": "text/html;charset=utf-8"
+  }
+ }
+}

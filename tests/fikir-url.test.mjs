@@ -5,6 +5,7 @@ import {
   parseLink,
   stripTracking,
   parseEmbedMessage,
+  mediaKindOf,
   TRACKING_PARAMS,
   MAX_URL_LENGTH,
 } from '../assets/js/fikir-url.mjs';
@@ -366,5 +367,33 @@ describe('parseEmbedMessage', () => {
     assert.equal(parseEmbedMessage('https://www.instagram.com', 'not json'), null);
     assert.equal(parseEmbedMessage('https://platform.twitter.com', { foo: 1 }), null);
     assert.equal(parseEmbedMessage('https://www.tiktok.com', '[tea-sdk]ready'), null);
+  });
+});
+
+describe('mediaKindOf', () => {
+  test('direct media files by extension', () => {
+    const cases = [
+      ['https://videocdn.cdnpk.net/videos/9d0664ea-fc7c-56ee-b566-eb13ffdc1812/horizontal/previews/magnific_watermarked/large.mp4', 'video'],
+      ['https://cdn.example.com/a.WEBM?x=1', 'video'],
+      ['https://cdn.example.com/a.mov#t=2', 'video'],
+      ['https://cdn.example.com/a.m4v', 'video'],
+      ['https://v.redd.it/abc/HLSPlaylist.m3u8?a=1', 'hls'],
+      ['https://cdn.example.com/a.jpg', 'image'],
+      ['https://cdn.example.com/a.JPEG', 'image'],
+      ['https://cdn.example.com/a.png', 'image'],
+      ['https://cdn.example.com/a.gif', 'image'],
+      ['https://cdn.example.com/a.webp', 'image'],
+      ['https://cdn.example.com/a.avif', 'image'],
+      ['/files/fikir/12/v-0123456789abcdef0123456789abcdef.mp4', 'video'],
+      ['/files/fikir/12/i-0123456789abcdef0123456789abcdef.png', 'image'],
+    ];
+    for (const [u, k] of cases) assert.equal(mediaKindOf(u), k, u);
+  });
+  test('everything else is null (svg, pages, other schemes, junk)', () => {
+    for (const u of ['https://cdn.example.com/a.svg', 'https://cdn.example.com/a.svgz', 'https://www.magnific.com/premium-video/x_4720543',
+      'https://cdn.example.com/a.mp4.html', 'https://cdn.example.com/video?f=a.mp4', 'javascript:alert(1)//a.mp4', 'data:video/mp4;base64,AAAA',
+      'ftp://cdn.example.com/a.mp4', '', null, undefined, 42, 'not a url']) {
+      assert.equal(mediaKindOf(u), null, String(u));
+    }
   });
 });

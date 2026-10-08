@@ -1,0 +1,363 @@
+{
+ "success": true,
+ "result": [
+  {
+   "selector": "meta[property^=\"og:\"]",
+   "results": [
+    {
+     "attributes": [
+      {
+       "name": "property",
+       "value": "og:title"
+      },
+      {
+       "name": "content",
+       "value": "Assembling a Burger - Beef Burger Ingredients Falling And Landing In The Bun One By One In Slow Motion | Premium Stock Video Footage"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "property",
+       "value": "og:type"
+      },
+      {
+       "name": "content",
+       "value": "video"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "property",
+       "value": "og:url"
+      },
+      {
+       "name": "content",
+       "value": "https://www.magnific.com/premium-video/assembling-burger-beef-burger-ingredients-falling-landing-bun-one-by-one-slow-motion_4720543"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "property",
+       "value": "og:image"
+      },
+      {
+       "name": "content",
+       "value": "https://videocdn.cdnpk.net/videos/9d0664ea-fc7c-56ee-b566-eb13ffdc1812/horizontal/thumbnails/large.jpg"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "property",
+       "value": "og:image:width"
+      },
+      {
+       "name": "content",
+       "value": "3840"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "property",
+       "value": "og:image:height"
+      },
+      {
+       "name": "content",
+       "value": "2160"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "property",
+       "value": "og:site_name"
+      },
+      {
+       "name": "content",
+       "value": "Magnific"
+      }
+     ],
+     "text": "",
+     "html": ""
+    }
+   ]
+  },
+  {
+   "selector": "video",
+   "results": [
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "1280"
+      },
+      {
+       "name": "height",
+       "value": "720"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/9d0664ea-fc7c-56ee-b566-eb13ffdc1812/horizontal/thumbnails/large.jpg?item_id=4720543&w=740&q=80"
+      }
+     ],
+     "text": "",
+     "html": "<source src=\"https://videocdn.cdnpk.net/videos/9d0664ea-fc7c-56ee-b566-eb13ffdc1812/horizontal/previews/magnific_watermarked/large.mp4\" type=\"video/mp4\">"
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/af75c92b-838e-5dbf-a651-d20b53427360/horizontal/thumbnails/small.jpg?item_id=7357292"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/fee65c49-445e-55a1-a28d-84ef682779b6/horizontal/thumbnails/small.jpg?item_id=4720551"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/e1ef331e-eb10-5600-b706-c9f7b9768746/vertical/thumbnails/small.jpg?item_id=8247354"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/fa4ef3b3-c356-57a0-a9b9-8629bcde87dd/horizontal/thumbnails/small.jpg?item_id=8702613"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/485aaeb5-4dfe-5e40-846c-331ba565875e/horizontal/thumbnails/small.jpg?item_id=7380812"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/4a83fe6e-e755-5f06-8b03-9953b62cf98c/horizontal/thumbnails/small.jpg?item_id=6118951"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/d4060fd3-600e-554e-be7c-950c38329454/horizontal/thumbnails/small.jpg?item_id=7214215"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/6c1ba3b9-57f2-563f-8cb5-3fede8dc05e5/horizontal/thumbnails/small.jpg?item_id=8776841"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/a5103f67-8cd1-519a-aa25-400093a8e199/vertical/thumbnails/small.jpg?item_id=8247357"
+      }
+     ],
+     "text": "",
+     "html": ""
+    },
+    {
+     "attributes": [
+      {
+       "name": "width",
+       "value": "480"
+      },
+      {
+       "name": "height",
+       "value": "270"
+      },
+      {
+       "name": "poster",
+       "value": "https://videocdn.cdnpk.net/videos/c8913c52-d8e1-50b4-bc45-cb640e500f15/vertical/thumbnails/small.jpg?item_id=8247344"
+      }
+     ],
+     "text": "",
+     "html": ""
+    }
+   ]
+  },
+  {
+   "selector": "video source",
+   "results": [
+    {
+     "attributes": [
+      {
+       "name": "src",
+       "value": "https://videocdn.cdnpk.net/videos/9d0664ea-fc7c-56ee-b566-eb13ffdc1812/horizontal/previews/magnific_watermarked/large.mp4"
+      },
+      {
+       "name": "type",
+       "value": "video/mp4"
+      }
+     ],
+     "text": "",
+     "html": ""
+    }
+   ]
+  },
+  {
+   "selector": "script[type=\"application/ld+json\"]",
+   "results": [
+    {
+     "attributes": [
+      {
+       "name": "type",
+       "value": "application/ld+json"
+      }
+     ],
+     "text": "",
+     "html": "{\"@context\":\"https://schema.org\",\"@graph\":[{\"@type\":\"WebPage\",\"@id\":\"https://www.magnific.com/premium-video/assembling-burger-beef-burger-ingredients-falling-landing-bun-one-by-one-slow-motion_4720543#webpage\",\"url\":\"https://www.magnific.com/premium-video/assembling-burger-beef-burger-ingredients-falling-landing-bun-one-by-one-slow-motion_4720543\",\"mainEntity\":{\"@type\":\"VideoObject\",\"name\":\"Assembling a Burger - Beef Burger Ingredients Falling And Landing In The Bun One By One In Slow Motion\",\"contentUrl\":\"https://videocdn.cdnpk.net/videos/9d0664ea-fc7c-56ee-b566-eb13ffdc1812/horizontal/previews/magnific_watermarked/large.mp4\",\"encodingFormat\":\"video/mp4\",\"thumbnailUrl\":\"https://videocdn.cdnpk.net/videos/9d0664ea-fc7c-56ee-b566-eb13ffdc1812/horizontal/thumbnails/large.jpg\",\"width\":3840,\"height\":2160}}]}"
+    }
+   ]
+  },
+  {
+   "selector": "title",
+   "results": [
+    {
+     "attributes": [],
+     "text": "Assembling a Burger - Beef Burger Ingredients Falling And Landing In The Bun One By One In Slow Motion | Premium Stock Video Footage",
+     "html": "Assembling a Burger - Beef Burger Ingredients Falling And Landing In The Bun One By One In Slow Motion | Premium Stock Video Footage"
+    }
+   ]
+  }
+ ],
+ "meta": {
+  "status": 200,
+  "title": "",
+  "finalUrl": "https://www.magnific.com/premium-video/assembling-burger-beef-burger-ingredients-falling-landing-bun-one-by-one-slow-motion_4720543",
+  "headers": {
+   "content-type": "text/html; charset=utf-8"
+  }
+ }
+}

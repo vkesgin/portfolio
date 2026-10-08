@@ -1,0 +1,48 @@
+# =====================================================================================
+# LOCAL TEST ONLY - never deploy.  LOCAL TEST ONLY - never deploy.  LOCAL TEST ONLY.
+# Never run `wrangler deploy`, `wrangler versions upload` or any remote command with
+# `-c wrangler.mediatest.toml`. It opens the SSRF guard for one local fixture server
+# (INSPIRE_TEST_FETCH_ALLOW), fakes Browser Run (INSPIRE_FAKE_BR) and allows guest uploads;
+# it exists only for tests/media-e2e/ (wrangler dev on 127.0.0.1:8821, fixture server 4742).
+# =====================================================================================
+# The database_id is a placeholder, so `wrangler deploy -c wrangler.mediatest.toml` fails by design.
+# No [browser] block: Browser Run is the fake at http://127.0.0.1:4742/__br/scrape. The hooks only work while
+# ALLOWED_ORIGIN is a http://127.0.0.1 origin (see inspireTestHooks in index.js).
+name = "vk-portfolio-api-mediatest"
+main = "index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "vk-portfolio-mediatest"
+database_id = "00000000-0000-4000-8000-000000000001"
+
+[[r2_buckets]]
+binding = "STORAGE"
+bucket_name = "vk-portfolio-mediatest-files"
+
+[[workflows]]
+name = "vk-storyboard-mediatest"
+binding = "STORYBOARD_WF"
+class_name = "StoryboardWorkflow"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+ALLOWED_ORIGIN = "http://127.0.0.1:4741"
+INSPIRE_TEST_FETCH_ALLOW = "127.0.0.1:4742"
+INSPIRE_FAKE_BR = "1"
+FIKIR_BR = "1"
+FIKIR_BR_DAILY = "3"
+FIKIR_BR_MS_DAILY = "300000"
+FIKIR_BR_PER_CID = "2"
+FIKIR_BR_PER_IP = "3"
+FIKIR_MEDIA_UPLOADS = "all"
+FIKIR_UP_PER_CID_N = "3"
+FIKIR_UP_PER_CID_MB = "3"
+FIKIR_UP_PER_IP_N = "5"
+FIKIR_UP_DAILY_MB = "1000"
+FIKIR_UP_TOTAL_MB = "6000"
+SB_ENABLED = "0"

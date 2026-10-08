@@ -324,6 +324,53 @@
     }
     @media (hover: hover) { .link-card:hover .link-title { color: var(--accent); } }
 
+    /* Media preview of a link card: the video / image found on the page (meta.media) or attached by hand
+       (post.media). The <video> is created by the mount manager (shares the iframe cap) and plays muted
+       while at least half of it is visible. Controls are never inside an <a>. */
+    .media.media-linkcard { position: relative; }
+    .media.has-media { background: #101010; }
+    .media-stage { display: flex; justify-content: center; background: #000; }
+    .media-box.preview.is-video { cursor: pointer; }
+    .media-box.preview .facade-thumb { opacity: 1; z-index: 0; }
+    .media-box.preview .media-img { object-fit: cover; }
+    /* the real ratio arrived while the box was already on screen: whole frame, no jump (next visit: right-sized box) */
+    .media-box.preview.fit-contain .preview-video, .media-box.preview.fit-contain .facade-thumb, .media-box.preview.fit-contain .media-img { object-fit: contain; }
+    .preview-video {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; z-index: 1;
+      background: transparent; opacity: 0; transition: opacity 0.2s ease-out;
+    }
+    .media-box.preview.is-loaded .preview-video { opacity: 1; }
+    .pv-btn {
+      position: absolute; z-index: 2; display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 15px; line-height: 1; cursor: pointer; text-decoration: none;
+    }
+    .pv-sound { right: 10px; bottom: 10px; }
+    .pv-pause { left: 10px; bottom: 10px; gap: 4px; }
+    .pv-pause::before, .pv-pause::after { content: ''; width: 4px; height: 13px; border-radius: 1px; background: #fff; }
+    .pv-open { right: 10px; top: 10px; }
+    .pv-play { left: 50%; top: 50%; width: 58px; height: 58px; transform: translate(-50%, -50%); font-size: 0; }
+    .pv-play::after {
+      content: ''; position: absolute; left: 50%; top: 50%; transform: translate(-35%, -50%);
+      border-style: solid; border-width: 10px 0 10px 16px; border-color: transparent transparent transparent #fff;
+    }
+    .pv-badge {
+      position: absolute; left: 10px; bottom: 10px; z-index: 2; pointer-events: none;
+      background: rgba(0, 0, 0, 0.65); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff;
+      padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    }
+    .pv-chip, .pv-pending {
+      position: absolute; top: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; max-width: calc(100% - 20px);
+      padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pv-chip { right: 10px; background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(0, 229, 255, 0.45); color: var(--accent); cursor: pointer; font-family: inherit; }
+    .pv-pending { left: 10px; background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.18); color: #ddd; pointer-events: none; }
+    .pv-pending .spinner { width: 12px; height: 12px; border-width: 2px; }
+    .link-card.compact .link-body { padding-top: 10px; }
+    @media (hover: hover) {
+      .pv-btn:hover, .pv-chip:hover { background: rgba(0, 229, 255, 0.28); }
+    }
+
     /* Text idea card */
     .text-idea { padding: 20px 18px 4px; background: linear-gradient(160deg, rgba(0, 229, 255, 0.09), rgba(0, 229, 255, 0) 60%); }
     .text-idea-label {
@@ -445,6 +492,49 @@
     .counter.over { color: #ff6b6b; }
     .confirm-text { margin: 0 0 22px; color: #eee; font-size: 15px; }
     .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+    /* Add / media dialogs: live preview, "Önizleme ekle" (media link or file), upload progress, bookmarklet */
+    #media-modal, #bm-modal { z-index: 1050; }
+    .add-preview {
+      margin: -2px 0 12px; padding: 10px; border: 1px solid var(--border-strong); border-radius: 10px;
+      background: rgba(255, 255, 255, 0.02); font-size: 13px; color: #bbb; overflow-wrap: anywhere;
+    }
+    .add-preview.bad { border-color: rgba(255, 210, 122, 0.35); color: #ffd27a; }
+    .add-preview .ap-state { display: flex; align-items: center; gap: 8px; }
+    .add-preview .ap-note { margin-top: 8px; }
+    .add-preview .ap-note:first-child { margin-top: 0; }
+    .add-preview .ap-sub { margin-top: 4px; color: #888; font-size: 12px; }
+    .ap-frame { position: relative; width: 100%; max-height: 260px; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; overflow: hidden; display: flex; justify-content: center; }
+    .ap-frame video, .ap-frame img { width: 100%; height: 100%; object-fit: contain; display: block; background: #000; }
+    .ap-card { display: flex; gap: 10px; align-items: center; min-width: 0; }
+    .ap-card img { width: 72px; height: 48px; object-fit: cover; border-radius: 6px; flex: none; background: #111; }
+    .ap-card .ap-title { color: #eee; font-weight: 600; font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .ap-card .ap-host { color: #888; font-size: 12px; }
+    .media-attach { margin: 0 0 12px; border: 1px dashed var(--border-strong); border-radius: 10px; padding: 0 12px; }
+    .media-attach > summary { cursor: pointer; padding: 10px 0; color: var(--accent); font-size: 13px; font-weight: 600; list-style-position: inside; }
+    .media-attach[open] > summary { padding-bottom: 8px; }
+    .media-attach[open] { padding-bottom: 4px; }
+    .file-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: -4px 0 10px; }
+    .file-row .file-name { font-size: 12px; color: #bbb; min-width: 0; overflow-wrap: anywhere; }
+    .upload-progress { margin: 0 0 10px; font-size: 13px; color: #ddd; }
+    .upload-progress .bar { height: 4px; margin-top: 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+    .upload-progress .bar > span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.15s linear; }
+    .bm-banner {
+      margin: 0 0 12px; padding: 8px 10px; border-radius: 8px; font-size: 13px;
+      background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.3); color: #bff6ff;
+    }
+    .media-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; }
+    .media-actions .btn { flex: 1 1 auto; }
+    .btn-outline.danger { color: #ff9b9b; border-color: rgba(255, 90, 90, 0.4); }
+    .bm-steps { margin: 0 0 14px; padding-left: 20px; color: #ddd; font-size: 14px; line-height: 1.55; }
+    .bm-steps li + li { margin-top: 6px; }
+    .bm-drag { display: flex; justify-content: center; margin: 4px 0 16px; }
+    .bm-link {
+      display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; cursor: grab;
+      background: var(--accent); color: #000; font-weight: 700; font-size: 14px; text-decoration: none; user-select: none;
+    }
+    .bm-link::before { content: '★'; }
+    .bm-hint { margin: 12px 0 0; text-align: center; }
 
     /* ---------- Toasts ---------- */
     #toasts {
@@ -568,15 +658,32 @@
         <button type="button" class="tab" role="tab" id="tab-text" aria-selected="false" aria-controls="text-form" tabindex="-1">Metin fikir</button>
       </div>
       <form id="link-form" role="tabpanel" aria-labelledby="tab-link" novalidate>
+        <div id="bm-banner" class="bm-banner" role="status" hidden>Yer imi aracından geldi. Kontrol edip Paylaş'a bas.</div>
         <input type="text" id="link-url" class="modal-input" inputmode="url" maxlength="2048" placeholder="Link yapıştır (Instagram, YouTube, TikTok, Pinterest…)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Link">
         <div id="link-detect" class="detect" aria-live="polite"></div>
         <div id="link-dup" class="dup-box" role="alert" hidden>
           <span id="link-dup-text"></span>
+          <button type="button" class="btn btn-outline btn-sm" id="link-dup-attach" hidden>Önizlemeyi mevcut fikre ekle</button>
           <button type="button" class="btn btn-outline btn-sm" id="link-dup-show">Göster</button>
         </div>
+        <div id="link-preview" class="add-preview" aria-live="polite" hidden></div>
+        <details id="link-media-box" class="media-attach" hidden>
+          <summary>Önizleme ekle</summary>
+          <input type="text" id="link-media" class="modal-input" inputmode="url" maxlength="2048" placeholder="Video veya görsel linki (https://…/video.mp4, .jpg …)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Video veya görsel linki">
+          <div class="file-row" data-uploads>
+            <input type="file" id="link-file" hidden accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp,image/gif">
+            <button type="button" class="btn btn-outline btn-sm" id="link-file-btn">Dosya yükle</button>
+            <span class="file-name" id="link-file-name" translate="no"></span>
+            <button type="button" class="text-btn danger" id="link-file-clear" hidden>Kaldır</button>
+          </div>
+          <p class="modal-note" data-uploads>MP4, WebM, MOV (en fazla 25 MB) · JPG, PNG, WebP, GIF (en fazla 10 MB). MOV bazı tarayıcılarda oynatılamayabilir; mümkünse MP4 yükle.</p>
+          <div id="link-media-preview" class="add-preview" aria-live="polite" hidden></div>
+        </details>
         <textarea id="link-desc" class="modal-input" maxlength="2000" placeholder="Bu fikir hakkında ne düşünüyorsun? (İsteğe bağlı)" aria-label="Açıklama"></textarea>
+        <div id="link-progress" class="upload-progress" role="status" hidden></div>
         <div id="link-error" class="form-error" role="alert" hidden></div>
         <button type="submit" class="btn btn-primary btn-block" id="link-submit" disabled>Paylaş</button>
+        <p class="modal-note bm-hint" id="bm-hint" hidden><button type="button" class="text-btn" data-bm-help>Yer imi aracını kur</button> · bir sitedeki videoyu tek tıkla buraya getirir.</p>
       </form>
       <form id="text-form" role="tabpanel" aria-labelledby="tab-text" novalidate hidden>
         <textarea id="text-body" class="modal-input text-body" maxlength="2000" rows="6" placeholder="Fikrini yaz… Bir sahne, bir başlık, bir video konsepti…" aria-label="Metin fikir"></textarea>
@@ -609,6 +716,55 @@
     </div>
   </div>
 
+  <!-- Media preview of an existing link idea (owner / admin): link or file, remove, automatic retry -->
+  <div class="modal-overlay" id="media-modal" hidden>
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="media-title">
+      <div class="modal-header">
+        <h2 id="media-title">Önizleme ekle</h2>
+        <button type="button" class="close-modal" data-close aria-label="Kapat">×</button>
+      </div>
+      <p id="media-hint" class="modal-note" hidden>Bu site önizleme vermiyor — video/görsel linkini yapıştır</p>
+      <form id="media-form" novalidate>
+        <input type="text" id="media-url" class="modal-input" inputmode="url" maxlength="2048" placeholder="Video veya görsel linki (https://…/video.mp4, .jpg …)" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Video veya görsel linki">
+        <div class="file-row" data-uploads>
+          <input type="file" id="media-file" hidden accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp,image/gif">
+          <button type="button" class="btn btn-outline btn-sm" id="media-file-btn">Dosya yükle</button>
+          <span class="file-name" id="media-file-name" translate="no"></span>
+          <button type="button" class="text-btn danger" id="media-file-clear" hidden>Kaldır</button>
+        </div>
+        <p class="modal-note" data-uploads>MP4, WebM, MOV (en fazla 25 MB) · JPG, PNG, WebP, GIF (en fazla 10 MB). MOV bazı tarayıcılarda oynatılamayabilir; mümkünse MP4 yükle.</p>
+        <div id="media-preview" class="add-preview" aria-live="polite" hidden></div>
+        <div id="media-progress" class="upload-progress" role="status" hidden></div>
+        <div id="media-error" class="form-error" role="alert" hidden></div>
+        <div class="media-actions">
+          <button type="submit" class="btn btn-primary" id="media-save" disabled>Kaydet</button>
+          <button type="button" class="btn btn-outline" id="media-retry">Otomatik yeniden dene</button>
+          <button type="button" class="btn btn-outline danger" id="media-remove" hidden>Önizlemeyi kaldır</button>
+          <button type="button" class="btn btn-outline" id="media-cancel">Vazgeç</button>
+        </div>
+        <p class="modal-note"><button type="button" class="text-btn" data-bm-help>Yer imi aracını kur</button> · bir sitedeki videoyu tek tıkla buraya getirir.</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Bookmarklet help: the link's href is set by the script (BM_SRC) -->
+  <div class="modal-overlay" id="bm-modal" hidden>
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="bm-title">
+      <div class="modal-header">
+        <h2 id="bm-title">Yer imi aracı: Fikir Havuzu'na ekle</h2>
+        <button type="button" class="close-modal" data-close aria-label="Kapat">×</button>
+      </div>
+      <ol class="bm-steps">
+        <li>Yer imleri çubuğunu göster: Chrome/Edge'de Ctrl+Shift+B (Mac'te ⌘+Shift+B), Safari'de Görünüm › Sık Kullanılanlar Çubuğunu Göster.</li>
+        <li>Aşağıdaki «Fikir Havuzu'na ekle» düğmesini sürükleyip yer imleri çubuğuna bırak.</li>
+        <li>Bir sitede (ör. Magnific) videonun sayfasındayken bu yer imine tıkla: Fikir Havuzu yeni sekmede açılır, link ve önizleme hazır gelir. Kontrol edip Paylaş'a bas.</li>
+      </ol>
+      <div class="bm-drag"><a id="bm-link" class="bm-link" translate="no" title="Yer imleri çubuğuna sürükle">Fikir Havuzu'na ekle</a></div>
+      <p class="modal-note">Araç yalnızca açık sayfanın bağlantısını, başlığını ve video/görsel adresini okur; hiçbir şeyi kendiliğinden paylaşmaz.</p>
+      <p class="modal-note" id="bm-phone-note">Telefonda yer imi araçları zahmetli; bunun yerine karttaki «Önizleme ekle» ile video/görsel linkini yapıştır.</p>
+    </div>
+  </div>
+
   <!-- Confirm dialog -->
   <div class="modal-overlay" id="confirm-modal" hidden>
     <div class="modal-content modal-sm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text">
@@ -632,12 +788,22 @@
      * ===================================================================== */
     let urlLib;
     try {
-      urlLib = await import('/assets/js/fikir-url.mjs?v=20261003');
+      urlLib = await import('/assets/js/fikir-url.mjs?v=20261007');
     } catch (err) {
       document.getElementById('boot-error').hidden = false;
       throw err;
     }
     const { parseLink, parseEmbedMessage } = urlLib;
+    // 'video' | 'image' | 'hls' | null from a media file URL's extension (shared module; local copy while an
+    // older cached module without the export is still around).
+    const mediaKindOf = typeof urlLib.mediaKindOf === 'function' ? urlLib.mediaKindOf : (url) => {
+      let path = '';
+      try { path = decodeURIComponent(new URL(url).pathname); } catch (_) { return null; }
+      if (/\.m3u8$/i.test(path)) return 'hls';
+      if (/\.(?:mp4|webm|mov|m4v)$/i.test(path)) return 'video';
+      if (/\.svg$/i.test(path)) return null;
+      return /\.(?:jpe?g|png|gif|webp|avif)$/i.test(path) ? 'image' : null;
+    };
 
     /* ---------------------------------------------------------------- config */
     const PROD_API = 'https://vk-portfolio-api.vkesgin38.workers.dev';
@@ -664,10 +830,17 @@
     const REFRESH_ON_FOCUS_MS = 30000;
     const AT_TOP_PX = 80;           // refresh inserts/removes cards directly only this close to the top
     const MAX_PAGES = 10;           // GET /api/inspire/posts pages (server sends X-Fikir-Next while more exist)
+    const META_POLLS = 3;           // re-asks per card and page load while a preview is still being prepared (pending)
+    const PENDING_NEAR_S = 120;     // "Önizleme hazırlanıyor…" only while the server's next attempt is this close (server: same)
+    const PREVIEW_DEBOUNCE_MS = 600;
+    const PREFILL_KEY = 'fikir_add_prefill';   // sessionStorage: bookmarklet #add?… data until the board is shown
+    const PREFILL_TTL_MS = 30 * 60 * 1000;
+    const MEDIA_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
     // Server-driven feature flags (GET /api/inspire/config). `storyboard` = the storyboard
     // creation UI may be shown to this user; `sb` = limits + today's remaining quota (null before login).
-    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null };
+    // `media` = media previews may be attached ({attach, uploads, max_video_mb, max_image_mb, types}) or null.
+    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null, media: null };
     const SB_MODULE = '/assets/js/fikir-storyboard.mjs?v=20261006';
     window.fikirConfig = config;
 
@@ -809,9 +982,47 @@
         provider: s(m.provider, 100),
         login_wall: m.login_wall === true, // private Drive/Docs file: Google refuses to frame it
       };
-      return out.title || out.description || out.image || out.site_name || out.login_wall ? out : null;
+      out.media = normMedia(m.media);
+      out.image_w = dimOk(m.image_w);
+      out.image_h = dimOk(m.image_h);
+      return out.title || out.description || out.image || out.site_name || out.login_wall || out.media ? out : null;
     }
-    const metaSig = (m) => JSON.stringify(normMeta(m));
+
+    /* Media object (meta.media found by the server, or post.media attached by hand):
+       { kind: video|image|hls|player, url, poster?, small?, w?, h?, autoplay?, play_at_source?, source? }.
+       '/files/…' URLs are uploads served by the API worker. */
+    const MEDIA_KINDS = new Set(['video', 'image', 'hls', 'player']);
+    const FILES_PATH_RE = /^\/files\/fikir\/\d{1,15}\/[vip]-[0-9a-f]{32}\.(?:mp4|webm|mov|jpg|png|webp|gif)$/;
+    function dimOk(v) {
+      const n = Number(v);
+      return Number.isInteger(n) && n >= 1 && n <= 10000 ? n : null;
+    }
+    function mediaUrl(v) {
+      if (typeof v !== 'string' || !v || v.length > 2048) return null;
+      if (v.startsWith('/')) return FILES_PATH_RE.test(v) ? safeHttpUrl(API_BASE + v) : null;
+      return safeHttpUrl(v);
+    }
+    function normMedia(x) {
+      if (!x) return null;
+      if (typeof x === 'string') { try { x = JSON.parse(x); } catch (_) { return null; } }
+      if (!x || typeof x !== 'object' || Array.isArray(x)) return null;
+      const kind = MEDIA_KINDS.has(x.kind) ? x.kind : null;
+      const url = kind ? mediaUrl(x.url) : null;
+      if (!url) return null;
+      const moving = kind === 'video' || kind === 'hls';
+      let w = dimOk(x.w), hh = dimOk(x.h);
+      if (!w || !hh) w = hh = null;   // a ratio needs both
+      return {
+        kind, url,
+        poster: moving ? mediaUrl(x.poster) : null,
+        small: kind === 'video' ? mediaUrl(x.small) : null,
+        w, h: hh,
+        autoplay: kind === 'video' ? x.autoplay !== false : x.autoplay === true,
+        play_at_source: x.play_at_source === true,
+        source: typeof x.source === 'string' ? x.source.slice(0, 40) : '',
+      };
+    }
+    const mediaSig = (post) => JSON.stringify([normMeta(post.meta), normMedia(post.media)]);
 
     function upsertById(list, item) {
       const arr = Array.isArray(list) ? list.slice() : [];
@@ -911,6 +1122,7 @@
     }
     function dismissModal(el) {
       if (el === $('add-modal')) closeAddModal();
+      else if (el === $('media-modal')) closeMediaModal();
       else if (el === $('confirm-modal')) settleConfirm(false);
       else if (typeof el.sbDismiss === 'function') el.sbDismiss();   // storyboard viewer
       else closeModal(el);
@@ -949,7 +1161,7 @@
         if (!top) return;
         if (e.key === 'Escape') { e.preventDefault(); dismissModal(top.el); return; }
         if (e.key === 'Tab') { // keep focus inside the dialog
-          const f = [...top.el.querySelectorAll('button, input, textarea, a[href]')].filter((x) => !x.disabled && x.offsetParent !== null);
+          const f = [...top.el.querySelectorAll('button, input, textarea, a[href], summary')].filter((x) => !x.disabled && x.offsetParent !== null);
           if (!f.length) return;
           const first = f[0], last = f[f.length - 1];
           if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -974,7 +1186,11 @@
       if (status === 403) return 'Bu işlem için yetkin yok.';
       if (status === 404) return 'Bulunamadı.';
       if (status === 409) return 'Bu kayıt zaten var.';
+      if (status === 411) return 'Dosya boyutu bilinmiyor, tekrar dene.';
       if (status === 413) return 'İçerik çok uzun.';
+      if (status === 415) return 'Desteklenmeyen dosya türü. MP4, WebM, MOV, JPG, PNG, WebP veya GIF yükle';
+      if (status === 422) return 'Bu link bir video/görsel dosyasına gitmiyor.';
+      if (status === 507) return 'Depolama alanı dolu, şimdilik dosya yüklenemiyor';
       if (status === 429) return 'Çok fazla istek. Biraz bekleyip tekrar dene.';
       return 'Sunucu hatası. Lütfen tekrar dene.';
     }
@@ -1015,6 +1231,7 @@
         if (c && typeof c === 'object') {
           if (typeof c.storyboard === 'boolean') config.storyboard = c.storyboard;
           config.sb = c.sb && typeof c.sb === 'object' ? c.sb : null;
+          config.media = normMediaConfig(c.media);
           for (const k of ['max_note_len', 'max_text_len']) {
             if (Number.isInteger(c[k]) && c[k] > 0 && c[k] <= 100000) config[k] = c[k];
           }
@@ -1023,6 +1240,10 @@
       $('text-body').maxLength = config.max_text_len;
       $('text-max').textContent = String(config.max_text_len);
       updateTextCounter();
+      addPicker.refreshAvailability();
+      mediaPicker.refreshAvailability();
+      $('bm-hint').hidden = !config.media || COARSE;
+      refreshAddMediaUI();
       if (sbUI) sbUI.configChanged();
       else if (config.storyboard) ensureStoryboardUI();
     }
@@ -1216,6 +1437,7 @@
       clearSession();
       config.storyboard = false;   // per-user flags; the next login reloads them (showBoard -> loadConfig)
       config.sb = null;
+      config.media = null;
       teardownBoard();
       closeAllModals();
       showEntry(message);
@@ -1245,6 +1467,7 @@
       initBoard();
       loadPosts({ initial: true });
       startRefresh();
+      applyPrefill();   // bookmarklet: #add?… opened the board
     }
 
     function renderHeader() {
@@ -1272,6 +1495,7 @@
     let nearIO = null;
     let farIO = null;
     let viewIO = null;
+    let playIO = null;                   // preview videos: play while >= 50% visible, pause otherwise
     let resizeTimer = 0;
     let refreshTimer = 0;
 
@@ -1295,6 +1519,7 @@
       nearIO = new IntersectionObserver(onNear, { rootMargin: `${NEAR_MARGIN}px 0px ${NEAR_MARGIN}px 0px` });
       farIO = new IntersectionObserver(onFar, { rootMargin: `${FAR_MARGIN}px 0px ${FAR_MARGIN}px 0px` });
       viewIO = new IntersectionObserver(onView);
+      playIO = new IntersectionObserver(onPlayVis, { threshold: [0, 0.5] });
       if ('ResizeObserver' in window) {
         new ResizeObserver(() => {
           clearTimeout(resizeTimer);
@@ -1331,8 +1556,11 @@
     }
     // A card is placed into a column exactly once; it never moves afterwards
     // (except during a column-count change, see redistribute()).
+    // Fill (newest first) goes to the shortest column, so the newest card lands top-left and
+    // the rest run left to right. A card added later goes to the top of the LEFT column, so the
+    // newest is always top-left without moving (and reloading) any card already on the board.
     const placeAppend = (entry) => shortestCol().append(entry.el);
-    const placePrepend = (entry) => shortestCol().prepend(entry.el);
+    const placePrepend = (entry) => board.cols[0].prepend(entry.el);
 
     // Column count changed: re-distribute ONCE. Iframes are unmounted first
     // (moving an iframe in the DOM reloads it anyway) and come back via the observers.
@@ -1547,6 +1775,7 @@
       cardOwner.set(e.el, e);
       nearIO.observe(e.el);
       if (e.media) farIO.observe(e.el);
+      if (e.media && e.media.type === 'video') playIO.observe(e.media.box);
     }
 
     function removeEntry(e) {
@@ -1555,7 +1784,12 @@
       if (farIO) farIO.unobserve(e.el);
       if (deferredEntries.delete(e) && viewIO) viewIO.unobserve(e.el);
       e.deferred = null;
-      if (e.media) { unmount(e.media); wanted.delete(e.media); }
+      if (e.media) {
+        unmount(e.media);
+        wanted.delete(e.media);
+        if (playIO && e.media.type === 'video') playIO.unobserve(e.media.box);
+      }
+      clearTimeout(e.metaTimer);
       clearTimeout(e.flashTimer);
       e.el.remove();
       posts.delete(e.id);
@@ -1609,7 +1843,7 @@
     /* ------------------------------------------------------------------- cards */
     // Decide how a post is shown. Legacy types (reels, link, pinterest, drive,
     // youtube, video, image) are all mapped through parseLink(post.url).
-    function classify(post) {
+    function classify(post, bad) {
       const type = String(post.type || '');
       if (type === 'text') return { kind: 'text', platform: 'text', parsed: null };
       let raw = String(post.url || '').trim();
@@ -1624,7 +1858,53 @@
       const meta = normMeta(post.meta);
       // a private Drive/Docs file only frames Google's "refused to connect" page: preview card instead
       if (parsed.embed && !parsed.needsResolve && !(meta && meta.login_wall)) return { kind: 'embed', platform, parsed };
-      return { kind: 'card', platform, parsed };
+      // Link card ("base" card: media previews may replace its visual). bad = media URLs that failed to load here.
+      const view = { kind: 'card', platform, parsed, base: 'card', plan: null };
+      // manual media first, then what the server found; one that failed here falls back to the next / the card.
+      // Exception: a page image or HLS stream sent by the bookmarklet gives way to a playable video found by the server.
+      const manual = normMedia(post.media);
+      const found = meta && meta.media;
+      const order = weakPick(manual) && playableVideo(found) ? [found, manual] : [manual, found];
+      for (const media of order) {
+        if (!media || (bad && bad.has(media.url))) continue;
+        if (media.kind === 'player') {
+          // the page's own player (YouTube, Vimeo …): the usual embed facade, the card's link stays the page
+          const pl = parseLink(media.url);
+          if (pl && pl.embed && !pl.needsResolve) return { kind: 'embed', platform: pl.platform, parsed: pl, page: parsed, base: 'card', player: pl.embed.src };
+          continue;
+        }
+        const plan = previewPlan(media, meta, media === manual);
+        if (plan && !(bad && bad.has(plan.url))) { view.plan = plan; return view; }
+      }
+      return view;
+    }
+
+    // Bookmarklet guesses that a server-found video beats: the page's image, or an HLS stream (no autoplay, and only
+    // where the browser plays HLS natively). `m` is normMedia() output or an add-dialog pick ({kind, via}).
+    const weakPick = (m) => !!m && (m.source === 'bookmarklet' || m.via === 'bookmarklet') && (m.kind === 'image' || m.kind === 'hls');
+    const playableVideo = (m) => !!m && m.kind === 'video' && !m.play_at_source;
+    // What the card shows for a media object: a playing video, or an image (photo, or the poster of a
+    // video that only plays at its source: expiring URL, HLS where the browser has no native HLS).
+    const CAN_HLS = (() => { try { return !!document.createElement('video').canPlayType('application/vnd.apple.mpegurl'); } catch (_) { return false; } })();
+    function previewPlan(media, meta, manual) {
+      const k = media.kind;
+      const dims = { w: media.w, h: media.h };
+      // found on the page: og:image's size is usually the item's size (a weaker hint: a ratio measured here wins over it,
+      // see previewRatio); an attached file may be anything
+      if (!dims.w && !manual && meta && meta.image_w && meta.image_h) { dims.w = meta.image_w; dims.h = meta.image_h; dims.ogDims = true; }
+      if ((k === 'video' && !media.play_at_source) || (k === 'hls' && CAN_HLS)) {
+        return { type: 'video', url: media.url, small: media.small || null, poster: media.poster || (meta && meta.image) || null,
+          ...dims, autoplay: k === 'video' && media.autoplay !== false };
+      }
+      if (k === 'image') return { type: 'image', url: media.url, ...dims, atSource: media.play_at_source };
+      const poster = media.poster || (meta && meta.image) || null;
+      return poster ? { type: 'image', url: poster, ...dims, atSource: true } : null;
+    }
+    // Compared on refresh: the card's media block is rebuilt only when this changes.
+    function viewSig(view) {
+      if (view.kind === 'card') return JSON.stringify(['card', view.plan]);
+      if (view.kind === 'embed') return JSON.stringify(['embed', view.parsed.embed.src]);
+      return view.kind;
     }
 
     function createEntry(post) {
@@ -1633,12 +1913,15 @@
         id: String(post.id),
         post,
         view,
-        key: view.parsed ? view.parsed.key : null,
+        key: (view.page || view.parsed || {}).key || null,
         el: null,
         refs: {},
         noteViews: new Map(),
         media: null,
         metaRequested: false,
+        metaPolls: 0,     // pending previews: re-asks so far (META_POLLS max)
+        metaTimer: 0,
+        badMedia: null,   // Set of media URLs that failed to load: shown as the classic card
         flashTimer: 0,
         shown: {},       // last rendered values (compared instead of the DOM, which GTranslate may rewrite)
       };
@@ -1648,7 +1931,8 @@
 
     function buildCard(entry) {
       const kind = entry.view.kind;
-      const card = h('article', { class: 'post-card kind-' + kind, 'data-id': entry.id });
+      entry.shown.viewSig = viewSig(entry.view);
+      const card = h('article', { class: 'post-card kind-' + kind + (entry.view.plan ? ' has-media' : ''), 'data-id': entry.id });
       let media = null;
       if (kind === 'embed') media = buildEmbedMedia(entry);
       else if (kind === 'image') media = buildImageMedia(entry);
@@ -1803,13 +2087,16 @@
 
     /* Preview card for links that cannot be framed. The visual box always has
        the same size: OG image, or a placeholder with favicon + domain. */
+    // Classic card: the visual box (OG image or placeholder) + site/title/description, all one link.
+    // With view.plan: the media preview (video or natural-ratio image) + a compact link under it.
     function buildLinkCard(entry) {
-      const { parsed, platform } = entry.view;
+      const { parsed, platform, plan } = entry.view;
       const href = safeHttpUrl(parsed.canonical);
       const info = platformInfo(platform);
       const r = entry.refs;
-      r.lvVisual = h('div', { class: 'link-visual' });
-      r.lvVisual.style.setProperty('--pc', info.color);
+      r.lvVisual = plan ? null : h('div', { class: 'link-visual' });
+      if (r.lvVisual) r.lvVisual.style.setProperty('--pc', info.color);
+      entry.shown.visual = undefined;
       r.lvSiteText = h('span', { translate: 'no' });
       r.lvTitle = h('div', { class: 'link-title' });
       r.lvDesc = h('div', { class: 'link-desc' });
@@ -1818,10 +2105,94 @@
         h('img', { src: faviconUrl(host, 32), alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer', width: 16, height: 16 }),
         r.lvSiteText);
       site.firstChild.addEventListener('error', (ev) => ev.target.remove(), { once: true });
-      const a = h('a', { class: 'link-card', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc' },
-        r.lvVisual, h('div', { class: 'link-body' }, site, r.lvTitle, r.lvDesc));
+      const body = h('div', { class: 'link-body' }, site, r.lvTitle, r.lvDesc);
+      const rel = 'noopener noreferrer nofollow ugc';
+      let wrap;
+      if (plan) {
+        const box = plan.type === 'video' ? buildPreviewVideo(entry, plan, href) : buildPreviewImage(entry, plan, href);
+        wrap = h('div', { class: 'media media-linkcard has-media' },
+          h('div', { class: 'media-stage' }, box),
+          h('a', { class: 'link-card compact', href, target: '_blank', rel }, body));
+      } else {
+        wrap = h('div', { class: 'media media-linkcard' }, h('a', { class: 'link-card', href, target: '_blank', rel }, r.lvVisual, body));
+      }
+      // Owner / admin: "+ Önizleme ekle" over the visual when nothing was found; "preparing" while the server works.
+      // Both are overlays (position: absolute): showing or hiding them never changes the card's height.
+      r.pvChip = plan ? null : h('button', { type: 'button', class: 'pv-chip', 'data-action': 'media-edit', hidden: true }, '＋ Önizleme ekle');
+      r.pvPending = plan ? null : h('span', { class: 'pv-pending', role: 'status', hidden: true },
+        h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Önizleme hazırlanıyor…');
+      if (r.pvChip) wrap.append(r.pvChip, r.pvPending);
       fillLinkCard(entry);
-      return h('div', { class: 'media media-linkcard' }, a);
+      return wrap;
+    }
+
+    /* Preview sizing: media.w/h, then the ratio measured on an earlier visit, then og:image's size (often a
+       1200x630 share card), then 16:9 (video) / 4:3 (image); clamped; tall boxes are narrowed like tall embeds.
+       A measured ratio is adopted only while the box is below the viewport (visible content never jumps) and
+       remembered; a box already on screen shows the whole frame instead (object-fit: contain) when the ratio is
+       clearly different. Preview videos load their metadata when mounted near the viewport, so it is measured early. */
+    function previewRatio(entry, plan) {
+      const videoLike = plan.type === 'video' || plan.atSource;   // a video's poster is framed like the video
+      const given = plan.w && plan.h ? plan.w / plan.h : 0;
+      let r = plan.ogDims ? 0 : given;
+      if (!r) r = Number(aspectCache[entry.id]) || 0;
+      if (!r) r = given;
+      if (!r) r = videoLike ? 16 / 9 : 4 / 3;
+      return clampRatio(r, videoLike ? 'video' : 'image');
+    }
+    function clampRatio(r, type) {
+      const [lo, hi] = type === 'video' ? [9 / 16, 2.4] : [0.5, 2];
+      return Math.round(Math.min(hi, Math.max(lo, r)) * 1000) / 1000;
+    }
+    function sizePreviewBox(box, r) {
+      box.style.aspectRatio = String(r);
+      box.style.width = `min(100%, ${Math.round(MAX_MEDIA_H * r)}px)`;
+    }
+    function measuredRatio(entry, box, w, hh, type) {
+      if (!w || !hh) return;
+      const r = clampRatio(w / hh, type);
+      rememberAspect(entry.id, r);
+      const cur = parseFloat(box.style.aspectRatio) || 0;   // read back as "1.778 / 1"
+      if (!box.isConnected || cur === r) return;
+      if (box.getBoundingClientRect().top > window.innerHeight) sizePreviewBox(box, r);
+      else if (!cur || Math.abs(Math.log(r / cur)) > 0.15) box.classList.add('fit-contain');
+    }
+
+    function buildPreviewVideo(entry, plan, href) {
+      const box = h('div', { class: 'media-box preview is-video', 'data-action': 'pv-toggle' });
+      sizePreviewBox(box, previewRatio(entry, plan));
+      if (plan.poster) {
+        // no `poster` attribute on <video>: this img gets no-referrer and an error handler
+        const img = h('img', { class: 'facade-thumb', src: plan.poster, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+        img.addEventListener('error', () => img.remove(), { once: true });
+        box.append(img);
+      }
+      const m = {
+        entry, box, type: 'video', video: null, src: null, url: plan.url, small: plan.small, autoplay: plan.autoplay,
+        visible: false, failed: false, user: false, userPaused: false, lastUsed: 0, playBtn: null, pauseBtn: null, soundBtn: null,
+      };
+      m.playBtn = h('button', { type: 'button', class: 'pv-btn pv-play', 'data-action': 'pv-play', 'aria-label': 'Oynat', hidden: canAutoplay(m) }, '▶');
+      m.pauseBtn = h('button', { type: 'button', class: 'pv-btn pv-pause', 'data-action': 'pv-pause', 'aria-label': 'Duraklat', title: 'Duraklat', hidden: true });
+      m.soundBtn = h('button', { type: 'button', class: 'pv-btn pv-sound', 'data-action': 'pv-sound', 'aria-label': 'Sesi aç', title: 'Sesi aç', translate: 'no' }, '🔇');
+      box.append(m.playBtn, m.pauseBtn, m.soundBtn,
+        h('a', { class: 'pv-btn pv-open', 'data-action': 'pv-open', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', 'aria-label': 'Kaynakta aç', title: 'Kaynakta aç' }, '↗'));
+      entry.media = m;
+      pvOwner.set(box, m);
+      return box;
+    }
+
+    function buildPreviewImage(entry, plan, href) {
+      const box = h('div', { class: 'media-box preview is-image' });
+      sizePreviewBox(box, previewRatio(entry, plan));
+      const img = h('img', {
+        class: 'media-img', src: plan.url, loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer',
+        alt: entry.post.description ? String(entry.post.description).slice(0, 140) : 'Fikir görseli',
+      });
+      img.addEventListener('load', () => measuredRatio(entry, box, img.naturalWidth, img.naturalHeight, 'image'), { once: true });
+      img.addEventListener('error', () => mediaFailed(entry, plan.url), { once: true });
+      box.append(h('a', { class: 'media-link', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', 'aria-label': 'Kaynakta aç' },
+        img, plan.atSource ? h('span', { class: 'pv-badge' }, '▶ Kaynakta izle') : null));
+      return box;
     }
 
     function fillLinkCard(entry) {
@@ -1838,6 +2209,8 @@
       r.lvDesc.hidden = !desc;
       const pname = platform !== 'web' ? platformInfo(platform).name : '';
       setText(r.lvSiteText, (meta && !locked && (meta.site_name || meta.provider)) || pname || host);
+      updateMediaControls(entry);
+      if (!r.lvVisual) return;   // media preview: no visual box
       const img = (meta && meta.image) || safeHttpUrl(parsed.thumb) || '';
       if (entry.shown.visual === img && r.lvVisual.firstChild) return;
       entry.shown.visual = img;
@@ -1893,12 +2266,15 @@
       entry.shown.date = d ? fmtRelative(d) : '';
       r.date = h('time', { class: 'post-date', datetime: d ? d.toISOString() : null, title: d ? fmtLongDate(d) : null }, entry.shown.date);
       const right = h('div', { class: 'post-meta-right' });
+      r.srcLink = null;
       if (view.parsed && view.kind !== 'card') {
-        const href = safeHttpUrl(view.src || view.parsed.canonical);
-        if (href) right.append(h('a', { class: 'src-link', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', title: href, translate: 'no' }, hostOf(href) + ' ↗'));
+        const href = safeHttpUrl(view.src || (view.page || view.parsed).canonical);
+        if (href) right.append(r.srcLink = h('a', { class: 'src-link', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', title: href, translate: 'no' }, hostOf(href) + ' ↗'));
       }
+      // Owner / admin of a link card: attach, replace or remove its media preview (#media-modal)
+      r.mediaBtn = h('button', { type: 'button', class: 'text-btn', 'data-action': 'media-edit', hidden: true }, 'Önizleme ekle');
       r.del = h('button', { type: 'button', class: 'text-btn danger', 'data-action': 'delete-post', hidden: !post.can_delete }, 'Sil');
-      right.append(r.del);
+      right.append(r.mediaBtn, r.del);
       info.append(h('div', { class: 'post-meta' }, h('div', { class: 'post-meta-left' }, r.author, roleBadge(post), r.date), right));
 
       r.notesTitle = h('div', { class: 'notes-title', hidden: true }, 'Notlar');
@@ -1911,7 +2287,24 @@
         h('div', { class: 'note-form-row' }, h('label', { class: 'note-public' }, r.notePublic, 'Diğer kullanıcılar da görsün'), r.noteBtn));
       info.append(h('div', { class: 'notes' }, r.notesTitle, r.notesList, form));
       reconcileNotes(entry, post.notes);
+      updateMediaControls(entry);
       return info;
+    }
+
+    // Media controls of a link card: the info-row button, the "+ Önizleme ekle" chip, the "preparing" label.
+    const canEditMedia = (entry) => !!(entry.post.can_edit_media && entry.view.base === 'card');
+    const hasShownMedia = (entry) => !!(entry.view.plan || entry.view.player);
+    function updateMediaControls(entry) {
+      const r = entry.refs;
+      const post = entry.post;
+      const can = canEditMedia(entry);
+      const has = hasShownMedia(entry);
+      if (r.mediaBtn) {
+        r.mediaBtn.hidden = !can;
+        setText(r.mediaBtn, has ? 'Önizlemeyi değiştir' : 'Önizleme ekle');
+      }
+      if (r.pvPending) r.pvPending.hidden = !(post.meta_pending && !has);
+      if (r.pvChip) r.pvChip.hidden = !(can && !has && !post.meta_pending && !post.meta_stale);
     }
 
     // Verified badge from the server's author_role (a guest may type any name).
@@ -1927,7 +2320,7 @@
       const old = entry.post;
       entry.post = post;
       applyOrDefer(entry, 'text', () => renderPatch(entry), above);
-      if (metaSig(old.meta) !== metaSig(post.meta)) patchMeta(entry, above);
+      if (mediaSig(old) !== mediaSig(post)) patchMeta(entry, above);
     }
     function renderPatch(entry) {
       const post = entry.post;
@@ -1948,16 +2341,23 @@
       const rel = fmtRelative(parseDate(post.created_at));
       if (s.date !== rel) { s.date = rel; r.date.textContent = rel; }
       reconcileNotes(entry, post.notes);
+      updateMediaControls(entry);
       if (entry.view.kind === 'text') {
         if (sbUI) sbUI.patch(entry, post);
         else if (post.storyboard) ensureStoryboardUI();
       }
     }
 
+    // Late or refreshed metadata / media. The media block is rebuilt only when what it shows changes
+    // (a found or attached video, a private Drive file ...); otherwise texts are patched in place.
     function patchMeta(entry, above) {
       const kind = entry.view.kind;
+      if (kind !== 'card' && kind !== 'embed') return;
       const meta = normMeta(entry.post.meta);
-      if (kind === 'embed' && meta && meta.login_wall) { applyOrDefer(entry, 'media', () => swapToCard(entry), above); return; }
+      if (viewSig(classify(entry.post, entry.badMedia)) !== entry.shown.viewSig) {
+        applyOrDefer(entry, 'media', () => swapMedia(entry), above);
+        return;
+      }
       if (kind === 'card') { applyOrDefer(entry, 'meta', () => fillLinkCard(entry), above); return; }
       if (kind === 'embed' && entry.media) { // overlay title / thumb inside the fixed box: no size change
         const m = entry.media;
@@ -1970,20 +2370,54 @@
       }
     }
 
-    // The file turned out private (meta.login_wall arrived after the card was built):
-    // only this card's media is replaced by a preview card.
-    function swapToCard(entry) {
-      const m = entry.media;
-      if (entry.view.kind !== 'embed' || !m) return;
-      unmount(m);
-      wanted.delete(m);
+    // Only this card's media block is replaced: a private Drive file (meta.login_wall) becomes a preview
+    // card; a link card gets, changes or loses its media preview (or the page's own player); a preview that
+    // failed to load falls back to the classic card. Runs through applyOrDefer (height changes).
+    function swapMedia(entry) {
+      if (!posts.has(entry.id) || posts.get(entry.id) !== entry) return;
+      const view = classify(entry.post, entry.badMedia);
+      const sig = viewSig(view);
+      if (sig === entry.shown.viewSig || (view.kind !== 'card' && view.kind !== 'embed')) return;
+      const old = entry.media;
+      const userStarted = !!(old && old.type === 'video' && old.user);   // a tapped video that failed: its fallback plays too
+      if (old) {
+        unmount(old);
+        wanted.delete(old);
+        if (playIO && old.type === 'video') playIO.unobserve(old.box);
+      }
       if (farIO) farIO.unobserve(entry.el);
       entry.media = null;
-      entry.view = { ...entry.view, kind: 'card' };
-      const media = buildLinkCard(entry);
-      const old = entry.el.querySelector(':scope > .media');
-      if (old) old.replaceWith(media); else entry.el.prepend(media);
-      entry.el.classList.replace('kind-embed', 'kind-card');
+      entry.view = view;
+      entry.shown.viewSig = sig;
+      const media = view.kind === 'embed' ? buildEmbedMedia(entry) : buildLinkCard(entry);
+      if (view.kind === 'embed') { entry.refs.lvVisual = null; entry.refs.pvChip = null; entry.refs.pvPending = null; }
+      const prev = entry.el.querySelector(':scope > .media');
+      if (prev) prev.replaceWith(media); else entry.el.prepend(media);
+      entry.el.classList.toggle('kind-embed', view.kind === 'embed');
+      entry.el.classList.toggle('kind-card', view.kind === 'card');
+      entry.el.classList.toggle('has-media', !!view.plan);
+      if (view.kind === 'embed' && view.page && !entry.refs.srcLink) {   // the page's own player: keep a link to the page
+        const href = safeHttpUrl(view.page.canonical);
+        const right = entry.el.querySelector('.post-meta-right');
+        if (href && right) right.prepend(entry.refs.srcLink = h('a', { class: 'src-link', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', title: href, translate: 'no' }, hostOf(href) + ' ↗'));
+      }
+      updateMediaControls(entry);
+      if (entry.media) {
+        if (userStarted && entry.media.type === 'video') entry.media.user = true;
+        farIO.observe(entry.el);
+        if (entry.media.type === 'video') playIO.observe(entry.media.box);
+      }
+      // the card is already near: observing again re-reports its state, so onNear() marks the new media wanted
+      nearIO.unobserve(entry.el);
+      nearIO.observe(entry.el);
+    }
+
+    // A preview video / image could not be loaded in this browser: this card shows the classic link card.
+    function mediaFailed(entry, url) {
+      if (!entry.badMedia) entry.badMedia = new Set();
+      if (entry.badMedia.has(url)) return;
+      entry.badMedia.add(url);
+      applyOrDefer(entry, 'media', () => swapMedia(entry));
     }
 
     /* ------------------------------------------------------------------- notes */
@@ -2152,6 +2586,16 @@
       const action = t.dataset.action;
       if (action === 'mount') { ev.preventDefault(); if (entry.media) forceMount(entry.media); return; }
       if (action === 'delete-post') { deletePost(entry); return; }
+      if (action === 'media-edit') { openMediaModal(entry); return; }
+      if (action === 'pv-open') return;   // plain link to the source page
+      const pm = entry.media && entry.media.type === 'video' ? entry.media : null;
+      if (pm && (action === 'pv-play' || action === 'pv-pause' || action === 'pv-sound' || action === 'pv-toggle')) {
+        ev.preventDefault();
+        if (action === 'pv-play') userPlay(pm, false);
+        else if (action === 'pv-pause') pvPause(pm);
+        else pvToggle(pm, action === 'pv-sound');
+        return;
+      }
       const noteEl = t.closest('.note');
       const nv = noteEl && entry.noteViews.get(noteEl.dataset.noteId);
       if (!nv) return;
@@ -2174,18 +2618,27 @@
      * near observer (800px): card enters "wanted"; far observer (3000px):
      * mounted iframe goes back to its facade. pump() mounts the nearest wanted
      * facades up to MAX_MOUNTED, evicting the farthest mounted one (LRU on ties).
+     * Preview videos (m.type === 'video') live in the same sets and share the
+     * cap: a mounted <video> counts like an iframe. Videos that may not autoplay
+     * (big file, reduced motion, data saver) are mounted only on tap.
      * ================================================================== */
     const wanted = new Set();
     const mounted = new Set();
+    const pvOwner = new WeakMap();       // preview media-box -> its media state (playIO)
     let pumpTimer = 0;
+    const isMounted = (m) => !!(m.iframe || m.video);
+    const reducedMotionMQ = matchMedia('(prefers-reduced-motion: reduce)');
+    const saveData = () => !!(navigator.connection && navigator.connection.saveData);
+    const canAutoplay = (m) => m.autoplay !== false && !reducedMotionMQ.matches && !saveData() && document.visibilityState === 'visible';
 
     function onNear(records) {
       for (const rec of records) {
         const e = cardOwner.get(rec.target);
         if (!e || !posts.has(e.id)) continue;
         if (rec.isIntersecting) {
-          if (e.media) wanted.add(e.media);
-          if ((e.view.kind === 'card' || e.view.platform === 'pinterest') && !normMeta(e.post.meta) && !e.post.meta_failed && !e.metaRequested) requestMeta(e);
+          if (e.media && (e.media.type !== 'video' || (canAutoplay(e.media) && !e.media.failed))) wanted.add(e.media);
+          if ((e.view.kind === 'card' || e.view.platform === 'pinterest') && (!normMeta(e.post.meta) || e.post.meta_stale || e.post.meta_pending) &&
+              !e.post.meta_failed && !e.metaRequested) requestMeta(e);
           if (e.refs.video && e.refs.video.preload === 'none') e.refs.video.preload = 'metadata';
         } else if (e.media) {
           wanted.delete(e.media);
@@ -2198,7 +2651,7 @@
       let freed = false;
       for (const rec of records) {
         const e = cardOwner.get(rec.target);
-        if (e && e.media && !rec.isIntersecting && e.media.iframe) { unmount(e.media); freed = true; }
+        if (e && e.media && !rec.isIntersecting && isMounted(e.media)) { unmount(e.media); freed = true; }
       }
       if (freed) schedulePump();
     }
@@ -2230,7 +2683,8 @@
       pumpTimer = 0;
       const cands = [];
       for (const m of wanted) {
-        if (!m.iframe && m.box.isConnected) cands.push({ m, d: distanceToViewport(m.box) });
+        if (m.type === 'video' && (m.failed || !canAutoplay(m))) continue;
+        if (!isMounted(m) && m.box.isConnected) cands.push({ m, d: distanceToViewport(m.box) });
       }
       cands.sort((a, b) => a.d - b.d);
       for (const { m, d } of cands) {
@@ -2245,7 +2699,7 @@
 
     function forceMount(m) {
       m.lastUsed = performance.now();
-      if (m.iframe) return;
+      if (isMounted(m) || m.failed) return;
       while (mounted.size >= MAX_MOUNTED) {
         const far = pickEvictee(m);
         if (!far) break;
@@ -2255,6 +2709,7 @@
     }
 
     function mount(m) {
+      if (m.type === 'video') { mountVideo(m); return; }
       if (m.iframe || !m.box.isConnected) return;
       const src = safeHttpUrl(m.embed.src);
       if (!src) return;
@@ -2293,6 +2748,7 @@
     }
 
     function unmount(m) {
+      if (m.type === 'video') { unmountVideo(m); return; }
       if (!m.iframe) return;
       clearTimeout(m.revealTimer);
       m.iframe.remove();
@@ -2300,6 +2756,151 @@
       mounted.delete(m);
       m.box.classList.remove('is-mounted', 'is-loaded');
       // box keeps its current (possibly measured) height: same size as before
+    }
+
+    /* ---- preview videos: muted, looping, inline; src set last (after safeHttpUrl), no poster/crossorigin attribute */
+    function mountVideo(m) {
+      if (m.video || m.failed || !m.box.isConnected) return;
+      const src = safeHttpUrl((COARSE || saveData()) && m.small ? m.small : m.url);
+      if (!src) { videoFailed(m); return; }
+      const v = document.createElement('video');
+      v.className = 'preview-video';
+      v.muted = true; v.defaultMuted = true; v.playsInline = true;
+      v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
+      // metadata now: only autoplay-eligible videos near the viewport are mounted, so the real ratio is measured while
+      // the box is still below the viewport (measuredRatio) instead of after play() started in view
+      v.loop = true; v.preload = 'metadata'; v.disablePictureInPicture = true; v.setAttribute('controlslist', 'nodownload');
+      v.dataset.action = 'pv-toggle';
+      v.addEventListener('playing', () => {
+        if (m.video !== v) return;
+        m.box.classList.add('is-loaded');
+        m.playBtn.hidden = true;
+        m.pauseBtn.hidden = false;
+      });
+      v.addEventListener('pause', () => { if (m.video === v) m.pauseBtn.hidden = true; });
+      v.addEventListener('loadedmetadata', () => { if (m.video === v) measuredRatio(m.entry, m.box, v.videoWidth, v.videoHeight, 'video'); }, { once: true });
+      v.addEventListener('volumechange', () => { if (m.video === v) updateSoundBtn(m); });
+      v.addEventListener('error', () => {
+        if (m.video !== v) return;
+        if (m.src !== m.url && m.url) {   // the lighter variant failed: try the main file once
+          m.small = null;
+          unmountVideo(m);
+          mountVideo(m);
+          return;
+        }
+        videoFailed(m);
+      }, { once: true });
+      m.src = src;
+      v.src = src;
+      m.video = v;
+      m.lastUsed = performance.now();
+      mounted.add(m);
+      m.box.classList.add('is-mounted');
+      m.box.append(v);
+      updateSoundBtn(m);
+      if (m.visible) tryPlay(m);
+    }
+
+    function unmountVideo(m) {
+      const v = m.video;
+      if (!v) return;
+      m.video = null;
+      mounted.delete(m);
+      try { v.pause(); } catch (_) { /* ignore */ }
+      v.removeAttribute('src');
+      try { v.load(); } catch (_) { /* ignore */ }   // releases the network connection and decoder
+      v.remove();
+      m.box.classList.remove('is-mounted', 'is-loaded');
+      m.pauseBtn.hidden = true;
+      updateSoundBtn(m);
+    }
+
+    function videoFailed(m) {
+      if (m.failed) return;
+      m.failed = true;
+      unmountVideo(m);
+      wanted.delete(m);
+      mediaFailed(m.entry, m.url);
+    }
+
+    // Automatic play: only while >= 50% visible, the tab is visible and autoplay is allowed for this video
+    // (or the user started it by hand). A refused play() (iOS Low Power Mode …) shows the play button.
+    function tryPlay(m) {
+      if (m.failed || !m.visible || !m.box.isConnected || document.visibilityState !== 'visible') return;
+      if (m.userPaused || (!m.user && !canAutoplay(m))) { m.playBtn.hidden = false; return; }   // paused by the user: stays paused
+      if (!m.video) { forceMount(m); return; }   // mountVideo() calls tryPlay() again
+      playVideo(m);
+    }
+    function playVideo(m) {
+      const v = m.video;
+      if (!v) return;
+      m.lastUsed = performance.now();
+      if (!v.paused) return;
+      let p;
+      try { p = v.play(); } catch (_) { p = null; }
+      if (p && typeof p.catch === 'function') {
+        p.catch((err) => {
+          // AbortError: paused again before it started (scrolled away); not a refusal
+          if (m.video === v && v.paused && !(err && err.name === 'AbortError')) m.playBtn.hidden = false;
+        });
+      }
+    }
+    // A tap is a user gesture: mount now (evicting the farthest embed if needed) and play.
+    function userPlay(m, withSound) {
+      if (m.failed) return;
+      m.user = true;
+      m.userPaused = false;
+      m.playBtn.hidden = true;
+      forceMount(m);
+      if (!m.video) return;
+      if (withSound) soloUnmute(m);
+      playVideo(m);
+    }
+    // Surface / sound button: paused -> play; playing -> toggle the sound. Only one video is audible.
+    function pvToggle(m, fromSoundBtn) {
+      const v = m.video;
+      if (!v || v.paused) { userPlay(m, fromSoundBtn); return; }
+      m.lastUsed = performance.now();
+      if (v.muted) soloUnmute(m); else v.muted = true;
+    }
+    // ⏸ (shown while playing; WCAG 2.2.2): the looping clip stops and stays paused, also when it scrolls back into view,
+    // until the user plays it again (▶ or a tap).
+    function pvPause(m) {
+      m.userPaused = true;
+      if (m.video) { try { m.video.pause(); } catch (_) { /* ignore */ } }
+      m.pauseBtn.hidden = true;
+      m.playBtn.hidden = false;
+      try { m.playBtn.focus({ preventScroll: true }); } catch (_) { /* ignore */ }
+    }
+    function soloUnmute(m) {
+      for (const o of mounted) if (o !== m && o.video && !o.video.muted) o.video.muted = true;
+      if (m.video) m.video.muted = false;
+    }
+    function updateSoundBtn(m) {
+      const muted = !m.video || m.video.muted;
+      const label = muted ? 'Sesi aç' : 'Sesi kapat';
+      setText(m.soundBtn, muted ? '🔇' : '🔊');
+      m.soundBtn.setAttribute('aria-label', label);
+      m.soundBtn.title = label;
+    }
+
+    function onPlayVis(records) {
+      for (const rec of records) {
+        const m = pvOwner.get(rec.target);
+        if (!m || !m.entry || posts.get(m.entry.id) !== m.entry || m.entry.media !== m) continue;
+        m.visible = rec.isIntersecting && rec.intersectionRatio >= 0.49;
+        if (m.visible) tryPlay(m);
+        else if (m.video && !m.video.paused) m.video.pause();
+      }
+    }
+
+    // Hidden tab: every preview video pauses; visible again: the ones in view resume.
+    function onVisibilityVideos() {
+      if (document.visibilityState !== 'visible') {
+        for (const m of mounted) if (m.video && !m.video.paused) m.video.pause();
+        return;
+      }
+      for (const e of posts.values()) if (e.media && e.media.type === 'video' && e.media.visible) tryPlay(e.media);
     }
 
     // One global listener; each message is matched to its own iframe through
@@ -2349,19 +2950,45 @@
         if (!posts.has(entry.id) || posts.get(entry.id) !== entry) continue;
         metaActive++;
         api('POST', `/api/inspire/posts/${encodeURIComponent(entry.id)}/meta`)
-          .then((d) => {
-            if (!d || !normMeta(d.meta) || posts.get(entry.id) !== entry) return;
-            entry.post = { ...entry.post, meta: d.meta };
-            patchMeta(entry);
-          })
+          .then((d) => { if (d && posts.get(entry.id) === entry) applyMetaResult(entry, d); })
           .catch(() => { /* silent: placeholder stays */ })
           .finally(() => { metaActive--; drainMeta(); });
+      }
+    }
+    // POST /meta answer {meta, media, pending?, retry_after?}: apply to the card. While the server is still
+    // preparing the preview (Browser Run in the background), ask again a few times. A retry that is far away
+    // (daily budget spent: after UTC midnight) or polls that ran out show the plain card (and the owner's chip).
+    const pendingSoon = (d) => d.pending === true && (Number(d.retry_after) || 0) <= PENDING_NEAR_S;
+    function applyMetaResult(entry, d) {
+      const soon = pendingSoon(d) && entry.metaPolls < META_POLLS;
+      const next = { ...entry.post, meta_stale: false, meta_pending: soon };
+      if (d.meta && normMeta(d.meta)) next.meta = d.meta;
+      if (Object.prototype.hasOwnProperty.call(d, 'media')) next.media = d.media || null;
+      const changed = mediaSig(entry.post) !== mediaSig(next);
+      entry.post = next;
+      if (changed) patchMeta(entry);
+      updateMediaControls(entry);   // overlays only (pending label, chip): no height change
+      clearTimeout(entry.metaTimer);
+      if (soon) {
+        entry.metaPolls++;
+        const s = Math.min(120, Math.max(10, Number(d.retry_after) || 15));
+        entry.metaTimer = setTimeout(() => {
+          if (posts.get(entry.id) !== entry) return;
+          metaQueue.push(entry);
+          drainMeta();
+        }, s * 1000);
       }
     }
 
     /* =============================================================== ADD MODAL */
     // session: incremented on every open; a submit only closes / resets the dialog it came from.
-    const add = { tab: 'link', checkSeq: 0, checkCtrl: null, timer: 0, dup: null, checking: false, session: 0 };
+    const add = {
+      tab: 'link', checkSeq: 0, checkCtrl: null, timer: 0, dup: null, checking: false, session: 0,
+      prefill: null,      // bookmarklet data ({url, title, …}) shown in this dialog
+      uploading: false,   // a file is being uploaded for the post just created (or for a duplicate)
+    };
+    // Live preview (POST /api/inspire/preview): what the card will show for the pasted link. Per-canonical cache.
+    const pv = { timer: 0, ctrl: null, seq: 0, cache: new Map(), forKey: null, data: null };
 
     function findByKey(key) {
       if (!key) return null;
@@ -2370,17 +2997,26 @@
     }
 
     function openAddModal() {
-      add.session++;
-      setBusy($('link-submit'), false); // a submit still running from a closed dialog does not lock this one
-      setBusy($('text-submit'), false);
-      resetAddModal();
+      newAddSession();
       openModal($('add-modal'), add.tab === 'link' ? $('link-url') : $('text-body'));
+    }
+    // Fresh content for the add dialog: a submit / upload still running from the earlier content no longer counts as
+    // this dialog's (it cannot close it, show its progress or its 409 here) and does not lock its buttons.
+    function newAddSession() {
+      add.session++;
+      setBusy($('link-submit'), false);
+      setBusy($('text-submit'), false);
+      setBusy($('link-dup-attach'), false);
+      resetAddModal();
     }
     const addModalOpen = () => modalStack.some((m) => m.el === $('add-modal'));
     function closeAddModal() {
       clearTimeout(add.timer);
       add.checkSeq++;
       if (add.checkCtrl) { add.checkCtrl.abort(); add.checkCtrl = null; }
+      cancelPreview();
+      stopPreviewBox($('link-preview'));
+      addPicker.stop();
       closeModal($('add-modal'));
     }
     function resetAddModal() {
@@ -2389,8 +3025,19 @@
       $('text-body').value = '';
       $('link-error').hidden = true;
       $('text-error').hidden = true;
+      $('bm-banner').hidden = true;
+      add.prefill = null;
+      add.uploading = false;
+      setProgress($('link-progress'), null);
       setDetect('', false);
+      cancelPreview();
+      pv.data = null;
+      pv.forKey = null;
+      addPicker.reset();
       setDup(null);
+      renderLinkPreview(null);
+      $('link-media-box').open = false;
+      updateMediaBox(null);
       updateTextCounter();
       updateLinkSubmit();
       if (sbUI) sbUI.resetAddForm();
@@ -2424,23 +3071,70 @@
       setDetect(extra, false, label);
     }
 
+    // Links shown as a link card can carry a media preview (embeds keep their own player, direct files are media).
+    function cardLike(p) {
+      if (!p || p.platform === 'image' || p.platform === 'video') return false;
+      if (p.needsResolve) {
+        const r = pv.cache.get(p.canonical);
+        return r ? r.kind === 'card' : p.platform === 'web';
+      }
+      return !p.embed;
+    }
+    function updateMediaBox(p) {
+      $('link-media-box').hidden = !(config.media && cardLike(p));
+      addPicker.refreshAvailability();
+    }
+    function openMediaBox() {
+      const box = $('link-media-box');
+      if (!box.hidden) box.open = true;
+    }
+    // config arrived after the dialog opened (bookmarklet prefill right after boot)
+    function refreshAddMediaUI() {
+      if (!addModalOpen()) return;
+      const p = parseLink($('link-url').value.trim());
+      updateMediaBox(p);
+      if (p && pv.forKey !== p.canonical) schedulePreview(p);
+    }
+
     function setDup(existing) {
+      const was = !!add.dup;
       add.dup = existing;
       const box = $('link-dup');
-      if (!existing) { box.hidden = true; updateLinkSubmit(); return; }
+      if (!existing) {
+        box.hidden = true;
+        updateDupAttach();
+        if (was) renderLinkPreview(pv.data);
+        updateLinkSubmit();
+        return;
+      }
       const d = parseDate(existing.created_at);
       const who = displayName(existing.author);
       $('link-dup-text').textContent = `Bu link zaten eklenmiş — ${who}${d ? ', ' + fmtLongDate(d) : ''}`;
       $('link-dup-show').hidden = existing.id == null;
       box.hidden = false;
+      updateDupAttach();
+      if (!was) renderLinkPreview(pv.data);
       updateLinkSubmit();
+    }
+    // The link is already on the board as the user's own idea (or the user is the admin): the chosen media
+    // link / file can go to that idea instead ("Önizlemeyi mevcut fikre ekle").
+    function dupAttachTarget() {
+      const d = add.dup;
+      if (!d || d.id == null || !config.media) return null;
+      const e = posts.get(String(d.id));
+      if (e) return canEditMedia(e) ? { id: e.id } : null;
+      return session.user && session.user.is_admin ? { id: String(d.id) } : null;
+    }
+    function updateDupAttach() {
+      $('link-dup-attach').hidden = !(dupAttachTarget() && addPicker.value());
     }
 
     function updateLinkSubmit() {
       const btn = $('link-submit');
       if (btn.dataset.busy) return;
       const v = $('link-url').value.trim();
-      btn.disabled = !v || !parseLink(v) || !!add.dup;
+      const p = v ? parseLink(v) : null;
+      btn.disabled = !p || !!add.dup || add.uploading || !!(cardLike(p) && addPicker.error());
     }
 
     function onLinkInput() {
@@ -2448,12 +3142,16 @@
       add.checkSeq++;
       if (add.checkCtrl) { add.checkCtrl.abort(); add.checkCtrl = null; }
       $('link-error').hidden = true;
+      cancelPreview();
+      pv.data = null;   // the previous link's preview; schedulePreview() renders the new one
       setDup(null);
       const v = $('link-url').value.trim();
-      if (!v) { setDetect('', false); updateLinkSubmit(); return; }
+      if (!v) { setDetect('', false); schedulePreview(null); updateMediaBox(null); updateLinkSubmit(); return; }
       const p = parseLink(v);
       if (!p) setDetect('Geçerli bir link değil (http/https olmalı).', true);
       else describeParsed(p);
+      schedulePreview(p);
+      updateMediaBox(p);
       updateLinkSubmit();
       if (p) add.timer = setTimeout(runDupCheck, 400);
     }
@@ -2485,10 +3183,141 @@
       }
     }
 
+    /* ---- live preview of the pasted link (card platforms only; L1 only on the server, never Browser Run) */
+    function cancelPreview() {
+      clearTimeout(pv.timer);
+      pv.timer = 0;
+      pv.seq++;
+      if (pv.ctrl) { pv.ctrl.abort(); pv.ctrl = null; }
+    }
+    function schedulePreview(p) {
+      cancelPreview();
+      if (!p || !config.media || p.platform === 'image' || p.platform === 'video' || (p.embed && !p.needsResolve)) {
+        pv.forKey = null;
+        renderLinkPreview(null);
+        return;
+      }
+      pv.forKey = p.canonical;
+      const hit = pv.cache.get(p.canonical);
+      if (hit) { renderLinkPreview(hit); return; }
+      renderLinkPreview({ loading: true });
+      const seq = pv.seq;
+      pv.timer = setTimeout(() => { pv.timer = 0; runPreview(p, seq); }, PREVIEW_DEBOUNCE_MS);
+    }
+    async function runPreview(p, seq) {
+      const ctrl = new AbortController();
+      pv.ctrl = ctrl;
+      try {
+        const r = await api('POST', '/api/inspire/preview', { url: p.canonical }, { signal: ctrl.signal });
+        if (seq !== pv.seq) return;
+        if (!r || typeof r !== 'object') { renderLinkPreview(null); return; }
+        if (pv.cache.size >= 30) pv.cache.delete(pv.cache.keys().next().value);
+        pv.cache.set(p.canonical, r);
+        renderLinkPreview(r);
+        if (p.needsResolve) { updateMediaBox(p); updateLinkSubmit(); }   // resolved: card or embed is known now
+      } catch (e) {
+        if ((e && e.name === 'AbortError') || seq !== pv.seq) return;
+        renderLinkPreview(null);   // 429 / network: no preview, the link can still be shared
+      } finally {
+        if (pv.ctrl === ctrl) pv.ctrl = null;
+      }
+    }
+    function renderLinkPreview(r) {
+      const box = $('link-preview');
+      pv.data = r;
+      stopPreviewBox(box);
+      box.classList.remove('bad');
+      // The bookmarklet's page image / HLS stream yields to a playable video the server found on the page (the user can
+      // still paste a link or pick a file below; those always win).
+      const sm = r && r.outcome === 'media' ? normMeta(r.meta) : null;
+      let replaced = false;
+      if (sm && playableVideo(sm.media) && weakPick(addPicker.value())) { addPicker.reset(); replaced = true; updateDupAttach(); }
+      // a media link / file chosen by the user overrides the server preview; a duplicate cannot be shared
+      if (!r || addPicker.value() || addPicker.error() || add.dup) { box.hidden = true; return; }
+      if (r.loading) {
+        box.append(h('div', { class: 'ap-state' }, h('span', { class: 'spinner spinner-sm', 'aria-hidden': 'true' }), 'Önizleme alınıyor…'));
+        box.hidden = false;
+        return;
+      }
+      if (r.outcome === 'skipped' || (r.kind && r.kind !== 'card')) { box.hidden = true; return; }
+      const meta = normMeta(r.meta);
+      const media = meta && meta.media;
+      const plan = media && media.kind !== 'player' ? previewPlan(media, meta) : null;
+      if (r.outcome === 'media' && plan) {
+        box.append(previewFrame(plan), h('div', { class: 'ap-note' }, plan.type === 'video' ? 'Kartta bu video oynatılacak.' : 'Kartta bu görsel gösterilecek.'));
+        if (replaced) box.append(h('div', { class: 'ap-sub' }, 'Sayfada oynatılabilir bir video bulundu; yer iminin getirdiği önizleme yerine bu kullanılacak.'));
+      } else if (r.outcome === 'media' && media && media.kind === 'player') {
+        box.append(h('div', { class: 'ap-note' }, 'Kartta sayfanın kendi oynatıcısı gösterilecek.'));
+      } else if (r.outcome === 'blocked') {
+        box.classList.add('bad');
+        box.append(h('div', { class: 'ap-note' }, `Bu site önizleme vermiyor — ${pasteOrUpload()}.`));
+        if (r.br_possible) box.append(h('div', { class: 'ap-sub' }, 'Kaydettikten sonra otomatik olarak bir kez daha denenecek.'));
+        openMediaBox();
+      } else {
+        if (meta && (meta.title || meta.image)) box.append(miniCard(meta, r.canonical));
+        box.append(h('div', { class: 'ap-note' }, 'Bu sayfada video/görsel bulunamadı; kart olarak gösterilecek. İstersen aşağıdan önizleme ekle.'));
+        openMediaBox();
+      }
+      box.hidden = false;
+    }
+    function previewFrame(plan) {
+      const frame = h('div', { class: 'ap-frame' });
+      if (plan.w && plan.h) frame.style.aspectRatio = `${plan.w} / ${plan.h}`;
+      if (plan.type === 'video') {
+        const v = previewVideoEl();
+        const src = safeHttpUrl((COARSE || saveData()) && plan.small ? plan.small : plan.url);
+        if (src) v.src = src;
+        frame.append(v);
+      } else {
+        frame.append(h('img', { src: plan.url, alt: '', decoding: 'async', referrerpolicy: 'no-referrer' }));
+      }
+      return frame;
+    }
+    // Muted looping preview inside a dialog (controls instead of autoplay under reduced motion).
+    function previewVideoEl() {
+      const v = document.createElement('video');
+      v.muted = true; v.defaultMuted = true; v.playsInline = true; v.loop = true; v.preload = 'metadata';
+      v.setAttribute('playsinline', '');
+      v.disablePictureInPicture = true;
+      v.setAttribute('controlslist', 'nodownload');
+      if (reducedMotionMQ.matches) v.controls = true; else v.autoplay = true;
+      return v;
+    }
+    function miniCard(meta, url) {
+      const card = h('div', { class: 'ap-card' });
+      if (meta.image) {
+        const img = h('img', { src: meta.image, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+        img.addEventListener('error', () => img.remove(), { once: true });
+        card.append(img);
+      }
+      card.append(h('div', { style: 'min-width:0' },
+        h('div', { class: 'ap-title' }, meta.title || prettyUrl(url)),
+        h('div', { class: 'ap-host', translate: 'no' }, meta.site_name || hostOf(url))));
+      return card;
+    }
+    // Stops dialog preview videos (no download continues after the dialog closes) and empties the box.
+    function stopPreviewBox(box) {
+      for (const v of box.querySelectorAll('video')) {
+        try { v.pause(); } catch (_) { /* ignore */ }
+        v.removeAttribute('src');
+        try { v.load(); } catch (_) { /* ignore */ }
+      }
+      box.textContent = '';
+    }
+
+    function mediaBody(pick) {
+      const b = { url: pick.url };
+      if (pick.kind === 'video' || pick.kind === 'image' || pick.kind === 'hls') b.kind = pick.kind;
+      if (pick.poster) b.poster = pick.poster;
+      if (pick.w && pick.h) { b.w = pick.w; b.h = pick.h; }
+      return b;
+    }
+
     async function submitLink(ev) {
       ev.preventDefault();
       const btn = $('link-submit');
-      if (btn.dataset.busy) return;
+      if (btn.dataset.busy || add.uploading) return;
+      addPicker.flush();
       const v = $('link-url').value.trim();
       const p = parseLink(v);
       const err = $('link-error');
@@ -2497,33 +3326,100 @@
       const local = findByKey(p.key);
       if (local) { setDup({ id: local.id, author: local.post.author, created_at: local.post.created_at }); return; }
       if (add.dup) return;
+      const withMedia = cardLike(p);
+      if (withMedia && addPicker.error()) { updateLinkSubmit(); return; }
+      const pick = withMedia ? addPicker.value() : null;
       clearTimeout(add.timer);
       add.checkSeq++;
       const addSession = add.session;
       const sameDialog = () => add.session === addSession && addModalOpen();
       setBusy(btn, true);
+      let created = false;
       try {
         const description = $('link-desc').value.trim();
-        const post = await mutate(() => api('POST', '/api/inspire/posts', { url: p.canonical, description }));
+        const body = { url: p.canonical, description };
+        if (pick && pick.url) body.media = mediaBody(pick);
+        const pre = add.prefill;
+        if (pre && pre.title && v === pre.url) body.title = pre.title;   // the bookmarked page's title (client meta)
+        if (body.media || body.title) body.via = (pick && pick.via) || (body.title ? 'bookmarklet' : 'modal');
+        const post = await mutate(() => api('POST', '/api/inspire/posts', body));
         if (!post || post.id == null) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
-        const live = sameDialog();
-        if (live) closeAddModal();
+        created = true;
         flushPending();
         const e = insertTop(post);
-        toast('Fikir eklendi.', 'ok');
+        if (post.media_error) toast('Önizleme eklenemedi: ' + (post.media_error.message || 'geçersiz medya linki'), 'error', 7000);
+        let note = 'Fikir eklendi.';
+        if (pick && pick.file && e) {
+          // the dialog stays open with the progress until the file is on the server
+          if (add.session === addSession) { add.uploading = true; updateLinkSubmit(); }
+          const up = await uploadPicked({ id: e.id }, pick, (f) => { if (add.session === addSession) setProgress($('link-progress'), f); });
+          if (!up.ok) {
+            const why = String(up.message || 'Yükleme başarısız').trim().replace(/[.!\s]+$/, '');
+            toast(`Fikir eklendi ama dosya yüklenemedi: ${why}. Karttaki «Önizleme ekle» ile tekrar deneyebilirsin.`, 'error', 9000);
+            note = '';
+          }
+        }
+        const live = sameDialog();
+        if (live) closeAddModal();
+        if (note) toast(note, 'ok');
         if (e && live) showPost(e.id);
       } catch (e) {
-        if (!sameDialog()) { // the dialog was closed (or reopened for something else) meanwhile
-          if (e.status !== 401) toast(e.message || 'Paylaşılamadı.', 'error');
+        if (created || e.status === 401) { /* posted (upload errors are reported above) / handled by api() */ }
+        else if (!sameDialog()) { // the dialog was closed (or reopened for something else) meanwhile
+          toast(e.message || 'Paylaşılamadı.', 'error');
         } else if (e.status === 409) {
           setDup((e.data && e.data.existing) || {});
           toast(e.message || 'Bu link zaten eklenmiş.', 'error');
-        } else if (e.status !== 401) {
+        } else {
           err.textContent = e.message || 'Paylaşılamadı.';
           err.hidden = false;
         }
       } finally {
-        if (add.session === addSession) { setBusy(btn, false); updateLinkSubmit(); }
+        if (add.session === addSession) {
+          add.uploading = false;
+          setProgress($('link-progress'), null);
+          setBusy(btn, false);
+          updateLinkSubmit();
+        }
+      }
+    }
+
+    // "Önizlemeyi mevcut fikre ekle" (409 duplicate that the user may edit)
+    async function attachToDuplicate() {
+      const target = dupAttachTarget();
+      addPicker.flush();
+      const pick = addPicker.value();
+      const btn = $('link-dup-attach');
+      if (!target || !pick || add.uploading || btn.dataset.busy) return;
+      const addSession = add.session;
+      const sameDialog = () => add.session === addSession && addModalOpen();
+      add.uploading = true;
+      setBusy(btn, true);
+      updateLinkSubmit();
+      $('link-error').hidden = true;
+      try {
+        if (pick.file) {
+          const up = await uploadPicked(target, pick, (f) => { if (add.session === addSession) setProgress($('link-progress'), f); });
+          if (!up.ok) throw new ApiError(up.status || 0, 'upload_failed', up.message);
+        } else {
+          const res = await mutate(() => api('PUT', `/api/inspire/posts/${encodeURIComponent(target.id)}/media`, mediaBody(pick)));
+          applyServerPost(res && res.post);
+        }
+        const live = sameDialog();
+        if (live) closeAddModal();
+        toast('Önizleme mevcut fikre eklendi.', 'ok');
+        if (live && posts.has(String(target.id))) showPost(target.id);
+      } catch (e) {
+        if (e.status === 401) { /* handled by api() */ }
+        else if (sameDialog()) { $('link-error').textContent = e.message || 'Önizleme eklenemedi.'; $('link-error').hidden = false; }
+        else toast(e.message || 'Önizleme eklenemedi.', 'error');
+      } finally {
+        if (add.session === addSession) {
+          add.uploading = false;
+          setProgress($('link-progress'), null);
+          setBusy(btn, false);
+          updateLinkSubmit();
+        }
       }
     }
 
@@ -2567,6 +3463,552 @@
       } finally {
         if (add.session === addSession) { setBusy(btn, false); updateTextCounter(); }
       }
+    }
+
+    /* ========================================================= MEDIA PICKER
+     * A video / image link or a local file as a card's preview (add dialog and
+     * #media-modal). A file is shown from an object URL that never leaves the
+     * page; it is uploaded (XHR, progress) once the post exists.
+     * ================================================================== */
+    const FILE_TYPES_BY_EXT = {
+      mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+    };
+    const mediaLimits = () => ({
+      video: (config.media && config.media.max_video_mb) || 25,
+      image: (config.media && config.media.max_image_mb) || 10,
+      types: (config.media && config.media.types) || MEDIA_TYPES,
+    });
+    function normMediaConfig(x) {
+      if (!x || typeof x !== 'object' || x.attach !== true) return null;
+      const mb = (v, d) => (Number.isInteger(v) && v > 0 && v <= 1000 ? v : d);
+      const types = Array.isArray(x.types) ? x.types.filter((t) => MEDIA_TYPES.includes(t)) : [];
+      return { attach: true, uploads: x.uploads === true, max_video_mb: mb(x.max_video_mb, 25), max_image_mb: mb(x.max_image_mb, 10), types: types.length ? types : MEDIA_TYPES };
+    }
+    function checkMediaLink(raw) {
+      const bad = { error: 'Geçerli bir http(s) video/görsel linki girin' };
+      if (raw.length > 2048) return bad;
+      let u;
+      try { u = new URL(raw); } catch (_) { return bad; }
+      if ((u.protocol !== 'http:' && u.protocol !== 'https:') || u.username || u.password) return bad;
+      let path = u.pathname;
+      try { path = decodeURIComponent(path); } catch (_) { /* keep raw */ }
+      if (/\.svgz?$/i.test(path)) return { error: 'Bu dosya türü desteklenmiyor (SVG vb.)' };
+      return { url: u.href, kind: mediaKindOf(u.href) };
+    }
+    function checkMediaFile(f) {
+      const lim = mediaLimits();
+      const ext = String((/\.([a-z0-9]{2,5})$/i.exec(f.name || '') || [])[1] || '').toLowerCase();
+      const type = MEDIA_TYPES.includes(f.type) ? f.type : (FILE_TYPES_BY_EXT[ext] || '');
+      if (!type || !lim.types.includes(type)) return { error: 'Desteklenmeyen dosya türü. MP4, WebM, MOV, JPG, PNG, WebP veya GIF yükle' };
+      if (!f.size) return { error: 'Dosya boş.' };
+      const part = type.startsWith('video/') ? 'video' : 'image';
+      if (f.size > lim[part] * 1048576) return { error: `Video en fazla ${lim.video} MB, görsel en fazla ${lim.image} MB olabilir` };
+      return { type, part };
+    }
+    const fmtMB = (n) => (n / 1048576).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) + ' MB';
+    // "yaklaşık 5 saat sonra" (a server retry_after in seconds)
+    function fmtWait(sec) {
+      const min = Math.round((Number(sec) || 0) / 60);
+      if (min < 2) return 'birazdan';
+      if (min < 90) return `yaklaşık ${min} dakika sonra`;
+      return `yaklaşık ${Math.round(min / 60)} saat sonra`;
+    }
+    // Copy that offers a file upload only to users who have the "Dosya yükle" button (config.media.uploads)
+    const uploadsOn = () => !!(config.media && config.media.uploads);
+    const pasteOrUpload = (cap) => `${cap ? 'Video' : 'video'}/görsel linkini yapıştır${uploadsOn() ? ' veya dosya yükle' : ''}`;
+
+    function createMediaPicker(ids, onChange) {
+      const root = $(ids.root), urlIn = $(ids.url), fileIn = $(ids.file), fileBtn = $(ids.fileBtn);
+      const fileName = $(ids.fileName), fileClear = $(ids.fileClear), box = $(ids.preview);
+      // link: {url, kind} | null; extra: bookmarklet data for exactly that link {url, mk, poster, w, h}
+      const st = { link: null, extra: null, file: null, type: '', part: null, obj: null, w: null, h: null, error: '', timer: 0 };
+
+      function clearFile() {
+        if (st.obj) URL.revokeObjectURL(st.obj);
+        st.obj = null; st.file = null; st.part = null; st.type = '';
+        fileIn.value = '';
+        setText(fileName, '');
+        fileClear.hidden = true;
+      }
+      function readLink() {
+        clearTimeout(st.timer);
+        st.timer = 0;
+        const raw = urlIn.value.trim();
+        st.link = null; st.error = ''; st.w = st.h = null;
+        if (st.extra && raw !== st.extra.url) st.extra = null;   // poster / size belong to the bookmarked link only
+        if (!raw) return;
+        const c = checkMediaLink(raw);
+        if (c.error) { st.error = c.error; return; }
+        st.link = c;
+        if (st.extra && st.extra.w && st.extra.h) { st.w = st.extra.w; st.h = st.extra.h; }
+      }
+      function changed() { render(); onChange(); }
+      function render() {
+        stopPreviewBox(box);
+        box.classList.toggle('bad', !!st.error);
+        if (st.error) {
+          box.append(h('div', { class: 'ap-note' }, st.error));
+          box.hidden = false;
+          return;
+        }
+        if (st.file) {
+          const isVideo = st.part === 'video';
+          const file = st.file;
+          const frame = h('div', { class: 'ap-frame' });
+          const note = h('div', { class: 'ap-sub' }, ids.afterText);
+          let el;
+          if (isVideo) {
+            el = previewVideoEl();
+            el.addEventListener('loadedmetadata', () => { if (st.file === file) { st.w = el.videoWidth || null; st.h = el.videoHeight || null; } }, { once: true });
+            el.addEventListener('error', () => setText(note, 'Bu dosya bu tarayıcıda önizlenemiyor; yine de yükleyebilirsin.'), { once: true });
+          } else {
+            el = h('img', { alt: '', decoding: 'async' });
+            el.addEventListener('load', () => { if (st.file === file) { st.w = el.naturalWidth || null; st.h = el.naturalHeight || null; } }, { once: true });
+            el.addEventListener('error', () => setText(note, 'Bu dosya bu tarayıcıda önizlenemiyor; yine de yükleyebilirsin.'), { once: true });
+          }
+          el.src = st.obj;   // our own object URL (h() accepts http(s) only)
+          frame.append(el);
+          box.append(frame, h('div', { class: 'ap-note' }, isVideo ? 'Kartta bu video oynatılacak.' : 'Kartta bu görsel gösterilecek.'), note);
+          box.hidden = false;
+          return;
+        }
+        if (st.link) {
+          const link = st.link;
+          const kind = link.kind || (st.extra && st.extra.mk) || null;
+          const note = h('div', { class: 'ap-sub' });
+          if (kind === 'video' || (kind === 'hls' && CAN_HLS) || kind === 'image') {
+            const frame = h('div', { class: 'ap-frame' });
+            if (st.w && st.h) frame.style.aspectRatio = `${st.w} / ${st.h}`;
+            if (kind === 'image') {
+              const img = h('img', { src: link.url, alt: '', decoding: 'async', referrerpolicy: 'no-referrer' });
+              img.addEventListener('load', () => { if (st.link === link && !st.w) { st.w = img.naturalWidth || null; st.h = img.naturalHeight || null; } }, { once: true });
+              img.addEventListener('error', () => setText(note, 'Görsel bu tarayıcıda açılamadı; kaydederken kontrol edilecek.'), { once: true });
+              frame.append(img);
+            } else {
+              const v = previewVideoEl();
+              v.addEventListener('loadedmetadata', () => { if (st.link === link && !st.w) { st.w = v.videoWidth || null; st.h = v.videoHeight || null; } }, { once: true });
+              v.addEventListener('error', () => setText(note, 'Video bu tarayıcıda açılamadı; kaydederken kontrol edilecek.'), { once: true });
+              v.src = link.url;   // checked http(s) above
+              frame.append(v);
+            }
+            box.append(frame);
+          } else {
+            setText(note, kind === 'hls' ? 'HLS akışı bu tarayıcıda önizlenemiyor.' : 'Linkin bir video/görsel dosyası olup olmadığı kaydederken kontrol edilecek.');
+          }
+          box.append(h('div', { class: 'ap-note' }, 'Medya: ', h('span', { translate: 'no' }, hostOf(link.url) || 'bağlantı')), note);
+          box.hidden = false;
+          return;
+        }
+        box.hidden = true;
+      }
+
+      urlIn.addEventListener('input', () => {
+        if (st.file) clearFile();
+        clearTimeout(st.timer);
+        st.timer = setTimeout(() => { readLink(); changed(); }, 350);
+      });
+      fileBtn.addEventListener('click', () => fileIn.click());
+      fileIn.addEventListener('change', () => {
+        const f = fileIn.files && fileIn.files[0];
+        if (!f) return;
+        clearTimeout(st.timer);
+        st.timer = 0;
+        urlIn.value = '';
+        st.link = null; st.extra = null; st.error = ''; st.w = st.h = null;
+        clearFile();
+        const c = checkMediaFile(f);
+        fileClear.hidden = false;
+        if (c.error) { st.error = c.error; setText(fileName, f.name); changed(); return; }
+        st.file = f; st.type = c.type; st.part = c.part;
+        st.obj = URL.createObjectURL(f);
+        setText(fileName, `${f.name} · ${fmtMB(f.size)}`);
+        fileClear.hidden = false;
+        changed();
+      });
+      fileClear.addEventListener('click', () => { clearFile(); st.error = ''; changed(); });
+
+      return {
+        // {file, type, part, w, h} | {url, kind, poster, w, h, via} | null
+        value() {
+          if (st.error) return null;
+          if (st.file) return { file: st.file, type: st.type, part: st.part, w: st.w, h: st.h };
+          if (st.link) {
+            const ex = st.extra;
+            return { url: st.link.url, kind: st.link.kind || (ex && ex.mk) || null, poster: (ex && ex.poster) || null, w: st.w, h: st.h, via: ex ? 'bookmarklet' : 'modal' };
+          }
+          return null;
+        },
+        error: () => st.error,
+        flush() { if (st.timer) { readLink(); changed(); } },
+        // Bookmarklet: the page's video / image (+ poster, size) as if typed by the user.
+        setLink(url, extra) {
+          if (st.file) clearFile();
+          urlIn.value = url;
+          st.extra = { url, ...extra };
+          readLink();
+          changed();
+        },
+        reset() {
+          clearTimeout(st.timer);
+          st.timer = 0;
+          clearFile();
+          urlIn.value = '';
+          st.link = null; st.extra = null; st.error = ''; st.w = st.h = null;
+          stopPreviewBox(box);
+          box.hidden = true;
+          box.classList.remove('bad');
+        },
+        stop() { stopPreviewBox(box); box.hidden = true; },
+        // uploads on/off for this user (config.media.uploads), accepted types and size limits from the config
+        refreshAvailability() {
+          const lim = mediaLimits();
+          const on = !!(config.media && config.media.uploads);
+          for (const el of root.querySelectorAll('[data-uploads]')) el.hidden = !on;
+          fileIn.accept = lim.types.join(',');
+          const note = root.querySelector('.modal-note[data-uploads]');
+          if (note) setText(note, `MP4, WebM, MOV (en fazla ${lim.video} MB) · JPG, PNG, WebP, GIF (en fazla ${lim.image} MB). MOV bazı tarayıcılarda oynatılamayabilir; mümkünse MP4 yükle.`);
+          if (!on && st.file) { clearFile(); changed(); }
+        },
+      };
+    }
+    let addPicker = null;     // created in bindStaticUI()
+    let mediaPicker = null;
+
+    function setProgress(el, frac) {
+      if (frac == null) { el.hidden = true; el.textContent = ''; return; }
+      const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
+      if (!el.firstChild) el.append(h('span'), h('div', { class: 'bar' }, h('span')));
+      setText(el.firstChild, `Yükleniyor… %${pct}`);
+      el.querySelector('.bar > span').style.width = pct + '%';
+      el.hidden = false;
+    }
+
+    // POST /api/inspire/posts/:id/media/upload?part=video|image|poster — raw bytes, XHR for upload progress.
+    function uploadMediaFile(postId, file, part, onProgress, dims, type) {
+      return new Promise((resolve, reject) => {
+        const q = new URLSearchParams({ part });
+        if (dims && dims.w && dims.h && dimOk(dims.w) && dimOk(dims.h)) { q.set('w', String(dims.w)); q.set('h', String(dims.h)); }
+        const tokenAtStart = session.token;
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_BASE}/api/inspire/posts/${encodeURIComponent(postId)}/media/upload?${q}`);
+        xhr.setRequestHeader('X-Fikir-Client', '2');
+        if (tokenAtStart) xhr.setRequestHeader('Authorization', 'Bearer ' + tokenAtStart);
+        xhr.setRequestHeader('Content-Type', type || file.type || 'application/octet-stream');
+        xhr.timeout = 15 * 60 * 1000;
+        if (onProgress) {
+          onProgress(0);
+          xhr.upload.addEventListener('progress', (e) => { if (e.lengthComputable && e.total) onProgress(Math.min(0.99, e.loaded / e.total)); });
+        }
+        xhr.addEventListener('load', () => {
+          let data = null;
+          try { data = JSON.parse(xhr.responseText || 'null'); } catch (_) { data = null; }
+          if (xhr.status >= 200 && xhr.status < 300) { if (onProgress) onProgress(1); resolve(data); return; }
+          const msg = (data && (data.message || (typeof data.error === 'string' ? data.error : ''))) || defaultError(xhr.status);
+          if (xhr.status === 401 && tokenAtStart && tokenAtStart === session.token) handleUnauthorized();
+          reject(new ApiError(xhr.status, data && data.error, msg, data));
+        });
+        const netFail = () => reject(new ApiError(0, 'network', 'Sunucuya ulaşılamadı. Bağlantını kontrol et.'));
+        xhr.addEventListener('error', netFail);
+        xhr.addEventListener('timeout', netFail);
+        xhr.addEventListener('abort', () => reject(new ApiError(0, 'aborted', 'Yükleme iptal edildi.')));
+        xhr.send(file);
+      });
+    }
+
+    // Poster for an uploaded video: a frame at 0.1 s, at most 960 px wide, JPEG. null on any problem.
+    async function makeVideoPoster(file) {
+      const url = URL.createObjectURL(file);
+      const v = document.createElement('video');
+      const wait = (ev, ms) => new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error('timeout')), ms);
+        v.addEventListener(ev, () => { clearTimeout(t); resolve(); }, { once: true });
+        v.addEventListener('error', () => { clearTimeout(t); reject(new Error('error')); }, { once: true });
+      });
+      try {
+        v.muted = true; v.playsInline = true; v.preload = 'auto';
+        v.src = url;
+        await wait('loadeddata', 10000);
+        const seek = wait('seeked', 5000);
+        v.currentTime = Math.min(0.1, (Number(v.duration) || 0.2) / 2);
+        await seek;
+        const w0 = v.videoWidth, h0 = v.videoHeight;
+        if (!w0 || !h0) return null;
+        const k = Math.min(1, 960 / w0);
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(w0 * k));
+        c.height = Math.max(1, Math.round(h0 * k));
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        const blob = await new Promise((resolve) => c.toBlob(resolve, 'image/jpeg', 0.8));
+        return blob ? { blob, w: w0, h: h0 } : null;
+      } catch (_) {
+        return null;
+      } finally {
+        v.removeAttribute('src');
+        try { v.load(); } catch (_) { /* ignore */ }
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    // Upload a chosen file as the media of post `target.id` (+ an automatic poster for a video).
+    // -> {ok:true} | {ok:false, status, message}. The card follows the server's answer.
+    async function uploadPicked(target, pick, onProgress) {
+      try {
+        const res = await mutate(() => uploadMediaFile(target.id, pick.file, pick.part, onProgress, pick, pick.type));
+        applyServerPost(res && res.post);
+      } catch (e) {
+        return { ok: false, status: e.status, message: e.message || 'Yükleme başarısız.' };
+      }
+      if (pick.part === 'video') {
+        try {
+          const shot = await makeVideoPoster(pick.file);
+          if (shot) {
+            const res = await mutate(() => uploadMediaFile(target.id, shot.blob, 'poster', null, null, 'image/jpeg'));
+            applyServerPost(res && res.post);
+          }
+        } catch (_) { /* the poster is optional */ }
+      }
+      return { ok: true };
+    }
+
+    // PostOut from a media route: the card is patched like a refresh (notes are kept as shown).
+    function applyServerPost(post) {
+      if (!post || typeof post !== 'object' || post.id == null) return;
+      const e = posts.get(String(post.id));
+      if (!e) return;
+      e.badMedia = null;   // new media from the user: try it even if an earlier one failed here
+      patchCard(e, { ...post, notes: e.post.notes, storyboard: e.post.storyboard });
+    }
+
+    /* ============================================================ MEDIA MODAL */
+    // Owner / admin of a link card: attach a media link or file, remove the attached one, or ask the
+    // server to look at the page again (POST /meta?force=1).
+    const mm = { entry: null, session: 0, busy: false };
+    const mediaModalOpen = () => modalStack.some((m) => m.el === $('media-modal'));
+
+    function openMediaModal(entry) {
+      if (!posts.has(entry.id) || !canEditMedia(entry)) return;
+      mm.entry = entry;
+      mm.session++;
+      mm.busy = false;
+      const has = hasShownMedia(entry);
+      $('media-title').textContent = has ? 'Önizlemeyi değiştir' : 'Önizleme ekle';
+      setText($('media-hint'), `Bu site önizleme vermiyor — ${pasteOrUpload()}`);
+      $('media-hint').hidden = has;
+      $('media-remove').hidden = !normMedia(entry.post.media);
+      $('media-error').hidden = true;
+      setProgress($('media-progress'), null);
+      for (const id of ['media-save', 'media-retry', 'media-remove']) setBusy($(id), false);
+      mediaPicker.reset();
+      mediaPicker.refreshAvailability();
+      updateMediaSave();
+      openModal($('media-modal'), $('media-url'));
+    }
+    function closeMediaModal() {
+      mediaPicker.stop();
+      closeModal($('media-modal'));
+    }
+    function updateMediaSave() {
+      if ($('media-save').dataset.busy) return;
+      $('media-save').disabled = mm.busy || !mediaPicker.value();
+    }
+
+    async function mediaAction(kind) {
+      const entry = mm.entry;
+      if (!entry || mm.busy) return;
+      if (kind === 'save') mediaPicker.flush();
+      if (kind === 'save' && !mediaPicker.value()) return;
+      if (kind === 'remove' && !(await confirmDialog('Eklenen önizleme kaldırılsın mı?', 'Kaldır'))) return;
+      const session = mm.session;
+      const same = () => mm.session === session && mediaModalOpen();
+      const btn = $(kind === 'save' ? 'media-save' : kind === 'remove' ? 'media-remove' : 'media-retry');
+      const err = $('media-error');
+      err.hidden = true;
+      mm.busy = true;
+      setBusy(btn, true);
+      updateMediaSave();
+      const path = `/api/inspire/posts/${encodeURIComponent(entry.id)}`;
+      try {
+        if (kind === 'save') {
+          const pick = mediaPicker.value();
+          if (pick.file) {
+            const up = await uploadPicked({ id: entry.id }, pick, (f) => { if (mm.session === session) setProgress($('media-progress'), f); });
+            if (!up.ok) throw new ApiError(up.status || 0, 'upload_failed', up.message);
+          } else {
+            const res = await mutate(() => api('PUT', path + '/media', mediaBody(pick)));
+            applyServerPost(res && res.post);
+          }
+          if (same()) closeMediaModal();
+          toast('Önizleme kaydedildi.', 'ok');
+        } else if (kind === 'remove') {
+          const res = await mutate(() => api('DELETE', path + '/media'));
+          applyServerPost(res && res.post);
+          if (same()) closeMediaModal();
+          toast('Önizleme kaldırıldı.', 'ok');
+        } else {
+          const d = await mutate(() => api('POST', path + '/meta?force=1'));
+          if (d && posts.get(entry.id) === entry) { entry.metaPolls = 0; applyMetaResult(entry, d); }
+          const found = d && (normMeta(d.meta) || {}).media;
+          if (d && d.pending && pendingSoon(d)) {
+            if (same()) closeMediaModal();
+            toast('Önizleme hazırlanıyor… Hazır olunca kartta görünecek.', 'ok');
+          } else if (d && d.pending) {
+            if (same()) closeMediaModal();
+            toast(`Önizleme şu anda alınamadı; ${fmtWait(d.retry_after)} otomatik olarak yeniden denenecek.`, 'ok', 7000);
+          } else if (found) {
+            if (same()) closeMediaModal();
+            toast('Sayfadan önizleme alındı.', 'ok');
+          } else if (same()) {
+            err.textContent = `Bu sayfada video/görsel bulunamadı. ${pasteOrUpload(true)}.`;
+            err.hidden = false;
+          }
+        }
+      } catch (e) {
+        if (e.status === 401) { /* handled by api() */ }
+        else if (e.status === 404 && e.code === 'not_found') {
+          if (same()) closeMediaModal();
+          toast('Bu fikir artık mevcut değil.', 'error');
+          if (posts.get(entry.id) === entry) { removeEntry(entry); updateEmptyState(); }
+        } else if (same()) {
+          err.textContent = e.message || 'İşlem yapılamadı.';
+          err.hidden = false;
+        } else {
+          toast(e.message || 'İşlem yapılamadı.', 'error');
+        }
+      } finally {
+        if (mm.session === session) {
+          mm.busy = false;
+          setBusy(btn, false);
+          setProgress($('media-progress'), null);
+          updateMediaSave();
+        }
+      }
+    }
+
+    /* ============================================================ BOOKMARKLET
+     * Single source of the "Fikir Havuzu'na ekle" bookmarklet (tests extract the
+     * text between the BM markers). On the page it is clicked on, it only READS:
+     * the link, the title, the largest playing / visible <video> (blob:/MSE
+     * streams are skipped), else og:video, else the single / main JSON-LD
+     * VideoObject; else og:image / a JSON-LD ImageObject (never just the largest
+     * <img>: that is often a site graphic). It opens the board with #add?… (a
+     * fragment: never sent to a server). Nothing is shared or attached automatically.
+     * A page image (or HLS stream) sent this way gives way to a playable video the
+     * server finds on the page (add dialog + classify()).
+     * abs('') must stay '' (new URL('', page) would be the page itself).
+     * ================================================================== */
+    // A local dev board keeps its ?api= (resolveApiBase() reads it on localhost only); elsewhere origin + path.
+    const BM_LOCAL = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+    const BM_TARGET = /(^|\.)velikesgin\.com$/.test(location.hostname) || BM_LOCAL
+      ? location.origin + location.pathname + (BM_LOCAL ? location.search : '') : 'https://velikesgin.com/fikir';
+    const BM_SRC = /*BM-START*/`(()=>{
+const L=2048,d=document,T=${JSON.stringify(BM_TARGET)};
+const abs=u=>{u=String(u||'').trim();if(!u)return'';try{const x=new URL(u,location.href);return /^https?:$/.test(x.protocol)&&x.href.length<=L?x.href:''}catch(e){return''}};
+const meta=k=>{const e=d.querySelector('meta[property="'+k+'"],meta[name="'+k+'"]');return e?e.getAttribute('content')||'':''};
+const one=v=>Array.isArray(v)?v[0]:v;
+const str=v=>{v=one(v);return typeof v==='string'?v:v&&typeof v==='object'?(v.url||v.contentUrl||''):''};
+const isVid=u=>/\\.(mp4|m4v|webm|mov|m3u8)(\\?|$)/i.test(u);
+let video='',poster='',image='',w=0,h=0;const vos=[];
+const walk=(o,n,main)=>{if(!o||typeof o!=='object'||n>6)return;if(Array.isArray(o)){o.forEach(x=>walk(x,n+1,main));return}
+ const t=[].concat(o['@type']||[]);
+ if(t.includes('VideoObject')){const c=abs(str(o.contentUrl));if(isVid(c))vos.push({c,t:abs(str(o.thumbnailUrl)),w:+o.width||0,h:+o.height||0,main:main||abs(o.url||'')===location.href.split('#')[0]})}
+ if(!image&&t.includes('ImageObject'))image=abs(str(o.contentUrl));
+ for(const k in o)if(o[k]&&typeof o[k]==='object')walk(o[k],n+1,k==='mainEntity')};
+d.querySelectorAll('script[type="application/ld+json"]').forEach(s=>{try{walk(JSON.parse(s.textContent),0,false)}catch(e){}});
+let best=0;d.querySelectorAll('video').forEach(v=>{const src=abs(v.currentSrc||v.src);if(!src)return;
+ const r=v.getBoundingClientRect(),vis=Math.max(0,Math.min(r.right,innerWidth)-Math.max(r.left,0))*Math.max(0,Math.min(r.bottom,innerHeight)-Math.max(r.top,0));
+ if(vis<40000&&v.paused)return;const s=vis+(v.paused?0:1e7);if(s>best){best=s;video=src;poster=abs(v.poster);w=v.videoWidth;h=v.videoHeight}});
+if(!video){const o=abs(meta('og:video:secure_url')||meta('og:video:url')||meta('og:video'));if(isVid(o))video=o}
+if(!video){const vo=vos.length===1?vos[0]:vos.find(x=>x.main);if(vo){video=vo.c;poster=vo.t;w=vo.w;h=vo.h}}
+image=abs(meta('og:image:secure_url')||meta('og:image')||meta('twitter:image')||meta('twitter:image:src'))||image;
+const here=location.href.split('#')[0];let page=here;
+try{const c=new URL(abs((d.querySelector('link[rel="canonical"]')||{}).href||meta('og:url'))),x=new URL(here);
+ if(c.hostname.replace(/^www\\./,'')===x.hostname.replace(/^www\\./,'')&&c.pathname.length>1)page=c.href}catch(e){}
+const p=new URLSearchParams();p.set('url',page.slice(0,L));
+const ti=(meta('og:title')||d.title||'').replace(/\\s+/g,' ').trim().slice(0,200);if(ti)p.set('title',ti);
+if(video){p.set('media',video);p.set('mk','video');if(poster||image)p.set('poster',poster||image);if(w>0&&h>0){p.set('w',String(Math.round(w)));p.set('h',String(Math.round(h)))}}
+else if(image){p.set('media',image);p.set('mk','image')}
+const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
+})()`/*BM-END*/;
+
+    function openBmHelp() {
+      setText($('bm-phone-note'), `Telefonda yer imi araçları zahmetli; bunun yerine karttaki «Önizleme ekle» ile ${pasteOrUpload()}.`);
+      openModal($('bm-modal'), $('bm-link'));
+    }
+
+    /* ------------------------------------------------- #add?… prefill (bookmarklet) */
+    // Whitelisted keys only (url, title, media, mk, poster, w, h); `api` and anything else is ignored and
+    // API_BASE never changes. The fragment is removed at once; the data waits in sessionStorage (30 min)
+    // until the board is shown, then fills the add dialog. Nothing is submitted or attached automatically.
+    function cleanTitle(v) {
+      return String(v == null ? '' : v)
+        .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 200);
+    }
+    function parseAddHash() {
+      const hash = location.hash;
+      if (!hash.startsWith('#add?')) return false;
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (_) { /* ignore */ }
+      try { window.opener = null; } catch (_) { /* ignore */ }
+      let q;
+      try { q = new URLSearchParams(hash.slice(5)); } catch (_) { return false; }
+      const url = q.get('url') || '';
+      if (!url || url.length > 2048 || !safeHttpUrl(url)) return false;
+      const p = parseLink(url);
+      if (!p) return false;
+      const pre = { url, title: cleanTitle(q.get('title')), media: null, mk: null, poster: null, w: null, h: null, at: Date.now() };
+      const media = q.get('media') || '';
+      if (cardLike(p) && media.length <= 2048 && safeHttpUrl(media) && !checkMediaLink(media).error) {
+        pre.media = safeHttpUrl(media);
+        const mk = q.get('mk');
+        pre.mk = mk === 'video' || mk === 'image' ? mk : null;
+        const poster = q.get('poster') || '';
+        pre.poster = poster.length <= 2048 ? safeHttpUrl(poster) : null;
+        const w = dimOk(q.get('w')), hh = dimOk(q.get('h'));
+        if (w && hh) { pre.w = w; pre.h = hh; }
+      }
+      try { sessionStorage.setItem(PREFILL_KEY, JSON.stringify(pre)); } catch (_) { addPrefillMem = pre; }
+      return true;
+    }
+    let addPrefillMem = null;   // when sessionStorage is unavailable
+    function takePrefill() {
+      let pre = addPrefillMem;
+      addPrefillMem = null;
+      try {
+        const raw = sessionStorage.getItem(PREFILL_KEY);
+        sessionStorage.removeItem(PREFILL_KEY);
+        if (raw) pre = JSON.parse(raw);
+      } catch (_) { /* keep the in-memory copy */ }
+      if (!pre || typeof pre !== 'object' || !(Date.now() - Number(pre.at) < PREFILL_TTL_MS)) return null;
+      const url = typeof pre.url === 'string' && pre.url.length <= 2048 ? safeHttpUrl(pre.url) && pre.url : null;
+      if (!url || !parseLink(url)) return null;
+      const media = typeof pre.media === 'string' ? safeHttpUrl(pre.media) : null;
+      return {
+        url, title: cleanTitle(pre.title), media,
+        mk: media && (pre.mk === 'video' || pre.mk === 'image') ? pre.mk : null,
+        poster: media && typeof pre.poster === 'string' ? safeHttpUrl(pre.poster) : null,
+        w: media && dimOk(pre.w) && dimOk(pre.h) ? dimOk(pre.w) : null,
+        h: media && dimOk(pre.w) && dimOk(pre.h) ? dimOk(pre.h) : null,
+      };
+    }
+    // Board visible and signed in: open the add dialog with the bookmarked page (the user checks and shares).
+    function applyPrefill() {
+      if (!session.token || $('dashboard').hidden) return;
+      const pre = takePrefill();
+      if (!pre) return;
+      for (const m of [...modalStack].reverse()) if (m.el !== $('add-modal')) dismissModal(m.el);
+      if (!addModalOpen()) openAddModal(); else newAddSession();
+      if (add.tab !== 'link') selectTab('link');
+      $('link-url').value = pre.url;
+      add.prefill = pre;
+      onLinkInput();
+      if (pre.media) {
+        addPicker.setLink(pre.media, { mk: pre.mk, poster: pre.poster, w: pre.w, h: pre.h });
+        $('link-media-box').open = true;
+      }
+      $('bm-banner').hidden = false;
     }
 
     /* ==================================================================== BOOT */
@@ -2619,6 +4061,26 @@
         closeAddModal();
         if (id != null) showPost(id);
       });
+      $('link-dup-attach').addEventListener('click', attachToDuplicate);
+
+      // Media previews: "Önizleme ekle" in the add dialog and #media-modal
+      addPicker = createMediaPicker({
+        root: 'link-media-box', url: 'link-media', file: 'link-file', fileBtn: 'link-file-btn', fileName: 'link-file-name',
+        fileClear: 'link-file-clear', preview: 'link-media-preview', afterText: 'Paylaş\'a basınca yüklenecek.',
+      }, () => { renderLinkPreview(pv.data); updateDupAttach(); updateLinkSubmit(); });
+      mediaPicker = createMediaPicker({
+        root: 'media-form', url: 'media-url', file: 'media-file', fileBtn: 'media-file-btn', fileName: 'media-file-name',
+        fileClear: 'media-file-clear', preview: 'media-preview', afterText: 'Kaydet\'e basınca yüklenecek.',
+      }, () => { $('media-error').hidden = true; updateMediaSave(); });
+      $('media-form').addEventListener('submit', (e) => { e.preventDefault(); mediaAction('save'); });
+      $('media-retry').addEventListener('click', () => mediaAction('retry'));
+      $('media-remove').addEventListener('click', () => mediaAction('remove'));
+      $('media-cancel').addEventListener('click', () => closeMediaModal());
+      for (const b of document.querySelectorAll('[data-bm-help]')) b.addEventListener('click', openBmHelp);
+      // the bookmarklet: href set once here (h() refuses javascript: URLs on purpose)
+      $('bm-link').setAttribute('href', 'javascript:' + encodeURIComponent(BM_SRC));
+      $('bm-link').addEventListener('click', (e) => { e.preventDefault(); toast('Bu düğmeyi yer imleri çubuğuna sürükle.'); });
+      window.addEventListener('hashchange', () => { if (parseAddHash()) applyPrefill(); });
       $('text-body').addEventListener('input', updateTextCounter);
       $('text-form').addEventListener('submit', submitText);
 
@@ -2631,6 +4093,7 @@
       window.addEventListener('message', onEmbedMessage);
       window.addEventListener('blur', onWindowBlur);
       document.addEventListener('visibilitychange', () => {
+        onVisibilityVideos();
         if (document.visibilityState === 'visible' && session.token && !$('dashboard').hidden &&
             Date.now() - load.lastAt > REFRESH_ON_FOCUS_MS) loadPosts();
       });
@@ -2641,6 +4104,7 @@
       session.cid = ensureCid();
       restoreSession();
       bindStaticUI();
+      parseAddHash();   // bookmarklet #add?… -> sessionStorage; applied once the board is shown (now or after login)
       if (session.token && session.user) showBoard();   // loads the config itself (with the session)
       else { loadConfig(); showEntry(); }
       window.__fikirReady = true;

@@ -8,7 +8,7 @@ import { tryParse, coerceDraft, finalizeDraft, lintDraft, scrubExpansions, sanit
   isPlaceholder } from "../postprocess.js";
 import { attachSuffix, defaultNameTr, normNameTr } from "../trtext.js";
 import { SB_DDL, sbConfig, COST, neuronItem, quotaStmts, isCheckError, ipBucket, utcDay, ledgerRowsStmts, buildReleaseStmt, buildRefundStmt,
-  opReleaseStmt, opRefundStmt, buildEndStmts, opEndStmts } from "../db.js";
+  opReleaseStmt, opRefundStmt, buildEndStmts, opEndStmts, summaryOut, SB_SUMMARY_SQL, provisionalAspect } from "../db.js";
 import { planImages, renderPlan, refInstruction, planFrameForOp, IMG_TAIL, IMG_STYLE } from "../images.js";
 import { validate, STORYBOARD_SCHEMA_V6 } from "../schema.v6.js";
 import { buildContext, buildSceneMessageV6, buildUserMessageV6, TEXT_FALLBACK, TEXT_FALLBACK_PARAMS, SCENE_SYSTEM_V6, SCENE_PARAMS, TEXT_PARAMS,
@@ -563,6 +563,54 @@ const allTurkish = (d) => [d.title, d.logline, d.core_message, ...d.assumptions,
   assert.ok(f2.prompt.indexOf(sc2.slice(0, 30)) > 0 && f2.prompt.indexOf(sc2.slice(0, 30)) < f2.prompt.indexOf("Use THE ELEPHANT"), "action before the reference rule");
   assert.match(f2.prompt, /new pose and camera angle, do not copy the pose of image 1\./);
   ok("bug 7: sheet in neutral three-quarter view; frame prompt = style, scene action, framing, 'do not copy the pose of image 1', setting, tail");
+}
+{
+  // Board summary (posts list): every drawn frame (<= 8, sorted) + a caption per scene (title localised like the full GET,
+  // trimmed); broken / missing scene JSON never fails the summary.
+  const base = { id: "sb_" + "a".repeat(32), post_id: 7, version: 1, status: "done", stage: "done", title: "T", aspect: "16:9", error_code: null,
+    updated_at: 5, previous_id: null, frame_total: 8, frame_done: 8, frame_busy: 0 };
+  const thumbs = [8, 3, 1, 2, 7, 6, 5, 4].map((k) => `${k}:sb/x/frame_${k}.r0.jpg`).join("|");
+  const scenes = JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8].map((k) => ({ n: k, title: k === 2 ? "THE ELEPHANT sokakta" : k === 3 ? "x".repeat(130) : `Sahne ${k}`, shot: "wide" })));
+  const chars = JSON.stringify([{ name: "THE ELEPHANT", name_tr: "fil", look: "an elephant" }]);
+  const s = summaryOut({ ...base, thumbs, scenes_json: scenes, chars_json: chars });
+  assert.deepEqual(s.thumbs.map((t) => t.n), [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.equal(s.thumbs[0].path, "/files/sb/x/frame_1.r0.jpg");
+  assert.equal(s.scenes.length, 8);
+  assert.deepEqual(s.scenes[0], { n: 1, title: "Sahne 1", shot: "wide" });
+  assert.equal(s.scenes[1].title, "Fil sokakta");
+  assert.equal(s.scenes[2].title.length, 100); assert.ok(s.scenes[2].title.endsWith("…"));
+  assert.deepEqual(Object.keys(s.scenes[1]).sort(), ["n", "shot", "title"]);
+  for (const bad of [{}, { scenes_json: null }, { scenes_json: "not json" }, { scenes_json: "[]", chars_json: "{" }, { scenes_json: '[{"n":"1"},{"n":2,"title":5}]' }]) {
+    const x = summaryOut({ ...base, thumbs: "", frame_total: 0, frame_done: 0, ...bad });
+    assert.ok(Array.isArray(x.scenes) && Array.isArray(x.thumbs) && x.thumbs.length === 0, JSON.stringify(bad));
+  }
+  assert.deepEqual(summaryOut({ ...base, scenes_json: '[{"n":"1"},{"n":2,"title":5}]' }).scenes, [{ n: 2, title: "", shot: null }]);
+  assert.match(SB_SUMMARY_SQL, /json_valid\(s\.draft_json\)/);
+  ok("board summary: all frames sorted (<= 8), scene captions localised + trimmed, broken scene JSON tolerated");
+}
+{
+  // Provisional aspect before the draft exists (the board reserves the carousel size up front): the explicit format, else
+  // the previous version's aspect (rebuild), else null. Same rule in SQL (list / POST summary) and JS (full GET).
+  assert.equal(provisionalAspect("9:16", "16:9"), "9:16"); assert.equal(provisionalAspect("16:9", null), "16:9");
+  assert.equal(provisionalAspect("auto", "9:16"), "9:16"); assert.equal(provisionalAspect(undefined, "1:1"), "1:1");
+  assert.equal(provisionalAspect("auto", null), null); assert.equal(provisionalAspect("4:5", null), null);
+  const { DatabaseSync } = await import("node:sqlite");
+  const raw = new DatabaseSync(":memory:");
+  for (const q of SB_DDL) raw.exec(q);
+  const ins = raw.prepare(`INSERT INTO sb_storyboards (id, post_id, version, status, stage, input_json, aspect, seed, day, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, '2026-10-08', 1, 1)`);
+  ins.run("sb_a1", 1, 1, "done", "done", '{"format":"auto"}', "9:16");
+  ins.run("sb_a2", 1, 2, "queued", "queued", '{"format":"auto"}', null);       // "Yorumu düzelt" rebuild: previous version's
+  ins.run("sb_b1", 2, 1, "done", "done", '{"format":"auto"}', "1:1");
+  ins.run("sb_b2", 2, 2, "running", "research", '{"format":"16:9"}', null);    // explicit format wins over the previous one
+  ins.run("sb_c1", 3, 1, "running", "draft", '{"format":"9:16"}', null);       // new post, explicit format
+  ins.run("sb_d1", 4, 1, "queued", "queued", '{"format":"auto"}', null);       // unknown until the draft
+  ins.run("sb_e1", 5, 1, "running", "draft", "not json", null);
+  ins.run("sb_f1", 6, 1, "done", "done", '{"format":"9:16"}', "9:16");
+  ins.run("sb_f2", 6, 2, "done", "done", '{"format":"auto"}', "16:9");          // the draft's aspect is never overridden
+  const got = raw.prepare(`${SB_SUMMARY_SQL} ORDER BY s.post_id`).all().map((r) => [r.id, summaryOut(r).aspect]);
+  assert.deepEqual(got, [["sb_a2", "9:16"], ["sb_b2", "16:9"], ["sb_c1", "9:16"], ["sb_d1", null], ["sb_e1", null], ["sb_f2", "16:9"]]);
+  ok("board summary: provisional aspect while building (explicit format > previous version's > none), executed on SQLite");
 }
 
 console.log(`\nall ${n} tests passed`);

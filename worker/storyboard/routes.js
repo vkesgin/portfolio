@@ -6,7 +6,7 @@
 //          overLimit(actor) -> true when the caller is over the inspire rate limit (buckets 'sb' / 'sb_ip'), limited() -> 429 }
 import {
   sbConfig, utcDay, now, filePath, SB_ID_RE, OP_ID_RE, newId, newSeed, COST, QUOTA_ERRORS, quotaItems, neuronItem, quotaStmts, refundStmts,
-  isCheckError, isUniqueError, whichQuota, quotaLeft, quotaSubject, ipSubject, SB_SUMMARY_SQL, summaryOut,
+  isCheckError, isUniqueError, whichQuota, quotaLeft, quotaSubject, ipSubject, SB_SUMMARY_SQL, summaryOut, provisionalAspect,
   buildEndStmts, opEndStmts, buildRefundStmt, opRefundStmt, startInstance, instanceStatus, terminateInstance, deleteSbObjects, deleteRowsStmts,
   ensureStoryboardSchema,
 } from "./db.js";
@@ -219,7 +219,10 @@ async function loadFull(env, deps, sbId, actor, debug) {
   if (await reconcileIfStale(env, db, cfg, sb, c.results || [])) { [a, b, c] = await read(); sb = (a.results || [])[0]; if (!sb) return null; }
   const [cid, uid] = deps.ownerParams(actor);
   const post = await db.prepare(`${deps.postSelect} WHERE p.id = ?3`).bind(cid, uid, sb.post_id).first();
-  const prev = await db.prepare("SELECT id FROM sb_storyboards WHERE post_id = ?1 AND version < ?2 AND status IN ('done','partial') ORDER BY version DESC LIMIT 1")
+  // previous finished version (offered when this one failed) + the newest older aspect (provisional aspect, see db.js)
+  const prev = await db.prepare(`SELECT
+      (SELECT id FROM sb_storyboards WHERE post_id = ?1 AND version < ?2 AND status IN ('done','partial') ORDER BY version DESC LIMIT 1) AS id,
+      (SELECT aspect FROM sb_storyboards WHERE post_id = ?1 AND version < ?2 AND aspect IS NOT NULL ORDER BY version DESC LIMIT 1) AS aspect`)
     .bind(sb.post_id, sb.version).first();
   const admin = !!(actor && actor.isAdmin);
   const owner = !!(actor && post && (post.is_mine || admin));
@@ -236,8 +239,9 @@ async function loadFull(env, deps, sbId, actor, debug) {
   const ops = (c.results || []).map((o) => ({ id: o.id, kind: o.kind, n: o.n, status: o.status, error: o.error_code || null, created_at: o.created_at }));
   const active = sb.status === "queued" || sb.status === "running" || ops.some((o) => o.status === "queued" || o.status === "running");
   const out = {
-    id: sb.id, post_id: sb.post_id, version: sb.version, previous_id: prev ? prev.id : null,
+    id: sb.id, post_id: sb.post_id, version: sb.version, previous_id: (prev && prev.id) || null,
     status: sb.status, stage: sb.stage, error: sb.error_code ? { code: sb.error_code } : null,
+    aspect: draft ? draft.aspect_ratio : provisionalAspect(input.format, prev && prev.aspect),
     input: { brand: input.brand || "", place: input.place || "", format: input.format || "auto", corrections: input.corrections || "" },
     entities: research && research.entities ? { brand: research.entities.brand || null, place: research.entities.place || null } : null,
     research: research ? { degraded: research.degraded || null, sources: (research.sources || []).slice(0, 6).map((s) => ({ title: s.title, host: hostOf(s.url) })) } : null,

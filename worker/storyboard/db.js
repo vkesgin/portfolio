@@ -1,5 +1,6 @@
 // db.js: storyboard schema (idempotent, memoized like ensureInspireSchema), settings, quota, ledger, R2/instance helpers.
 // Every timestamp is epoch milliseconds; every "day" is the UTC date YYYY-MM-DD (Workers AI neurons reset at 00:00 UTC).
+import { localizeCharNames } from "./postprocess.js";
 
 export const now = () => Date.now();
 export const utcDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
@@ -280,25 +281,62 @@ export async function tavilyCreditsThisMonth(db) {
 // ---------------------------------------------------------------- summaries (board cards)
 // previous_id: the newest finished (done/partial) older version, kept until a newer version finishes; the board offers it
 // when the latest version failed (e.g. a "Yorumu düzelt" rebuild).
+// The board shows every frame as a swipeable carousel, so the summary carries ALL drawn frames (`thumbs`, <= 8 scenes by the
+// schema) plus each scene's short title + shot (`scenes`, also for frames still being drawn: their placeholder slides get a
+// caption). Only those three fields are read out of draft_json (json_each, guarded by json_valid so a broken row cannot fail
+// the posts list); a summary stays ~1 KB. Clients that predate the carousel read thumbs[0..3] only and ignore `scenes`.
+// `aspect` before the draft exists (queued / research / draft) is provisional, so the card reserves its carousel at the
+// right size from the start: the add form's explicit format (applyFormat forces it on the draft), else the previous
+// version's aspect (a "Yorumu düzelt" rebuild), else null (the board's 16:9 default). provisionalAspect() is the same rule
+// for the full GET (polling).
+export const SB_SUMMARY_MAX_FRAMES = 8;
+const SB_TITLE_MAX = 100;
+export const provisionalAspect = (format, prevAspect) => (format === "16:9" || format === "9:16" ? format : prevAspect || null);
 export const SB_SUMMARY_SQL = `
-  SELECT s.id, s.post_id, s.version, s.status, s.stage, s.title, s.aspect, s.error_code, s.updated_at,
+  SELECT s.id, s.post_id, s.version, s.status, s.stage, s.title, s.error_code, s.updated_at,
+    COALESCE(s.aspect,
+      CASE WHEN json_valid(s.input_json) AND json_extract(s.input_json, '$.format') IN ('16:9', '9:16') THEN json_extract(s.input_json, '$.format') END,
+      (SELECT p.aspect FROM sb_storyboards p WHERE p.post_id = s.post_id AND p.version < s.version AND p.aspect IS NOT NULL
+        ORDER BY p.version DESC LIMIT 1)) AS aspect,
     (SELECT p.id FROM sb_storyboards p WHERE p.post_id = s.post_id AND p.version < s.version AND p.status IN ('done','partial')
       ORDER BY p.version DESC LIMIT 1) AS previous_id,
     (SELECT COUNT(*) FROM sb_images i WHERE i.sb_id = s.id AND i.kind = 'frame') AS frame_total,
     (SELECT COUNT(*) FROM sb_images i WHERE i.sb_id = s.id AND i.kind = 'frame' AND i.r2_key IS NOT NULL) AS frame_done,
     (SELECT COUNT(*) FROM sb_images i WHERE i.sb_id = s.id AND i.kind = 'frame' AND i.status IN ('pending','running')) AS frame_busy,
-    (SELECT group_concat(i.n || ':' || i.r2_key, '|') FROM sb_images i WHERE i.sb_id = s.id AND i.kind = 'frame' AND i.r2_key IS NOT NULL) AS thumbs
+    (SELECT group_concat(i.n || ':' || i.r2_key, '|') FROM sb_images i WHERE i.sb_id = s.id AND i.kind = 'frame' AND i.r2_key IS NOT NULL) AS thumbs,
+    (SELECT json_group_array(json_object('n', json_extract(v.value, '$.n'), 'title', substr(json_extract(v.value, '$.title'), 1, ${SB_TITLE_MAX + 20}),
+        'shot', json_extract(v.value, '$.shot')))
+      FROM json_each(CASE WHEN json_valid(s.draft_json) THEN s.draft_json ELSE '{}' END, '$.scenes') v) AS scenes_json,
+    CASE WHEN json_valid(s.draft_json) THEN json_extract(s.draft_json, '$.characters_en') END AS chars_json
   FROM sb_storyboards s
   WHERE NOT EXISTS (SELECT 1 FROM sb_storyboards s2 WHERE s2.post_id = s.post_id AND s2.version > s.version)`;
+const parseJson = (v, d) => { if (typeof v !== "string" || !v) return d; try { return JSON.parse(v); } catch (_) { return d; } };
+// Scene captions for the board: titles go through the same character-name localisation as the full GET (old drafts).
+function summaryScenes(r) {
+  const raw = parseJson(r.scenes_json, []);
+  const scenes = (Array.isArray(raw) ? raw : []).filter((x) => x && Number.isInteger(x.n) && x.n >= 1)
+    .slice(0, SB_SUMMARY_MAX_FRAMES)
+    .map((x) => ({ n: x.n, title: typeof x.title === "string" ? x.title : "", shot: typeof x.shot === "string" ? x.shot : null }));
+  const chars = parseJson(r.chars_json, null);
+  if (scenes.length && Array.isArray(chars) && chars.length) {
+    try { localizeCharNames({ characters_en: chars, scenes }); } catch (_) { /* keep the stored titles */ }
+  }
+  for (const x of scenes) {
+    x.title = String(x.title || "").replace(/\s+/g, " ").trim();
+    if (x.title.length > SB_TITLE_MAX) x.title = x.title.slice(0, SB_TITLE_MAX - 1).trimEnd() + "…";
+    for (const k of ["action", "onscreen_text", "vo", "sound"]) delete x[k];   // set (empty) by localizeCharNames
+  }
+  return scenes;
+}
 export function summaryOut(r) {
   if (!r) return null;
   const thumbs = String(r.thumbs || "").split("|").filter(Boolean)
     .map((x) => { const i = x.indexOf(":"); return { n: Number(x.slice(0, i)), path: filePath(x.slice(i + 1)) }; })
-    .sort((a, b) => a.n - b.n).slice(0, 4);
+    .sort((a, b) => a.n - b.n).slice(0, SB_SUMMARY_MAX_FRAMES);
   return {
     id: r.id, version: r.version, status: r.status, stage: r.stage, title: r.title || null, aspect: r.aspect || null,
     frame_total: r.frame_total || 0, frame_done: r.frame_done || 0, frame_busy: r.frame_busy || 0,
-    thumbs, error_code: r.error_code || null, previous_id: r.previous_id || null, updated_at: r.updated_at,
+    thumbs, scenes: summaryScenes(r), error_code: r.error_code || null, previous_id: r.previous_id || null, updated_at: r.updated_at,
   };
 }
 

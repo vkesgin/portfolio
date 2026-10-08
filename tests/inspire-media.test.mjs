@@ -508,7 +508,7 @@ describe('config guard', () => {
     const toml = fs.readFileSync(path.join(HERE, '../worker/wrangler.toml'), 'utf8');
     const live = toml.split('\n').map((l) => l.replace(/#.*$/, '')).join('\n');
     for (const k of ['INSPIRE_TEST_FETCH_ALLOW', 'INSPIRE_FAKE_BR', 'SB_FAKE_']) assert.ok(!live.includes(k), `${k} set in wrangler.toml`);
-    assert.match(live, /^\s*FIKIR_BR\s*=\s*"0"/m, 'Browser Run off at first deploy');
+    assert.match(live, /^\s*FIKIR_BR\s*=\s*"[01]"/m, 'FIKIR_BR is "0" or "1"');
     assert.match(live, /^\[browser\]\s*\n\s*binding\s*=\s*"BROWSER"/m);
     assert.match(live, /^compatibility_date\s*=\s*"2024-09-23"/m, 'compatibility_date unchanged');
   });

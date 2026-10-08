@@ -22,6 +22,7 @@
       --danger: #ff5a5a;
       --ok: #2ee59d;
       --gap: 20px;
+      --pad: 16px;                 /* inner padding of every card section (text, link body, info) */
       color-scheme: dark;
     }
     html { scrollbar-gutter: stable; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
@@ -299,7 +300,7 @@
     .media-fallback .mf-host, .media-invalid .mf-host { color: var(--accent); font-size: 12px; overflow-wrap: anywhere; }
 
     /* Link preview card (platforms that cannot be framed) */
-    .media.media-linkcard { background: #101010; display: block; }
+    .media.media-linkcard { background: var(--card-bg); display: block; }   /* link title / site text flows into the card body (no seam) */
     .link-card { display: block; color: inherit; text-decoration: none; }
     .link-visual {
       position: relative; aspect-ratio: 1.91 / 1; overflow: hidden; display: flex; flex-direction: column;
@@ -310,7 +311,7 @@
     .link-visual .og { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
     .ph-favicon { width: 52px; height: 52px; border-radius: 14px; background: rgba(255, 255, 255, 0.08); padding: 8px; }
     .ph-host { font-size: 13px; color: #bbb; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .link-body { padding: 12px 15px 2px; }
+    .link-body { padding: 12px var(--pad) 0; }
     .link-site { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); min-width: 0; }
     .link-site img { width: 16px; height: 16px; border-radius: 3px; flex: none; }
     .link-site span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -366,23 +367,71 @@
     .pv-chip { right: 10px; background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(0, 229, 255, 0.45); color: var(--accent); cursor: pointer; font-family: inherit; }
     .pv-pending { left: 10px; background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.18); color: #ddd; pointer-events: none; }
     .pv-pending .spinner { width: 12px; height: 12px; border-width: 2px; }
-    .link-card.compact .link-body { padding-top: 10px; }
+    .link-card.compact .link-body { padding-top: 12px; }
     @media (hover: hover) {
       .pv-btn:hover, .pv-chip:hover { background: rgba(0, 229, 255, 0.28); }
     }
 
-    /* Text idea card */
-    .text-idea { padding: 20px 18px 4px; background: linear-gradient(160deg, rgba(0, 229, 255, 0.09), rgba(0, 229, 255, 0) 60%); }
+    /* Text idea card: [AI storyboard carousel] + label + idea text + storyboard info (assets/js/fikir-storyboard.mjs) */
+    .text-idea { padding: var(--pad) var(--pad) 0; background: linear-gradient(160deg, rgba(0, 229, 255, 0.09), rgba(0, 229, 255, 0) 60%); }
+    .post-card.has-sb-media .text-idea { background: none; }
     .text-idea-label {
-      display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
-      letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; line-height: 16px;
+      letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
     }
     .text-idea-label::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
-    .text-idea-body { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.6; color: #f2f2f2; }
+    .text-idea-body { font-size: 15px; line-height: 1.6; color: #f0f0f0; }
+
+    /* AI storyboard media block of a text card: an edge-to-edge carousel (fikir-storyboard.mjs) whose size is fixed HERE, so
+       the card reserves it before the module has loaded: 16:9 frames full width, 9:16 / 4:5 frames letterboxed into a 4:5
+       box (an Instagram portrait post, never taller), 1:1 frames in a square box (never cropped), then a fixed row with the
+       dots and the scene caption. */
+    .sb-media { background: #0c0c0c; }
+    .sb-car-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: #171717; }
+    .sb-media.tall .sb-car-stage { aspect-ratio: 4 / 5; }
+    .sb-media.square .sb-car-stage { aspect-ratio: 1 / 1; }
+    .sb-car-foot { height: 50px; }
+
+    /* Idea texts and descriptions: safe Markdown subset (assets/js/fikir-md.mjs), collapsed to ~8 lines with "Daha fazla göster" */
+    .rich { overflow-wrap: anywhere; }
+    .rich.plain { white-space: pre-wrap; }
+    .rich > * { margin: 0 0 0.55em; }
+    .rich > :last-child { margin-bottom: 0; }
+    .rich .md-h { color: #fff; font-weight: 700; line-height: 1.3; margin: 0.9em 0 0.35em; }
+    .rich .md-h:first-child { margin-top: 0; }
+    .rich .md-h1 { font-size: 1.28em; }
+    .rich .md-h2 { font-size: 1.16em; }
+    .rich .md-h3 { font-size: 1.07em; }
+    .rich strong { color: #fff; font-weight: 700; }
+    .rich ul, .rich ol { padding-left: 1.35em; }
+    .rich li + li { margin-top: 0.2em; }
+    .rich li::marker { color: var(--accent); }
+    .rich blockquote { margin-inline: 0; padding: 1px 0 1px 12px; border-left: 3px solid rgba(0, 229, 255, 0.45); color: #cdd4d5; }
+    .rich hr { border: 0; border-top: 1px solid var(--border-strong); margin: 0.9em 0; }
+    .rich a { color: var(--accent); text-decoration: underline; text-decoration-color: rgba(0, 229, 255, 0.45); text-underline-offset: 2px; }
+    /* --clamp-h: collapsed height in px (read by fikir.html: keep plain px values); texts up to 1.25x of it are shown whole */
+    .text-idea .clamp { --clamp-h: 192px; }
+    .post-info .clamp { --clamp-h: 174px; margin-bottom: 10px; }
+    /* clip, not hidden: a collapsed box can't be scrolled by focus or find-in-page (it would stay scrolled to its end) */
+    .clamp-box { max-height: var(--clamp-h); overflow: hidden; overflow: clip; }
+    .clamp.is-short .clamp-box, .clamp.is-open .clamp-box { max-height: none; }
+    .clamp.is-long:not(.is-open) .clamp-box {
+      -webkit-mask-image: linear-gradient(#000 calc(100% - 52px), transparent); mask-image: linear-gradient(#000 calc(100% - 52px), transparent);
+    }
+    .clamp-btn {
+      display: inline-flex; align-items: center; gap: 7px; margin-top: 4px; min-height: 34px; padding: 4px 0;
+      background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .clamp-btn::after {
+      content: ''; width: 6px; height: 6px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+      transform: translateY(-2px) rotate(45deg);
+    }
+    .clamp.is-open .clamp-btn::after { transform: translateY(2px) rotate(-135deg); }
+    @media (hover: hover) { .clamp-btn:hover { text-decoration: underline; text-underline-offset: 3px; } }
 
     /* Card info */
-    .post-info { padding: 15px; }
-    .post-desc { font-size: 14px; color: #ddd; margin: 0 0 10px 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .post-info { padding: 12px var(--pad) var(--pad); }
+    .post-desc { font-size: 14px; color: #ddd; line-height: 1.55; }
     .post-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: #666; flex-wrap: wrap; }
     .post-meta-left, .post-meta-right { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
     .author-badge {
@@ -583,6 +632,15 @@
     }
     @media (pointer: coarse) {
       input, textarea { font-size: 16px !important; }
+      /* touch: 40px+ tap targets; small text buttons get an invisible larger hit area instead of a taller row */
+      .clamp-btn, .btn-sm, .btn-mini { min-height: 40px; }
+      .pv-btn:not(.pv-play) { width: 40px; height: 40px; }
+      .pv-chip { min-height: 40px; padding: 8px 14px; }
+      .text-btn { position: relative; min-width: 40px; }   /* a short label ("Sil") still gets a 40px wide box */
+      .text-btn::after { content: ''; position: absolute; inset: -12px -8px; }
+      .src-link { padding: 11px 0; margin: -11px 0; }   /* overflow: hidden (ellipsis) would clip a pseudo hit area */
+      .note-input { min-height: 40px; }
+      .note-public { min-height: 40px; }   /* the label is the checkbox's tap target */
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
@@ -786,13 +844,18 @@
      * code runs in the worker). All DOM is built with createElement and
      * textContent; every URL put into src/href passes safeHttpUrl().
      * ===================================================================== */
-    let urlLib;
-    try {
-      urlLib = await import('/assets/js/fikir-url.mjs?v=20261007');
-    } catch (err) {
+    // Loaded together: the link parser is required; the Markdown module (idea texts / descriptions) is optional - without
+    // it texts are shown as plain text.
+    const [urlRes, mdRes] = await Promise.allSettled([
+      import('/assets/js/fikir-url.mjs?v=20261007'),
+      import('/assets/js/fikir-md.mjs?v=20261008'),
+    ]);
+    if (urlRes.status !== 'fulfilled') {
       document.getElementById('boot-error').hidden = false;
-      throw err;
+      throw urlRes.reason;
     }
+    const urlLib = urlRes.value;
+    const mdLib = mdRes.status === 'fulfilled' ? mdRes.value : null;
     const { parseLink, parseEmbedMessage } = urlLib;
     // 'video' | 'image' | 'hls' | null from a media file URL's extension (shared module; local copy while an
     // older cached module without the export is still around).
@@ -841,7 +904,7 @@
     // creation UI may be shown to this user; `sb` = limits + today's remaining quota (null before login).
     // `media` = media previews may be attached ({attach, uploads, max_video_mb, max_image_mb, types}) or null.
     const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null, media: null };
-    const SB_MODULE = '/assets/js/fikir-storyboard.mjs?v=20261006';
+    const SB_MODULE = '/assets/js/fikir-storyboard.mjs?v=20261008';
     window.fikirConfig = config;
 
     const session = { token: null, user: null, cid: null };
@@ -1780,6 +1843,7 @@
 
     function removeEntry(e) {
       if (sbUI) sbUI.unmount(e);
+      if (clampRO) for (const c of [e.refs.textClamp, e.refs.descClamp]) if (c) clampRO.unobserve(c.body);
       if (nearIO) nearIO.unobserve(e.el);
       if (farIO) farIO.unobserve(e.el);
       if (deferredEntries.delete(e) && viewIO) viewIO.unobserve(e.el);
@@ -1940,7 +2004,8 @@
       else if (kind === 'card') media = buildLinkCard(entry);
       else if (kind === 'text') media = buildTextIdea(entry);
       else media = buildInvalidMedia(entry);
-      card.append(media, buildInfo(entry));
+      card.append(...[].concat(media), buildInfo(entry));
+      if (kind === 'text') card.classList.toggle('has-sb-media', !entry.refs.sbMedia.hidden);
       return card;
     }
 
@@ -2231,16 +2296,38 @@
       visual.append(fav, h('span', { class: 'ph-host', translate: 'no' }, host || 'Bağlantı'));
     }
 
-    /* Text idea card. `.sb-slot` (hidden until used) holds the AI storyboard panel
-       (assets/js/fikir-storyboard.mjs). */
+    /* Text idea card: `.sb-media` (edge-to-edge storyboard carousel, top) + label + idea text (Markdown, collapsible) +
+       `.sb-slot` (storyboard title / progress / "Storyboard'u aç"). Both slots are filled by assets/js/fikir-storyboard.mjs;
+       the carousel's height is reserved here from the list summary before that module has loaded. */
     function buildTextIdea(entry) {
       const r = entry.refs;
-      r.textBody = h('div', { class: 'text-idea-body' }, entry.post.description || '');
-      r.sbSlot = h('div', { class: 'sb-slot', hidden: true, 'data-post-id': entry.id });
       entry.shown.text = entry.post.description || '';
-      const wrap = h('div', { class: 'text-idea' }, h('div', { class: 'text-idea-label' }, 'Metin fikir'), r.textBody, r.sbSlot);
+      r.textClamp = buildClamp(entry, 'text', 'text-idea-body', entry.shown.text);
+      r.sbSlot = h('div', { class: 'sb-slot', hidden: true, 'data-post-id': entry.id });
+      r.sbMedia = h('div', { class: 'sb-media', hidden: true, 'data-post-id': entry.id });
+      const wrap = h('div', { class: 'text-idea' }, h('div', { class: 'text-idea-label' }, 'Metin fikir'), r.textClamp.wrap, r.sbSlot);
+      reserveSbMedia(entry);
       mountStoryboard(entry);
-      return wrap;
+      return [r.sbMedia, wrap];
+    }
+
+    // Same rules as carouselPlan() / sbShape() in fikir-storyboard.mjs: shown for a running build or a build with frames;
+    // stage shape from the aspect ('wide' 16:9 by default, 'tall' 4:5 box for 9:16 / 4:5, 'square' for 1:1).
+    const sbShape = (aspect) => (aspect === '9:16' || aspect === '4:5' ? 'tall' : aspect === '1:1' ? 'square' : 'wide');
+    function sbMediaShown(s) {
+      return !!s && (s.status === 'queued' || s.status === 'running' || s.frame_done > 0 || (s.frame_total > 0 && s.status !== 'failed'));
+    }
+    function reserveSbMedia(entry) {
+      const el = entry.refs.sbMedia;
+      if (!el || sbUI) return;   // the module owns the slot once loaded
+      const s = entry.post.storyboard;
+      const show = sbMediaShown(s);
+      const shape = sbShape(s && s.aspect);
+      el.hidden = !show;
+      el.classList.toggle('tall', shape === 'tall');
+      el.classList.toggle('square', shape === 'square');
+      entry.el && entry.el.classList.toggle('has-sb-media', show);
+      if (show && !el.firstChild) el.append(h('div', { class: 'sb-car' }, h('div', { class: 'sb-car-stage' }), h('div', { class: 'sb-car-foot' })));
     }
 
     // AI storyboard panel inside the text card (viewing works for everyone; creation needs config.storyboard).
@@ -2251,14 +2338,91 @@
       else if (entry.post.storyboard || config.storyboard) ensureStoryboardUI();
     }
 
+    /* Long texts (idea text, a link card's description): Markdown subset, collapsed to ~8 lines (--clamp-h) with
+       "Daha fazla göster"; texts up to CLAMP_SLACK x that height are shown whole. Whether a text is long is measured by one
+       ResizeObserver (after layout, before paint: no visible jump; again when the column width changes). The open state is
+       kept per post (clampOpen) and survives refreshes, which only replace the text inside. */
+    const CLAMP_SLACK = 1.25;
+    const clampOpen = new Set();
+    const clampOf = new WeakMap();   // .rich element -> clamp
+    const clampRO = 'ResizeObserver' in window ? new ResizeObserver((records) => {
+      for (const rec of records) { const c = clampOf.get(rec.target); if (c) measureClamp(c); }
+    }) : null;
+    function setRich(el, text) {
+      el.textContent = '';
+      const v = String(text || '');
+      if (mdLib) {
+        try { el.classList.remove('plain'); el.append(mdLib.renderMarkdown(mdLib.parseMarkdown(v), h)); return; } catch (err) { console.error('markdown', err); el.textContent = ''; }
+      }
+      el.classList.add('plain');
+      el.textContent = v;
+    }
+    function buildClamp(entry, field, cls, text) {
+      const key = entry.id + ':' + field;
+      const body = h('div', { class: 'rich ' + cls });
+      const box = h('div', { class: 'clamp-box', id: `clamp-${entry.id}-${field}` }, body);
+      const btn = h('button', { type: 'button', class: 'clamp-btn', 'data-action': 'clamp', 'data-field': field, 'aria-expanded': 'false', 'aria-controls': box.id, hidden: true }, 'Daha fazla göster');
+      const c = { key, wrap: h('div', { class: 'clamp', hidden: !text }, box, btn), box, body, btn, long: false };
+      setRich(body, text);
+      setClampOpen(c, clampOpen.has(key));
+      clampOf.set(body, c);
+      if (clampRO) clampRO.observe(body);
+      else c.wrap.classList.add('is-short');
+      c.wrap.addEventListener('focusin', (ev) => onClampFocus(c, ev));
+      return c;
+    }
+    // Keyboard focus reaching a link in the faded / hidden part of a collapsed text opens the text, so the focused link is
+    // readable (a mouse click on a link in the visible part is not :focus-visible and changes nothing).
+    const CLAMP_FADE = 52;   // px, the mask fade at the bottom of a collapsed .clamp-box
+    function onClampFocus(c, ev) {
+      if (!c.long || c.wrap.classList.contains('is-open') || !c.box.contains(ev.target)) return;
+      let keyboard = true;
+      try { keyboard = ev.target.matches(':focus-visible'); } catch (_) { /* no :focus-visible support: assume keyboard */ }
+      if (!keyboard || ev.target.getBoundingClientRect().bottom <= c.box.getBoundingClientRect().bottom - CLAMP_FADE) return;
+      setClampOpen(c, true);
+    }
+    function setClampText(c, text) {
+      c.wrap.hidden = !text;
+      setRich(c.body, text);   // the ResizeObserver re-measures it
+    }
+    function measureClamp(c) {
+      if (!c.body.isConnected || c.wrap.hidden) return;
+      const limit = parseFloat(getComputedStyle(c.wrap).getPropertyValue('--clamp-h')) || 192;
+      const long = c.body.offsetHeight > limit * CLAMP_SLACK;
+      if (long === c.long && c.wrap.classList.contains(long ? 'is-long' : 'is-short')) return;
+      c.long = long;
+      c.wrap.classList.toggle('is-long', long);
+      c.wrap.classList.toggle('is-short', !long);
+      c.btn.hidden = !long;
+    }
+    function setClampOpen(c, open) {
+      c.wrap.classList.toggle('is-open', open);
+      c.btn.setAttribute('aria-expanded', String(open));
+      setText(c.btn, open ? 'Daha az göster' : 'Daha fazla göster');
+      if (open) clampOpen.add(c.key); else clampOpen.delete(c.key);
+    }
+    // User toggle. Collapsing a card whose top was scrolled past (reading the long text) brings its top back into view;
+    // only this card's column changes height.
+    function toggleClamp(entry, field) {
+      const c = field === 'text' ? entry.refs.textClamp : entry.refs.descClamp;
+      if (!c) return;
+      const open = !c.wrap.classList.contains('is-open');
+      setClampOpen(c, open);
+      if (!open) {
+        if (c.box.scrollTop) c.box.scrollTop = 0;   // engines without overflow: clip
+        const top = entry.el.getBoundingClientRect().top;
+        if (top < 0) window.scrollTo({ top: Math.max(0, window.scrollY + top - 12), behavior: 'auto' });
+      }
+    }
+
     function buildInfo(entry) {
       const { post, view } = entry;
       const r = entry.refs;
       const info = h('div', { class: 'post-info' });
       if (view.kind !== 'text') {
-        r.desc = h('p', { class: 'post-desc', hidden: !post.description }, post.description || '');
         entry.shown.desc = post.description || '';
-        info.append(r.desc);
+        r.descClamp = buildClamp(entry, 'desc', 'post-desc', entry.shown.desc);
+        info.append(r.descClamp.wrap);
       }
       entry.shown.author = displayName(post.author);
       r.author = h('span', { class: 'author-badge' + (post.is_mine ? ' is-mine' : ''), translate: 'no', title: post.is_mine ? 'Senin paylaşımın' : null }, entry.shown.author);
@@ -2328,11 +2492,10 @@
       const s = entry.shown;
       const desc = post.description || '';
       if (entry.view.kind === 'text') {
-        if (s.text !== desc) { s.text = desc; r.textBody.textContent = desc; }
+        if (s.text !== desc) { s.text = desc; setClampText(r.textClamp, desc); }
       } else if (s.desc !== desc) {
         s.desc = desc;
-        r.desc.textContent = desc;
-        r.desc.hidden = !desc;
+        setClampText(r.descClamp, desc);
       }
       const author = displayName(post.author);
       if (s.author !== author) { s.author = author; r.author.textContent = author; }
@@ -2344,7 +2507,7 @@
       updateMediaControls(entry);
       if (entry.view.kind === 'text') {
         if (sbUI) sbUI.patch(entry, post);
-        else if (post.storyboard) ensureStoryboardUI();
+        else { reserveSbMedia(entry); if (post.storyboard) ensureStoryboardUI(); }
       }
     }
 
@@ -2585,6 +2748,7 @@
       if (!entry) return;
       const action = t.dataset.action;
       if (action === 'mount') { ev.preventDefault(); if (entry.media) forceMount(entry.media); return; }
+      if (action === 'clamp') { toggleClamp(entry, t.dataset.field); return; }
       if (action === 'delete-post') { deletePost(entry); return; }
       if (action === 'media-edit') { openMediaModal(entry); return; }
       if (action === 'pv-open') return;   // plain link to the source page

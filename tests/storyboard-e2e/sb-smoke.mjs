@@ -70,10 +70,13 @@ if (MODE === "main") {
   assert.equal(r.status, 201, JSON.stringify(r.data));
   assert.ok(r.data.storyboard && /^sb_[0-9a-f]{32}$/.test(r.data.storyboard.id)); assert.equal(r.data.storyboard.status, "queued");
   assert.equal(r.data.sb_left.per_user, 2);
+  assert.equal(r.data.storyboard.aspect, "9:16", "provisional aspect (explicit format) before the draft exists");
   const postId = r.data.id; const sb1 = r.data.storyboard.id;
+  r = await call("GET", `/api/inspire/storyboards/${sb1}`, null, A);
+  assert.equal(r.data.aspect, "9:16", "full GET: provisional aspect, then the draft's");
   r = await call("POST", `/api/inspire/posts/${postId}/storyboards`, {}, A);
   assert.equal(r.status, 409); assert.equal(r.data.error, "sb_busy");
-  ok("create with post -> 201 + summary; second start while running -> 409 sb_busy");
+  ok("create with post -> 201 + summary (provisional aspect 9:16); second start while running -> 409 sb_busy");
 
   let w = await waitSb(sb1, A);
   assert.equal(w.s.status, "done", JSON.stringify(w.s.error)); assert.equal(w.s.draft.aspect_ratio, "9:16");
@@ -156,7 +159,8 @@ if (MODE === "main") {
   // per-user limit (3/day): A has used 2
   r = await textPost(A, "Kedi kahve dükkanının önünde bekliyor, sabah ilk müşteri o.", { format: "auto" });
   assert.equal(r.status, 201); assert.ok(r.data.storyboard);
-  const sb3 = r.data.storyboard.id;
+  assert.equal(r.data.storyboard.aspect, null, "format auto: aspect unknown until the draft");
+  const sb3 = r.data.storyboard.id, post3 = r.data.id;
   r = await textPost(A, "Eski koltuk evden kaçıyor, sezon sonu indirimi.", { format: "auto" });
   assert.equal(r.status, 201); assert.equal(r.data.storyboard, null); assert.equal(r.data.storyboard_error.error, "sb_user_limit");
   ok("per-user limit: 4th storyboard -> post saved, storyboard_error sb_user_limit");
@@ -174,6 +178,11 @@ if (MODE === "main") {
   assert.ok(r.data.debug && r.data.debug.plan && r.data.draft.scenes[0].image_prompt_en);
   assert.equal(r.data.draft.characters_en[0].name_tr, "fil", "Turkish display name stored with the character");
   assert.ok(r.data.debug.plan.jobs.find((j) => j.kind === "char").prompt.includes("neutral three-quarter view"));
+  // rebuild of a format-auto idea: provisional aspect = the previous version's (16:9 from the fake draft)
+  assert.equal((await call("GET", `/api/inspire/storyboards/${sb3}`, null, A)).data.aspect, "16:9");
+  r = await call("POST", `/api/inspire/posts/${post3}/storyboards`, {}, ADM);
+  assert.equal(r.status, 202); assert.equal(r.data.storyboard.version, 2); assert.equal(r.data.storyboard.aspect, "16:9", "rebuild: previous version's aspect");
+  await waitSb(r.data.storyboard.id, ADM);
   r = await call("GET", "/api/inspire/sb-admin/usage", null, ADM);
   assert.equal(r.status, 200); assert.ok(r.data.quota.find((q) => q.scope === "sb").n >= 4);
   // capacity guard: every job has ended and fake AI ledgers 0 neurons, so all reservations were released

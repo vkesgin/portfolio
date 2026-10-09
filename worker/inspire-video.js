@@ -918,15 +918,17 @@ const REDDIT_ADAPTER = {
   },
 };
 
-// Not downloadable (no request is made): the reason goes to download-info / the error page.
+// Not downloadable (no request is made): the reason goes to download-info / the error page. The worker never falls back
+// to their thumbnail for a video download (auto / video -> 422 not_downloadable); part=image gives the thumbnail.
 const VIMEO_ADAPTER = {
   name: 'vimeo', support: false, reason: 'drm', hint: { video: false, image: null },
   match: (p) => p.platform === 'vimeo' && p.subtype === 'video',
   async resolve() { return adFail('drm'); },
 };
+// YouTube: ciphered / SABR streams and bot checks; videos, Shorts and (past) live streams alike
 const YT_ADAPTER = {
   name: 'youtube', support: false, reason: 'not_supported', hint: { video: false, image: true },
-  match: (p) => p.platform === 'youtube' && (p.subtype === 'video' || p.subtype === 'short') && /^[A-Za-z0-9_-]{11}$/.test(String(p.id || '')),
+  match: (p) => p.platform === 'youtube' && ['video', 'short', 'live'].includes(p.subtype) && /^[A-Za-z0-9_-]{11}$/.test(String(p.id || '')),
   async resolve(p) { return adFail('not_supported', { id: p.id, image: { url: `https://i.ytimg.com/vi/${p.id}/hqdefault.jpg` } }); },
 };
 

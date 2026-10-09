@@ -6,12 +6,14 @@
 #   MEDIA_E2E_PORT=8799 MEDIA_E2E_CONFIG=wrangler.toml  runs the production config instead; the test values
 #   (127.0.0.1 ALLOWED_ORIGIN, fetch allow, fake Browser Run, caps) are then passed with --var, nothing is edited.
 #   MEDIA_E2E_FXPORT=<port> moves the fixture server (default 4742; the fetch allow follows it via --var).
+#   Board password: a TEST value (FIKIR_E2E_BOARD_PASSWORD, default test-board-pass) passed with --var and to the smoke.
 R="${0:A:h:h:h}"                      # repo root
 HERE="${0:A:h}"
 OUT="${MEDIA_E2E_OUT:-${TMPDIR:-/tmp}/fikir-media-e2e}"
 PORT="${MEDIA_E2E_PORT:-8821}"
 FXPORT="${MEDIA_E2E_FXPORT:-4742}"
 CONFIG="${MEDIA_E2E_CONFIG:-wrangler.mediatest.toml}"
+export FIKIR_E2E_BOARD_PASSWORD="${FIKIR_E2E_BOARD_PASSWORD:-test-board-pass}"
 [[ "$PORT" == 8765 || "$FXPORT" == 8765 ]] && { echo "never 8765"; exit 1; }
 if [[ "$CONFIG" == wrangler.toml ]]; then DB=vk-portfolio; else DB=vk-portfolio-mediatest; fi
 MODES=("$@"); (( ${#MODES} )) || MODES=(main brquota brlimit)
@@ -24,7 +26,7 @@ RC=0
 for MODE in $MODES; do
   STATE="$OUT/state-$MODE"; rm -rf "$STATE"; mkdir -p "$STATE"
   curl -s -X POST "http://127.0.0.1:$FXPORT/__br/reset" >/dev/null
-  VARS=()
+  VARS=(--var FIKIR_BOARD_PASSWORD:$FIKIR_E2E_BOARD_PASSWORD)
   [[ "$FXPORT" != 4742 && "$CONFIG" != wrangler.toml ]] && VARS+=(--var INSPIRE_TEST_FETCH_ALLOW:127.0.0.1:$FXPORT)
   if [[ "$CONFIG" == wrangler.toml ]]; then
     VARS+=(--var ALLOWED_ORIGIN:http://127.0.0.1:4741 --var INSPIRE_TEST_FETCH_ALLOW:127.0.0.1:$FXPORT --var INSPIRE_FAKE_BR:1

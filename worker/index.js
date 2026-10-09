@@ -13,6 +13,10 @@ import {
   adToCache, adFromCache, VIDEO_CACHE_DDL, vcGet, vcPut, vcFail, vcDefer, vcExtra, vcItemFresh, vcBackingOff, itemToCache, cacheToItem,
 } from './inspire-video.js';
 import { Budget, CRON_BUDGET, CRON_COSTS, CRON_IG, withBudget } from './budget.js';
+import {
+  boardPv, boardLocked, checkBoardPassword, guestPvOk, dlTicket, dlTicketRole, filesGateOn, filesToken, filesTokenTtl,
+  signFilesJson, FILES_GATED_RE,
+} from './fikir-gate.js';
 // Cloudflare Workflows: the class named in wrangler.toml [[workflows]] class_name must be exported by the main module.
 export { StoryboardWorkflow } from './storyboard/workflow.js';
 
@@ -138,8 +142,10 @@ async function kpssOwnerPasswordOk(env, password) {
 // ─── INSPIRE (Fikir Havuzu) HELPERS ───
 // Tokens: HMAC-SHA256 with key JWT_SECRET + '_inspire'. New tokens are base64url(UTF-8 JSON) so Turkish
 // names (ş, ğ, ı) survive; tokens made by the old btoa() helper (standard base64 of Latin-1 JSON) still verify.
-// Payloads: guest {g:1, cid, name, iat, exp}  |  registered/admin {userId, username, iat, exp}
+// Payloads: guest {g:1, cid, name, pv, iat, exp}  |  registered/admin {userId, username, iat, exp}
 // iat/exp are seconds (JWT NumericDate). Old tokens have no exp (still valid) and a millisecond iat.
+// Board password gate (worker/fikir-gate.js): a guest token is valid only while its pv is the current board password's;
+// guest tokens without pv (minted before the gate) are rejected.
 const INSPIRE_ADMIN_USERNAME = 'vkesgin38';
 const INSPIRE_GUEST_USERNAME = '__guest__';           // reserved inspire_users row that owns guest posts/notes
 const INSPIRE_GUEST_TTL_S    = 180 * 24 * 60 * 60;
@@ -184,8 +190,12 @@ const INSPIRE_BR_PER_POST = 3;
 const INSPIRE_PENDING_NEAR_S = 120;
 // Rate limits: bucket -> [max requests, window seconds]. Counted in D1 (inspire_rate), fixed windows.
 const INSPIRE_LIMITS = {
-  guest:    [30, 600],    // guest tokens per IP / 10 min
+  guest:    [30, 600],    // guest tokens per IP / 10 min (POST /guest with the right password, POST /guest/rename)
   login:    [5, 900],     // FAILED password logins per IP / 15 min
+  board_pw: [8, 900],     // WRONG board passwords (POST /guest) per IP / 15 min; the next attempt gets 429 until the window ends
+  board_pw_net: [40, 900], //   ... per network (IPv6 /48, IPv4 /24: one tunnel or hosting block holds 65,536 /64s) / 15 min
+  board_pw_all: [300, 3600], // ... site-wide (key 'board_pw_all:all') / hour; over it only IPs with a recent board_ok are checked
+  board_ok: [0, 30 * 86400], // marker (key 'board_ok:<ip>'): this IP entered the right board password within 30 days
   post:     [30, 3600],   // new posts per guest cid or user / hour
   post_ip:  [60, 3600],   // new posts per IP / hour
   note:     [60, 3600],   // new notes per guest cid or user / hour
@@ -206,7 +216,8 @@ const INSPIRE_LIMITS = {
                             // is skipped for the rest of the window (one challenge can be transient: Magnific blocked 1 of 4
                             // scrapes in the Phase D acceptance run). A 404 / empty page is never a strike.
   br_bpost: [1, 7 * 86400], // key '<host>:<post id>': the first bot wall of a post is its host's strike, repeats are not
-  // Downloads + Instagram copies (worker/inspire-video.js). The download link is opened as a navigation (no session).
+  // Downloads + Instagram copies (worker/inspire-video.js). The download link is opened as a navigation (no Authorization
+  // header): it carries the session's 15-minute ticket from download-info (worker/fikir-gate.js dlTicket).
   dl_ip:    [40, 600],    // GET /posts/:id/download per IP / 10 min
   dl_info_ip: [120, 600], // GET /posts/:id/download-info per IP / 10 min
   ig_fetch: [20, 600],    // site-wide (key 'ig_fetch:all'): Instagram page + embed fetches by the worker / 10 min
@@ -286,11 +297,19 @@ async function inspireAuth(request, env) {
   return verifyInspireJWT(token, env.JWT_SECRET || 'secret');
 }
 // Verified token -> actor, or null. Guests are identified by their client id (cid), registered users by id.
-async function inspireActor(request, env) {
+// Memoized per request (the session gate in handleInspire and the route handlers ask for the same actor).
+const inspireActorMemo = new WeakMap();
+function inspireActor(request, env) {
+  let p = inspireActorMemo.get(request);
+  if (!p) { p = inspireActorOf(request, env); inspireActorMemo.set(request, p); }
+  return p;
+}
+async function inspireActorOf(request, env) {
   const p = await inspireAuth(request, env);
   if (!p) return null;
   if (p.g === 1) {
     if (typeof p.cid !== 'string' || !INSPIRE_CID_RE.test(p.cid)) return null;
+    if (!(await guestPvOk(env, p))) return null;   // board password gate: no pv / an old password's pv / gate locked
     const name = cleanInspireName(p.name);
     // tokens minted before the reserved-name check still post, but as Anonim
     return { guest: true, cid: p.cid, userId: null, username: null, name: inspireReservedName(name) ? '' : name, isAdmin: false };
@@ -299,8 +318,19 @@ async function inspireActor(request, env) {
   if (!Number.isSafeInteger(userId) || userId <= 0) return null;
   const username = typeof p.username === 'string' ? p.username : '';
   if (username === INSPIRE_GUEST_USERNAME) return null;
-  if (username === INSPIRE_ADMIN_USERNAME && ownerTokenRevoked(p, env)) return null;   // see ADMIN_TOKENS_NOT_BEFORE
-  return { guest: false, cid: null, userId, username, name: null, isAdmin: username === INSPIRE_ADMIN_USERNAME };
+  if (username === INSPIRE_ADMIN_USERNAME) {
+    if (ownerTokenRevoked(p, env)) return null;   // see ADMIN_TOKENS_NOT_BEFORE
+    return { guest: false, cid: null, userId, username, name: null, isAdmin: true };
+  }
+  // Registered (non-admin) users skip the board password, so their token must still stand for a live account: it needs
+  // an expiry (POST /login mints 30-day tokens; the d9456ea-era ones had none and never expired, and fikir.html copies the
+  // old inspire_token over) and the user row must still exist under that username (a deleted user is out at once).
+  // A D1 error throws (500 at the gate), so a hiccup does not end the session.
+  if (p.exp == null) return null;
+  await ensureInspireSchema(env);
+  const row = await env.DB.prepare('SELECT username FROM inspire_users WHERE id=?').bind(userId).first();
+  if (!row || row.username !== username) return null;
+  return { guest: false, cid: null, userId, username, name: null, isAdmin: false };
 }
 async function inspireSafeEqual(a, b) {
   const enc = new TextEncoder();
@@ -724,16 +754,25 @@ async function sbHook(label, fn, fallback) {
   try { return await fn(); } catch (e) { console.error('sb ' + label, e && e.stack || e); return fallback; }
 }
 
-// ── Rate limits (D1 fixed windows; fail open if the counter itself errors) ──
+// ── Rate limits (D1 fixed windows; fail open if the counter itself errors, except the board password limiter) ──
 const INSPIRE_RATE_SQL = `INSERT INTO inspire_rate (k, n, reset) VALUES (?1, 1, ?2)
   ON CONFLICT(k) DO UPDATE SET n = CASE WHEN reset <= ?3 THEN 1 ELSE n + 1 END,
                                reset = CASE WHEN reset <= ?3 THEN ?2 ELSE reset END
   RETURNING n`;
 // IPv6 counts per /64 (ipBucket): one client can rotate through a whole /64; IPv4 stays per address.
+async function inspireHashedKey(label, value) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(label + ':' + value)));
+  return [...d.subarray(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 async function inspireIpKey(request) {
-  const ip = ipBucket(request.headers.get('CF-Connecting-IP') || 'unknown');
-  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('inspire-ip:' + ip)));
-  return 'ip:' + [...d.subarray(0, 12)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return 'ip:' + await inspireHashedKey('inspire-ip', ipBucket(request.headers.get('CF-Connecting-IP') || 'unknown'));
+}
+// The network around it (board password limiter): IPv6 /48, IPv4 /24; anything else as is.
+async function inspireNetKey(request) {
+  const b = ipBucket(request.headers.get('CF-Connecting-IP') || 'unknown');
+  const net = b.endsWith('::/64') ? b.split(':').slice(0, 3).join(':') + '::/48'
+    : /^\d{1,3}(?:\.\d{1,3}){3}$/.test(b) ? b.split('.').slice(0, 3).join('.') + '.0/24' : b;
+  return 'net:' + await inspireHashedKey('inspire-net', net);
 }
 const inspireActorKey = (actor) => (actor.guest ? 'c:' + actor.cid : 'u:' + actor.userId);
 // Counts this request in every [bucket, id] pair; true if any of them is over its limit.
@@ -752,6 +791,65 @@ async function inspireRateCount(db, bucket, id) {
     const r = await db.prepare('SELECT n FROM inspire_rate WHERE k=? AND reset > ?').bind(`${bucket}:${id}`, Math.floor(Date.now() / 1000)).first();
     return r ? r.n : 0;
   } catch (e) { return 0; }
+}
+// Counts one hit of [bucket, id] (same fixed window as inspireOverLimit) -> {n (this hit included), reset (epoch s)}, or
+// null if the counter could not be updated. Unlike inspireOverLimit this does NOT fail open: its caller, the board password
+// limiter, refuses the attempt then (an attacker's own flood must not switch the limiter off).
+async function inspireRateHit(db, bucket, id) {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const r = await db.prepare(INSPIRE_RATE_SQL.replace(/RETURNING n$/, 'RETURNING n, reset')).bind(`${bucket}:${id}`, now + INSPIRE_LIMITS[bucket][1], now).first();
+    const n = r ? Number(r.n) : NaN;
+    return n >= 1 ? { n, reset: Number(r.reset) || 0 } : null;
+  } catch (e) {
+    console.error('inspire rate hit', e && e.message);
+    return null;
+  }
+}
+// Takes one hit back from every [bucket, id] pair (best effort); `mark` = an IP key that gets the board_ok marker too.
+async function inspireRateGiveBack(db, pairs, mark = null) {
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const stmts = pairs.map(([b, id]) => db.prepare('UPDATE inspire_rate SET n = MAX(0, n - 1) WHERE k=?').bind(`${b}:${id}`));
+    if (mark) stmts.push(db.prepare(INSPIRE_RATE_SQL).bind(`board_ok:${mark}`, now + INSPIRE_LIMITS.board_ok[1], now));
+    if (stmts.length) await db.batch(stmts);
+  } catch (e) { console.error('inspire rate give back', e && e.message); }
+}
+// Board password limiter (POST /guest), run BEFORE the compare. Wrong passwords are counted per IP (board_pw), per network
+// (board_pw_net) and site-wide (board_pw_all), in that order: each counter is one atomic statement, so parallel requests
+// cannot slip under a limit together, and a bucket only counts the attempts the previous one let through (an IP that is
+// already refused does not use up its network's or the site's budget). Over the site-wide budget only IPs that entered the
+// right password within 30 days (board_ok) are still checked. The caller gives the counts back for a right (or empty)
+// password, so only wrong ones add up. Fails CLOSED: a counter that cannot be updated refuses the attempt (503).
+// -> { res } (refused, nothing compared) | { counted: [[bucket, id], ...], left: wrong attempts left before a 429 }
+async function inspireBoardPwLimit(db, request, ipKey, fail) {
+  const counted = [];
+  const refuse = async (res, retry) => {
+    if (counted.length) await inspireRateGiveBack(db, counted);   // not compared: the earlier buckets get it back
+    res.headers.set('Retry-After', String(retry));
+    return { res };
+  };
+  const tooMany = (reset, message) => {
+    const retry = Math.max(1, reset - inspireNowS());
+    return refuse(fail(429, 'too_many_attempts', message(`${Math.max(1, Math.ceil(retry / 60))} dk`), { retry_s: retry }), retry);
+  };
+  const unavailable = () => refuse(fail(503, 'login_unavailable', 'Giriş şu anda doğrulanamıyor. Biraz sonra tekrar dene.', { retry_s: 30 }), 30);
+  const ip = await inspireRateHit(db, 'board_pw', ipKey);
+  if (!ip) return unavailable();
+  if (ip.n > INSPIRE_LIMITS.board_pw[0]) return tooMany(ip.reset, (w) => `Çok fazla hatalı deneme. ${w} sonra tekrar dene.`);
+  counted.push(['board_pw', ipKey]);
+  const netKey = await inspireNetKey(request);
+  const net = await inspireRateHit(db, 'board_pw_net', netKey);
+  if (!net) return unavailable();
+  if (net.n > INSPIRE_LIMITS.board_pw_net[0]) return tooMany(net.reset, (w) => `Bu ağdan çok fazla hatalı deneme. ${w} sonra tekrar dene.`);
+  counted.push(['board_pw_net', netKey]);
+  const all = await inspireRateHit(db, 'board_pw_all', 'all');
+  if (!all) return unavailable();
+  if (all.n > INSPIRE_LIMITS.board_pw_all[0] && !(await inspireRateCount(db, 'board_ok', ipKey))) {   // count error -> 0: refused
+    return tooMany(all.reset, (w) => `Şu an çok fazla hatalı giriş denemesi var. ${w} sonra tekrar dene.`);
+  }
+  counted.push(['board_pw_all', 'all']);
+  return { counted, left: Math.max(0, Math.min(INSPIRE_LIMITS.board_pw[0] - ip.n, INSPIRE_LIMITS.board_pw_net[0] - net.n)) };
 }
 
 // ── Safe server-side fetching ──
@@ -1985,26 +2083,42 @@ async function inspireAdItem(env, db, postId, ad, parsed, { needVideo = false, f
   console.log('inspire dl adapter', ad.name, postId, r.ok ? 'ok' : r.reason, r.ok && r.video ? (r.video.mux ? 'split' : 'progressive') : '', feed ? 'feed' : '');
   return { ...r, cached: false };
 }
-// Turkish text for a reason a post's video cannot be downloaded (download-info, error page)
+// Turkish text for a reason a post's video cannot be downloaded (download-info, error page). YouTube / Vimeo
+// (adapter support:false): their own text (INSPIRE_DL_PLATFORM_TR), never the generic one.
+const INSPIRE_DL_PLATFORM_TR = {
+  youtube: 'YouTube videoları siteden indirilemiyor — YouTube buna izin vermiyor.',
+  vimeo: 'Vimeo videoları siteden indirilemiyor — Vimeo bu videoları şifreli (DRM) yayınlıyor.',
+};
 const INSPIRE_DL_REASON_TR = {
-  not_supported: 'YouTube videoları buradan indirilemiyor (YouTube buna izin vermiyor). Kaynağında açabilirsin.',
-  drm: 'Vimeo bu videoyu şifreli (DRM) yayınlıyor; buradan indirilemiyor. Kaynağında açabilirsin.',
+  not_supported: 'Bu videonun biçimi siteden indirilemiyor. Kaynağında açabilirsin.',
+  drm: 'Bu video şifreli (DRM) yayınlanıyor; siteden indirilemiyor. Kaynağında açabilirsin.',
   login_required: 'Bu video herkese açık değil (giriş gerekiyor); buradan indirilemiyor.',
   not_found: 'Gönderi kaldırılmış ya da bulunamadı.',
   no_video: 'Bu gönderide video yok.',
   disabled: 'Bu platformdan indirme şu anda kapalı.',
   busy: 'Bu platforma şu anda çok fazla istek yapıldı. Birkaç dakika sonra tekrar dene.',
 };
+const inspireDlReasonText = (reason, adName) =>
+  (adName && INSPIRE_DL_PLATFORM_TR[adName]) || (reason && INSPIRE_DL_REASON_TR[reason]) || null;
+// YouTube / Vimeo: the platform never lets the worker download the video (ciphered / SABR streams, bot checks, DRM).
+// -> {name, reason} of that adapter, or null
+function inspireDlUnsupported(parsed) {
+  const ad = parsed && !igRef(parsed) ? dlAdapterFor(parsed) : null;
+  return ad && ad.support === false ? { name: ad.name, reason: ad.reason || 'not_supported' } : null;
+}
+const INSPIRE_DL_AUTH_TR = 'İndirme bağlantısının süresi doldu ya da oturum yok. Fikir Havuzu’na dönüp yeniden “İndir”e bas.';
 
 // Failure page of a download link (opened as a navigation): tiny Turkish HTML, no scripts, every value escaped.
-function inspireDlErrorPage(env, status, message, source) {
+// extra: {href (same-origin path), text} for one more link (e.g. "Kapak görselini indir" for a YouTube post)
+function inspireDlErrorPage(env, status, message, source, extra = null) {
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const src = typeof source === 'string' && /^https?:\/\//i.test(source) && inspireHostOk(source) ? source : null;
   const board = inspireBoardOrigin(env);
+  const more = extra && typeof extra.href === 'string' && /^\/api\/inspire\/[A-Za-z0-9/_.?=&-]+$/.test(extra.href) ? extra : null;
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>İndirilemedi</title><style>body{font:16px/1.5 system-ui,-apple-system,sans-serif;margin:0;padding:40px 16px;background:#0b0b0b;color:#eee}
 main{max-width:560px;margin:0 auto}h1{font-size:22px;margin:0 0 12px}a{color:#7cc4ff;overflow-wrap:anywhere}p{margin:0 0 12px}</style></head>
-<body><main><h1>İndirilemedi</h1><p>${esc(message)}</p>${src ? `<p>Kaynağında aç: <a href="${esc(src)}" rel="noopener noreferrer nofollow">${esc(src)}</a></p>` : ''}${board ? `<p><a href="${esc(board + '/fikir')}">Fikir Havuzu’na dön</a></p>` : ''}</main></body></html>`;
+<body><main><h1>İndirilemedi</h1><p>${esc(message)}</p>${more ? `<p><a href="${esc(more.href)}" rel="nofollow">${esc(more.text)}</a></p>` : ''}${src ? `<p>Kaynağında aç: <a href="${esc(src)}" rel="noopener noreferrer nofollow">${esc(src)}</a></p>` : ''}${board ? `<p><a href="${esc(board + '/fikir')}">Fikir Havuzu’na dön</a></p>` : ''}</main></body></html>`;
   return new Response(html, { status, headers: {
     'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
@@ -2024,38 +2138,35 @@ function inspireDlResponse(body, { length = null, fixed = false, mime, ext, part
   }
   return new Response(out, { status: 200, headers: h });
 }
-// Download ticket (?k= on the download link). A download is a navigation without the session, so download-info hands the
-// admin a link that skips the site-wide daily download budget (guests cannot use up the owner's downloads): HMAC
-// (JWT_SECRET) of post id + expiry, for that post only, valid 15 minutes. A missing / stale / wrong ticket is ignored.
-const INSPIRE_DL_TICKET_S = 900;
-async function inspireDlTicketSig(env, id, exp) {
-  const sig = await crypto.subtle.sign('HMAC', await inspireHmacKey(env.JWT_SECRET, 'sign'), new TextEncoder().encode(`fikir-dl:${id}:${exp}`));
-  return b64urlFromBytes(new Uint8Array(sig).subarray(0, 16));
+// Download ticket (?k= on the download link, worker/fikir-gate.js dlTicket): a download is a navigation / plain fetch
+// without the Authorization header, so download-info hands every session a link with a 15-minute ticket for that post.
+// Role 'a' (the admin) also skips the site-wide daily download budget (guests cannot use up the owner's downloads).
+// A download needs a valid ticket or a session header; anything else is 401 (inspireDlAuth).
+// -> {admin: bool} | null
+async function inspireDlAuth(request, env, id) {
+  const role = await dlTicketRole(env, id, new URL(request.url).searchParams.get('k'));
+  if (role) return { admin: role === 'a' };
+  const actor = request.headers.get('Authorization') ? await inspireActor(request, env) : null;
+  return actor ? { admin: !!actor.isAdmin } : null;
 }
-async function inspireDlTicket(env, id) {
-  if (!env.JWT_SECRET) return null;
-  const exp = Math.floor(Date.now() / 1000) + INSPIRE_DL_TICKET_S;
-  return exp.toString(36) + '.' + await inspireDlTicketSig(env, id, exp);
-}
-async function inspireDlTicketOk(env, id, k) {
-  const m = /^([0-9a-z]{1,10})\.([A-Za-z0-9_-]{22})$/.exec(String(k || ''));
-  if (!m || !env.JWT_SECRET) return false;
-  const exp = parseInt(m[1], 36), now = Math.floor(Date.now() / 1000);
-  if (!(exp > now && exp <= now + INSPIRE_DL_TICKET_S + 60)) return false;
-  return inspireSafeEqual(m[2], await inspireDlTicketSig(env, id, exp));
-}
+const inspireDlAsJson = (request) => {
+  const accept = request.headers.get('Accept') || '';
+  return new URL(request.url).searchParams.get('format') === 'json' || (/application\/json/i.test(accept) && !/text\/html/i.test(accept));
+};
 const INSPIRE_DL_FILE_MIMES = { mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime', jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
-// GET /api/inspire/posts/:id/download?part=video|image|auto (default auto = the video, else the image)
-async function inspireDownload(request, env, ctx, db, id, { selfHost, origin }) {
+// GET /api/inspire/posts/:id/download?part=video|image|auto&k=<ticket> (default auto = the video, else the image; for
+// YouTube / Vimeo auto = the video only: 422 not_downloadable, never the thumbnail in its place; part=image gives it).
+// auth: inspireDlAuth() of this request (the session gate in handleInspire already refused requests without one).
+async function inspireDownload(request, env, ctx, db, id, { selfHost, origin, auth }) {
   const reqUrl = new URL(request.url);
   const qp = reqUrl.searchParams.get('part');
   const part = qp == null || qp === '' ? 'auto' : ['video', 'image', 'auto'].includes(qp) ? qp : null;
-  const accept = request.headers.get('Accept') || '';
-  const asJson = reqUrl.searchParams.get('format') === 'json' || (/application\/json/i.test(accept) && !/text\/html/i.test(accept));
+  const asJson = inspireDlAsJson(request);
   let source = null;
-  const fail = (status, error, message, extra) => (asJson
+  const fail = (status, error, message, extra, link = null) => (asJson
     ? json({ error, message, ...(source ? { source } : {}), ...(extra || {}) }, status, origin)
-    : inspireDlErrorPage(env, status, message, source));
+    : inspireDlErrorPage(env, status, message, source, link));
+  if (!auth) return fail(401, 'unauthorized', INSPIRE_DL_AUTH_TR);
   if (!part) return fail(400, 'bad_request', 'Geçersiz istek (part=video|image)');
   const cfg = inspireVideoConfig(env);
   if (!cfg.dl) return fail(503, 'downloads_disabled', 'İndirme şu anda kapalı.');
@@ -2071,20 +2182,35 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin }) 
     const again = await inspireParseInput(row.url, selfHost);
     if (again && !again.needsResolve && inspireHostOk(again.canonical)) { parsed = again; source = again.canonical; }
   }
+  const media = inspireMediaOut(row.media), meta = inspireMetaOut(row.meta);
+  const ig = igRef(parsed);
+  // YouTube / Vimeo: no video from the platform. Without a video from elsewhere (an upload, a link-preview file) auto and
+  // video are refused at once (no budget unit, no platform request): 422 + the reason, never the thumbnail in its place.
+  const unsupported = inspireDlUnsupported(parsed);
+  if (unsupported && part !== 'image') {
+    const otherVideo = (media && media.kind === 'video') || (meta && meta.media && meta.media.kind === 'video') || (parsed && parsed.platform === 'video');
+    if (!otherVideo) {
+      const hint = dlHint({ type: row.type, parsed, media, meta });
+      const image = !!(hint && hint.image);
+      const k = reqUrl.searchParams.get('k');
+      const coverHref = `/api/inspire/posts/${id}/download?part=image` + (k ? '&k=' + encodeURIComponent(k) : '');
+      return fail(422, 'not_downloadable', inspireDlReasonText(unsupported.reason, unsupported.name),
+        { reason: unsupported.reason, unsupported: true, platform: unsupported.name, image },
+        image ? { href: coverHref, text: 'Kapak görselini indir' } : null);
+    }
+  }
   // Site-wide daily budget (FIKIR_DL_DAILY) of downloads that fetch from elsewhere: taken before the first upstream request
   // (Instagram / platform resolve, CDN or linked file) and refunded when nothing is served. Our own R2 files (copies,
-  // uploads) never count, nor does a link with the admin's ticket.
+  // uploads) never count, nor does the admin's download (admin ticket or admin session).
   const day = utcDay();
   const dayItem = [{ scope: 'dl', subject: '', lim: cfg.dlDaily, units: 1 }];
-  let dayState = (await inspireDlTicketOk(env, id, reqUrl.searchParams.get('k'))) ? 'exempt' : null;   // taken | exceeded | error
+  let dayState = auth.admin ? 'exempt' : null;   // taken | exceeded | error
   const takeDay = async () => {
     if (dayState === null) {
       try { dayState = (await inspireReserve(db, day, dayItem)).ok ? 'taken' : 'exceeded'; } catch (e) { dayState = 'error'; }
     }
     return dayState === 'taken' || dayState === 'exempt';
   };
-  const media = inspireMediaOut(row.media), meta = inspireMetaOut(row.meta);
-  const ig = igRef(parsed);
   const titleParts = ['fikir', id, titleSlug((meta && meta.title) || row.description || '')];
   const safeURL = inspireDlSafe(selfHost);
   let lastError = null, opens = 0, igRes = null, igRetried = false, adRes = null, adRetried = false, adReason = null;
@@ -2177,7 +2303,8 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin }) 
     return null;
   };
   try {
-    for (const want of part === 'auto' ? ['video', 'image'] : [part]) {
+    // auto: the video, else the image; never the image of a platform whose video cannot be downloaded (YouTube / Vimeo)
+    for (const want of part === 'auto' ? (unsupported ? ['video'] : ['video', 'image']) : [part]) {
       const res = await tryWant(want);
       if (res) return res;
       if (want === 'video' && ((igRes && igRes.busy) || adReason === 'busy')) break;   // 429 below, not the poster
@@ -2199,7 +2326,8 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin }) 
   // platform adapter: why its video is not downloadable (YouTube, Vimeo, private / removed posts, ...)
   if (adReason === 'busy') return fail(429, 'busy', INSPIRE_DL_REASON_TR.busy + ' Ya da kaynağında aç.', { reason: 'busy' });
   if (adReason && part !== 'image' && INSPIRE_DL_REASON_TR[adReason]) {
-    return fail(adReason === 'disabled' ? 503 : 404, 'not_downloadable', INSPIRE_DL_REASON_TR[adReason], { reason: adReason });
+    const text = inspireDlReasonText(adReason, unsupported ? unsupported.name : null);
+    return fail(adReason === 'disabled' ? 503 : unsupported ? 422 : 404, 'not_downloadable', text, { reason: adReason, ...(unsupported ? { unsupported: true } : {}) });
   }
   if (adReason && !lastError) lastError = adReason;
   return fail(lastError ? 502 : 404, 'not_downloadable', `Bu fikrin ${what} buradan indirilemedi.`, lastError ? { reason: String(lastError).slice(0, 40) } : null);
@@ -2427,8 +2555,73 @@ async function cronIg(env, budget) {
   try { await inspireIgScheduled(env, budget); } catch (e) { console.error('inspire ig cron', e && e.stack || e); }
 }
 
-// ── /api/inspire/* router. Every error is JSON {error, message} with CORS headers. ──
+// ── Session gate of /api/inspire/* (board password, worker/fikir-gate.js) ──
+// Open without a session: GET /config (flags only), POST /guest (board password), POST /login (admin / legacy users);
+// the CORS preflight is answered before this. GET /posts/:id/download takes a download ticket (?k=) or a session header.
+// Everything else, unknown paths included, needs a session: a guest token with the current pv, or an admin / registered
+// user token (DELETE /posts/:id also accepts the portfolio admin JWT, as before). No session -> 401 before any D1 work.
+const INSPIRE_OPEN_ROUTES = new Set(['GET /api/inspire/config', 'POST /api/inspire/guest', 'POST /api/inspire/login']);
+const INSPIRE_DOWNLOAD_RE = /^\/api\/inspire\/posts\/(\d{1,15})\/download$/;
+const INSPIRE_UPLOAD_RE = /^\/api\/inspire\/posts\/\d{1,15}\/media\/upload$/;
+// -> 'open' | 'download' | 'session'
+function inspireGateKind(cleanPath, method) {
+  if (INSPIRE_OPEN_ROUTES.has(`${method} ${cleanPath}`)) return 'open';
+  if (method === 'GET' && INSPIRE_DOWNLOAD_RE.test(cleanPath)) return 'download';
+  return 'session';
+}
+// Reads (discards) an upload body of allowed size before a refusal, so the client gets the JSON instead of a reset.
+async function inspireDrain(request) {
+  const declared = Number(request.headers.get('Content-Length'));
+  if (!request.body || !(declared > 0 && declared <= INSPIRE_UP_VIDEO_MB * 1048576)) return;
+  try { const r = request.body.getReader(); for (;;) { const { done } = await r.read(); if (done) break; } } catch (e) {}
+}
 async function handleInspire(request, env, ctx, cleanPath, method, origin) {
+  const kind = inspireGateKind(cleanPath, method);
+  let dlAuth = null;
+  try {
+    if (kind === 'download') {
+      dlAuth = await inspireDlAuth(request, env, Number(INSPIRE_DOWNLOAD_RE.exec(cleanPath)[1]));
+      if (!dlAuth) {
+        return inspireDlAsJson(request)
+          ? json({ error: 'unauthorized', message: INSPIRE_DL_AUTH_TR }, 401, origin)
+          : inspireDlErrorPage(env, 401, INSPIRE_DL_AUTH_TR, null);
+      }
+    } else if (kind === 'session') {
+      let ok = !!(await inspireActor(request, env));
+      // the portfolio admin panel deletes posts with its own JWT (see DELETE /posts/:id)
+      if (!ok && method === 'DELETE' && /^\/api\/inspire\/posts\/\d{1,15}$/.test(cleanPath)) {
+        const siteAdmin = await authMiddleware(request, env);
+        ok = !!(siteAdmin && siteAdmin.role === 'admin');
+      }
+      if (!ok) {
+        if (method === 'POST' && INSPIRE_UPLOAD_RE.test(cleanPath)) await inspireDrain(request);
+        const hadToken = /^Bearer\s+\S/i.test(request.headers.get('Authorization') || '');
+        return hadToken
+          ? json({ error: 'session_expired', message: 'Oturumun sona erdi, şifreyle tekrar gir.' }, 401, origin)
+          : json({ error: 'unauthorized', message: 'Önce giriş yapın' }, 401, origin);
+      }
+    }
+  } catch (e) {
+    console.error('inspire gate', cleanPath, e && e.stack || e);
+    return json({ error: 'server_error', message: 'Sunucu hatası, lütfen tekrar deneyin' }, 500, origin);
+  }
+  const res = await handleInspireRoutes(request, env, ctx, cleanPath, method, origin, dlAuth);
+  // Board files in the JSON (/files/fikir/…, /files/sb/…) get the files token (?t=) that /files asks for.
+  if (kind === 'session' && filesGateOn(env) && /^application\/json/i.test(res.headers.get('Content-Type') || '')) {
+    try {
+      const text = await res.text();
+      const token = text.includes('"/files/') ? await filesToken(env) : null;
+      return new Response(signFilesJson(text, token), { status: res.status, statusText: res.statusText, headers: res.headers });
+    } catch (e) {
+      console.error('inspire files sign', cleanPath, e && e.stack || e);
+      return json({ error: 'server_error', message: 'Sunucu hatası, lütfen tekrar deneyin' }, 500, origin);
+    }
+  }
+  return res;
+}
+
+// ── /api/inspire/* routes. Every error is JSON {error, message} with CORS headers. ──
+async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin, dlAuth) {
   const fail = (status, error, message, extra) => json({ error, message, ...(extra || {}) }, status, origin);
   const limited = () => fail(429, 'rate_limited', 'Çok fazla istek. Biraz bekleyip tekrar dene.');
   inspireTestHooks(env);
@@ -2461,12 +2654,17 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       return json({ ok: true }, 200, origin);
     }
 
-    // Feature flags / limits. `storyboard` = the storyboard creation UI may be shown to this caller;
-    // `sb` carries the limits and (with a session) today's remaining quota. Auth is optional here and an
-    // invalid token is ignored (never 401). Clients without "X-Fikir-Client: 2" get the Phase A answer (no `sb`).
+    // Feature flags / limits (no board content: open without a session). `storyboard` = the storyboard creation UI may be
+    // shown to this caller; `sb` carries the limits and (with a session) today's remaining quota. Auth is optional here and
+    // an invalid token is ignored (never 401). Clients without "X-Fikir-Client: 2" get the Phase A answer (no `sb`).
+    // gate: true = the board needs the board password (POST /guest); locked: the secret is missing (nobody but the admin
+    // can enter); session: what the sent token is worth now ('none' | 'expired' | 'guest' | 'user' | 'admin').
     if (cleanPath === '/api/inspire/config' && method === 'GET') {
-      if (!sbClient) return json({ storyboard: false, max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT }, 200, origin);
+      const gate = { gate: true, locked: boardLocked(env) };
+      if (!sbClient) return json({ storyboard: false, max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT, ...gate }, 200, origin);
       const actor = await inspireActor(request, env);
+      const hadToken = /^Bearer\s+\S/i.test(request.headers.get('Authorization') || '');
+      const session = actor ? (actor.isAdmin ? 'admin' : actor.guest ? 'guest' : 'user') : hadToken ? 'expired' : 'none';
       const sb = sbReady ? await sbHook('config', () => sbConfigPayload(env, db, actor), null) : null;
       const vcfg = inspireVideoConfig(env);
       const media = {
@@ -2474,19 +2672,47 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
         types: INSPIRE_UP_TYPES,
         download: vcfg.dl, ig_copy: vcfg.igCopy && !!actor, ig_auto: vcfg.igAuto,   // GET /posts/:id/download, POST /posts/:id/ig-copy
       };
-      return json({ storyboard: !!(sb && sb.can_create), max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT, sb, media }, 200, origin);
+      return json({ storyboard: !!(sb && sb.can_create), max_note_len: INSPIRE_MAX_NOTE, max_text_len: INSPIRE_MAX_TEXT, sb, media, ...gate, session }, 200, origin);
     }
 
-    // Guest session: a name (or nothing = Anonim) + a client-generated id. No password.
+    // Guest session: the board password + a client-generated id (+ a display name; nothing = Anonim). The name is only a
+    // display name, never a username. Same cid = same guest (the device code restore sends a cid from another device and
+    // needs the password too). The password: constant-time compare against FIKIR_BOARD_PASSWORD; secret missing -> 503
+    // board_locked (never open); wrong -> 401 bad_password, counted per IP (8 / 15 min), per network (40 / 15 min) and
+    // site-wide (300 / hour), then 429 too_many_attempts; limiter unavailable -> 503 login_unavailable (nothing compared).
     if (cleanPath === '/api/inspire/guest' && method === 'POST') {
       const d = await inspireBody(request);
       if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
       const cid = typeof d.cid === 'string' ? d.cid : '';
       if (!INSPIRE_CID_RE.test(cid)) return fail(400, 'invalid_cid', 'Geçersiz istemci kimliği');
+      if (boardLocked(env)) return fail(503, 'board_locked', 'Pano şu anda kilitli; şifreyle giriş kapalı. Daha sonra tekrar dene.');
+      const ipKey = await inspireIpKey(request);
+      // Counted BEFORE the compare (inspireBoardPwLimit: per IP, per network, site-wide; fails closed); a right (or empty)
+      // password gives its counts back, so only wrong ones add up.
+      const lim = await inspireBoardPwLimit(db, request, ipKey, fail);
+      if (lim.res) return lim.res;
+      const pw = await checkBoardPassword(env, d.password);
+      if (pw !== 'bad') await inspireRateGiveBack(db, lim.counted, pw === 'ok' ? ipKey : null);
+      if (pw === 'missing') return fail(400, 'password_required', 'Giriş şifresini yaz.');
+      if (pw !== 'ok') return fail(401, 'bad_password', 'Şifre yanlış.', { attempts_left: lim.left });
+      const name = cleanInspireName(d.name);
+      if (inspireReservedName(name)) return fail(400, 'reserved_name', 'Bu isim kullanılamaz, lütfen başka bir isim seç');
+      if (await inspireOverLimit(db, [['guest', ipKey]])) return limited();
+      const token = await signInspireJWT({ g: 1, cid, name, pv: await boardPv(env) }, env.JWT_SECRET, INSPIRE_GUEST_TTL_S);
+      return json({ token, user: { guest: true, name, display_name: name || 'Anonim', is_admin: false } }, 200, origin);
+    }
+
+    // "İsmi değiştir": a new guest token with the same cid and pv, without the password (a valid guest session only;
+    // the session gate above already refused anything else). {name} -> same answer as POST /guest.
+    if (cleanPath === '/api/inspire/guest/rename' && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor || !actor.guest) return fail(403, 'not_guest', 'Yalnızca misafir oturumunun ismi buradan değiştirilir');
+      const d = await inspireBody(request);
+      if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
       const name = cleanInspireName(d.name);
       if (inspireReservedName(name)) return fail(400, 'reserved_name', 'Bu isim kullanılamaz, lütfen başka bir isim seç');
       if (await inspireOverLimit(db, [['guest', await inspireIpKey(request)]])) return limited();
-      const token = await signInspireJWT({ g: 1, cid, name }, env.JWT_SECRET || 'secret', INSPIRE_GUEST_TTL_S);
+      const token = await signInspireJWT({ g: 1, cid: actor.cid, name, pv: await boardPv(env) }, env.JWT_SECRET, INSPIRE_GUEST_TTL_S);
       return json({ token, user: { guest: true, name, display_name: name || 'Anonim', is_admin: false } }, 200, origin);
     }
 
@@ -2543,7 +2769,7 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
     // Board: newest first, INSPIRE_PAGE_SIZE per request (?before=<id>; X-Fikir-Next = next cursor).
     // Private notes only reach their author (filtered in SQL).
     if (cleanPath === '/api/inspire/posts' && method === 'GET') {
-      const actor = await inspireActor(request, env);   // optional
+      const actor = await inspireActor(request, env);   // the session gate already required one
       const [cid, uid] = inspireOwnerParams(actor);
       const q = new URL(request.url).searchParams;
       const limit = Math.min(INSPIRE_PAGE_SIZE, Math.max(1, parseInt(q.get('limit'), 10) || INSPIRE_PAGE_SIZE));
@@ -2811,24 +3037,26 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
       return json({ post: inspirePostOut(after, actor.isAdmin, []) }, 200, origin);
     }
 
-    // Download the post's own video / image as a file (opened as a link: no session; rate-limited per IP + per day).
-    // ?part=video|image|auto (default auto). Failure: a small Turkish HTML page (JSON with Accept: application/json or
-    // ?format=json) that links the source.
+    // Download the post's own video / image as a file (opened as a link without the session header: the ticket ?k= from
+    // download-info, checked by the session gate; rate-limited per IP + per day). ?part=video|image|auto (default auto).
+    // Failure: a small Turkish HTML page (JSON with Accept: application/json or ?format=json) that links the source.
     if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/download$/)) && method === 'GET') {
-      return await inspireDownload(request, env, ctx, db, Number(m[1]), { selfHost, origin });
+      return await inspireDownload(request, env, ctx, db, Number(m[1]), { selfHost, origin, auth: dlAuth });
     }
     // What a download would give, without fetching anything (cached resolutions only):
-    // {id, platform, source, enabled, video, image, from, adapter, reason, message, copied, embed, url}
-    // url: the download link to open; with the admin's session it carries a 15-minute ticket (?k=) that skips the
-    // site-wide daily download budget (inspireDlTicket), so the response is then never cached.
+    // {id, platform, source, enabled, video, image, from, adapter, reason, message, unsupported, copied, embed, url}
+    // url: the download link to open, with this session's 15-minute ticket (?k=, worker/fikir-gate.js dlTicket; the
+    // admin's also skips the site-wide daily download budget), so the response is never cached.
+    // unsupported: true = YouTube / Vimeo (video false, reason not_supported / drm, message = why): the board shows the
+    // message and offers the thumbnail (part=image) as a separate action instead of downloading it in the video's place.
     if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/download-info$/)) && method === 'GET') {
       if (await inspireOverLimit(db, [['dl_info_ip', await inspireIpKey(request)]])) return limited();
       const id = Number(m[1]);
       const row = await db.prepare('SELECT id, type, url, media, meta FROM inspire_posts WHERE id=?').bind(id).first();
       if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
       const cfgV = inspireVideoConfig(env);
-      const actor = request.headers.get('Authorization') ? await inspireActor(request, env) : null;
-      const ticket = actor && actor.isAdmin ? await inspireDlTicket(env, id) : null;
+      const actor = await inspireActor(request, env);   // the session gate already required one
+      const ticket = await dlTicket(env, id, actor && actor.isAdmin ? 'a' : 'g');
       const parsed = row.url ? parseLink(row.url) : null;
       const media = inspireMediaOut(row.media), meta = inspireMetaOut(row.meta);
       const hint = dlHint({ type: row.type, parsed, media, meta });
@@ -2865,15 +3093,19 @@ async function handleInspire(request, env, ctx, cleanPath, method, origin) {
         from = meta && meta.media ? 'link' : parsed && (parsed.platform === 'video' || parsed.platform === 'image') ? 'direct'
           : ad && image ? 'adapter' : meta && meta.image ? 'link' : null;
       }
+      // YouTube / Vimeo without a video from elsewhere: never downloadable here (the download refuses auto / video with 422)
+      const unsupported = !otherVideo ? inspireDlUnsupported(parsed) : null;
+      if (unsupported) { video = false; reason = unsupported.reason; }
       if (video === true) reason = null;   // another source gives the video
       const res = json({
         id, platform: parsed ? parsed.platform : row.type, source: parsed && inspireHostOk(parsed.canonical) ? parsed.canonical : null,
         enabled: cfgV.dl, video, image, from, adapter: ad ? ad.name : null, reason: reason || null,
-        message: reason && INSPIRE_DL_REASON_TR[reason] ? INSPIRE_DL_REASON_TR[reason] : null,
+        message: reason ? inspireDlReasonText(reason, unsupported ? unsupported.name : null) : null,
+        unsupported: !!unsupported,
         copied: !!(media && media.source === 'instagram'), embed,
         url: `/api/inspire/posts/${id}/download` + (ticket ? '?k=' + ticket : ''),
       }, 200, origin);
-      res.headers.set('Cache-Control', ticket ? 'private, no-store' : 'private, max-age=60');
+      res.headers.set('Cache-Control', 'private, no-store');
       res.headers.set('Vary', 'Authorization');
       return res;
     }
@@ -3173,11 +3405,22 @@ export default {
     // === PUBLIC: Dosya serve ===
     // R2 objects, Range-capable (video seeking). fikir/ keys (Fikir Havuzu uploads) must match the server-generated
     // pattern and are served sandboxed (CSP sandbox, nosniff, inline) so an uploaded file can never run as a page.
+    // Board files (fikir/* uploads + Instagram copies, sb/* storyboard frames) also need the files token ?t= that the
+    // inspire API appends to their paths for a session (worker/fikir-gate.js; FIKIR_FILES_GATE="0" turns this off);
+    // without a valid one -> 403, before R2 is touched. Every other key (portfolio, UI library) stays public as before.
     if (path.startsWith('/files/')) {
       try {
         const key = path.replace('/files/', '');
         const isFikir = key.startsWith('fikir/');
         if (isFikir && !FILES_KEY_RE.test(key)) return new Response('Not Found', { status: 404 });
+        const gated = FILES_GATED_RE.test(key) && filesGateOn(env);
+        const ttl = gated ? await filesTokenTtl(env, url.searchParams.get('t')) : 0;
+        if (gated && !ttl) {
+          return new Response('Bu dosyanın bağlantısının süresi doldu; Fikir Havuzu’nu yenile.', { status: 403, headers: {
+            'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+            'Access-Control-Allow-Origin': '*', 'Cross-Origin-Resource-Policy': 'cross-origin',
+          } });
+        }
         const rangeHeader = request.headers.get('Range');
         const range = rangeHeader ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim()) : null;
         const head = range ? await env.STORAGE.head(key) : null;
@@ -3198,6 +3441,8 @@ export default {
             h.set('Cross-Origin-Resource-Policy', 'cross-origin');
             h.set('Cache-Control', 'public, max-age=31536000, immutable');
           }
+          // a gated file is cached by the browser only (private) and never past its token
+          if (gated) h.set('Cache-Control', `private, max-age=${Math.min(ttl, 86400)}, immutable`);
           return h;
         };
         if (range && head.size > 0 && (range[1] !== '' || range[2] !== '')) {

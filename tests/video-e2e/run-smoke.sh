@@ -4,12 +4,14 @@
 # Local worker (wrangler dev --local with worker/wrangler.toml, fresh state) + tests/media-e2e/fixture-server.mjs, then
 # video-smoke.mjs. Test-only values (127.0.0.1 ALLOWED_ORIGIN, fetch allow for the fixture server, Browser Run off,
 # storyboards off) are passed with --var; nothing is edited. State + logs in $VIDEO_E2E_OUT (default $TMPDIR/fikir-video-e2e).
+# Board password: a TEST value (FIKIR_E2E_BOARD_PASSWORD, default test-board-pass) passed with --var and to the smoke.
 # Ports: worker 8841, fixture server 4741 (VIDEO_E2E_PORT / VIDEO_E2E_FXPORT). Never 8765.
 R="${0:A:h:h:h}"
 HERE="${0:A:h}"
 OUT="${VIDEO_E2E_OUT:-${TMPDIR:-/tmp}/fikir-video-e2e}"
 PORT="${VIDEO_E2E_PORT:-8841}"
 FXPORT="${VIDEO_E2E_FXPORT:-4741}"
+export FIKIR_E2E_BOARD_PASSWORD="${FIKIR_E2E_BOARD_PASSWORD:-test-board-pass}"
 [[ "$PORT" == 8765 || "$FXPORT" == 8765 ]] && { echo "never 8765"; exit 1; }
 for p in $PORT $FXPORT; do if lsof -nP -iTCP:$p -sTCP:LISTEN >/dev/null; then echo "port $p busy"; exit 1; fi; done
 STATE="$OUT/state"; rm -rf "$STATE"; mkdir -p "$STATE" "$OUT/logs"
@@ -21,6 +23,7 @@ npx -y wrangler@4 dev -c wrangler.toml --local --ip 127.0.0.1 --port $PORT --per
   --show-interactive-dev-session=false \
   --var ALLOWED_ORIGIN:http://127.0.0.1:$FXPORT --var INSPIRE_TEST_FETCH_ALLOW:127.0.0.1:$FXPORT \
   --var FIKIR_BR:0 --var SB_ENABLED:0 --var FIKIR_IG_AUTO:blocked --var FIKIR_IG_CRON_CHECKS:0 \
+  --var FIKIR_BOARD_PASSWORD:$FIKIR_E2E_BOARD_PASSWORD \
   > "$OUT/logs/worker.log" 2>&1 &
 WPID=$!
 for i in {1..90}; do grep -q "Ready on" "$OUT/logs/worker.log" && break; sleep 1; done

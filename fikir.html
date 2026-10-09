@@ -163,6 +163,8 @@
     }
     @media (hover: hover) { .link-btn:hover { text-decoration: underline; } }
     .auth-hint { margin-top: 18px; font-size: 12px; color: var(--dim); line-height: 1.5; }
+    .auth-hint p { margin: 0; }
+    .auth-hint p + p { margin-top: 6px; }
     .auth-error { color: #ff6b6b; font-size: 13px; margin-top: 12px; }
     .auth-notice {
       color: #ffd27a; font-size: 13px; margin: -12px 0 18px; padding: 8px 10px;
@@ -172,6 +174,23 @@
     .admin-toggle { background: none; border: 0; color: var(--dim); font-size: 12px; cursor: pointer; padding: 4px; }
     @media (hover: hover) { .admin-toggle:hover { color: #aaa; } }
     #admin-form { margin-top: 14px; }
+    /* Password field with a show / hide toggle (board password, admin password) */
+    .pass-field { position: relative; margin-bottom: 15px; }
+    .pass-field .auth-input { margin-bottom: 0; padding-right: 50px; }
+    .pass-toggle {
+      position: absolute; top: 0; right: 0; height: 100%; width: 48px; display: flex; align-items: center; justify-content: center;
+      background: none; border: 0; border-radius: 0 12px 12px 0; color: var(--muted); cursor: pointer; padding: 0;
+    }
+    .pass-toggle svg { width: 20px; height: 20px; }
+    .pass-toggle[aria-pressed="true"] { color: var(--accent); }
+    @media (hover: hover) { .pass-toggle:hover { color: #ddd; } }
+    .auth-input.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; letter-spacing: 0.02em; }
+    .auth-input.invalid { border-color: rgba(255, 90, 90, 0.6); }
+    #restore-box { text-align: left; }
+    .entry-prefill {
+      margin: -12px 0 18px; padding: 8px 10px; border-radius: 8px; font-size: 13px; text-align: left;
+      background: rgba(0, 229, 255, 0.08); border: 1px solid rgba(0, 229, 255, 0.3); color: #bff6ff;
+    }
 
     /* ---------- Dashboard ---------- */
     #dashboard {
@@ -634,6 +653,14 @@
     .toast.error { border-left-color: var(--danger); }
     .toast.ok { border-left-color: var(--ok); }
     .toast.out { opacity: 0; transform: translateY(6px); transition: opacity 0.2s, transform 0.2s; }
+    /* a toast with one action button (e.g. "Kapak görselini indir" when a video cannot be downloaded) */
+    .toast.has-action { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+    .toast.has-action .toast-msg { flex: 1 1 200px; min-width: 0; }
+    .toast-action {
+      flex: none; margin-left: auto; background: var(--accent); color: #000; border: 0; border-radius: 8px; padding: 7px 12px;
+      font: inherit; font-size: 13px; font-weight: 700; line-height: 1.2; cursor: pointer; white-space: nowrap;
+    }
+    @media (hover: hover) { .toast-action:hover { background: var(--accent-hover); } }
     @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
     /* "N yeni fikir" pill: posts that arrive by refresh while the user reads further down */
@@ -651,7 +678,6 @@
     .device-code { display: flex; gap: 8px; align-items: stretch; margin-bottom: 8px; }
     .device-code .modal-input { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; letter-spacing: 0.02em; }
     .field-label { display: block; font-size: 12px; color: #aaa; margin: 4px 0 6px; text-align: left; }
-    #restore-form { margin-top: 12px; }
 
     /* ---------- Small screens ---------- */
     @media (max-width: 600px) {
@@ -673,6 +699,7 @@
       .pv-btn:not(.pv-play) { width: 40px; height: 40px; }
       .pv-chip { min-height: 40px; padding: 8px 14px; }
       .dl-btn { min-height: 40px; padding: 6px 15px 6px 13px; font-size: 13px; }
+      .toast-action { min-height: 40px; }
       .ig-open { padding: 11px 0; margin: -11px 0; }
       .text-btn { position: relative; min-width: 40px; }   /* a short label ("Sil") still gets a 40px wide box */
       .text-btn::after { content: ''; position: absolute; inset: -12px -8px; }
@@ -689,34 +716,50 @@
   <noscript><div class="boot-error">Fikir Havuzu için JavaScript gerekli.</div></noscript>
   <div id="boot-error" class="boot-error" role="alert" hidden>Sayfa yüklenemedi. Lütfen sayfayı yenile.</div>
 
-  <!-- Entry screen: name or anonymous; password only for the owner -->
+  <!-- Entry screen: one board password for everyone; the name (optional, empty = Anonim) is only shown next to posts.
+       The owner's admin login is separate. The password is never stored: only the session token is. -->
   <main id="entry-screen" hidden>
     <div class="auth-box">
       <h1>Fikir Havuzu</h1>
       <p class="auth-sub">İlham veren içerikleri keşfet ve paylaş.</p>
       <div id="entry-notice" class="auth-notice" role="status" hidden></div>
+      <div id="entry-prefill" class="entry-prefill" role="status" hidden>Yer imi aracından gelen link hazır: giriş yapınca ekleme penceresi açılacak.</div>
 
       <form id="guest-form" novalidate>
-        <label class="sr-only" for="guest-name">Adın</label>
-        <input type="text" id="guest-name" class="auth-input" placeholder="Adın (isteğe bağlı)" maxlength="40" autocomplete="nickname" enterkeyhint="go">
+        <label class="sr-only" for="guest-name">Adın (isteğe bağlı)</label>
+        <input type="text" id="guest-name" class="auth-input" placeholder="Adın (isteğe bağlı)" maxlength="40" autocomplete="nickname" enterkeyhint="next">
+        <label class="sr-only" for="guest-pass">Şifre</label>
+        <div class="pass-field">
+          <input type="password" id="guest-pass" class="auth-input" placeholder="Şifre" maxlength="200" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-describedby="guest-error">
+          <button type="button" class="pass-toggle" data-pass-toggle="guest-pass" aria-controls="guest-pass" aria-pressed="false" aria-label="Şifreyi göster">
+            <svg data-eye="show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg data-eye="hide" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.9 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>
+          </button>
+        </div>
+        <div id="restore-box" hidden>
+          <label class="field-label" for="restore-code">Daha önce kaydettiğin cihaz kodu</label>
+          <input type="text" id="restore-code" class="auth-input mono" placeholder="Cihaz kodu" maxlength="64" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        </div>
         <button type="submit" class="auth-btn" id="guest-btn">Giriş</button>
-        <button type="button" class="link-btn" id="anon-btn">İsimsiz devam et</button>
         <div id="guest-error" class="auth-error" role="alert" hidden></div>
       </form>
-      <div class="auth-hint">Şifre gerekmez. Paylaşımların bu tarayıcıya bağlı kalır; silme hakkın ve özel notların buradan geçerlidir. Tarayıcı verileri silinirse (Safari bir haftadan uzun girilmeyen sitelerinkini silebilir) bu bağ kopar: "İsmi değiştir" ekranındaki cihaz kodunu sakla.</div>
-      <button type="button" class="link-btn" id="restore-toggle" aria-expanded="false" aria-controls="restore-form">Cihaz kodum var</button>
-      <form id="restore-form" novalidate hidden>
-        <label class="field-label" for="restore-code">Daha önce kaydettiğin cihaz kodu</label>
-        <input type="text" id="restore-code" class="auth-input" placeholder="Cihaz kodu" maxlength="64" autocomplete="off" autocapitalize="off" spellcheck="false">
-        <button type="submit" class="auth-btn outline" id="restore-btn">Kodla devam et</button>
-        <div id="restore-error" class="auth-error" role="alert" hidden></div>
-      </form>
+      <div class="auth-hint">
+        <p>İsim yalnızca paylaşımlarının yanında görünür, kullanıcı adı değildir; isimsiz girmek için boş bırak. Şifreyi panoyu seninle paylaşan kişiden alabilirsin.</p>
+        <p>Paylaşımların bu tarayıcıya bağlı kalır; tarayıcı verileri silinirse (Safari bir haftadan uzun girilmeyen sitelerinkini silebilir) "İsmi değiştir" ekranındaki cihaz kodunla geri alırsın.</p>
+      </div>
+      <button type="button" class="link-btn" id="restore-toggle" aria-expanded="false" aria-controls="restore-box">Cihaz kodum var</button>
 
       <div class="admin-sep">
         <button type="button" class="admin-toggle" id="admin-toggle" aria-expanded="false" aria-controls="admin-form">Yönetici girişi</button>
         <form id="admin-form" novalidate hidden>
           <input type="text" id="admin-user" class="auth-input" placeholder="Kullanıcı adı" autocomplete="username" autocapitalize="off" spellcheck="false" aria-label="Kullanıcı adı">
-          <input type="password" id="admin-pass" class="auth-input" placeholder="Şifre" autocomplete="current-password" aria-label="Şifre">
+          <div class="pass-field">
+            <input type="password" id="admin-pass" class="auth-input" placeholder="Şifre" autocomplete="current-password" aria-label="Şifre">
+            <button type="button" class="pass-toggle" data-pass-toggle="admin-pass" aria-controls="admin-pass" aria-pressed="false" aria-label="Şifreyi göster">
+              <svg data-eye="show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg data-eye="hide" hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.9 3.9"/><path d="M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>
+            </button>
+          </div>
           <button type="submit" class="auth-btn outline" id="admin-btn">Yönetici olarak giriş yap</button>
           <div id="admin-error" class="auth-error" role="alert" hidden></div>
         </form>
@@ -808,7 +851,7 @@
         <input type="text" id="cid-code" class="modal-input" readonly autocomplete="off" spellcheck="false" translate="no">
         <button type="button" class="btn btn-outline btn-sm" id="cid-copy">Kopyala</button>
       </div>
-      <p class="modal-note">Bu kodu güvenli bir yere kaydet ve kimseyle paylaşma: kodu bilen, paylaşımlarını silebilir ve özel notlarını görebilir. Tarayıcı verilerin silinirse giriş ekranındaki "Cihaz kodum var" ile paylaşımlarına yeniden sahip olursun.</p>
+      <p class="modal-note">Bu kodu güvenli bir yere kaydet ve kimseyle paylaşma: kodu bilen, paylaşımlarını silebilir ve özel notlarını görebilir. Tarayıcı verilerin silinirse giriş ekranındaki "Cihaz kodum var" ile (pano şifresiyle birlikte) paylaşımlarına yeniden sahip olursun.</p>
     </div>
   </div>
 
@@ -944,7 +987,7 @@
     // `video` = downloads / Instagram copies (config.media.download, ig_copy, ig_auto). Both default to on (the server's
     // defaults), so cards built before the config arrives do not change height when it does; "off" hides "İndir" /
     // "Oynamıyor mu?" again. ig_copy is taken only from a config loaded with the session (without one it is always false).
-    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null, media: null, video: videoDefaults() };
+    const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null, media: null, video: videoDefaults(), locked: false };
     function videoDefaults() { return { download: true, ig_copy: true, ig_auto: 'off' }; }
     const SB_MODULE = '/assets/js/fikir-storyboard.mjs?v=20261008';
     window.fikirConfig = config;
@@ -1095,9 +1138,9 @@
 
     /* Media object (meta.media found by the server, or post.media attached by hand):
        { kind: video|image|hls|player, url, poster?, small?, w?, h?, autoplay?, play_at_source?, source? }.
-       '/files/…' URLs are uploads served by the API worker. */
+       '/files/…' URLs are uploads served by the API worker (they may carry a signed query, e.g. ?t=…, kept as is). */
     const MEDIA_KINDS = new Set(['video', 'image', 'hls', 'player']);
-    const FILES_PATH_RE = /^\/files\/fikir\/\d{1,15}\/[vip]-[0-9a-f]{32}\.(?:mp4|webm|mov|jpg|png|webp|gif)$/;
+    const FILES_PATH_RE = /^\/files\/fikir\/\d{1,15}\/[vip]-[0-9a-f]{32}\.(?:mp4|webm|mov|jpg|png|webp|gif)(?:\?[A-Za-z0-9._~=&%-]{1,600})?$/;
     function dimOk(v) {
       const n = Number(v);
       return Number.isInteger(n) && n >= 1 && n <= 10000 ? n : null;
@@ -1200,13 +1243,29 @@
     }
 
     /* ------------------------------------------------------------------ toasts */
-    function toast(message, kind = 'info', ms = 3600) {
-      const el = h('div', { class: 'toast ' + kind, role: kind === 'error' ? 'alert' : 'status' }, message);
-      $('toasts').append(el);
-      setTimeout(() => {
+    // action: { label, run } adds one button (the toast closes, then run() is called); the timer pauses while the
+    // pointer is over such a toast. Returns a function that closes the toast early.
+    function toast(message, kind = 'info', ms = 3600, action = null) {
+      const withAction = !!(action && action.label && typeof action.run === 'function');
+      const el = h('div', { class: 'toast ' + kind + (withAction ? ' has-action' : ''), role: kind === 'error' ? 'alert' : 'status' },
+        withAction ? h('span', { class: 'toast-msg' }, message) : message);
+      let timer = 0;
+      const close = () => {
+        clearTimeout(timer);
+        if (el.classList.contains('out')) return;
         el.classList.add('out');
         setTimeout(() => el.remove(), 250);
-      }, ms);
+      };
+      if (withAction) {
+        const b = h('button', { type: 'button', class: 'toast-action' }, action.label);
+        b.addEventListener('click', () => { close(); action.run(); });
+        el.append(b);
+        el.addEventListener('pointerenter', () => clearTimeout(timer));
+        el.addEventListener('pointerleave', () => { if (!el.classList.contains('out')) { clearTimeout(timer); timer = setTimeout(close, 4000); } });
+      }
+      $('toasts').append(el);
+      timer = setTimeout(close, ms);
+      return close;
     }
 
     /* ------------------------------------------------------------------ modals */
@@ -1335,11 +1394,17 @@
     }
 
     async function loadConfig() {
+      let expired = false;
       try {
-        // With a session the server adds today's remaining storyboard quota; it never answers 401 here.
+        // With a session the server adds today's remaining storyboard quota; it never answers 401 here, but says what the
+        // sent token is worth (session: 'expired' = refused, e.g. the board password changed) and whether the board is
+        // locked (no board password set on the server: only the admin can enter).
         const authed = !!session.token;
+        const tokenAtStart = session.token;
         const c = await api('GET', '/api/inspire/config', null, { auth: authed });
         if (c && typeof c === 'object') {
+          expired = c.session === 'expired' && !!tokenAtStart && tokenAtStart === session.token;
+          config.locked = c.locked === true;
           if (typeof c.storyboard === 'boolean') config.storyboard = c.storyboard;
           config.sb = c.sb && typeof c.sb === 'object' ? c.sb : null;
           config.media = normMediaConfig(c.media);
@@ -1364,6 +1429,8 @@
       for (const e of posts.values()) refreshCardActions(e);   // "İndir" / "Oynamıyor mu?" follow the flags
       if (sbUI) sbUI.configChanged();
       else if (config.storyboard) ensureStoryboardUI();
+      if (expired) handleUnauthorized();
+      else if (!$('entry-screen').hidden) updateEntryLocked();
     }
 
     /* AI storyboards: /assets/js/fikir-storyboard.mjs is loaded only when creation is allowed
@@ -1451,45 +1518,117 @@
       store.del(LS.user);
     }
 
-    async function guestLogin(rawName, btn, err = $('guest-error')) {
-      const name = cleanName(rawName);
-      err.hidden = true;
+    /* Board login: POST /api/inspire/guest {name, cid, password}. The password is the one shared board password (also
+       for anonymous entry); the name is only a display name. The password is read from the field, sent once and
+       cleared; it is never stored (only the token is). Errors: 401 bad_password, 429 too_many_attempts {retry_s} (too
+       many wrong passwords from this IP / network / the whole site), 503 board_locked (the board password is not set on
+       the server) or login_unavailable (the attempt counter is down: nothing was checked).
+       With "Cihaz kodum var" open, the device code is the guest client id: entering it in a new or wiped browser
+       (Safari deletes site storage after ~7 days without a visit) gives back ownership of earlier posts and notes. */
+    const entryLock = { until: 0 };   // after a 429: no request before this time (the server would refuse it anyway)
+    function entryError(text, field) {
+      const err = $('guest-error');
+      err.textContent = text;
+      err.hidden = false;
+      for (const id of ['guest-name', 'guest-pass', 'restore-code']) $(id).classList.toggle('invalid', field === id);
+      if (field) {
+        const el = $(field);
+        el.focus({ preventScroll: true });
+        if (field === 'guest-pass' && el.value) el.select();
+      }
+    }
+    function clearEntryError() {
+      $('guest-error').hidden = true;
+      for (const id of ['guest-name', 'guest-pass', 'restore-code']) $(id).classList.remove('invalid');
+    }
+    const waitText = (s) => `${Math.max(1, Math.ceil(s / 60))} dk`;
+    const LOCKED_TEXT = 'Pano şu an kilitli: giriş geçici olarak kapalı. Daha sonra tekrar dene.';
+    function guestLoginError(e) {
+      if (e && e.status === 401) {
+        const left = e.data && typeof e.data === 'object' ? e.data.attempts_left : null;
+        const tail = !Number.isInteger(left) || left > 3 ? 'Tekrar dene.'
+          : left > 0 ? `${left} deneme hakkın kaldı.` : 'Deneme hakkın doldu; bir süre sonra tekrar dene.';
+        return { text: `Şifre yanlış. ${tail}`, field: 'guest-pass' };
+      }
+      if (e && e.code === 'reserved_name') return { text: e.message || 'Bu isim kullanılamaz.', field: 'guest-name' };
+      if (e && e.status === 429) {
+        const d = e.data && typeof e.data === 'object' ? e.data : {};
+        const s = Number(d.retry_s != null ? d.retry_s : d.retry_after);
+        if (s > 0) entryLock.until = Date.now() + Math.min(s, 86400) * 1000;
+        return { text: s > 0 ? `Çok fazla deneme yapıldı. ${waitText(s)} sonra tekrar dene.` : 'Çok fazla deneme yapıldı. Biraz bekleyip tekrar dene.' };
+      }
+      if (e && e.code === 'board_locked') return { text: LOCKED_TEXT };
+      if (e && e.status === 503) return { text: (e.code && e.message) || 'Giriş şu anda doğrulanamıyor. Biraz sonra tekrar dene.' };
+      return { text: (e && e.message) || 'Giriş yapılamadı.' };
+    }
+
+    async function guestLogin() {
+      clearEntryError();
+      const name = cleanName($('guest-name').value);
+      const pass = $('guest-pass').value;
+      const restoring = !$('restore-box').hidden;
+      const code = restoring ? $('restore-code').value.trim() : '';
+      if (!pass) { entryError('Şifreyi yaz.', 'guest-pass'); return; }
+      if (restoring && !CID_RE.test(code)) {
+        entryError(code ? 'Geçersiz cihaz kodu.' : 'Cihaz kodunu yaz ya da "Cihaz kodum var"ı kapat.', 'restore-code');
+        return;
+      }
+      if (Date.now() < entryLock.until) {
+        entryError(`Çok fazla deneme yapıldı. ${waitText((entryLock.until - Date.now()) / 1000)} sonra tekrar dene.`);
+        return;
+      }
+      const cid = restoring ? code : session.cid;
+      const btn = $('guest-btn');
       setBusy(btn, true);
       try {
-        const r = await api('POST', '/api/inspire/guest', { name, cid: session.cid }, { auth: false });
+        const r = await api('POST', '/api/inspire/guest', { name, cid, password: pass }, { auth: false });
         if (!r || typeof r.token !== 'string') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        if (restoring) {
+          session.cid = code;
+          store.set(LS.cid, code);
+          $('restore-code').value = '';
+          setRestoreOpen(false);
+        }
+        resetPassField($('guest-pass'));
+        entryLock.until = 0;
         setSession(r.token, normalizeUser(r.user, { guest: true, name }));
         store.set(LS.name, name);
         showBoard();
         return true;
       } catch (e) {
-        err.textContent = e.message || 'Giriş yapılamadı.';
-        err.hidden = false;
+        const { text, field } = guestLoginError(e);
+        entryError(text, field);
         return false;
       } finally {
         setBusy(btn, false);
       }
     }
-
-    // The device code is the guest client id. Entering it in a new or wiped browser (Safari deletes
-    // site storage after ~7 days without a visit) gives back ownership of earlier posts and private notes.
-    async function restoreWithCode() {
-      const code = $('restore-code').value.trim();
-      const err = $('restore-error');
-      err.hidden = true;
-      if (!CID_RE.test(code)) {
-        err.textContent = 'Geçersiz cihaz kodu.';
-        err.hidden = false;
-        return;
-      }
-      const prev = session.cid;
-      session.cid = code;
-      if (await guestLogin($('guest-name').value, $('restore-btn'), err)) {
-        store.set(LS.cid, code);
-        $('restore-code').value = '';
-      } else {
-        session.cid = prev;
-      }
+    function setRestoreOpen(open) {
+      $('restore-box').hidden = !open;
+      const t = $('restore-toggle');
+      t.setAttribute('aria-expanded', String(open));
+      t.textContent = open ? 'Cihaz kodu olmadan devam et' : 'Cihaz kodum var';
+      if (!open) $('restore-code').classList.remove('invalid');
+    }
+    // Show / hide toggle of a password field ([data-pass-toggle] = the input's id)
+    function setPassVisible(input, show) {
+      input.type = show ? 'text' : 'password';
+      const btn = document.querySelector(`[data-pass-toggle="${input.id}"]`);
+      if (!btn) return;
+      btn.setAttribute('aria-pressed', String(show));
+      btn.setAttribute('aria-label', show ? 'Şifreyi gizle' : 'Şifreyi göster');
+      for (const svg of btn.querySelectorAll('svg[data-eye]')) svg.hidden = (svg.dataset.eye === 'show') === show;
+    }
+    function togglePass(btn) {
+      const input = $(btn.dataset.passToggle);
+      if (!input) return;
+      setPassVisible(input, input.type === 'password');
+      input.focus({ preventScroll: true });
+    }
+    function resetPassField(input) {
+      input.value = '';
+      setPassVisible(input, false);
+      input.classList.remove('invalid');
     }
     async function copyCid() {
       const input = $('cid-code');
@@ -1519,7 +1658,7 @@
         const r = await api('POST', '/api/inspire/login', { username, password }, { auth: false });
         if (!r || typeof r.token !== 'string') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
         setSession(r.token, normalizeUser(r.user, { guest: false }));
-        $('admin-pass').value = '';
+        resetPassField($('admin-pass'));
         showBoard();
       } catch (e) {
         err.textContent = e.status === 401 ? 'Hatalı kullanıcı adı veya şifre.' : (e.message || 'Giriş yapılamadı.');
@@ -1529,21 +1668,33 @@
       }
     }
 
+    // "İsmi değiştir": the session re-issued with the new name (same device id, no password again):
+    // POST /api/inspire/guest/rename {name} with the session. A server without that route (404/405: the API not yet
+    // updated) still takes the old way, a new guest token for the same device id.
     async function renameGuest() {
       const name = cleanName($('name-input').value);
       const err = $('name-error');
       err.hidden = true;
       const btn = $('name-submit');
+      const tokenAtStart = session.token;
       setBusy(btn, true);
       try {
-        const r = await api('POST', '/api/inspire/guest', { name, cid: session.cid }, { auth: false });
+        let r;
+        try {
+          r = await api('POST', '/api/inspire/guest/rename', { name });
+        } catch (e) {
+          if (e.status !== 404 && e.status !== 405) throw e;
+          r = await api('POST', '/api/inspire/guest', { name, cid: session.cid }, { auth: false });
+        }
         if (!r || typeof r.token !== 'string') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        if (session.token !== tokenAtStart) return;   // logged out / in again meanwhile
         setSession(r.token, normalizeUser(r.user, { guest: true, name }));
         store.set(LS.name, name);
         renderHeader();
         closeModal($('name-modal'));
         toast(name ? `Artık "${name}" olarak görünüyorsun.` : 'Artık Anonim olarak görünüyorsun.', 'ok');
       } catch (e) {
+        if (e.status === 401 && session.token !== tokenAtStart) return;   // session ended: back on the entry screen
         err.textContent = e.message || 'İsim değiştirilemedi.';
         err.hidden = false;
       } finally {
@@ -1559,11 +1710,17 @@
       config.video = videoDefaults();
       teardownBoard();
       closeAllModals();
+      for (const t of $('toasts').querySelectorAll('.toast.has-action')) t.remove();   // their actions need the board
       showEntry(message);
     }
+    // Any 401 of the API with the current session (expired token, or the board password changed: every guest token
+    // of the old password is refused): back to the entry screen. A bookmarklet link still waiting in the add dialog
+    // is kept for after the login.
+    const SESSION_ENDED = 'Oturumun sona erdi, şifreyle tekrar gir.';
     function handleUnauthorized() {
       if (!session.token) return;
-      logout('Oturumun sona erdi. Lütfen tekrar giriş yap.');
+      if (add.prefill && addModalOpen()) stashPrefill(add.prefill);
+      logout(SESSION_ENDED);
     }
 
     /* ----------------------------------------------------------------- screens */
@@ -1573,9 +1730,25 @@
       const n = $('entry-notice');
       n.textContent = notice || '';
       n.hidden = !notice;
-      $('guest-name').value = cleanName(store.get(LS.name) || '');
-      $('guest-error').hidden = true;
-      if (!COARSE) $('guest-name').focus({ preventScroll: true });
+      delete n.dataset.locked;
+      if (!notice) updateEntryLocked();
+      const name = cleanName(store.get(LS.name) || '');
+      $('guest-name').value = name;
+      resetPassField($('guest-pass'));
+      clearEntryError();
+      $('admin-error').hidden = true;
+      updateEntryPrefill();
+      // a remembered name: only the password is left to type
+      if (!COARSE) (name ? $('guest-pass') : $('guest-name')).focus({ preventScroll: true });
+    }
+    // Board locked (config.locked: no board password on the server): said up front, when no other notice is shown
+    function updateEntryLocked() {
+      const n = $('entry-notice');
+      if (config.locked && n.hidden) { n.textContent = LOCKED_TEXT; n.dataset.locked = '1'; n.hidden = false; }
+      else if (!config.locked && n.dataset.locked) { delete n.dataset.locked; n.textContent = ''; n.hidden = true; }
+    }
+    function updateEntryPrefill() {
+      $('entry-prefill').hidden = !peekPrefill();
     }
 
     function showBoard() {
@@ -2588,7 +2761,9 @@
       const b = entry.refs.dlBtn;
       if (b && !b.hidden && !b.dataset.busy) {
         const dl = entry.post.dl || {};
-        const label = dl.video === true ? 'Videoyu indir' : dl.video === false ? 'Görseli indir' : 'Videoyu ya da görseli indir';
+        const label = dl.video === true ? 'Videoyu indir' : dl.video === false
+          ? (dl.reason && dl.reason !== 'no_video' ? 'Bu video siteden indirilemiyor; kapak görseli indirilebilir' : 'Görseli indir')
+          : 'Videoyu ya da görseli indir';
         if (b.title !== label) { b.title = label; b.setAttribute('aria-label', label); }
       }
     }
@@ -4247,8 +4422,8 @@
     }
 
     /* ============================================== DOWNLOADS + INSTAGRAM COPIES
-     * "İndir": GET …/download-info (no network on the server; with the session the owner's link carries a ticket that
-     * skips the daily budget), then the file itself is fetched with format=json: a refusal (rate limit, Instagram busy,
+     * "İndir": GET …/download-info (no network on the server; its link carries a short-lived ticket for this post, since
+     * the file request has no session header), then the file itself is fetched with format=json: a refusal (rate limit, Instagram busy,
      * a failed upstream) comes back as JSON and is shown as a Turkish toast; the board never navigates away. The bytes
      * are collected into a Blob (progress on the button) and saved through a temporary <a download> on a blob: URL (same
      * origin, so the download attribute and the server's file name apply; iOS Safari 13+ asks before saving it into
@@ -4259,23 +4434,28 @@
     const DL_EXT = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
     const dlRunning = new Set();   // post ids with a download in progress (one per card)
 
-    async function downloadPost(entry) {
+    // want: null = what the post has (the video, else the image); 'image' = the cover / image only ("Kapak görselini
+    // indir" under a video that cannot be downloaded). The download link of download-info carries a short-lived ticket
+    // (the file request has no Authorization header); a refused ticket (401) gets one fresh download-info + retry.
+    async function downloadPost(entry, want = null) {
       const btn = entry.refs.dlBtn;
       if (!btn || btn.hidden || dlRunning.has(entry.id)) return;
       dlRunning.add(entry.id);
       setDlBusy(btn, true);
+      if (entry.dlToast) { entry.dlToast(); entry.dlToast = null; }
+      let info = null;
       try {
-        const info = await api('GET', `/api/inspire/posts/${encodeURIComponent(entry.id)}/download-info`);
-        if (!info || typeof info !== 'object') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
-        if (info.enabled === false) { toast('İndirme şu anda kapalı.', 'error'); return; }
-        if (info.video === false && !info.image) {
-          toast(info.message || 'Bu fikirde indirilecek bir video ya da görsel yok.', 'error', 6500);
-          return;
+        for (let attempt = 0; ; attempt++) {
+          info = await api('GET', `/api/inspire/posts/${encodeURIComponent(entry.id)}/download-info`);
+          if (!info || typeof info !== 'object') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+          try {
+            await dlRun(entry, btn, info, want);
+            return;
+          } catch (e) {
+            if (e && e.code === 'dl_ticket' && attempt === 0) continue;
+            throw e;
+          }
         }
-        // a known video: only the video (never its poster in its place); "maybe": the video, else the image
-        const part = info.video === true ? 'video' : info.video === false ? 'image' : 'auto';
-        if (info.video === false && info.message) toast(`${info.message} Kapak görseli indiriliyor.`, 'info', 6500);
-        await fetchDownload(entry, btn, info, part);
       } catch (e) {
         if (e && e.name === 'AbortError') return;
         if (e && e.status === 404 && e.code === 'not_found' && posts.get(entry.id) === entry) {
@@ -4284,20 +4464,68 @@
           updateEmptyState();
           return;
         }
+        // the video cannot be downloaded (YouTube, Vimeo …): never its cover in its place, only when asked for
+        if (e && e.status === 422 && e.code === 'not_downloadable' && want !== 'image') {
+          const d = e.data && typeof e.data === 'object' ? e.data : {};
+          offerCover(entry, { ...(info || {}), ...d, message: d.message || (info && info.message) || null,
+            image: typeof d.image === 'boolean' ? d.image : !!(info && info.image) });
+          return;
+        }
+        if (e && e.code === 'dl_ticket') { toast('İndirme bağlantısının süresi doldu. Tekrar dene.', 'error', 6000); return; }
         if (!e || e.status !== 401) toast(dlErrorText(e), 'error', 7000);
       } finally {
         dlRunning.delete(entry.id);
         setDlBusy(btn, false);
       }
     }
+    async function dlRun(entry, btn, info, want) {
+      if (info.enabled === false) { toast('İndirme şu anda kapalı.', 'error'); return; }
+      if (want === 'image') {
+        if (!info.image) { toast('Bu fikirde indirilecek bir kapak görseli yok.', 'error', 6000); return; }
+        await fetchDownload(entry, btn, info, 'image');
+        return;
+      }
+      if (info.video === false) {
+        if (!info.image) { toast(info.message || 'Bu fikirde indirilecek bir video ya da görsel yok.', 'error', 6500); return; }
+        // a video the site cannot download (reason): say so, the cover only on request; a post without a video: its image
+        if (info.reason && info.reason !== 'no_video') { offerCover(entry, info); return; }
+        await fetchDownload(entry, btn, info, 'image');
+        return;
+      }
+      // a known video: only the video (never its poster in its place); "maybe": the video, else the image
+      await fetchDownload(entry, btn, info, info.video === true ? 'video' : 'auto');
+    }
+    // "YouTube videoları siteden indirilemiyor …" with a "Kapak görselini indir" button (when there is a cover)
+    const DL_BLOCKED_TEXT = {
+      youtube: 'YouTube videoları siteden indirilemiyor — YouTube buna izin vermiyor.',
+      vimeo: 'Vimeo videoları siteden indirilemiyor — Vimeo bu videoları şifreli (DRM) yayınlıyor.',
+    };
+    function offerCover(entry, info) {
+      const platform = (info && info.platform) || (entry.view && entry.view.platform) || '';
+      // the server's text for a platform it never downloads (unsupported: YouTube / Vimeo), else the built-in one
+      const serverMsg = info && info.unsupported === true && typeof info.message === 'string' ? info.message : '';
+      const msg = serverMsg || DL_BLOCKED_TEXT[platform] || (info && info.message) || 'Bu video siteden indirilemiyor.';
+      if (entry.dlToast) entry.dlToast();
+      entry.dlToast = info && info.image
+        ? toast(msg, 'info', 15000, { label: 'Kapak görselini indir', run: () => { entry.dlToast = null; downloadPost(entry, 'image'); } })
+        : toast(msg, 'error', 8000);
+    }
 
-    // The download link of download-info (…/download[?k=ticket]) with part= / format=json; another shape: the plain link.
+    // The download link of download-info (…/download?k=<ticket>) with part= / format=json. Only that post's download
+    // path on the API is taken from it (with its query, the ticket); another shape: the plain link (no ticket).
     function dlLink(entry, info, part, asJson) {
-      const raw = info && typeof info.url === 'string' ? info.url : '';
-      const m = /^\/api\/inspire\/posts\/(\d{1,15})\/download(?:\?k=[A-Za-z0-9._-]{1,80})?$/.exec(raw);
-      const path = m && m[1] === entry.id ? raw : `/api/inspire/posts/${encodeURIComponent(entry.id)}/download`;
-      let u;
-      try { u = new URL(API_BASE + path); } catch (_) { return null; }
+      const path = `/api/inspire/posts/${encodeURIComponent(entry.id)}/download`;
+      const raw = info && typeof info.url === 'string' && info.url.length <= 2048 ? info.url : '';
+      let u = null;
+      try {
+        if (raw) {
+          const x = new URL(raw, API_BASE + '/');
+          if (x.origin === new URL(API_BASE).origin && x.pathname === path && !x.hash) u = x;
+        }
+        if (!u) u = new URL(API_BASE + path);
+      } catch (_) { return null; }
+      u.searchParams.delete('part');
+      u.searchParams.delete('format');
       if (part !== 'auto') u.searchParams.set('part', part);
       if (asJson) u.searchParams.set('format', 'json');
       return safeHttpUrl(u.href);
@@ -4318,6 +4546,8 @@
         let d = null;
         try { d = JSON.parse(await res.text()); } catch (_) { d = null; }
         if (!d || typeof d !== 'object') d = null;
+        // a missing / expired ticket (not the session: download-info just accepted it): downloadPost asks for a new one
+        if (res.status === 401) throw new ApiError(401, 'dl_ticket', 'İndirme bağlantısının süresi doldu. Tekrar dene.', d);
         throw new ApiError(res.status, d && d.error, (d && typeof d.message === 'string' && d.message) || defaultError(res.status), d);
       }
       const len = Number(res.headers.get('Content-Length')) || 0;
@@ -4570,6 +4800,19 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
       return true;
     }
     let addPrefillMem = null;   // when sessionStorage is unavailable
+    // Put bookmarklet data back (the session ended while it was in the add dialog): applied again after the login.
+    function stashPrefill(pre) {
+      if (!pre || typeof pre !== 'object' || typeof pre.url !== 'string') return;
+      const v = { url: pre.url, title: pre.title || '', media: pre.media || null, mk: pre.mk || null, poster: pre.poster || null,
+        w: pre.w || null, h: pre.h || null, at: Date.now() };
+      try { sessionStorage.setItem(PREFILL_KEY, JSON.stringify(v)); } catch (_) { addPrefillMem = v; }
+    }
+    // Is bookmarklet data waiting (entry screen hint)? Reads without taking it.
+    function peekPrefill() {
+      let pre = addPrefillMem;
+      try { const raw = sessionStorage.getItem(PREFILL_KEY); if (raw) pre = JSON.parse(raw); } catch (_) { /* keep the in-memory copy */ }
+      return !!(pre && typeof pre === 'object' && typeof pre.url === 'string' && Date.now() - Number(pre.at) < PREFILL_TTL_MS);
+    }
     function takePrefill() {
       let pre = addPrefillMem;
       addPrefillMem = null;
@@ -4612,8 +4855,16 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
     function bindStaticUI() {
       bindModalChrome();
 
-      $('guest-form').addEventListener('submit', (e) => { e.preventDefault(); guestLogin($('guest-name').value, $('guest-btn')); });
-      $('anon-btn').addEventListener('click', () => guestLogin('', $('anon-btn')));
+      $('guest-form').addEventListener('submit', (e) => { e.preventDefault(); guestLogin(); });
+      // Enter in the name field goes on to the empty password field (not an error)
+      $('guest-name').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.isComposing && !$('guest-pass').value) { e.preventDefault(); $('guest-pass').focus(); }
+      });
+      for (const id of ['guest-name', 'guest-pass', 'restore-code']) $(id).addEventListener('input', () => $(id).classList.remove('invalid'));
+      for (const b of document.querySelectorAll('[data-pass-toggle]')) {
+        b.addEventListener('pointerdown', (e) => e.preventDefault());   // the field keeps its focus (and the keyboard stays up)
+        b.addEventListener('click', () => togglePass(b));
+      }
       $('admin-toggle').addEventListener('click', () => {
         const form = $('admin-form');
         form.hidden = !form.hidden;
@@ -4632,12 +4883,11 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
       });
       $('cid-copy').addEventListener('click', copyCid);
       $('restore-toggle').addEventListener('click', () => {
-        const form = $('restore-form');
-        form.hidden = !form.hidden;
-        $('restore-toggle').setAttribute('aria-expanded', String(!form.hidden));
-        if (!form.hidden) $('restore-code').focus();
+        const open = $('restore-box').hidden;
+        setRestoreOpen(open);
+        clearEntryError();
+        if (open) $('restore-code').focus();
       });
-      $('restore-form').addEventListener('submit', (e) => { e.preventDefault(); restoreWithCode(); });
       $('name-form').addEventListener('submit', (e) => { e.preventDefault(); renameGuest(); });
 
       $('tab-link').addEventListener('click', () => selectTab('link'));
@@ -4677,7 +4927,7 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
       // the bookmarklet: href set once here (h() refuses javascript: URLs on purpose)
       $('bm-link').setAttribute('href', 'javascript:' + encodeURIComponent(BM_SRC));
       $('bm-link').addEventListener('click', (e) => { e.preventDefault(); toast('Bu düğmeyi yer imleri çubuğuna sürükle.'); });
-      window.addEventListener('hashchange', () => { if (parseAddHash()) applyPrefill(); });
+      window.addEventListener('hashchange', () => { if (parseAddHash()) { applyPrefill(); updateEntryPrefill(); } });
       $('text-body').addEventListener('input', updateTextCounter);
       $('text-form').addEventListener('submit', submitText);
 

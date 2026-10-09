@@ -18,7 +18,10 @@ page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error" && !/favicon|gtranslate|Failed to load resource/i.test(m.text())) errors.push(m.text()); });
 await page.setViewport({ width: 1300, height: 900 });
 await page.goto(`${STATIC}/fikir.html?api=${encodeURIComponent(API)}`, { waitUntil: "networkidle0" });
-await page.click("#anon-btn");
+// board password gate: anonymous entry = empty name + the TEST board password (run-ui.sh passes the same value with --var)
+await page.waitForSelector("#entry-screen:not([hidden])");
+await page.type("#guest-pass", process.env.FIKIR_E2E_BOARD_PASSWORD || "test-board-pass");
+await page.click("#guest-btn");
 await page.waitForSelector("#dashboard:not([hidden])");
 await page.waitForFunction(() => window.fikirConfig && window.fikirConfig.sb && window.fikirConfig.sb.left);
 await page.click("#btn-add");
@@ -113,7 +116,8 @@ await page.type('.sb-scene[data-n="2"] .sb-rewrite input', "kamera yerden baksı
 const before = await page.$eval('.sb-scene[data-n="1"] img', (i) => i.src);
 await page.click('.sb-scene[data-n="1"] [data-sbv="redraw"]');
 await page.waitForFunction((b) => { const i = document.querySelector('.sb-scene[data-n="1"] img'); return i && i.src !== b && i.complete; }, { timeout: 30000 }, before);
-assert.match(await page.$eval('.sb-scene[data-n="1"] img', (i) => i.src), /frame_1\.r1\.jpg$/);
+// board files carry the files token (?t=, board password gate) unless FIKIR_FILES_GATE="0"
+assert.match(await page.$eval('.sb-scene[data-n="1"] img', (i) => i.src), /frame_1\.r1\.jpg(?:\?t=[0-9a-z]+\.[A-Za-z0-9_-]{22})?$/);
 await new Promise((r) => setTimeout(r, 800));   // quota refresh after the op ended re-renders the scenes
 assert.equal(await page.$eval('.sb-scene[data-n="2"] .sb-rewrite input', (i) => i.value), "kamera yerden baksın", "note kept across re-renders");
 assert.equal(await page.evaluate(() => !!document.activeElement && !!document.activeElement.closest('.sb-scene[data-n="2"] .sb-rewrite')), false, "focus not pulled into the note");

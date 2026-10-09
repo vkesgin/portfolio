@@ -64,10 +64,20 @@ FIKIR_IG_CRON_COPIES = "1"     # copies per Instagram cron run ("7-59/15", every
 FIKIR_IG_CRON_CHECKS = "2"     # embed checks per Instagram cron run (same gate)
 FIKIR_DL_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # platforms whose videos downloads resolve (drop one to turn it off; YouTube/Vimeo cannot be downloaded)
 FIKIR_DL_AD_DAILY = "400"      # platform page/API fetches for downloads per UTC day (plus 20 per platform / 10 min in code)
+# Board password gate (worker/fikir-gate.js): every /api/inspire/* route but GET /config, POST /guest and POST /login needs
+# a session; guests get one with the secret FIKIR_BOARD_PASSWORD. The board's R2 files (/files/fikir/*, /files/sb/*) need
+# the files token (?t=) the API appends for a session; "0" serves them public by unguessable URL again (rollback switch).
+FIKIR_FILES_GATE = "1"
 # Never set in production: INSPIRE_TEST_FETCH_ALLOW, INSPIRE_FAKE_BR (test-only: wrangler.mediatest.toml).
 # Never set in production: SB_FAKE_AI, SB_FAKE_TAVILY, SB_FAKE_DELAY_MS, SB_FAKE_FAIL (test-only: wrangler.sbtest.toml).
-# Secret (never in [vars]): TAVILY_API_KEY, already set in production. To rotate it, from worker/:
-#   npx wrangler secret put TAVILY_API_KEY -c wrangler.toml     (without -c it lands on the static "portfolio" worker)
+# Secrets (never in [vars], never in the repo): JWT_SECRET, ADMIN_PASSWORD, TAVILY_API_KEY, FIKIR_BOARD_PASSWORD.
+#   FIKIR_BOARD_PASSWORD  the shared board password for guests (anonymous ones too). Missing = the board is locked for
+#                         guests (POST /guest -> 503 board_locked, every guest token rejected); the admin login still works.
+#                         Changing it logs every guest out (their tokens carry its version `pv`).
+# To set / rotate one, from worker/ (the value is typed at the prompt, never on the command line):
+#   npx wrangler secret put FIKIR_BOARD_PASSWORD -c wrangler.toml     (without -c it lands on the static "portfolio" worker)
+#   npx wrangler secret put TAVILY_API_KEY -c wrangler.toml
+# Local runs: worker/.dev.vars (git-ignored) holds TEST values only.
 
 [ai]
 binding = "AI"

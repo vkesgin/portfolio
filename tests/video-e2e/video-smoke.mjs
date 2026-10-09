@@ -5,7 +5,9 @@
 // tests/media-e2e/fixture-server.mjs on 127.0.0.1:4741. With VIDEO_E2E_REAL_IG=1 it also talks to the real Instagram
 // for two public reels (one whose embed is blocked, one control): embed checks, a download, an R2 copy, removal and
 // the cron copy. That is 3 www.instagram.com page requests and ~6 CDN file requests, spaced 3 s apart.
-// Reads ADMIN_PASSWORD from worker/.dev.vars (TEST value) and never prints it.
+// Reads ADMIN_PASSWORD and FIKIR_BOARD_PASSWORD from worker/.dev.vars (TEST values; the board password falls back to
+// FIKIR_E2E_BOARD_PASSWORD / 'test-board-pass', which run-smoke.sh also passes with --var) and never prints them.
+// Downloads carry the session's ticket from download-info (?k=), as the board's links do (board password gate).
 // usage: node tests/video-e2e/video-smoke.mjs <base=http://127.0.0.1:8841>
 //   env: VIDEO_E2E_STATE (wrangler --persist-to dir), VIDEO_E2E_CONFIG (wrangler config), VIDEO_E2E_DB (D1 name),
 //        VIDEO_E2E_FX (fixture server base), VIDEO_E2E_REAL_IG=1, VIDEO_E2E_IG_BLOCKED / VIDEO_E2E_IG_OK (reel codes)
@@ -31,6 +33,7 @@ const CLIP = fs.readFileSync(path.join(HERE, '../fixtures/media/clip.mp4'));
 const POSTER = fs.readFileSync(path.join(HERE, '../fixtures/media/poster.jpg'));
 const devVars = Object.fromEntries(fs.readFileSync(path.join(WORKER, '.dev.vars'), 'utf8').split('\n').filter((l) => l.includes('='))
   .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+const BOARD_PW = process.env.FIKIR_E2E_BOARD_PASSWORD || devVars.FIKIR_BOARD_PASSWORD || 'test-board-pass';
 let n = 0;
 const ok = (msg) => console.log(`ok ${++n} ${msg}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -56,15 +59,30 @@ async function call(method, p, body, token, { legacy = false, headers = {} } = {
   let data = null; try { data = JSON.parse(text); } catch (_) { data = text; }
   return { status: res.status, data, headers: res.headers };
 }
-// a download as the browser opens it (navigation: Accept text/html, no session)
-async function dl(id, q = '', headers = {}) {
-  const res = await fetchOnce(`${BASE}/api/inspire/posts/${id}/download${q}`, { headers: { Accept: 'text/html,application/xhtml+xml,*/*;q=0.8', ...headers } });
+// The download ticket (?k=) of a session for a post, from download-info (as the board gets it); kept for 10 minutes
+const tickets = new Map();
+async function ticketFor(id, token) {
+  const key = id + ':' + token;
+  const c = tickets.get(key);
+  if (c && Date.now() - c.at < 600e3) return c.k;
+  const r = await call('GET', `/api/inspire/posts/${id}/download-info`, null, token);
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  const k = r.data.url.split('?k=')[1];
+  tickets.set(key, { k, at: Date.now() });
+  return k;
+}
+// a download as the browser opens it (navigation: Accept text/html, no session header) with guest g's ticket;
+// k: another ticket (null = none)
+async function dl(id, q = '', headers = {}, { k } = {}) {
+  const kk = k === undefined ? await ticketFor(id, g.token) : k;
+  const qs = q + (kk ? (q ? '&' : '?') + 'k=' + kk : '');
+  const res = await fetchOnce(`${BASE}/api/inspire/posts/${id}/download${qs}`, { headers: { Accept: 'text/html,application/xhtml+xml,*/*;q=0.8', ...headers } });
   const buf = Buffer.from(await res.arrayBuffer());
   return { status: res.status, headers: res.headers, buf, text: () => buf.toString('utf8') };
 }
 async function guest(name) {
   const cid = newCid();
-  const r = await call('POST', '/api/inspire/guest', { name, cid });
+  const r = await call('POST', '/api/inspire/guest', { name, cid, password: BOARD_PW });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   return { token: r.data.token, cid };
 }
@@ -124,6 +142,8 @@ const posts = {
   igBudget: { type: 'instagram', url: 'https://www.instagram.com/reel/DAaaaaaaaa9/', meta: null, cid: g.cid },
   // never fetched either: the ig-blocked / ig-copy guards below (owner: other)
   igRep: { type: 'instagram', url: 'https://www.instagram.com/reel/DAaaaaaaa10/', meta: null },
+  // YouTube Shorts: never downloadable (no request is made); only its thumbnail on request
+  yt: { type: 'youtube', url: 'https://www.youtube.com/shorts/jNQXAC9IVRw', meta: null },
 };
 const guestRow = `(SELECT id FROM inspire_users WHERE username='__guest__')`;
 const ids = {};
@@ -143,8 +163,9 @@ ok('seeded ' + Object.keys(ids).length + ' posts: ' + JSON.stringify(ids));
   assert.equal(by[ids.text].dl, null);
   assert.deepEqual(by[ids.igBlocked].dl, { video: true, image: true });
   assert.equal(by[ids.ssrf].dl.video, true, 'hint is optimistic; the download itself refuses');
-  const legacy = await board(null, true);
+  const legacy = await board(g.token, true);
   assert.ok(legacy.length && legacy.every((p) => !('dl' in p)), 'old cached pages never see dl');
+  assert.equal((await call('GET', '/api/inspire/posts', null, null, { legacy: true })).status, 401, 'nor anything without a session');
   ok('GET /posts: dl hints per post; legacy clients get none');
 }
 
@@ -200,25 +221,47 @@ ok('seeded ' + Object.keys(ids).length + ' posts: ' + JSON.stringify(ids));
   ok('private address and a redirect to one are never fetched (reason unsafe)');
   const t404 = await dl(ids.text);
   assert.equal(t404.status, 404); assert.ok(t404.text().includes('yalnızca metin'));
-  assert.equal((await dl(999999999)).status, 404);
+  assert.equal((await dl(999999999, '', {}, { k: null })).status, 401, 'unknown post: no ticket can exist for it');
+  assert.equal((await fetchOnce(`${BASE}/api/inspire/posts/999999999/download`, { headers: { Authorization: 'Bearer ' + g.token } })).status, 404, 'with the session header: 404');
   assert.equal((await dl(ids.clip, '?part=audio')).status, 400);
   ok('text post / unknown post / bad part');
+  // board password gate: no ticket / a ticket of another post / a forged one -> 401 (HTML page or JSON)
+  const nt = await dl(ids.clip, '', {}, { k: null });
+  assert.equal(nt.status, 401); assert.match(nt.headers.get('content-type'), /^text\/html/); assert.ok(nt.text().includes('süresi doldu'));
+  assert.equal((await dl(ids.clip, '?format=json', {}, { k: await ticketFor(ids.direct, g.token) })).status, 401, "another post's ticket");
+  const exp = (Math.floor(Date.now() / 1000) + 600).toString(36);
+  assert.equal((await dl(ids.clip, '?format=json', {}, { k: `${exp}.a.${'A'.repeat(22)}` })).status, 401, 'forged ticket');
+  ok('download links need the ticket of a session (401 without, for another post, forged)');
 }
 
 // ── download-info ──
 {
-  const a = await call('GET', `/api/inspire/posts/${ids.clip}/download-info`);
+  assert.equal((await call('GET', `/api/inspire/posts/${ids.clip}/download-info`)).status, 401, 'a session only');
+  const a = await call('GET', `/api/inspire/posts/${ids.clip}/download-info`, null, g.token);
   assert.equal(a.status, 200);
-  assert.deepEqual({ video: a.data.video, image: a.data.image, from: a.data.from, platform: a.data.platform },
-    { video: true, image: true, from: 'link', platform: 'web' });
-  assert.equal(a.data.url, `/api/inspire/posts/${ids.clip}/download`);
-  assert.match(a.headers.get('cache-control'), /max-age=60/);
-  const b = await call('GET', `/api/inspire/posts/${ids.igBlocked}/download-info`);
+  assert.deepEqual({ video: a.data.video, image: a.data.image, from: a.data.from, platform: a.data.platform, unsupported: a.data.unsupported },
+    { video: true, image: true, from: 'link', platform: 'web', unsupported: false });
+  assert.match(a.data.url, new RegExp(`^/api/inspire/posts/${ids.clip}/download\\?k=[0-9a-z]+\\.g\\.[A-Za-z0-9_-]{22}$`));
+  assert.equal(a.headers.get('cache-control'), 'private, no-store');
+  const b = await call('GET', `/api/inspire/posts/${ids.igBlocked}/download-info`, null, g.token);
   assert.deepEqual({ video: b.data.video, image: b.data.image, from: b.data.from, copied: b.data.copied, embed: b.data.embed },
     { video: true, image: true, from: 'instagram', copied: false, embed: null });
-  const t = await call('GET', `/api/inspire/posts/${ids.text}/download-info`);
+  const t = await call('GET', `/api/inspire/posts/${ids.text}/download-info`, null, g.token);
   assert.deepEqual({ video: t.data.video, image: t.data.image }, { video: false, image: false });
-  ok('download-info: no network, from/copied/embed fields');
+  ok('download-info: no network, from/copied/embed fields, a ticketed link');
+  // YouTube Shorts: why not, up front; the download refuses auto / video with 422 (no thumbnail, no budget unit, no fetch)
+  const y = await call('GET', `/api/inspire/posts/${ids.yt}/download-info`, null, g.token);
+  assert.deepEqual({ video: y.data.video, image: y.data.image, reason: y.data.reason, unsupported: y.data.unsupported, message: y.data.message },
+    { video: false, image: true, reason: 'not_supported', unsupported: true, message: 'YouTube videoları siteden indirilemiyor — YouTube buna izin vermiyor.' });
+  const yk = y.data.url.split('?k=')[1];
+  const yj = await dl(ids.yt, '?format=json', {}, { k: yk });
+  assert.equal(yj.status, 422); const yd = JSON.parse(yj.text());
+  assert.deepEqual({ error: yd.error, reason: yd.reason, unsupported: yd.unsupported, image: yd.image }, { error: 'not_downloadable', reason: 'not_supported', unsupported: true, image: true });
+  assert.equal((await dl(ids.yt, '?part=video&format=json', {}, { k: yk })).status, 422);
+  const yh = await dl(ids.yt, '', {}, { k: yk });
+  assert.equal(yh.status, 422); assert.match(yh.headers.get('content-type'), /^text\/html/);
+  assert.ok(yh.text().includes('Kapak görselini indir') && yh.text().includes(`/api/inspire/posts/${ids.yt}/download?part=image&amp;k=`));
+  ok('YouTube Shorts: download-info unsupported + message; auto / video -> 422 (JSON / HTML with the cover link), never the thumbnail');
 }
 
 // ── ig-copy / ig-blocked guards ──
@@ -239,15 +282,15 @@ ok('seeded ' + Object.keys(ids).length + ' posts: ' + JSON.stringify(ids));
   const quota = (scope, subject = '') => (d1(`SELECT n FROM inspire_quota WHERE day=${q(today)} AND scope=${q(scope)} AND subject=${q(subject)}`)[0] || { n: 0 }).n;
   const fill = (scope, subject, n) => d1(`INSERT INTO inspire_quota (day, scope, subject, n, lim) VALUES (${q(today)}, ${q(scope)}, ${q(subject)}, ${n}, ${n})
     ON CONFLICT(day, scope, subject) DO UPDATE SET n=${n}, lim=${n}`);
-  // download-info: the admin's link carries a ticket (never cached), a guest's / anonymous one does not
+  // download-info: every session's link carries a 15-minute ticket (never cached); the admin's (role a) skips the budget
   const ia = await call('GET', `/api/inspire/posts/${ids.clip}/download-info`, null, adm.token);
-  assert.match(ia.data.url, new RegExp(`^/api/inspire/posts/${ids.clip}/download\\?k=[0-9a-z]+\\.[A-Za-z0-9_-]{22}$`));
+  assert.match(ia.data.url, new RegExp(`^/api/inspire/posts/${ids.clip}/download\\?k=[0-9a-z]+\\.a\\.[A-Za-z0-9_-]{22}$`));
   assert.equal(ia.headers.get('cache-control'), 'private, no-store');
   const ig = await call('GET', `/api/inspire/posts/${ids.clip}/download-info`, null, g.token);
-  assert.equal(ig.data.url, `/api/inspire/posts/${ids.clip}/download`);
+  assert.match(ig.data.url, new RegExp(`^/api/inspire/posts/${ids.clip}/download\\?k=[0-9a-z]+\\.g\\.[A-Za-z0-9_-]{22}$`));
   const io = await call('GET', `/api/inspire/posts/${ids.direct}/download-info`, null, adm.token);
   assert.notEqual(io.data.url.split('?k=')[1], ia.data.url.split('?k=')[1], 'a ticket is bound to its post');
-  ok('download-info: admin link with a 15-minute ticket, plain link for guests');
+  ok('download-info: admin link with an admin ticket, guests with a guest ticket');
   // an R2 file (admin upload) downloads without touching the daily budget; an upstream download takes one unit
   const up = await fetchOnce(`${BASE}/api/inspire/posts/${ids.r2}/media/upload?part=video`, { method: 'POST', body: CLIP,
     headers: { Authorization: 'Bearer ' + adm.token, 'X-Fikir-Client': '2', 'Content-Type': 'video/mp4' } });
@@ -266,10 +309,10 @@ ok('seeded ' + Object.keys(ids).length + ' posts: ' + JSON.stringify(ids));
   assert.equal(ex.status, 429); assert.equal(JSON.parse(ex.text()).error, 'quota_exceeded');
   assert.equal((await dl(ids.r2)).status, 200, 'R2 file despite the spent budget');
   const tk = ia.data.url.split('?k=')[1];
-  const adm1 = await dl(ids.clip, '?k=' + tk);
+  const adm1 = await dl(ids.clip, '', {}, { k: tk });
   assert.equal(adm1.status, 200); assert.ok(adm1.buf.equals(CLIP));
-  assert.equal((await dl(ids.direct, '?format=json&k=' + tk)).status, 429, 'ticket of another post is ignored');
-  assert.equal((await dl(ids.clip, '?format=json&k=0.AAAAAAAAAAAAAAAAAAAAAA')).status, 429, 'forged ticket is ignored');
+  assert.equal((await dl(ids.direct, '?format=json', {}, { k: tk })).status, 401, 'an admin ticket of another post opens nothing');
+  assert.equal((await dl(ids.clip, '?format=json', {}, { k: '0.a.AAAAAAAAAAAAAAAAAAAAAA' })).status, 401, 'forged ticket');
   assert.equal(quota('dl'), 1500, 'the admin download took no unit');
   fill('dl', '', 0);
   ok('daily download budget: R2 files never count, the admin ticket is exempt, others get 429 when it is spent');
@@ -387,8 +430,9 @@ if (REAL_IG) {
   assert.equal(c.status, 201, JSON.stringify(c.data));
   const m = c.data.post.media;
   assert.equal(m.source, 'instagram'); assert.equal(m.kind, 'video'); assert.equal(m.mime, 'video/mp4');
-  assert.match(m.url, new RegExp(`^/files/fikir/${ids.igBlocked}/v-[0-9a-f]{32}\\.mp4$`));
-  assert.match(m.poster, new RegExp(`^/files/fikir/${ids.igBlocked}/p-[0-9a-f]{32}\\.(jpg|webp|png)$`));
+  assert.match(m.url, new RegExp(`^/files/fikir/${ids.igBlocked}/v-[0-9a-f]{32}\\.mp4\\?t=[0-9a-z]+\\.[A-Za-z0-9_-]{22}$`));
+  assert.match(m.poster, new RegExp(`^/files/fikir/${ids.igBlocked}/p-[0-9a-f]{32}\\.(jpg|webp|png)\\?t=`));
+  assert.equal((await fetchOnce(BASE + m.url.split('?')[0])).status, 403, 'our copy needs the files token');
   assert.ok(m.by && m.w && m.h && m.bytes === v.buf.length, JSON.stringify(m));
   assert.equal(c.data.post.can_edit_media, false);
   const f = await fetchOnce(BASE + m.url);
@@ -405,7 +449,7 @@ if (REAL_IG) {
   assert.equal(fromR2.status, 200); assert.equal(fromR2.buf.length, m.bytes);
   const b = (await board(g.token)).find((p) => p.id === ids.igBlocked);
   assert.equal(b.media.source, 'instagram'); assert.deepEqual(b.dl, { video: true, image: true });
-  const info = await call('GET', `/api/inspire/posts/${ids.igBlocked}/download-info`);
+  const info = await call('GET', `/api/inspire/posts/${ids.igBlocked}/download-info`, null, g.token);
   assert.deepEqual({ from: info.data.from, copied: info.data.copied, embed: info.data.embed }, { from: 'copy', copied: true, embed: 'blocked' });
   ok('download after the copy comes from R2; board + download-info show the copy');
 

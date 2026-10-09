@@ -1,7 +1,8 @@
 // sb-smoke.mjs: end-to-end checks against `wrangler dev -c worker/wrangler.sbtest.toml` (SB_FAKE_AI=1, no neurons).
 // usage: node tests/storyboard-e2e/sb-smoke.mjs [base=http://127.0.0.1:8813]
 //          [mode=main|fail_frame|fail_draft|fail_draft_quota|fail_quota|global_limit|capacity|ip_limit|kpss|kpss_nopw|kpss_cutoff]
-// (normally started by run-mode.sh). Reads ADMIN_PASSWORD from worker/.dev.vars (TEST value) and never prints it.
+// (normally started by run-mode.sh). Reads ADMIN_PASSWORD and FIKIR_BOARD_PASSWORD from worker/.dev.vars (TEST values; the
+// board password falls back to FIKIR_E2E_BOARD_PASSWORD / 'test-board-pass') and never prints them.
 // Requests carry "X-Fikir-Client: 2" like fikir.html; old clients (no header) must not see storyboard fields.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -12,6 +13,7 @@ const BASE = process.argv[2] || "http://127.0.0.1:8813";
 const MODE = process.argv[3] || "main";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const devVars = Object.fromEntries(fs.readFileSync(path.join(HERE, "../../worker/.dev.vars"), "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+const BOARD_PW = process.env.FIKIR_E2E_BOARD_PASSWORD || devVars.FIKIR_BOARD_PASSWORD || "test-board-pass";
 let n = 0;
 const ok = (msg) => console.log(`ok ${++n} ${msg}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -29,7 +31,7 @@ async function call(method, p, body, token, { legacy = false, ip = null } = {}) 
   return { status: res.status, data, headers: res.headers };
 }
 async function guest(name, opts) {
-  const r = await call("POST", "/api/inspire/guest", { name, cid: cid() }, null, opts);
+  const r = await call("POST", "/api/inspire/guest", { name, cid: cid(), password: BOARD_PW }, null, opts);
   assert.equal(r.status, 200); return r.data.token;
 }
 async function admin() {
@@ -87,8 +89,10 @@ if (MODE === "main") {
   assert.ok(!("image_prompt_en" in w.s.draft.scenes[0]), "prompts hidden from non-admin");
   const f1 = w.s.frames[1];
   r = await fetch(BASE + f1.path);
-  assert.equal(r.status, 200); assert.match(r.headers.get("content-type"), /image\/jpeg/); assert.match(r.headers.get("cache-control"), /max-age=31536000/);
-  ok(`build: stages ${w.stages.join(">")}, ${w.s.frame_total} frames, format forced 9:16, files served`);
+  assert.equal(r.status, 200); assert.match(r.headers.get("content-type"), /image\/jpeg/); assert.match(r.headers.get("cache-control"), /^private, max-age=\d+, immutable$/);
+  assert.match(f1.path, /^\/files\/sb\/sb_[0-9a-f]{32}\/[^?]+\?t=[0-9a-z]+\.[A-Za-z0-9_-]{22}$/);
+  assert.equal((await fetch(BASE + f1.path.split("?")[0])).status, 403, "frames need the files token");
+  ok(`build: stages ${w.stages.join(">")}, ${w.s.frame_total} frames, format forced 9:16, files served (with the files token)`);
 
   r = await call("GET", "/api/inspire/posts", null, A);
   const card = r.data.find((p) => p.id === postId);
@@ -100,7 +104,7 @@ if (MODE === "main") {
   r = await call("POST", "/api/inspire/posts", { type: "text", text: "Eski sayfadan metin fikir", storyboard: { format: "auto" } }, A, { legacy: true });
   assert.equal(r.status, 201); assert.ok(!("storyboard" in r.data) && !("storyboard_error" in r.data) && !("sb_left" in r.data), "old client: plain 201");
   r = await call("GET", "/api/inspire/config", null, A, { legacy: true });
-  assert.deepEqual(r.data, { storyboard: false, max_note_len: 1000, max_text_len: 2000 }, "old client: Phase A config answer");
+  assert.deepEqual(r.data, { storyboard: false, max_note_len: 1000, max_text_len: 2000, gate: true, locked: false }, "old client: Phase A config answer (+ gate flags)");
   r = await call("GET", "/api/inspire/config", null, A);
   assert.equal(r.data.sb.left.per_user, 2, "old client post did not start a storyboard");
   assert.equal((await call("DELETE", `/api/inspire/posts/${(await call("GET", "/api/inspire/posts", null, A)).data.find((p) => p.description === "Eski sayfadan metin fikir").id}`, null, A)).status, 200);
@@ -111,7 +115,7 @@ if (MODE === "main") {
   r = await call("GET", `/api/inspire/storyboards/${sb1}`, null, B);
   assert.equal(r.status, 200); assert.equal(r.data.can_edit, false);
   r = await call("GET", `/api/inspire/storyboards/${sb1}`);
-  assert.equal(r.status, 200, "anonymous view");
+  assert.equal(r.status, 401, "no view without a session (board password gate)");
   r = await call("POST", `/api/inspire/storyboards/${sb1}/frames/2/redraw`, {}, B);
   assert.equal(r.status, 403);
   r = await call("POST", `/api/inspire/posts/${postId}/storyboards`, {}, B);
@@ -196,7 +200,7 @@ if (MODE === "main") {
   r = await call("DELETE", `/api/inspire/posts/${postId}`, null, A);
   assert.equal(r.status, 200);
   await sleep(1500);
-  assert.equal((await call("GET", `/api/inspire/storyboards/${sb4}`)).status, 404);
+  assert.equal((await call("GET", `/api/inspire/storyboards/${sb4}`, null, A)).status, 404);
   for (const k of keys) assert.equal((await fetch(BASE + k)).status, 404);
   ok("post delete: storyboard rows + R2 objects removed");
 
@@ -319,7 +323,7 @@ if (MODE === "kpss_cutoff") {   // --var ADMIN_TOKENS_NOT_BEFORE:2099-01-01T00:0
   assert.equal(r.status, 200);
   assert.equal((await call("GET", "/api/admin/inspire-users", null, r.data.token)).status, 401, "portfolio admin token before the cutoff");
   const ADM = await admin();
-  assert.equal((await call("GET", "/api/inspire/sb-admin/usage", null, ADM)).status, 403, "inspire admin token before the cutoff");
+  assert.equal((await call("GET", "/api/inspire/sb-admin/usage", null, ADM)).status, 401, "inspire admin token before the cutoff (no session: the gate)");
   const G = await guest("Kesim");
   assert.equal((await call("GET", "/api/inspire/config", null, G)).data.sb.left.per_user, 3, "guest tokens unaffected");
   ok("ADMIN_TOKENS_NOT_BEFORE: owner/admin tokens older than the cutoff rejected (KPSS, portfolio admin, inspire admin); others unaffected");

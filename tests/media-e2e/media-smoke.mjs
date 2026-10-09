@@ -1,7 +1,8 @@
 // media-smoke.mjs: end-to-end checks of the media-preview backend against a local `wrangler dev` (see run-smoke.sh):
 // meta v2 extraction, the Browser Run fallback (fake), quotas, legacy refresh, PUT/DELETE /media, uploads + /files,
 // /preview, the 64 KB precheck and CORS. Third-party sites are fixture-server.mjs on 127.0.0.1:4742; nothing leaves
-// the machine. Reads ADMIN_PASSWORD from worker/.dev.vars (TEST value) and never prints it.
+// the machine. Reads ADMIN_PASSWORD and FIKIR_BOARD_PASSWORD from worker/.dev.vars (TEST values; the board password falls
+// back to FIKIR_E2E_BOARD_PASSWORD / 'test-board-pass') and never prints them.
 // usage: node tests/media-e2e/media-smoke.mjs <base=http://127.0.0.1:8821> <mode=main|brquota|brlimit>
 //   env: MEDIA_E2E_STATE (wrangler --persist-to dir), MEDIA_E2E_CONFIG (wrangler config), MEDIA_E2E_DB (D1 name)
 import assert from 'node:assert/strict';
@@ -23,6 +24,7 @@ const DB = process.env.MEDIA_E2E_DB || 'vk-portfolio-mediatest';
 if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(BASE)) throw new Error('local worker only');
 const devVars = Object.fromEntries(fs.readFileSync(path.join(WORKER, '.dev.vars'), 'utf8').split('\n').filter((l) => l.includes('='))
   .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+const BOARD_PW = process.env.FIKIR_E2E_BOARD_PASSWORD || devVars.FIKIR_BOARD_PASSWORD || 'test-board-pass';
 let n = 0;
 const ok = (msg) => console.log(`ok ${++n} ${msg}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -50,7 +52,7 @@ async function call(method, p, body, token, { legacy = false, headers = {} } = {
 }
 async function guest(name) {
   const cid = newCid();
-  const r = await call('POST', '/api/inspire/guest', { name, cid });
+  const r = await call('POST', '/api/inspire/guest', { name, cid, password: BOARD_PW });
   assert.equal(r.status, 200, JSON.stringify(r.data));
   return { token: r.data.token, cid };
 }
@@ -494,7 +496,8 @@ if (MODE === 'main') {
   r = await upload(A, P9, 'video', file('clip.webm'), 'video/webm', '&w=160&h=90');
   assert.equal(r.status, 201, JSON.stringify(r.data));
   const m1 = r.data.post.media;
-  assert.match(m1.url, new RegExp(`^/files/fikir/${P9}/v-[0-9a-f]{32}\\.webm$`));
+  assert.match(m1.url, new RegExp(`^/files/fikir/${P9}/v-[0-9a-f]{32}\\.webm\\?t=[0-9a-z]+\\.[A-Za-z0-9_-]{22}$`));
+  assert.equal((await fetch(BASE + m1.url.split('?')[0])).status, 403, 'board files need the files token (?t=)');
   assert.equal(m1.mime, 'video/webm'); assert.equal(m1.bytes, file('clip.webm').length); assert.equal(m1.source, 'upload');
   assert.equal(m1.verified, true); assert.equal(m1.w, 160);
   assert.equal(r.data.quota.uploads_left, 2); assert.equal(r.data.quota.mb_left, 2); assert.match(r.data.quota.reset_at, /T00:00:00\.000Z$/);
@@ -505,7 +508,7 @@ if (MODE === 'main') {
   assert.equal(f.headers.get('content-security-policy'), "default-src 'none'; sandbox");
   assert.equal(f.headers.get('content-disposition'), 'inline');
   assert.equal(f.headers.get('cross-origin-resource-policy'), 'cross-origin');
-  assert.match(f.headers.get('cache-control'), /immutable/);
+  assert.match(f.headers.get('cache-control'), /^private, max-age=\d+, immutable$/);
   assert.ok(f.headers.get('etag'));
   const size = Number(f.headers.get('content-length'));
   assert.equal(size, file('clip.webm').length);
@@ -518,17 +521,17 @@ if (MODE === 'main') {
   f = await fetch(BASE + m1.url, { headers: { Range: 'bytes=999999-' } });
   assert.equal(f.status, 416); assert.equal(f.headers.get('content-range'), `bytes */${size}`);
   assert.equal((await fetch(BASE + '/files/fikir/1/v-zz.mp4')).status, 404, 'fikir/ keys must match the server pattern');
-  ok('upload webm -> 201; /files: type, nosniff, CSP sandbox, inline, CORP, immutable, ETag; 206 range + suffix; 416');
+  ok('upload webm -> 201; /files: files token, type, nosniff, CSP sandbox, inline, CORP, private immutable, ETag; 206 range + suffix; 416');
 
   r = await upload(A, P9, 'video', file('clip.mp4'), 'video/mp4');
   assert.equal(r.status, 201);
   const m2 = r.data.post.media;
-  assert.match(m2.url, /\.mp4$/); assert.equal(m2.mime, 'video/mp4');
+  assert.match(m2.url, /\.mp4\?t=[^?]+$/); assert.equal(m2.mime, 'video/mp4');
   await waitFor(async () => (await fetch(BASE + m1.url)).status === 404, 5000, 'replaced object deleted');
   r = await upload(A, P9, 'poster', file('poster.png'), 'image/png');
   assert.equal(r.status, 201);
-  assert.equal(r.data.post.media.url, m2.url);
-  assert.match(r.data.post.media.poster, new RegExp(`^/files/fikir/${P9}/p-[0-9a-f]{32}\\.png$`));
+  assert.equal(r.data.post.media.url.split('?')[0], m2.url.split('?')[0]);
+  assert.match(r.data.post.media.poster, new RegExp(`^/files/fikir/${P9}/p-[0-9a-f]{32}\\.png\\?t=`));
   const posterPath = r.data.post.media.poster;
   assert.equal((await fetch(BASE + posterPath)).headers.get('content-type'), 'image/png');
   r = await upload(A, P9, 'image', file('poster.jpg'), 'image/jpeg');

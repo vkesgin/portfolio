@@ -7,6 +7,8 @@
 // usage: VIDEO_E2E_REAL=1 node tests/video-e2e/platform-smoke.mjs <base=http://127.0.0.1:8841>
 //   env: VIDEO_E2E_STATE (--persist-to dir), VIDEO_E2E_LOG (worker log file), VIDEO_E2E_DL (download dir),
 //        VIDEO_E2E_FX (fixture server), VIDEO_E2E_CONFIG / VIDEO_E2E_DB, VIDEO_E2E_SKIP_IG=1 (no Instagram posts / copy)
+// Board password gate: the guest logs in with FIKIR_E2E_BOARD_PASSWORD / worker/.dev.vars FIKIR_BOARD_PASSWORD (TEST value,
+// never printed); every API call carries that session and every download the session's ticket from download-info.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,6 +30,10 @@ if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(BASE)) throw new Error('local worker onl
 if (!STATE || !LOG) throw new Error('VIDEO_E2E_STATE and VIDEO_E2E_LOG are required');
 fs.mkdirSync(DLDIR, { recursive: true });
 
+const devVars = Object.fromEntries(fs.readFileSync(path.join(WORKER, '.dev.vars'), 'utf8').split('\n').filter((l) => l.includes('='))
+  .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
+const BOARD_PW = process.env.FIKIR_E2E_BOARD_PASSWORD || devVars.FIKIR_BOARD_PASSWORD || 'test-board-pass';
+let SESSION = null;   // the guest's token once logged in (the default of call() / dl())
 let n = 0;
 const ok = (msg) => console.log(`ok ${++n} ${msg}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -40,7 +46,7 @@ async function fetchOnce(url, init) {
     return fetch(url, init);
   }
 }
-async function call(method, p, body, token, headers = {}) {
+async function call(method, p, body, token = SESSION, headers = {}) {
   const h = { 'X-Fikir-Client': '2', ...headers };
   if (body != null) h['Content-Type'] = 'application/json';
   if (token) h.Authorization = 'Bearer ' + token;
@@ -49,9 +55,17 @@ async function call(method, p, body, token, headers = {}) {
   let data = null; try { data = JSON.parse(text); } catch (_) { data = text; }
   return { status: res.status, data, headers: res.headers };
 }
+// the session's download ticket (?k=) of a post, from download-info; null when there is none (unknown post)
+async function ticketFor(id) {
+  const r = await call('GET', `/api/inspire/posts/${id}/download-info`);
+  return r.status === 200 ? r.data.url.split('?k=')[1] || null : null;
+}
 async function dl(id, q = '', headers = {}) {
+  const k = await ticketFor(id);
+  const qs = q + (k ? (q ? '&' : '?') + 'k=' + k : '');
   const t0 = Date.now();
-  const res = await fetchOnce(`${BASE}/api/inspire/posts/${id}/download${q}`, { headers: { Accept: 'text/html,application/xhtml+xml,*/*;q=0.8', ...headers } });
+  const res = await fetchOnce(`${BASE}/api/inspire/posts/${id}/download${qs}`, { headers: { Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+    ...(k ? {} : { Authorization: 'Bearer ' + SESSION }), ...headers } });
   const buf = Buffer.from(await res.arrayBuffer());
   return { status: res.status, headers: res.headers, buf, ms: Date.now() - t0, text: () => buf.toString('utf8') };
 }
@@ -91,7 +105,8 @@ function save(name, r) {
 }
 
 // ── posts through the API as a guest ──
-const g = await (async () => { const r = await call('POST', '/api/inspire/guest', { name: 'Platform Test', cid: newCid() }); assert.equal(r.status, 200); return r.data; })();
+const g = await (async () => { const r = await call('POST', '/api/inspire/guest', { name: 'Platform Test', cid: newCid(), password: BOARD_PW }, null); assert.equal(r.status, 200); return r.data; })();
+SESSION = g.token;
 const POSTS = [
   { key: 'igBlocked', url: 'https://www.instagram.com/reel/DRUcmHMjeLZ/', ig: true, video: true, file: /^instagram-[A-Za-z0-9._]+-DRUcmHMjeLZ\.mp4$/ },
   { key: 'igOk', url: 'https://www.instagram.com/reel/DW9tQ1fkrBR/', ig: true, video: true, file: /^instagram-[A-Za-z0-9._]+-DW9tQ1fkrBR\.mp4$/ },
@@ -101,8 +116,9 @@ const POSTS = [
   { key: 'facebook', url: 'https://www.facebook.com/reel/930452829785006', video: true, file: /^facebook-930452829785006\.mp4$/ },
   { key: 'reddit', url: 'https://www.reddit.com/r/oddlysatisfying/comments/1wvgywt/jewelry_chain_making_machine/', video: true, file: /^reddit-([A-Za-z0-9_-]+-)?1wvgywt\.mp4$/ },
   { key: 'xPhoto', url: 'https://x.com/NASAKennedy/status/2106096415587840118', video: false, reason: 'no_video', file: /^x-NASAKennedy-2106096415587840118\.jpg$/ },
-  { key: 'youtube', url: 'https://www.youtube.com/watch?v=Paj_NkVbYp4', video: false, reason: 'not_supported', file: /^youtube-Paj_NkVbYp4\.jpg$/ },
-  { key: 'vimeo', url: 'https://vimeo.com/76979871', video: false, reason: 'drm', q: '?part=video' },
+  // YouTube / Vimeo: the video is never downloadable (auto / video -> 422); the thumbnail only with part=image
+  { key: 'youtube', url: 'https://www.youtube.com/watch?v=Paj_NkVbYp4', video: false, reason: 'not_supported', q: '?part=image', unsupported: true, file: /^youtube-Paj_NkVbYp4\.jpg$/ },
+  { key: 'vimeo', url: 'https://vimeo.com/76979871', video: false, reason: 'drm', unsupported: true, status: 422 },
   { key: 'igMissing', url: 'https://www.instagram.com/reel/DZzTestGone0/', ig: true, video: 'fail' },
   { key: 'direct', url: FXB + '/cdn/direct.mp4', video: true, file: /^fikir-\d+-?\.mp4$|^fikir-\d+\.mp4$/ },
 ];
@@ -142,7 +158,7 @@ for (const p of POSTS) {
     assert.equal(logCount(new RegExp(`inspire ig resolve ${id} `)), igBefore + 1, 'the failure backs off: the second request fetched nothing');
     row.note = `HTML error page; JSON reason ${row.reason}`;
   } else if (p.video === false && !p.file) {
-    assert.equal(r.status, 404, `${p.key}: ${r.text().slice(0, 200)}`);
+    assert.equal(r.status, p.status || 404, `${p.key}: ${r.text().slice(0, 200)}`);
     const j = JSON.parse((await dl(id, (p.q ? p.q + '&' : '?') + 'format=json')).text());
     assert.equal(j.reason, p.reason);
     row.reason = j.reason;
@@ -173,6 +189,12 @@ for (const p of POSTS) {
   rows.push(row);
   console.log('# ' + JSON.stringify(row));
   await sleep(p.ig ? 3000 : 800);
+}
+for (const p of POSTS.filter((x) => x.unsupported)) {
+  const info = (await call('GET', `/api/inspire/posts/${ids[p.key]}/download-info`)).data;
+  assert.equal(info.unsupported, true, p.key); assert.equal(info.video, false, p.key);
+  const j = await dl(ids[p.key], '?format=json');
+  assert.equal(j.status, 422, `${p.key}: auto never falls back to the thumbnail`); assert.equal(JSON.parse(j.text()).reason, p.reason);
 }
 for (const k of [...(SKIP_IG ? [] : ['igBlocked', 'igOk']), 'x', 'pinterest', 'tiktok', 'facebook', 'reddit']) {
   const row = rows.find((r) => r.key === k);
@@ -266,7 +288,8 @@ if (!SKIP_IG) {
 // ── invalid ids, text posts, bad parts ──
 {
   for (const p of ['/api/inspire/posts/abc/download', '/api/inspire/posts/1234567890123456/download', '/api/inspire/posts/-1/download']) {
-    assert.equal((await fetchOnce(BASE + p)).status, 404, p);
+    assert.equal((await fetchOnce(BASE + p)).status, 401, p + ' (no session: gated)');
+    assert.equal((await fetchOnce(BASE + p, { headers: { Authorization: 'Bearer ' + SESSION } })).status, 404, p);
   }
   const missing = await dl(999999999);
   assert.equal(missing.status, 404); assert.ok(missing.text().includes('Fikir bulunamadı'));

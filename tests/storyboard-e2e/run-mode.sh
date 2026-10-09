@@ -4,11 +4,13 @@
 #          | kpss | kpss_nopw | kpss_cutoff   (see sb-smoke.mjs for the --var each mode expects)
 # Fake-AI worker (worker/wrangler.sbtest.toml, LOCAL TEST ONLY) on 127.0.0.1:8813 with a fresh local state per run.
 # Never uses port 8765. State + logs go to $SB_E2E_OUT (default: $TMPDIR/fikir-sb-e2e), never into the repo.
+# Board password: a TEST value (FIKIR_E2E_BOARD_PASSWORD, default test-board-pass) passed with --var and to the smoke.
 R="${0:A:h:h:h}"                      # repo root
 HERE="${0:A:h}"
 OUT="${SB_E2E_OUT:-${TMPDIR:-/tmp}/fikir-sb-e2e}"
 MODE="$1"; shift
 PORT=8813
+export FIKIR_E2E_BOARD_PASSWORD="${FIKIR_E2E_BOARD_PASSWORD:-test-board-pass}"
 if lsof -nP -iTCP:$PORT -sTCP:LISTEN >/dev/null; then echo "port $PORT busy"; exit 1; fi
 STATE="$OUT/state-$MODE"; rm -rf "$STATE"; mkdir -p "$STATE" "$OUT/logs"
 cd "$R/worker"
@@ -17,7 +19,8 @@ if [[ "$MODE" == kpss* ]]; then
   npx -y wrangler@4 d1 execute vk-portfolio-sbtest --local -c wrangler.sbtest.toml --persist-to "$STATE" --file "$HERE/kpss-seed.sql" > "$OUT/logs/kpss-seed.log" 2>&1 \
     || { echo "kpss seed failed (see $OUT/logs/kpss-seed.log)"; exit 1; }
 fi
-npx -y wrangler@4 dev -c wrangler.sbtest.toml --local --ip 127.0.0.1 --port $PORT --persist-to "$STATE" --show-interactive-dev-session=false "$@" > "$OUT/logs/worker-$MODE.log" 2>&1 &
+npx -y wrangler@4 dev -c wrangler.sbtest.toml --local --ip 127.0.0.1 --port $PORT --persist-to "$STATE" --show-interactive-dev-session=false \
+  --var FIKIR_BOARD_PASSWORD:$FIKIR_E2E_BOARD_PASSWORD "$@" > "$OUT/logs/worker-$MODE.log" 2>&1 &
 WPID=$!
 for i in {1..60}; do grep -q "Ready on" "$OUT/logs/worker-$MODE.log" && break; sleep 1; done
 node "$HERE/sb-smoke.mjs" "http://127.0.0.1:$PORT" "$MODE"; RC=$?

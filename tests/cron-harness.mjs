@@ -265,6 +265,7 @@ export function makeWorld({ vars = {}, fetchOpts = {}, wfStatus = 'errored' } = 
     ALLOWED_ORIGIN: 'https://board.example',
     JWT_SECRET: 'harness-secret',
     ADMIN_PASSWORD: 'harness-admin',
+    FIKIR_BOARD_PASSWORD: 'harness-board-pass',   // TEST value (board password gate, worker/fikir-gate.js)
     DB: db, STORAGE: r2, STORYBOARD_WF: makeWorkflows(stats, wfStatus), BROWSER: makeBrowser(stats, net), AI: makeAI(stats),
     ...vars,
   };
@@ -323,11 +324,12 @@ export function runScheduled(world, worker, cron) {
   });
 }
 // One fetch() invocation; reads the whole response body (a download streams through the worker).
-export function runRequest(world, worker, method, pathname, { token = null, body = null, ip = '203.0.113.7' } = {}) {
+// headers: extra request headers; legacy: no "X-Fikir-Client: 2" (an old cached board page). -> {status, bytes, json, headers, text}
+export function runRequest(world, worker, method, pathname, { token = null, body = null, ip = '203.0.113.7', headers: extra = {}, legacy = false } = {}) {
   return measure(world, async () => {
     const ps = [];
     const ctx = { waitUntil: (p) => ps.push(Promise.resolve(p)), passThroughOnException() {} };
-    const headers = { 'CF-Connecting-IP': ip, 'X-Fikir-Client': '2' };
+    const headers = { 'CF-Connecting-IP': ip, ...(legacy ? {} : { 'X-Fikir-Client': '2' }), ...extra };
     if (token) headers.Authorization = 'Bearer ' + token;
     if (body) headers['Content-Type'] = 'application/json';
     const res = await worker.fetch(new Request('https://api.example' + pathname, { method, headers, body: body ? JSON.stringify(body) : undefined }), world.env, ctx);
@@ -335,7 +337,7 @@ export function runRequest(world, worker, method, pathname, { token = null, body
     await settle(ps);
     let json = null;
     try { json = JSON.parse(buf.toString('utf8')); } catch (e) {}
-    return { status: res.status, bytes: buf.length, json };
+    return { status: res.status, bytes: buf.length, json, headers: Object.fromEntries(res.headers), text: () => buf.toString('utf8') };
   });
 }
 
@@ -351,7 +353,7 @@ export async function readyWorld(opts = {}) {
   return { w, warm };
 }
 export async function guestToken(world, worker, cid = 'harness-cid-0001') {
-  const r = await runRequest(world, worker, 'POST', '/api/inspire/guest', { body: { cid, name: 'Deneme' } });
+  const r = await runRequest(world, worker, 'POST', '/api/inspire/guest', { body: { cid, name: 'Deneme', password: world.env.FIKIR_BOARD_PASSWORD } });
   return r.result.json.token;
 }
 export async function adminToken(world, worker) {
@@ -527,8 +529,10 @@ export async function scenarios() {
     const [a, b, c, d] = seedIgPosts(w, ['Rdownl00001', 'Rcopy000001', 'Rcopy000002', 'Rrep0000001']);
     seedIgCache(w, [a, b]);
     seedEmbedState(w, [b, c], 'blocked');   // guests copy only reels whose embed was found blocked
+    // a download is a navigation without the session header: the link of download-info carries the session's ticket (?k=)
+    const link = (await runRequest(w, warm, 'GET', `/api/inspire/posts/${a}/download-info`, { token: tok })).result.json.url;
     add('GET download (IG: cached link dead, Browser Run re-resolve, redirects), cold', 'request',
-      await runRequest(w, await loadIsolate(), 'GET', `/api/inspire/posts/${a}/download?part=video`), { status: 200 });
+      await runRequest(w, await loadIsolate(), 'GET', `${link}&part=video`), { status: 200 });
     add('POST ig-copy (guest: cached link dead, Browser Run re-resolve, redirects), cold', 'request',
       await runRequest(w, await loadIsolate(), 'POST', `/api/inspire/posts/${b}/ig-copy`, { token: tok }), { status: 201 });
     takeBrSlot(w);
@@ -539,7 +543,7 @@ export async function scenarios() {
     // the post owner's report of a never-checked post: the one case (with the admin's) that fetches the embed page
     add('POST ig-blocked (unchecked post: embed fetch), cold', 'request',
       await runRequest(w, await loadIsolate(), 'POST', `/api/inspire/posts/${d}/ig-blocked`, { token: tok }), { status: 200 });
-    add('GET download-info, cold', 'request', await runRequest(w, await loadIsolate(), 'GET', `/api/inspire/posts/${a}/download-info`), { status: 200 });
+    add('GET download-info, cold', 'request', await runRequest(w, await loadIsolate(), 'GET', `/api/inspire/posts/${a}/download-info`, { token: tok }), { status: 200 });
   }
   {
     const { w, warm } = await readyWorld({ fetchOpts: { redirects: 3 } });

@@ -2324,8 +2324,8 @@
       m.playBtn = h('button', { type: 'button', class: 'pv-btn pv-play', 'data-action': 'pv-play', 'aria-label': 'Oynat', hidden: canAutoplay(m) }, '▶');
       m.pauseBtn = h('button', { type: 'button', class: 'pv-btn pv-pause', 'data-action': 'pv-pause', 'aria-label': 'Duraklat', title: 'Duraklat', hidden: true });
       m.soundBtn = h('button', { type: 'button', class: 'pv-btn pv-sound', 'data-action': 'pv-sound', 'aria-label': 'Sesi aç', title: 'Sesi aç', translate: 'no', hidden: !sound }, '🔇');
-      box.append(m.playBtn, m.pauseBtn, m.soundBtn,
-        open && href ? h('a', { class: 'pv-btn pv-open', 'data-action': 'pv-open', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', 'aria-label': 'Kaynakta aç', title: 'Kaynakta aç' }, '↗') : null);
+      box.append(m.playBtn, m.pauseBtn, m.soundBtn);
+      if (open && href) box.append(h('a', { class: 'pv-btn pv-open', 'data-action': 'pv-open', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', 'aria-label': 'Kaynakta aç', title: 'Kaynakta aç' }, '↗'));
       entry.media = m;
       pvOwner.set(box, m);
       return box;

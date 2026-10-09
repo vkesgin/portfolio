@@ -15,6 +15,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as nodeModule from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
+import { CMAF_VIDEO, CMAF_AUDIO } from './fmp4.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(HERE, '..');
@@ -198,18 +199,33 @@ export function makeAI(stats) {
 // Instagram: the page of a code is tests/fixtures/video/ig-reel.html with that code (padKB pads it like the real
 // 0.8-0.95 MB pages); embeds by state; CDN files are small MP4 / JPEG bodies with valid magic bytes; magnific.com pages
 // answer the 403 security filter (link previews then need Browser Run).
+// The other copy platforms answer with their fixtures (tests/fixtures/video): X syndication JSON, the TikTok page (+ its
+// tt_chain_token cookie), Pinterest PinResource (pin id 1… video pin, 2… idea pin: HLS only, 3… image pin) and the HEADs of
+// an idea pin's progressive file, the Reddit feed + DASH playlist + CMAF picture / sound files (tests/fmp4.mjs), the
+// Facebook reel page.
 //   ig: 'ok' (plain fetch finds the post) | 'login' (redirect to the login page: Browser Run needed)
 //   embed(code): 'blocked' | 'ok' | 'photo' | 'fail' (HTTP 500)
 //   deadCached: Instagram CDN links seeded by seedIgCache answer 404 (cached links that died; fresh ones work)
-//   redirects: hops every non-Instagram request goes through first (the worker follows <= 3)
+//   redirects: hops every non-Instagram request goes through first (the worker follows <= 3 for files, <= 2 for a
+//              platform's page / API); a number, or (url) => number
+//   pinHeadOk: the n-th HEAD of an idea pin's progressive-file candidates that answers 200 (the others 403)
+//   redditFeed: HTTP status of Reddit's post feed (200, or e.g. 429: rate-limited)
 export function makeFetch(stats, opts = {}) {
-  const o = { ig: 'ok', embed: () => 'ok', padKB: 0, deadCached: false, redirects: 0, videoBytes: 300000, ...opts };
+  const o = { ig: 'ok', embed: () => 'ok', padKB: 0, deadCached: false, redirects: 0, videoBytes: 300000, pinHeadOk: 1, redditFeed: 200, ...opts };
   const pad = o.padKB ? `<script type="application/json" data-sjs>{"pad":"${'x'.repeat(o.padKB * 1024)}"}</script>` : '';
   const reel = FX('video/ig-reel.html').toString('utf8');
   const igPage = (code) => reel.replaceAll('DTestReel01', code).replace('</body>', pad + '</body>');
   const embeds = { blocked: FX('video/ig-embed-blocked.html').toString('utf8'), ok: FX('video/ig-embed-ok.html').toString('utf8'), photo: FX('video/ig-embed-photo.html').toString('utf8') };
   const hops = new Map();
-  const html = (body, status = 200) => new Response(body, { status, headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+  let pinHeads = 0;
+  const html = (body, status = 200, extra = {}) => new Response(body, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', ...extra } });
+  const typed = (body, type, status = 200, extra = {}) => new Response(body, { status, headers: { 'Content-Type': type, ...extra } });
+  const file = (bytes, range) => {
+    const m = range && /bytes=0-(\d+)/.exec(range);
+    const b = m ? bytes.subarray(0, Number(m[1]) + 1) : bytes;
+    return new Response(b, { status: m ? 206 : 200, headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(b.length) } });
+  };
+  const redirectsFor = (u) => (typeof o.redirects === 'function' ? o.redirects(u) : o.redirects);
   const fetchFn = (input, init = {}) => fakeCpu(stats, async () => respond(input, init));
   const respond = (input, init) => {
     const url = typeof input === 'string' ? input : input.url;
@@ -218,10 +234,11 @@ export function makeFetch(stats, opts = {}) {
     const u = new URL(url);
     const hdr = init.headers || {};
     const accept = String(hdr.Accept || hdr.accept || '');
-    if (o.redirects && u.hostname !== 'www.instagram.com') {
+    const redirects = u.hostname !== 'www.instagram.com' ? redirectsFor(u) : 0;
+    if (redirects) {
       const key = u.href.replace(/[?&]_hop=\d+$/, '');
       const n = hops.get(key) || 0;
-      if (n < o.redirects) {
+      if (n < redirects) {
         hops.set(key, n + 1);
         return new Response(null, { status: 302, headers: { Location: key + (key.includes('?') ? '&' : '?') + '_hop=' + (n + 1) } });
       }
@@ -235,9 +252,30 @@ export function makeFetch(stats, opts = {}) {
       return html(igPage(m[2]));
     }
     if (/(^|\.)magnific\.com$/.test(u.hostname)) return html(FX('media/magnific-security-filter.html'), 403);
+    const range = hdr.Range || hdr.range;
+    // the other copy platforms (their adapters in worker/inspire-video.js)
+    if (u.hostname === 'cdn.syndication.twimg.com') return typed(FX('video/x-video.json'), 'application/json');
+    if (u.hostname === 'www.tiktok.com' && /^\/@[^/]*\/video\/\d+$/.test(u.pathname)) {
+      return html(FX('video/tiktok-video.html'), 200, { 'Set-Cookie': 'tt_chain_token=HarnessToken01; path=/; secure' });
+    }
+    if (u.hostname === 'www.pinterest.com' && u.pathname === '/resource/PinResource/get/') {
+      const id = (/"id":"(\d+)"/.exec(u.searchParams.get('data') || '') || [])[1] || '';
+      return typed(FX(`video/${id.startsWith('2') ? 'pin-story' : id.startsWith('3') ? 'pin-image' : 'pin-video'}.json`), 'application/json');
+    }
+    if (u.hostname === 'v1.pinimg.com' && (init.method || 'GET') === 'HEAD') {
+      return ++pinHeads === o.pinHeadOk ? typed(null, 'video/mp4', 200, { 'Content-Length': '300000' }) : typed(null, 'text/html', 403);
+    }
+    if (/^(www|old)\.reddit\.com$/.test(u.hostname) && u.pathname.endsWith('/.rss')) {
+      return o.redditFeed === 200 ? typed(FX('video/reddit-post.rss'), 'application/atom+xml') : typed('Too Many Requests', 'text/plain', o.redditFeed);
+    }
+    if (u.hostname === 'v.redd.it') {
+      if (u.pathname.endsWith('/DASHPlaylist.mpd')) return typed(FX('video/reddit-dash.mpd'), 'application/dash+xml');
+      if (/\/CMAF_AUDIO_\d+\.mp4$/.test(u.pathname)) return file(CMAF_AUDIO, range);
+      if (/\/CMAF_\d+\.mp4$/.test(u.pathname)) return file(CMAF_VIDEO, range);
+    }
+    if (u.hostname === 'www.facebook.com' && u.pathname.startsWith('/reel/')) return html(FX('video/fb-reel.html'));
     const video = /video/.test(accept) || /\.mp4$/.test(u.pathname);
     if (o.deadCached && /(cdninstagram\.com|fbcdn\.net)$/.test(u.hostname) && u.pathname.includes('/CACHED-')) return new Response('gone', { status: 404 });
-    const range = hdr.Range || hdr.range;
     if (video) {
       const n = o.videoBytes;
       const b = new Uint8Array(n);
@@ -324,7 +362,8 @@ export function runScheduled(world, worker, cron) {
   });
 }
 // One fetch() invocation; reads the whole response body (a download streams through the worker).
-// headers: extra request headers; legacy: no "X-Fikir-Client: 2" (an old cached board page). -> {status, bytes, json, headers, text}
+// headers: extra request headers; legacy: no "X-Fikir-Client: 2" (an old cached board page).
+// -> {status, bytes, json, headers, text, waits (ctx.waitUntil calls: work that outlives a client disconnect)}
 export function runRequest(world, worker, method, pathname, { token = null, body = null, ip = '203.0.113.7', headers: extra = {}, legacy = false } = {}) {
   return measure(world, async () => {
     const ps = [];
@@ -337,7 +376,7 @@ export function runRequest(world, worker, method, pathname, { token = null, body
     await settle(ps);
     let json = null;
     try { json = JSON.parse(buf.toString('utf8')); } catch (e) {}
-    return { status: res.status, bytes: buf.length, json, headers: Object.fromEntries(res.headers), text: () => buf.toString('utf8') };
+    return { status: res.status, bytes: buf.length, json, headers: Object.fromEntries(res.headers), text: () => buf.toString('utf8'), waits: ps.length };
   });
 }
 
@@ -366,6 +405,40 @@ export function seedIgPosts(world, codes, { kind = 'reel' } = {}) {
   const g = guestRow(world);
   return codes.map((c) => Number(sqlRun(world, "INSERT INTO inspire_posts (user_id, type, url, description, url_key, client_id) VALUES (?, 'instagram', ?, '', ?, 'harness-cid-0001')",
     g, `https://www.instagram.com/${kind}/${c}/`, `instagram:${c}`).lastInsertRowid));
+}
+// Posts of the other copy platforms (guest cid harness-cid-0001; urls of the fixtures' ids); -> {name: id}
+export const PLATFORM_POSTS = {
+  x: ['x', 'https://x.com/ornek_studio/status/1900000000000000001'],
+  tiktok: ['tiktok', 'https://www.tiktok.com/@ornek.tiktok/video/7000000000000000001'],
+  facebook: ['facebook', 'https://www.facebook.com/reel/500000000000001'],
+  pinVideo: ['pinterest', 'https://www.pinterest.com/pin/100000000000000001/'],
+  pinIdea: ['pinterest', 'https://www.pinterest.com/pin/200000000000000001/'],
+  pinImage: ['pinterest', 'https://www.pinterest.com/pin/300000000000000001/'],
+  reddit: ['web', 'https://www.reddit.com/r/ornek/comments/1abcdef/ornek_makine/'],
+  youtube: ['youtube', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'],
+};
+// The Reddit post's link preview as the board stores it (its v.redd.it picture-only file: no feed request needed)
+export const REDDIT_PREVIEW_META = { v: 2, via: 'plain', title: 'Örnek makine', provider: 'reddit.com',
+  media: { mv: 1, kind: 'video', url: 'https://v.redd.it/testvid0001/CMAF_720.mp4', poster: 'https://external-preview.redd.it/TestThumb01.png', autoplay: true, verified: true, source: 'og' } };
+let seedSeq = 0;
+export function seedPlatformPosts(world, names, { meta = {} } = {}) {
+  const g = guestRow(world);
+  const out = {};
+  for (const n of names) {
+    const [type, url] = PLATFORM_POSTS[n];
+    out[n] = Number(sqlRun(world, "INSERT INTO inspire_posts (user_id, type, url, description, url_key, client_id, meta) VALUES (?, ?, ?, '', ?, 'harness-cid-0001', ?)",
+      g, type, url, `harness:${n}:${++seedSeq}`, meta[n] ? JSON.stringify(meta[n]) : null).lastInsertRowid);
+  }
+  return out;
+}
+// The worst redirect chains the worker still follows: a platform's page / API 2 hops (adFetch), files 3 hops (openMedia);
+// Reddit's picture file none (its first bytes are read with a Range request that never follows a redirect)
+export function worstHops(u) {
+  const h = u.hostname;
+  if (['cdn.syndication.twimg.com', 'www.tiktok.com', 'www.pinterest.com', 'www.reddit.com', 'www.facebook.com'].includes(h)) return 2;
+  if (h === 'v1.pinimg.com') return 2;   // HEADs of an idea pin's progressive file go through adFetch too (its GET follows 3: same key)
+  if (h === 'v.redd.it') return u.pathname.endsWith('.mpd') ? 2 : /CMAF_AUDIO/.test(u.pathname) ? 3 : 0;
+  return 3;
 }
 export function seedEmbedState(world, ids, state) {
   const now = nowS();
@@ -438,6 +511,15 @@ const backlogFacts = (w) => ({
   mediaRows: count(w, 'SELECT COUNT(*) AS n FROM inspire_media'),
   brPending: count(w, `SELECT COUNT(*) AS n FROM inspire_posts WHERE meta LIKE '%"pending":"br"%'`),
 });
+const copyFacts = (w) => {
+  const by = Object.fromEntries(sqlAll(w, "SELECT json_extract(media, '$.source') AS s, COUNT(*) AS n FROM inspire_posts WHERE media IS NOT NULL GROUP BY 1").map((r) => [r.s, r.n]));
+  return {
+    by, copied: Object.values(by).reduce((a, b) => a + b, 0),
+    records: sqlAll(w, "SELECT kind, error, retry_at FROM inspire_video_cache WHERE kind IN ('ig_copy', 'ad_copy')"),
+    mediaRows: count(w, 'SELECT COUNT(*) AS n FROM inspire_media'), r2Objects: w.r2.objs.size,
+    media: sqlAll(w, 'SELECT id, media FROM inspire_posts WHERE media IS NOT NULL').map((r) => ({ id: r.id, ...JSON.parse(r.media) })),
+  };
+};
 const igFacts = (w) => ({
   copied: count(w, "SELECT COUNT(*) AS n FROM inspire_posts WHERE json_extract(media, '$.source') = 'instagram'"),
   embedRows: count(w, "SELECT COUNT(*) AS n FROM inspire_video_cache WHERE kind = 'ig_embed'"),
@@ -489,6 +571,13 @@ export async function scenarios() {
     add('ig, plain resolve (2nd run), warm', 'cron', await runScheduled(w, warm, CRON_IG), { facts: igFacts(w) });
   }
   {
+    // the earlier rollout step (FIKIR_IG_AUTO=blocked, one copy per run): a copy and the embed checks in every run
+    const { w, warm } = await igWorld({ ig: 'ok' }, { FIKIR_IG_AUTO: 'blocked', FIKIR_IG_CRON_COPIES: '1' });
+    add('ig, blocked only, one copy per run, cold', 'cron', await runScheduled(w, await loadIsolate(), CRON_IG), { facts: igFacts(w) });
+    advanceClock(900);
+    add('ig, blocked only, one copy per run (2nd run), warm', 'cron', await runScheduled(w, warm, CRON_IG), { facts: igFacts(w) });
+  }
+  {
     const { w, warm } = await igWorld({ ig: 'login', redirects: 3 });
     add('ig, Browser Run resolve, 3-hop CDN, cold', 'cron', await runScheduled(w, await loadIsolate(), CRON_IG), { facts: igFacts(w) });
     advanceClock(900);
@@ -498,14 +587,14 @@ export async function scenarios() {
   {
     // worst copy: Browser Run after a slot wait, 3-hop CDN links, the commit lost to a manual preview (undo path);
     // no embed checks: unit = run - fixed part (warm: cleanup 1 + queue select 1)
-    const { w, warm } = await igWorld({ ig: 'login', redirects: 3 }, { FIKIR_IG_CRON_CHECKS: '0' });
+    const { w, warm } = await igWorld({ ig: 'login', redirects: 3 }, { FIKIR_IG_CRON_CHECKS: '0', FIKIR_IG_CRON_COPIES: '1' });
     takeBrSlot(w);
     loseCommitOnPut(w);
     add('ig, worst copy (slot wait, redirects, commit lost), warm', 'unit', await runScheduled(w, warm, CRON_IG), { cost: 'igCopy', fixed: 2, facts: igFacts(w) });
   }
   {
     // a cached link that died: the cron marks it stale and fails softly (no second resolve in the same run) ...
-    const { w, warm, blocked } = await igWorld({ ig: 'login', deadCached: true }, { FIKIR_IG_CRON_CHECKS: '0' });
+    const { w, warm, blocked } = await igWorld({ ig: 'login', deadCached: true }, { FIKIR_IG_CRON_CHECKS: '0', FIKIR_IG_CRON_COPIES: '1' });
     seedIgCache(w, blocked);
     add('ig, cached link dead (soft failure), warm', 'unit', await runScheduled(w, warm, CRON_IG), { cost: 'igCopy', fixed: 2, facts: igFacts(w) });
     advanceClock(900);   // ... and the next run (past the 10-minute backoff) resolves the post again and copies it
@@ -520,6 +609,46 @@ export async function scenarios() {
     const { w } = await igWorld({ ig: 'ok' }, { FIKIR_IG_AUTO: 'all' });
     seedIgPosts(w, Array.from({ length: 30 }, (_, i) => `Pall${String(i).padStart(7, '0')}`), { kind: 'p' });
     add('ig, FIKIR_IG_AUTO=all with 39 posts, cold', 'cron', await runScheduled(w, await loadIsolate(), CRON_IG), { facts: igFacts(w) });
+  }
+
+  {
+    // the second Instagram copy of a run never uses Browser Run: its worst case (plain resolve, 3-hop CDN, the commit lost)
+    // measured as a unit (Browser Run off; unit = run - fixed: cleanup 1 + queue select 1)
+    const { w, warm } = await igWorld({ ig: 'ok', redirects: 3 }, { FIKIR_IG_CRON_CHECKS: '0', FIKIR_IG_CRON_COPIES: '1', FIKIR_BR: '0' });
+    loseCommitOnPut(w);
+    add('ig, plain copy worst (3-hop CDN, commit lost), warm', 'unit', await runScheduled(w, warm, CRON_IG), { cost: 'igCopyPlain', fixed: 2, facts: igFacts(w) });
+  }
+
+  // "7-59/15": copies of the other platforms (adapters), one per run as a unit (unit = run - fixed: cleanup 1 + select 1)
+  {
+    // cost: the platform's own worst case (CRON_COSTS.adCopyBy.<platform>); every one is also within CRON_COSTS.adCopy
+    const unit = async (label, names, fetchOpts = {}, { meta = {}, lose = false, vars = {} } = {}) => {
+      const x = await readyWorld({ fetchOpts: { redirects: worstHops, ...fetchOpts }, vars: { FIKIR_IG_CRON_CHECKS: '0', FIKIR_IG_CRON_COPIES: '1', ...vars } });
+      const ids = seedPlatformPosts(x.w, names, { meta });
+      if (lose) loseCommitOnPut(x.w);
+      const pf = PLATFORM_POSTS[names[0]][0] === 'web' ? 'reddit' : PLATFORM_POSTS[names[0]][0];
+      add(label, 'unit', await runScheduled(x.w, x.warm, CRON_IG), { cost: 'adCopyBy.' + pf, fixed: 2, ids, facts: copyFacts(x.w) });
+    };
+    await unit('copy, TikTok (page + cookie, worst redirects), warm', ['tiktok']);
+    await unit('copy, X (syndication, worst redirects), warm', ['x']);
+    await unit('copy, Facebook reel (poster size, worst redirects), warm', ['facebook']);
+    await unit('copy, Pinterest idea pin (4 HEADs, worst redirects), warm', ['pinIdea'], { pinHeadOk: 4 });
+    await unit('copy, Reddit (feed + DASH + picture/sound mux, worst redirects), warm', ['reddit']);
+    await unit('copy, Reddit with a link-preview video (feed read for author + title), warm', ['reddit'], {}, { meta: { reddit: REDDIT_PREVIEW_META } });
+    await unit('copy, Reddit feed refused (429): the preview video, its generic title dropped, warm', ['reddit'], { redditFeed: 429 },
+      { meta: { reddit: { ...REDDIT_PREVIEW_META, title: 'Reddit - İnternetin kalbi' } } });
+    await unit('copy, TikTok commit lost (undo), warm', ['tiktok'], {}, { lose: true });
+    await unit('copy, image pin (no video: 30-day record), warm', ['pinImage']);
+  }
+  {
+    // the production queue: every platform waiting, two copies per run (Browser Run never for the second), 3 runs
+    const { w, warm } = await igWorld({ ig: 'ok' });
+    seedPlatformPosts(w, ['x', 'tiktok', 'facebook', 'pinVideo', 'pinImage', 'reddit', 'youtube']);
+    add('ig, every platform queued (1st run), cold', 'cron', await runScheduled(w, await loadIsolate(), CRON_IG), { facts: copyFacts(w) });
+    for (const n of [2, 3, 4, 5, 6, 7, 8]) {
+      advanceClock(900);
+      add(`ig, every platform queued (run ${n}), warm`, 'cron', await runScheduled(w, warm, CRON_IG), { facts: copyFacts(w) });
+    }
   }
 
   // requests that can do heavy work, on cold isolates (the board's first request after an isolate starts)
@@ -544,6 +673,26 @@ export async function scenarios() {
     add('POST ig-blocked (unchecked post: embed fetch), cold', 'request',
       await runRequest(w, await loadIsolate(), 'POST', `/api/inspire/posts/${d}/ig-blocked`, { token: tok }), { status: 200 });
     add('GET download-info, cold', 'request', await runRequest(w, await loadIsolate(), 'GET', `/api/inspire/posts/${a}/download-info`, { token: tok }), { status: 200 });
+  }
+  {
+    // a card in view asks for its copy (POST /copy): the heavy paths of every platform, each on a cold isolate
+    const { w, warm } = await readyWorld({ fetchOpts: { ig: 'login', deadCached: true, redirects: worstHops, pinHeadOk: 4 } });
+    const tok = await guestToken(w, warm, 'harness-cid-0003');
+    const [ig, igDead] = seedIgPosts(w, ['Vview000001', 'Vview000002']);
+    seedIgCache(w, [igDead]);
+    const p = seedPlatformPosts(w, ['tiktok', 'reddit', 'pinIdea', 'pinImage', 'x']);
+    const view = async (label, id, status) => add(label, 'request', await runRequest(w, await loadIsolate(), 'POST', `/api/inspire/posts/${id}/copy`, { token: tok }), { status, id });
+    await view('POST copy (on view: Instagram via Browser Run, 3-hop CDN), cold', ig, 201);
+    advanceClock(30);   // the Browser Run slot is free again
+    await view('POST copy (on view: Instagram cached link dead, Browser Run re-resolve), cold', igDead, 201);
+    await view('POST copy (on view: TikTok, worst redirects), cold', p.tiktok, 201);
+    await view('POST copy (on view: Reddit feed + DASH + mux), cold', p.reddit, 201);
+    await view('POST copy (on view: Pinterest idea pin, 4 HEADs), cold', p.pinIdea, 201);
+    await view('POST copy (on view: image pin -> never), cold', p.pinImage, 200);
+    await view('POST copy (on view: copy exists), cold', p.tiktok, 200);
+    add('GET /posts (current board: copy_view hints), cold', 'request', await runRequest(w, await loadIsolate(), 'GET', '/api/inspire/posts', { token: tok }), { status: 200 });
+    add('DELETE copy (post owner: TikTok copy), cold', 'request', await runRequest(w, await loadIsolate(), 'DELETE', `/api/inspire/posts/${p.tiktok}/copy`, { token: await guestToken(w, warm) }), { status: 200 });
+    await view('POST copy (on view: removed copy -> never), cold', p.tiktok, 200);
   }
   {
     const { w, warm } = await readyWorld({ fetchOpts: { redirects: 3 } });

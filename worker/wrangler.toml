@@ -48,22 +48,38 @@ FIKIR_UP_PER_CID_MB = "100"
 FIKIR_UP_PER_IP_N = "20"       # uploads per IP per UTC day (guest cids are client-chosen)
 FIKIR_UP_PER_IP_MB = "200"
 FIKIR_UP_DAILY_MB = "1000"     # all guest/user uploads per UTC day
-FIKIR_UP_TOTAL_MB = "6000"     # lead: set after checking current vk-portfolio-files usage (R2 Free 10 GB)
-# Downloads + Instagram copies (worker/inspire-video.js): GET /api/inspire/posts/:id/download, POST .../ig-copy, cron.
+FIKIR_UP_TOTAL_MB = "6000"     # all live board files (uploads + R2 copies) together, checked before every write; R2 Free = 10 GB.
+# R2 copies, estimate (2026-10-09): the board had 95 posts on 2026-10-08 (78 Instagram: 19 /reel/ + 59 /p/, 8 Pinterest pins,
+# 3 YouTube never copied, the rest text / links). Copies measured: Instagram reels 1.5-20 MB (mean ~7 MB, median ~6 MB),
+# TikTok 2.7 MB, X 7.8 MB (47 s), Reddit 4.2 MB (16 s, picture + sound joined), posters 0.05-0.3 MB. Upper bound for the
+# current board (every Instagram post a video): 78 x ~7 MB + a few pins ~ 0.6 GB (the 5 blocked reels already copied: ~40 MB;
+# /p/ photos and image pins copy nothing). New video posts add ~3-8 MB each (40 MB cap per copy): 6000 MB leaves room for
+# ~800+ more. R2 operations: 2 writes per copy; plays are range reads (Free: 1M writes / 10M reads a month, no egress fee).
+# Downloads + R2 copies of video posts (worker/inspire-video.js): GET /api/inspire/posts/:id/download, POST .../copy (cards in
+# view), POST .../ig-copy, cron "7-59/15". A copy plays on the board as our player + caption + "@user · Platform".
 FIKIR_DL = "1"                 # "0" turns the download links off
 FIKIR_DL_DAILY = "1500"        # downloads that fetch from elsewhere per UTC day, whole site (our R2 copies/uploads and the
                                # admin's ticketed links do not count; plus 40 per IP / 10 min in code)
 FIKIR_DL_MAX_MB = "200"        # largest file a download streams through
-FIKIR_IG_COPY = "1"            # "0" turns R2 copies of Instagram videos off (route and cron)
-FIKIR_IG_AUTO = "blocked"      # cron: off | blocked (copy reels whose embed shows "Instagram'da İzle") | all (every Instagram video, /p/ links too, blocked first; ~6 MB each)
-FIKIR_IG_COPY_DAILY = "40"     # R2 copies per UTC day by the cron + guests (guests together at most half; admin exempt). Bytes count
-                               # into FIKIR_UP_DAILY_MB (not the admin's) and FIKIR_UP_TOTAL_MB; a guest's copies also into FIKIR_UP_PER_CID_* / _PER_IP_*
-FIKIR_IG_COPY_MB = "40"        # largest Instagram video copied
+FIKIR_IG_COPY = "1"            # "0" turns R2 copies of Instagram videos off (routes and cron)
+FIKIR_IG_AUTO = "all"          # Instagram copies without anyone asking (cron + cards in view): off | blocked (reels whose embed shows
+                               # "Instagram'da İzle") | all (every Instagram video post, /p/ and /tv/ links too, blocked first; photos drop out)
+FIKIR_COPY_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # other platforms whose video posts are copied (cron + cards in view),
+                               # through the download adapters (each must also be in FIKIR_DL_ADAPTERS); "" = Instagram only
+FIKIR_IG_COPY_DAILY = "150"    # R2 copies per UTC day, every platform: cron + cards in view + requests (guests' requests together at most
+                               # half; admin exempt). Bytes count into FIKIR_UP_DAILY_MB (not the admin's) and FIKIR_UP_TOTAL_MB; a
+                               # guest's requested copies also into FIKIR_UP_PER_CID_* / _PER_IP_*
+FIKIR_IG_COPY_MB = "40"        # largest video copied (any platform; a Reddit video is measured after joining picture + sound)
+FIKIR_COPY_VIEW = "1"          # "1": a card in view asks for its post's copy (POST .../copy, any board session); "0" off
+FIKIR_COPY_VIEW_DAILY = "100"  # on-view copies per UTC day, whole site (inside FIKIR_IG_COPY_DAILY; admin exempt)
+FIKIR_COPY_VIEW_PER_SESSION = "20"   # ... per guest cid / user per UTC day (plus 60 requests / hour in code)
+FIKIR_COPY_VIEW_PER_IP = "40"  # ... per IP per UTC day (plus 120 requests / hour in code)
 FIKIR_IG_FETCH_DAILY = "300"   # Instagram page + embed fetches by the worker per UTC day (plus 20 per 10 min in code)
-FIKIR_IG_CRON_COPIES = "1"     # copies per Instagram cron run ("7-59/15", every 15 min; each also gated by the run's D1/subrequest budget)
-FIKIR_IG_CRON_CHECKS = "2"     # embed checks per Instagram cron run (same gate)
+FIKIR_IG_CRON_COPIES = "2"     # copies per "7-59/15" cron run (every 15 min, any platform; each also gated by the run's D1/subrequest
+                               # budget: a second copy never uses Browser Run and starts only when its worst case still fits)
+FIKIR_IG_CRON_CHECKS = "2"     # Instagram embed checks per cron run (same gate)
 FIKIR_DL_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # platforms whose videos downloads resolve (drop one to turn it off; YouTube/Vimeo cannot be downloaded)
-FIKIR_DL_AD_DAILY = "400"      # platform page/API fetches for downloads per UTC day (plus 20 per platform / 10 min in code)
+FIKIR_DL_AD_DAILY = "400"      # platform page/API fetches for downloads + copies per UTC day (plus 20 per platform / 10 min in code)
 # Board password gate (worker/fikir-gate.js): every /api/inspire/* route but GET /config, POST /guest and POST /login needs
 # a session; guests get one with the secret FIKIR_BOARD_PASSWORD. The board's R2 files (/files/fikir/*, /files/sb/*) need
 # the files token (?t=) the API appends for a session; "0" serves them public by unguessable URL again (rollback switch).
@@ -94,6 +110,6 @@ class_name = "StoryboardWorkflow"   # exported from index.js; same script, so no
 # its own Workers Free limits (50 D1 queries, 50 external subrequests, 10 ms CPU), and every run is metered to stay under
 # 40 D1 statements / 35 subrequests (tests/cron-budget.test.mjs). Free allows 5 Cron Triggers per ACCOUNT: this worker uses 2.
 #   "*/15 * * * *"     stale storyboard jobs, orphan sweep, quota/ledger/rate pruning, upload cleanup, link-preview Browser Run retries
-#   "7-59/15 * * * *"  Instagram embed checks + R2 copies of blocked reels (FIKIR_IG_AUTO), minutes 7/22/37/52
+#   "7-59/15 * * * *"  R2 copies of video posts (FIKIR_IG_AUTO, FIKIR_COPY_ADAPTERS) + Instagram embed checks, minutes 7/22/37/52
 [triggers]
 crons = ["*/15 * * * *", "7-59/15 * * * *"]

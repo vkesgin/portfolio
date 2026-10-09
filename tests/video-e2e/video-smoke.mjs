@@ -1,7 +1,8 @@
-// video-smoke.mjs: end-to-end checks of downloads + Instagram copies against a local `wrangler dev` (see run-smoke.sh):
+// video-smoke.mjs: end-to-end checks of downloads + R2 copies against a local `wrangler dev` (see run-smoke.sh):
 // GET /posts/:id/download (stored media, link-preview media, direct files, refusals, error page, rate limit),
 // /download-info, the `dl` hint in GET /posts, /ig-copy and /ig-blocked guards (sessions, blocked embeds only, who may
-// make the server re-check an embed). Non-Instagram media come from
+// make the server re-check an embed), POST/DELETE /copy (cards in view; guards and answers from the copy records, no
+// network) and the copy_view hints of GET /posts. Non-Instagram media come from
 // tests/media-e2e/fixture-server.mjs on 127.0.0.1:4741. With VIDEO_E2E_REAL_IG=1 it also talks to the real Instagram
 // for two public reels (one whose embed is blocked, one control): embed checks, a download, an R2 copy, removal and
 // the cron copy. That is 3 www.instagram.com page requests and ~6 CDN file requests, spaced 3 s apart.
@@ -34,6 +35,9 @@ const POSTER = fs.readFileSync(path.join(HERE, '../fixtures/media/poster.jpg'));
 const devVars = Object.fromEntries(fs.readFileSync(path.join(WORKER, '.dev.vars'), 'utf8').split('\n').filter((l) => l.includes('='))
   .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
 const BOARD_PW = process.env.FIKIR_E2E_BOARD_PASSWORD || devVars.FIKIR_BOARD_PASSWORD || 'test-board-pass';
+// [vars] of the config the worker runs with (the daily copy budget the checks below fill up)
+const tomlVar = (k) => Number((new RegExp(`^${k}\\s*=\\s*"(\\d+)"`, 'm').exec(fs.readFileSync(path.join(WORKER, CONFIG), 'utf8')) || [])[1]);
+const COPY_DAILY = tomlVar('FIKIR_IG_COPY_DAILY') || 40;
 let n = 0;
 const ok = (msg) => console.log(`ok ${++n} ${msg}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -123,7 +127,10 @@ const cfg = await call('GET', '/api/inspire/config', null, g.token);
 assert.equal(cfg.status, 200);
 assert.equal(cfg.data.media.download, true);
 assert.equal(cfg.data.media.ig_copy, true);
-ok('config: media.download / ig_copy flags');
+assert.equal(cfg.data.media.copy_view, true);
+assert.deepEqual(cfg.data.media.copy, ['instagram', 'x', 'tiktok', 'facebook', 'pinterest', 'reddit'], 'never YouTube / Vimeo');
+assert.equal((await call('GET', '/api/inspire/config')).data.media.copy_view, false, 'no on-view copies without a session');
+ok('config: media.download / ig_copy / copy_view flags, copy platforms');
 
 const FX = (p) => FXB + p;
 const meta = (o) => JSON.stringify({ v: 2, via: 'plain', checked: Math.floor(Date.now() / 1000), provider: 'example.com', ...o });
@@ -144,6 +151,10 @@ const posts = {
   igRep: { type: 'instagram', url: 'https://www.instagram.com/reel/DAaaaaaaa10/', meta: null },
   // YouTube Shorts: never downloadable (no request is made); only its thumbnail on request
   yt: { type: 'youtube', url: 'https://www.youtube.com/shorts/jNQXAC9IVRw', meta: null },
+  // on-view copies (POST /copy): answered from seeded copy records, never fetched
+  ttGone: { type: 'tiktok', url: 'https://www.tiktok.com/@ornek.tiktok/video/7000000000000000099', meta: null },
+  pinNoVideo: { type: 'pinterest', url: 'https://www.pinterest.com/pin/300000000000000099/', meta: null },
+  xLater: { type: 'x', url: 'https://x.com/ornek/status/1900000000000000099', meta: null, cid: g.cid },
 };
 const guestRow = `(SELECT id FROM inspire_users WHERE username='__guest__')`;
 const ids = {};
@@ -275,6 +286,42 @@ ok('seeded ' + Object.keys(ids).length + ' posts: ' + JSON.stringify(ids));
   ok('ig-copy and ig-blocked need a session and an Instagram post');
 }
 
+// ── cards in view: POST /copy (any board session) answers from the copy records without any network here; DELETE /copy ──
+{
+  const nowS = Math.floor(Date.now() / 1000);
+  const rec = (id, kind, extra, error = null, retryIn = 3600) => d1(`INSERT INTO inspire_video_cache (post_id, kind, error, fail_count, retry_at, resolved_at, extra)
+    VALUES (${id}, ${q(kind)}, ${q(error)}, ${error ? 1 : 0}, ${nowS + retryIn}, ${nowS}, ${q(JSON.stringify(extra || {}))})
+    ON CONFLICT(post_id, kind) DO UPDATE SET error=excluded.error, retry_at=excluded.retry_at, extra=excluded.extra`);
+  rec(ids.ttGone, 'ad_copy', {}, 'not_found', 7 * 86400);
+  rec(ids.pinNoVideo, 'ad_copy', {}, 'no_video', 30 * 86400);
+  rec(ids.xLater, 'ad_copy', {}, 'upstream', 1800);
+  const view = (id, who = g) => call('POST', `/api/inspire/posts/${id}/copy`, null, who.token);
+  assert.equal((await call('POST', `/api/inspire/posts/${ids.ttGone}/copy`)).status, 401, 'a session only');
+  assert.deepEqual((await view(ids.ttGone)).data, { state: 'never', reason: 'not_found' });
+  assert.deepEqual((await view(ids.pinNoVideo)).data, { state: 'never', reason: 'no_video' });
+  const later = await view(ids.xLater);
+  assert.equal(later.data.state, 'later'); assert.equal(later.data.reason, 'upstream'); assert.ok(later.data.retry_s > 1500 && later.data.retry_s <= 1800);
+  for (const k of ['clip', 'text', 'direct']) assert.deepEqual((await view(ids[k])).data, { state: 'never', reason: 'not_video' }, k);
+  assert.deepEqual((await view(ids.yt)).data, { state: 'never', reason: 'not_video' }, 'YouTube is never copied');
+  assert.equal((await view(999999999)).status, 404);
+  const b = Object.fromEntries((await board(g.token)).map((p) => [p.id, p]));
+  assert.deepEqual([ids.ttGone, ids.pinNoVideo, ids.xLater, ids.clip, ids.yt, ids.text].map((id) => by(b, id)), [false, false, false, false, false, false]);
+  function by(list, id) { return list[id].copy_view; }
+  // run-smoke.sh runs FIKIR_IG_AUTO=blocked: an Instagram post is copied on view only once its embed was found blocked
+  assert.equal(b[ids.igOk].copy_view, false, 'Instagram, embed never checked (blocked mode): not asked in view');
+  assert.deepEqual((await view(ids.igOk)).data, { state: 'later', reason: 'not_checked', retry_s: 3600 });
+  assert.ok((await board(g.token, true)).every((p) => !('copy_view' in p)), 'old cached pages never see copy_view');
+  ok('POST /copy: never / later from the copy records (no network), never for links that are no video post or YouTube; copy_view hints');
+  // DELETE /copy: the post owner / admin; a post without a copy just gets the "removed" marker (no copy on view after that)
+  assert.equal((await call('DELETE', `/api/inspire/posts/${ids.xLater}/copy`, null, other.token)).status, 403);
+  assert.equal((await call('DELETE', `/api/inspire/posts/${ids.clip}/copy`, null, adm.token)).status, 400, 'not a video post of a copy platform');
+  const del = await call('DELETE', `/api/inspire/posts/${ids.xLater}/copy`, null, g.token);
+  assert.equal(del.status, 200); assert.equal(del.data.removed, false); assert.equal(del.data.post.copy_view, false);
+  d1(`UPDATE inspire_video_cache SET retry_at = ${nowS - 1} WHERE post_id=${ids.xLater} AND kind='ad_copy'`);
+  assert.deepEqual((await view(ids.xLater)).data, { state: 'never', reason: 'removed' });
+  ok('DELETE /copy: owner / admin only; a removed copy is never asked for again');
+}
+
 // ── budgets: the daily download budget skips R2 files and the admin's ticket; ig-copy daily budgets per caller ──
 {
   const today = new Date().toISOString().slice(0, 10);
@@ -321,10 +368,10 @@ ok('seeded ' + Object.keys(ids).length + ' posts: ' + JSON.stringify(ids));
   d1(`INSERT INTO inspire_video_cache (post_id, kind, error, fail_count, retry_at, resolved_at) VALUES (${ids.igBudget}, 'ig', 'redirect', 1, ${nowS + 3600}, ${nowS})`);
   d1(`INSERT INTO inspire_video_cache (post_id, kind, resolved_at, retry_at, extra) VALUES (${ids.igBudget}, 'ig_embed', ${nowS}, ${nowS + 30 * 86400}, '{"state":"blocked"}')`);
   const copy = (who) => call('POST', `/api/inspire/posts/${ids.igBudget}/ig-copy`, null, who.token);
-  fill('ig_copy', 'guests', 20);
+  fill('ig_copy', 'guests', Math.ceil(COPY_DAILY / 2));
   const gq = await copy(g);
   assert.equal(gq.status, 429, JSON.stringify(gq.data)); assert.equal(gq.data.error, 'quota_exceeded');
-  fill('ig_copy', '', 40);
+  fill('ig_copy', '', COPY_DAILY);
   const aq = await copy(adm);
   assert.equal(aq.status, 502, JSON.stringify(aq.data)); assert.equal(aq.data.reason, 'redirect');
   fill('ig_copy', 'guests', 0); fill('ig_copy', '', 0);

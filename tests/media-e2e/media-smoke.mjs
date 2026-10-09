@@ -143,8 +143,9 @@ const ADM = await admin();
 if (MODE === 'main') {
   const A = await guest('Ayşe'), B = await guest('Burak');
   r = await call('GET', '/api/inspire/config', null, A.token);
-  // download / Instagram-copy flags (worker/inspire-video.js) ride on the same block
-  const { download, ig_copy, ig_auto, ...upMedia } = r.data.media;
+  // download / copy flags (worker/inspire-video.js) ride on the same block
+  const { download, ig_copy, ig_auto, copy_view, copy, ...upMedia } = r.data.media;
+  assert.equal(typeof copy_view, 'boolean'); assert.ok(Array.isArray(copy) && !copy.includes('youtube') && !copy.includes('vimeo'));
   assert.deepEqual(upMedia, { attach: true, uploads: true, max_video_mb: 25, max_image_mb: 10,
     types: ['video/mp4', 'video/webm', 'video/quicktime', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'] });
   assert.equal(download, true); assert.equal(ig_copy, true); assert.ok(['off', 'blocked', 'all'].includes(ig_auto), ig_auto);

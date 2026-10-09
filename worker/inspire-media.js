@@ -26,7 +26,13 @@ export const MEDIA_MIMES = new Set([
 export const FILES_PATH_RE = /^\/files\/fikir\/\d{1,15}\/[vip]-[0-9a-f]{32}\.(mp4|webm|mov|jpg|png|webp|gif)$/;
 export const FILES_KEY_RE = /^fikir\/\d{1,15}\/[vip]-[0-9a-f]{32}\.(mp4|webm|mov|jpg|png|webp|gif)$/;
 const MEDIA_KINDS = new Set(['video', 'image', 'hls', 'player']);
-const SOURCE_RE = /^(og|ld|html|inline|oembed|br|manual|upload|bookmarklet|instagram|adapter:[a-z0-9_]{1,30})$/;
+const SOURCE_RE = /^(og|ld|html|inline|oembed|br|manual|upload|bookmarklet|instagram|x|tiktok|facebook|pinterest|reddit|adapter:[a-z0-9_]{1,30})$/;
+// R2 copies of a platform's video post (worker/index.js inspireCopy): post.media.source = the platform. These carry the
+// credit (`by`), the caption (plain text, <= COPY_CAPTION_MAX code points) and the sound flag (`audio`) for the card.
+export const COPY_SOURCES = new Set(['instagram', 'x', 'tiktok', 'facebook', 'pinterest', 'reddit']);
+export const COPY_CAPTION_MAX = 2000;
+// Instagram user names; the other platforms' handles (TikTok uniqueId, X screen_name, Reddit /u/, Pinterest username)
+const COPY_BY_RE = { instagram: /^[A-Za-z0-9._]{1,30}$/, other: /^[A-Za-z0-9._-]{1,40}$/ };
 
 /* ------------------------------------------------------------------ text helpers (moved from index.js) */
 
@@ -913,14 +919,26 @@ export function sanitizeMedia(obj, { allowFiles = false, nowS } = {}) {
   out.verified = obj.verified === true;
   if (obj.play_at_source === true) out.play_at_source = true;
   if (typeof obj.source === 'string' && SOURCE_RE.test(obj.source)) out.source = obj.source;
-  // R2 copy of an Instagram post (worker/inspire-video.js): credit + caption for the card (plain text, rendered as text)
-  if (out.source === 'instagram') {
-    if (typeof obj.by === 'string' && /^[A-Za-z0-9._]{1,30}$/.test(obj.by)) out.by = obj.by;
+  // R2 copy of a platform's post (worker/index.js inspireCopy): credit + caption for the card (plain text, rendered as text)
+  if (COPY_SOURCES.has(out.source)) {
+    const byRe = out.source === 'instagram' ? COPY_BY_RE.instagram : COPY_BY_RE.other;
+    if (typeof obj.by === 'string' && byRe.test(obj.by)) out.by = obj.by;
     const cap = typeof obj.caption === 'string' ? Array.from(obj.caption.replace(/[\u0000-\u0008\u000B-\u001F\u007F\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, '').trim()) : [];
-    if (cap.length) out.caption = cap.slice(0, 500).join('');
+    if (cap.length) out.caption = cap.slice(0, COPY_CAPTION_MAX).join('');
     if (typeof obj.audio === 'boolean') out.audio = obj.audio;
   }
-  return JSON.stringify(out).length <= MAX_MEDIA_JSON ? out : null;
+  let json = JSON.stringify(out);
+  // a long caption (emoji, quotes and line breaks take 2 JSON characters each) gives way before the media would be lost
+  if (json.length > MAX_MEDIA_JSON && out.caption) {
+    const cps = Array.from(out.caption);
+    let n = cps.length;
+    while (json.length > MAX_MEDIA_JSON && n > 0) {
+      n = Math.max(0, n - Math.ceil((json.length - MAX_MEDIA_JSON) / 2) - 1);
+      if (n) out.caption = cps.slice(0, n).join('').trimEnd() + '…'; else delete out.caption;
+      json = JSON.stringify(out);
+    }
+  }
+  return json.length <= MAX_MEDIA_JSON ? out : null;
 }
 const MP4_BRANDS = new Set(['isom', 'iso2', 'iso4', 'iso5', 'iso6', 'mp41', 'mp42', 'avc1', 'M4V ', 'M4VH', 'M4VP', 'dash', 'MSNV']);
 // First bytes of an upload -> {mime, ext, kind} for the allowlist, else null (svg/html/xml/pdf/zip/heic/avif/3gp/short).

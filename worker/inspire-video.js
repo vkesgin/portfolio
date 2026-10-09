@@ -1,8 +1,9 @@
-// Fikir Havuzu downloads + Instagram copies (worker/index.js routes /posts/:id/download, /download-info, /ig-copy,
-// /ig-blocked and the cron). This module holds the pure helpers (Instagram page/embed parsing, the platform adapters for
-// X / Pinterest / TikTok / Facebook / Reddit, filenames, the cheap download hint) and the network pieces that need no D1
-// quota logic (Instagram page fetch, adapter fetches, guarded media open, Reddit mux). The D1 cache helpers at the end
-// take the database handle; rate limits, quotas and Browser Run admission stay in index.js.
+// Fikir Havuzu downloads + R2 copies of video posts (worker/index.js routes /posts/:id/download, /download-info, /copy,
+// /ig-copy, /ig-blocked and the cron). This module holds the pure helpers (Instagram page/embed parsing, the platform
+// adapters for X / Pinterest / TikTok / Facebook / Reddit, which posts can be copied, filenames, the cheap download hint,
+// image sizes) and the network pieces that need no D1 quota logic (Instagram page fetch, adapter fetches, guarded media
+// open, Reddit mux). The D1 cache helpers at the end take the database handle; rate limits, quotas and Browser Run
+// admission stay in index.js.
 //
 // Instagram (verified 2026-10-08, see scratchpad phase-f/ig-feasibility.md): a plain GET of
 // https://www.instagram.com/{reel|p|tv}/{code}/ with a desktop Chrome UA and browser navigation headers returns ~0.7-1 MB
@@ -13,7 +14,7 @@
 // Embed check: /{kind}/{code}/embed/ of a reel whose owner disabled embedded playback renders a poster with
 // class="WatchOnInstagram" ("Instagram'da İzle") and its gql_data has is_video:true without video_url; playable embeds
 // carry video_url. The embed iframe's postMessages (LOADING / MEASURE / MOUNTED) are identical in both cases.
-import { sniffMagic } from './inspire-media.js';
+import { sniffMagic, COPY_CAPTION_MAX } from './inspire-media.js';
 import { muxCmafStream, muxedLength } from './cmaf-mux.js';
 
 export const IG_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36';
@@ -158,7 +159,7 @@ function igNormalize(item, code) {
   const dur = Number(src.video_duration);
   return {
     code, user,
-    caption: cleanCaption(item.caption && typeof item.caption === 'object' ? item.caption.text : null),
+    caption: cleanCaption(item.caption && typeof item.caption === 'object' ? item.caption.text : null, COPY_CAPTION_MAX),
     has_audio: src.has_audio === true ? true : src.has_audio === false ? false : null,
     w: w && h ? w : null, h: w && h ? h : null,
     duration: Number.isFinite(dur) && dur > 0 ? Math.round(dur * 10) / 10 : null,
@@ -268,12 +269,13 @@ export async function igFetchHtml(url, headers, { fetchImpl = fetch, timeoutMs =
   }
 }
 // Resolve an Instagram post to its media. Plain fetch first; Browser Run (Quick Action `content`) only through
-// opts.brContent(url) -> html | null (failed / unavailable) | {refused: true, retry_s, site} (not admitted right now: the
-// Browser Run slot or a budget), which index.js passes when FIKIR_BR is on and admits it under the Browser Run quotas.
+// opts.brContent(url) -> html | null (failed / unavailable) | {refused: true, retry_s, site, scope?} (not admitted right
+// now: the Browser Run slot or a budget), which index.js passes when FIKIR_BR is on and admits it under the Browser Run quotas.
 // Never loops: at most one plain fetch + one Browser Run call.
 // -> {ok: true, item, via: 'plain'|'br'} | {ok: false, error, status?, retry: 'soon'|'later'|'gone'}
-//    | {ok: false, error: 'busy', busy: true, retry_s, site, status?}: Browser Run was needed but refused. Not a
-//      failure of the post: callers must not record it (no backoff); `site` = refused for every post, not just this one.
+//    | {ok: false, error: 'busy', busy: true, retry_s, site, scope, status?}: Browser Run was needed but refused. Not a
+//      failure of the post: callers must not record it (no backoff); `site` = refused for every post, not just this one;
+//      `scope` = the budget that refused, when brContent named it (br_post: this post's own), else null.
 export async function igResolve(ref, { fetchImpl = fetch, brContent = null, timeoutMs = IG_FETCH_TIMEOUT_MS } = {}) {
   if (!ref || !IG_CODE_RE.test(ref.code || '') || !IG_KINDS.has(ref.kind)) return { ok: false, error: 'bad_ref', retry: 'gone' };
   const url = igPageUrl(ref);
@@ -288,7 +290,8 @@ export async function igResolve(ref, { fetchImpl = fetch, brContent = null, time
     let html = null;
     try { html = await brContent(url); } catch (e) { html = null; }
     if (html && typeof html === 'object' && html.refused) {
-      return { ok: false, error: 'busy', busy: true, retry_s: Math.max(1, Number(html.retry_s) || 60), site: html.site !== false, status: page.status };
+      return { ok: false, error: 'busy', busy: true, retry_s: Math.max(1, Number(html.retry_s) || 60), site: html.site !== false,
+        scope: typeof html.scope === 'string' ? html.scope : null, status: page.status };
     }
     if (typeof html === 'string' && html) {
       const item = igExtract(html, ref.code);
@@ -482,8 +485,9 @@ export function titleSlug(v) {
 //
 // Adapter: {name, support: true|false, reason (support false), match(parsed) -> bool, hint: {video, image},
 //   async resolve(parsed, deps) -> AdResult, feed?(parsed, deps) -> bool (Reddit: the resolve reads the rate-limited
-//   post feed)}; deps = {fetchImpl, timeoutMs, maxShort, preview: {video, image} (the post's link-preview media URLs)}.
-// AdResult: {ok: true, id, by, title, duration, video: AdVideo|null, image: {url}|null}
+//   post feed)}; deps = {fetchImpl, timeoutMs, maxShort, preview: {video, image, title} (the post's link preview)}.
+// AdResult: {ok: true, id, by, title (<= 140), caption (the post's text, <= 2,000: R2 copies), duration, video: AdVideo|null,
+//           image: {url}|null}
 //         | {ok: false, reason, retry: 'soon'|'gone', image: {url}|null, id?, by?}
 //   AdVideo: {url, w, h, bytes, audio: bool|null, expires_at: unix s|null,
 //             headers?: {Referer, Cookie} (TikTok), private?: true (headers carry a cookie: never cached, never sent to a
@@ -524,7 +528,7 @@ export function urlExpiry(v) {
 }
 const AD_GONE = new Set(['no_video', 'not_found', 'login_required', 'drm', 'not_supported', 'bad_input']);
 export const adFail = (reason, extra = {}) => ({ ok: false, reason, retry: AD_GONE.has(reason) ? 'gone' : 'soon', image: null, ...extra });
-const adOk = (f) => ({ ok: true, id: null, by: null, title: null, duration: null, video: null, image: null, ...f });
+const adOk = (f) => ({ ok: true, id: null, by: null, title: null, caption: null, duration: null, video: null, image: null, ...f });
 const adImg = (name, v) => { const u = adMediaUrl(name, v); return u ? { url: u } : null; };
 const pos = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
 // Best rendition: largest whose short side is <= maxShort (720p / 1080p in either orientation), then bitrate; else the smallest
@@ -633,7 +637,7 @@ export function xParse(j, id, { maxShort = 1080 } = {}) {
   const best = pickBest(vs, maxShort);
   const ms = pos(vi.duration_millis);
   return adOk({
-    id: tid, by, title: cleanCaption(j.text, 140), duration: ms ? Math.round(ms / 100) / 10 : null, image: poster,
+    id: tid, by, title: cleanCaption(j.text, 140), caption: cleanCaption(j.text, COPY_CAPTION_MAX), duration: ms ? Math.round(ms / 100) / 10 : null, image: poster,
     video: { url: best.url, w: best.w, h: best.h, bytes: null, audio: !gif, expires_at: null },
   });
 }
@@ -662,7 +666,7 @@ export function pinResourceUrl(id) {
   return `https://www.pinterest.com/resource/PinResource/get/?source_url=${encodeURIComponent(`/pin/${id}/`)}&data=${encodeURIComponent(data)}`;
 }
 const pinHeaders = () => ({ 'User-Agent': IG_UA, 'Accept': 'application/json, text/javascript, */*; q=0.01', 'X-Requested-With': 'XMLHttpRequest', 'X-Pinterest-PWS-Handler': 'www/pin/[id].js' });
-// PinResource JSON -> {mp4s: [{url, w, h}], hls: [url], duration, image, title, by} | null
+// PinResource JSON -> {mp4s: [{url, w, h}], hls: [url], duration, image, title, by, caption} | null
 export function pinParse(j) {
   const data = j && j.resource_response && j.resource_response.data;
   if (!data || typeof data !== 'object') return null;
@@ -682,7 +686,8 @@ export function pinParse(j) {
   const orig = data.images && data.images.orig;
   const by = [data.native_creator && data.native_creator.username, data.pinner && data.pinner.username]
     .find((u) => typeof u === 'string' && /^[A-Za-z0-9_.-]{1,40}$/.test(u)) || null;
-  return { mp4s, hls, duration, image: (orig && adMediaUrl('pinterest', orig.url)) || thumb, title: cleanCaption(data.title || data.grid_title, 140), by };
+  return { mp4s, hls, duration, image: (orig && adMediaUrl('pinterest', orig.url)) || thumb, title: cleanCaption(data.title || data.grid_title, 140), by,
+    caption: cleanCaption(data.description, COPY_CAPTION_MAX) || cleanCaption(data.title || data.grid_title, COPY_CAPTION_MAX) };
 }
 // HLS master URL -> progressive MP4 candidates (HEAD-checked in this order)
 export function pinHlsCandidates(hlsUrl) {
@@ -702,7 +707,7 @@ const PIN_ADAPTER = {
     let info = null;
     if (r.status === 200) { try { info = pinParse(JSON.parse(r.text)); } catch { info = null; } }
     if (!info) return adFail(r.status === 200 ? 'parse_failed' : r.status === 403 || r.status === 429 ? 'blocked' : 'upstream');
-    const base = { id: p.id, by: info.by, title: info.title, duration: info.duration, image: info.image ? { url: info.image } : null };
+    const base = { id: p.id, by: info.by, title: info.title, caption: info.caption, duration: info.duration, image: info.image ? { url: info.image } : null };
     if (info.mp4s.length) return adOk({ ...base, video: { url: info.mp4s[0].url, w: info.mp4s[0].w, h: info.mp4s[0].h, bytes: null, audio: null, expires_at: null } });
     if (!info.hls.length) return adFail('no_video', base);   // image pin
     let heads = 0;
@@ -770,7 +775,7 @@ export function ttParse(it, id, cookie, { maxShort = 1080 } = {}) {
   const best = pickBest(h264.length ? h264 : list, maxShort);
   const ds = it.author && it.author.downloadSetting != null ? it.author.downloadSetting : it.downloadSetting;
   return adOk({
-    id: tid, by, title: cleanCaption(it.desc, 140), duration: pos(v.duration), image,
+    id: tid, by, title: cleanCaption(it.desc, 140), caption: cleanCaption(it.desc, COPY_CAPTION_MAX), duration: pos(v.duration), image,
     video: { url: best.url, w: best.w, h: best.h, bytes: best.bytes, audio: true, expires_at: urlExpiry(best.url),
       headers: { Referer: 'https://www.tiktok.com/', ...(cookie ? { Cookie: cookie } : {}) }, private: true },
     creator_download: ds == null ? null : Number(ds) === 0,   // TikTok's own download button (0 = on)
@@ -847,7 +852,7 @@ export function redditRef(href) {
 }
 const xmlText = (s) => String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;|&#x27;/g, "'")
   .replace(/&#(\d{1,7});/g, (_, n) => (Number(n) <= 0x10FFFF ? String.fromCodePoint(Number(n)) : '')).replace(/&amp;/g, '&');
-// Post feed -> {link, vid, thumb, title, author} of its first <entry> | null
+// Post feed -> {link, vid, thumb, title, caption (the whole title), author} of its first <entry> | null
 export function redditRss(xml) {
   const s = String(xml || '');
   const i = s.indexOf('<entry>');
@@ -858,7 +863,8 @@ export function redditRss(xml) {
   const vid = link ? ((/^https:\/\/v\.redd\.it\/([a-z0-9]{5,20})/i.exec(link) || [])[1] || null) : null;
   const thumb = (/<media:thumbnail url="([^"]+)"/.exec(e) || [])[1];
   const author = ((/<name>\/u\/([A-Za-z0-9_-]{3,20})<\/name>/.exec(e) || [])[1]) || null;
-  return { link, vid, thumb: thumb ? xmlText(thumb) : null, title: cleanCaption(xmlText((/<title>([\s\S]*?)<\/title>/.exec(e) || [])[1] || ''), 140), author };
+  const title = xmlText((/<title>([\s\S]*?)<\/title>/.exec(e) || [])[1] || '');
+  return { link, vid, thumb: thumb ? xmlText(thumb) : null, title: cleanCaption(title, 140), caption: cleanCaption(title, COPY_CAPTION_MAX), author };
 }
 // DASHPlaylist.mpd -> {video: [{file, width, height, bandwidth}], audio: [{file, bandwidth}], duration}
 export function redditMpd(mpd) {
@@ -891,25 +897,37 @@ const redditPreviewVid = (deps) => {
   const m = /^https:\/\/v\.redd\.it\/([a-z0-9]{5,20})\//i.exec(String((deps && deps.preview && deps.preview.video) || ''));
   return m ? m[1] : null;
 };
+// the link preview's title, unless it is Reddit's generic page title ("Reddit - The heart of the internet", localized)
+const redditPreviewTitle = (deps) => {
+  const t = deps && deps.preview && typeof deps.preview.title === 'string' ? deps.preview.title.trim() : '';
+  return t && !/^reddit(\s*[-–—:|·].*)?$/i.test(t) ? t : null;
+};
+// deps.wantPost (R2 copies): the post's author and title matter, so the feed is read even when the link preview knows the
+// video; the preview's video is the fallback when the feed fails (downloads keep skipping the rate-limited feed).
 const REDDIT_ADAPTER = {
   name: 'reddit', support: true, hint: { video: null, image: null },
   match: (p) => (p.platform === 'web' || p.platform === 'video') && !p.needsResolve && !!redditRef(p.canonical),
-  feed(p, deps = {}) { const ref = redditRef(p.canonical); return !!(ref && !ref.vid && ref.postId && !redditPreviewVid(deps)); },
+  feed(p, deps = {}) { const ref = redditRef(p.canonical); return !!(ref && !ref.vid && ref.postId && (deps.wantPost || !redditPreviewVid(deps))); },
   async resolve(p, deps = {}) {
     const ref = redditRef(p.canonical);
     if (!ref) return adFail('bad_input');
     if (ref.vid) return redditDash(deps, ref.vid, { id: ref.vid });
     // the link preview already knows the video: no feed request (Reddit rate-limits feeds hard)
     const pv = ref.postId ? redditPreviewVid(deps) : null;
-    if (pv) return redditDash(deps, pv, { id: ref.postId, image: adImg('reddit', deps.preview.image) });
+    const viaPreview = () => {
+      if (!pv) return null;
+      const t = redditPreviewTitle(deps);
+      return redditDash(deps, pv, { id: ref.postId, title: cleanCaption(t, 140), caption: cleanCaption(t, COPY_CAPTION_MAX), image: adImg('reddit', deps.preview.image) });
+    };
+    if (pv && !deps.wantPost) return viaPreview();
     const feed = `https://www.reddit.com/${ref.sub ? `r/${ref.sub}/` : ''}comments/${ref.postId}/.rss`;
     const r = await adFetch(deps, feed, { headers: { 'User-Agent': REDDIT_UA, 'Accept': 'application/atom+xml' }, hosts: /^(www|old)\.reddit\.com$/, maxBytes: 1 << 20 });
-    if (!r.ok) return adFail('upstream');
+    if (!r.ok) return viaPreview() || adFail('upstream');
     if (r.status === 404) return adFail('not_found');
-    if (r.status !== 200) return adFail(r.status === 403 || r.status === 429 ? 'blocked' : 'upstream');
+    if (r.status !== 200) return viaPreview() || adFail(r.status === 403 || r.status === 429 ? 'blocked' : 'upstream');
     const post = redditRss(r.text);
-    if (!post) return adFail('parse_failed');
-    const meta = { id: ref.postId, by: post.author, title: post.title, image: adImg('reddit', post.thumb) };
+    if (!post) return viaPreview() || adFail('parse_failed');
+    const meta = { id: ref.postId, by: post.author, title: post.title, caption: post.caption, image: adImg('reddit', post.thumb) };
     if (post.vid) return redditDash(deps, post.vid, meta);
     const gifv = post.link && /^https:\/\/i\.imgur\.com\/([A-Za-z0-9]{5,10})\.(gifv|mp4)$/.exec(post.link);
     if (gifv) return adOk({ ...meta, video: { url: `https://i.imgur.com/${gifv[1]}.mp4`, w: null, h: null, bytes: null, audio: null, expires_at: null } });
@@ -943,6 +961,60 @@ export function dlAdapterFor(parsed) {
   return null;
 }
 
+/* ------------------------------------------------------------------ R2 copies: which posts */
+
+// Platforms whose video posts the board copies into R2 (worker/index.js inspireCopy) and plays from there: Instagram
+// (resolved from its page) and the adapters that give a file (never YouTube / Vimeo).
+export const COPY_PLATFORMS = ['instagram', 'x', 'tiktok', 'facebook', 'pinterest', 'reddit'];
+export const COPY_PLATFORM_TR = { instagram: 'Instagram', x: 'X', tiktok: 'TikTok', facebook: 'Facebook', pinterest: 'Pinterest', reddit: 'Reddit' };
+// parseLink() result -> {platform: 'instagram', ref} | {platform: <adapter name>, ad} | null (not a post that can hold a
+// video we copy: photos and image pins are only found out by resolving). `enabled(platform)` -> bool narrows it further.
+export function copyTargetOf(parsed, enabled = null) {
+  if (!parsed || parsed.needsResolve) return null;
+  const ref = igRef(parsed);
+  if (ref) return !enabled || enabled('instagram') ? { platform: 'instagram', ref } : null;
+  const ad = dlAdapterFor(parsed);
+  if (!ad || ad.support === false || !COPY_PLATFORMS.includes(ad.name)) return null;
+  return !enabled || enabled(ad.name) ? { platform: ad.name, ad } : null;
+}
+// inspire_video_cache kind of a post's copy record (failures, backoff, the "removed" marker): Instagram keeps its own
+export const copyKind = (platform) => (platform === 'instagram' ? 'ig_copy' : 'ad_copy');
+
+/* ------------------------------------------------------------------ image size (copy posters) */
+
+// JPEG / PNG / WebP / GIF bytes -> {w, h} | null. The poster's size stands in for the video's when a platform gives none
+// (Facebook, some pins), so the card reserves the right box before the video loads.
+export function imageDims(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : bytes ? new Uint8Array(bytes) : null;
+  if (!b || b.length < 24) return null;
+  const ok = (w, h) => (w >= 1 && h >= 1 && w <= 20000 && h <= 20000 ? { w, h } : null);
+  const u16 = (o) => (b[o] << 8) | b[o + 1];
+  const u32 = (o) => ((b[o] << 24) >>> 0) + (b[o + 1] << 16) + (b[o + 2] << 8) + b[o + 3];
+  const ascii = (o, n) => String.fromCharCode(...b.subarray(o, o + n));
+  if (b[0] === 0x89 && ascii(1, 3) === 'PNG') return ok(u32(16), u32(20));
+  if (ascii(0, 3) === 'GIF') return ok(b[6] | (b[7] << 8), b[8] | (b[9] << 8));
+  if (ascii(0, 4) === 'RIFF' && ascii(8, 4) === 'WEBP' && b.length >= 30) {
+    const t = ascii(12, 4);
+    if (t === 'VP8 ') return ok((b[26] | (b[27] << 8)) & 0x3fff, (b[28] | (b[29] << 8)) & 0x3fff);
+    if (t === 'VP8L') { const x = b[21] | (b[22] << 8) | (b[23] << 16) | (b[24] << 24); return ok((x & 0x3fff) + 1, ((x >>> 14) & 0x3fff) + 1); }
+    if (t === 'VP8X') return ok(1 + (b[24] | (b[25] << 8) | (b[26] << 16)), 1 + (b[27] | (b[28] << 8) | (b[29] << 16)));
+    return null;
+  }
+  if (b[0] === 0xFF && b[1] === 0xD8) {
+    // walk the segments to the first SOFn (baseline / progressive): height, width
+    let o = 2;
+    for (let n = 0; o + 9 < b.length && n < 500; n++) {
+      if (b[o] !== 0xFF) { o++; continue; }
+      const m = b[o + 1];
+      if (m === 0xD8 || m === 0x01 || (m >= 0xD0 && m <= 0xD7) || m === 0xFF) { o += m === 0xFF ? 1 : 2; continue; }
+      if ((m >= 0xC0 && m <= 0xCF) && m !== 0xC4 && m !== 0xC8 && m !== 0xCC) return ok(u16(o + 7), u16(o + 5));
+      if (m === 0xDA || m === 0xD9) return null;
+      o += 2 + u16(o + 2);
+    }
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ adapter results <-> cache rows (kind 'ad') */
 
 // Success / no-video results are cached (links until they expire, else 7 days); private (cookie) links never are: the
@@ -954,7 +1026,8 @@ export function adToCache(name, r, now = Math.floor(Date.now() / 1000)) {
     url: v && !v.private ? v.url : null, poster: img ? img.url : null, width: (v && v.w) || null, height: (v && v.h) || null,
     bytes: (v && v.bytes) || null, expires_at: exps.length ? Math.min(...exps) : now + 7 * 86400,
     extra: { ad: name, id: r.id || null, by: r.by || null, has_video: !!v, private: !!(v && v.private), audio: v ? v.audio : null,
-      audio_url: v && v.audio_url ? v.audio_url : null, mux: v && v.mux === 'cmaf' ? 'cmaf' : null, duration: r.duration || null },
+      audio_url: v && v.audio_url ? v.audio_url : null, mux: v && v.mux === 'cmaf' ? 'cmaf' : null, duration: r.duration || null,
+      caption: cleanCaption(r.caption || r.title, COPY_CAPTION_MAX) },
   };
 }
 export function adFromCache(name, row) {
@@ -963,6 +1036,7 @@ export function adFromCache(name, row) {
   const image = adImg(name, row.poster);
   const by = typeof x.by === 'string' && /^[A-Za-z0-9._-]{1,40}$/.test(x.by) ? x.by : null;
   const id = typeof x.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(x.id) ? x.id : null;
+  const caption = cleanCaption(x.caption, COPY_CAPTION_MAX);
   if (!x.has_video) return adFail('no_video', { id, by, image });
   let video;
   if (x.private) video = { url: null, private: true };
@@ -973,7 +1047,7 @@ export function adFromCache(name, row) {
     const au = x.mux === 'cmaf' ? adMediaUrl(name, x.audio_url) : null;
     if (au) { video.audio_url = au; video.mux = 'cmaf'; }
   }
-  return adOk({ id, by, duration: Number(x.duration) || null, video, image });
+  return adOk({ id, by, caption, duration: Number(x.duration) || null, video, image });
 }
 
 /* ------------------------------------------------------------------ download hint (no network) */
@@ -1084,8 +1158,10 @@ export const VIDEO_CACHE_DDL = `CREATE TABLE IF NOT EXISTS inspire_video_cache (
   PRIMARY KEY (post_id, kind)
 )`;
 const nowS = () => Math.floor(Date.now() / 1000);
-// Backoff after the n-th consecutive failure: 10 min, 30 min, 2 h, 6 h, then 24 h; a removed post 7 days.
+// Backoff after the n-th consecutive failure: 10 min, 30 min, 2 h, 6 h, then 24 h; a removed post 7 days; 'never' (a copy
+// that can never happen: no video in the post, a file over the copy cap) 30 days.
 export function backoffS(n, retry) {
+  if (retry === 'never') return 30 * 86400;
   if (retry === 'gone') return 7 * 86400;
   return [600, 1800, 7200, 21600][Math.max(0, n - 1)] || 86400;
 }
@@ -1093,12 +1169,25 @@ export async function vcGet(db, postId, kind) {
   try { return await db.prepare('SELECT * FROM inspire_video_cache WHERE post_id=?1 AND kind=?2').bind(postId, kind).first(); }
   catch (e) { return null; }
 }
+// extra JSON of a cache row (<= 8,000 characters): a long caption is shortened, never the JSON cut (a cut would be invalid)
+export function vcExtraJson(extra, max = 8000) {
+  if (extra == null) return null;
+  let s = JSON.stringify(extra);
+  if (s.length <= max) return s;
+  if (extra && typeof extra.caption === 'string') {
+    const cps = Array.from(extra.caption);
+    const keep = Math.max(0, cps.length - (s.length - max) - 1);
+    s = JSON.stringify({ ...extra, caption: keep ? cps.slice(0, keep).join('') + '…' : null });
+    if (s.length <= max) return s;
+  }
+  return JSON.stringify({ ...extra, caption: null }).length <= max ? JSON.stringify({ ...extra, caption: null }) : null;
+}
 export function vcExtra(row) {
   if (!row || !row.extra) return {};
   try { const x = JSON.parse(row.extra); return x && typeof x === 'object' && !Array.isArray(x) ? x : {}; } catch { return {}; }
 }
 export async function vcPut(db, postId, kind, rec = {}) {
-  const extra = rec.extra ? JSON.stringify(rec.extra).slice(0, 4000) : null;
+  const extra = rec.extra ? vcExtraJson(rec.extra) : null;
   await db.prepare(`INSERT INTO inspire_video_cache (post_id, kind, url, poster, width, height, bytes, expires_at, resolved_at, error, fail_count, retry_at, extra)
     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, NULL, 0, ?10, ?11)
     ON CONFLICT(post_id, kind) DO UPDATE SET url=excluded.url, poster=excluded.poster, width=excluded.width, height=excluded.height,
@@ -1112,7 +1201,7 @@ export async function vcFail(db, postId, kind, error, { retry = 'soon', extra = 
   const prev = await vcGet(db, postId, kind);
   const n = (prev ? Number(prev.fail_count) || 0 : 0) + 1;
   const retryAt = nowS() + backoffS(n, retry);
-  const ex = extra !== undefined ? JSON.stringify(extra).slice(0, 4000) : prev ? prev.extra : null;
+  const ex = extra !== undefined ? vcExtraJson(extra) : prev ? prev.extra : null;
   await db.prepare(`INSERT INTO inspire_video_cache (post_id, kind, error, fail_count, retry_at, resolved_at, extra) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
     ON CONFLICT(post_id, kind) DO UPDATE SET error=excluded.error, fail_count=excluded.fail_count, retry_at=excluded.retry_at,
       resolved_at=excluded.resolved_at, extra=excluded.extra`)
@@ -1141,13 +1230,19 @@ export function vcItemFresh(row, now = nowS()) {
 export function vcBackingOff(row, now = nowS()) {
   return !!(row && row.error && Number(row.retry_at) > now);
 }
-// Item (igExtract shape) <-> cache row
+// Item (igExtract shape) <-> cache row. cv 2: the caption is kept up to COPY_CAPTION_MAX (older rows cut it at 300 code points).
 export function itemToCache(item) {
   return {
     url: item.video ? item.video.url : null, poster: item.image ? item.image.url : null, width: item.w, height: item.h,
-    expires_at: item.expires_at, extra: { user: item.user, caption: item.caption ? cleanCaption(item.caption, 300) : null,
+    expires_at: item.expires_at, extra: { cv: 2, user: item.user, caption: item.caption ? cleanCaption(item.caption, COPY_CAPTION_MAX) : null,
       has_audio: item.has_audio, duration: item.duration, media_type: item.media_type },
   };
+}
+// A cached Instagram row from before cv 2 whose caption the old 300-code-point cap cut ('…' at its end): an R2 copy (kept
+// for good) resolves the post once more for the whole caption instead of using it.
+export function igCacheCaptionCut(row) {
+  const x = vcExtra(row);
+  return !(Number(x.cv) >= 2) && typeof x.caption === 'string' && x.caption.endsWith('…');
 }
 export function cacheToItem(row, code) {
   const x = vcExtra(row);
@@ -1156,7 +1251,7 @@ export function cacheToItem(row, code) {
   if (!video && !image) return null;
   return {
     code, user: typeof x.user === 'string' && /^[A-Za-z0-9._]{1,30}$/.test(x.user) ? x.user : null,
-    caption: cleanCaption(x.caption, 300), has_audio: typeof x.has_audio === 'boolean' ? x.has_audio : null,
+    caption: cleanCaption(x.caption, COPY_CAPTION_MAX), has_audio: typeof x.has_audio === 'boolean' ? x.has_audio : null,
     w: row.width || null, h: row.height || null, duration: Number(x.duration) || null, media_type: Number(x.media_type) || null,
     video, videos: video ? [video] : [], image, expires_at: Number(row.expires_at) || null,
   };

@@ -17,10 +17,24 @@ export const CRON_BUDGET = Object.freeze({ d1: 40, sub: 35 });
 // Worst case of one unit of cron work (D1 statements, other subrequests), checked with Budget.fits() before it starts;
 // tests/cron-budget.test.mjs measures each one against these. index.js uses them (sbScheduled has its own, smaller ones).
 export const CRON_COSTS = Object.freeze({
-  // Instagram R2 copy by the cron (inspireIgCopy, retryStale false) incl. the cron's failure record. Worst measured: 22
+  // Instagram R2 copy by the cron (inspireCopy, retryStale false) incl. the cron's failure record. Worst measured: 22
   // statements (Browser Run after a slot wait, then the commit lost to a manual preview: undo); 13 subrequests = Instagram
   // page + Browser Run + video and poster (<= 4 hops each) + 2 R2 puts + the R2 delete of the undo
   igCopy: Object.freeze({ d1: 24, sub: 13 }),
+  // a second Instagram copy in the same run: never Browser Run (allowBR false) -> no Browser Run quota / slot statements.
+  // Worst measured: 18 statements, 12 subrequests (plain resolve, 3-hop CDN links, the commit lost: undo)
+  igCopyPlain: Object.freeze({ d1: 20, sub: 12 }),
+  // X / TikTok / Facebook / Pinterest / Reddit copy by the cron (inspireCopy through the platform adapter, retryStale false)
+  // incl. the failure record: worst of every platform (adCopyBy). Statements as an Instagram copy without Browser Run
+  // (worst measured 18: TikTok, the commit lost). Subrequests: the adapter's page / API (<= 3 fetches: 2 redirect hops),
+  // the video (<= 4 hops), the poster (<= 4 hops), 2 R2 puts + the R2 delete of an undo; Reddit adds its DASH playlist
+  // (<= 3) and the sound file (<= 4) + the picture's first bytes (1; the picture itself then cannot redirect); a Pinterest
+  // idea pin adds <= 6 HEADs (<= 3 fetches each) of the progressive file next to its HLS playlist.
+  adCopy: Object.freeze({ d1: 20, sub: 33 }),
+  adCopyBy: Object.freeze({
+    x: Object.freeze({ d1: 20, sub: 14 }), tiktok: Object.freeze({ d1: 20, sub: 14 }), facebook: Object.freeze({ d1: 20, sub: 14 }),
+    reddit: Object.freeze({ d1: 20, sub: 20 }), pinterest: Object.freeze({ d1: 20, sub: 33 }),
+  }),
   // embed check (inspireIgEmbed): cache read, fetch window, daily quota (+ its lookup), result (a failure: 2) <= 5; 1 fetch
   igCheck: Object.freeze({ d1: 6, sub: 1 }),
   // link-preview Browser Run retry (inspireBrAndStore, mode cron): <= 8 statements (rate count, reservation, slot, ms
@@ -31,7 +45,7 @@ export const CRON_COSTS = Object.freeze({
 });
 // wrangler.toml [triggers] crons; scheduled() dispatches on controller.cron (each fires its own invocation, own limits)
 export const CRON_MAIN = '*/15 * * * *';      // storyboard reconcile + board housekeeping + link-preview Browser Run retries
-export const CRON_IG = '7-59/15 * * * *';     // Instagram embed checks + R2 copies (minutes 7, 22, 37, 52)
+export const CRON_IG = '7-59/15 * * * *';     // R2 copies of video posts (all copy platforms) + Instagram embed checks (minutes 7, 22, 37, 52)
 
 export class BudgetExceeded extends Error {
   constructor(kind, budget) {

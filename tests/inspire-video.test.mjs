@@ -1,4 +1,4 @@
-// Unit tests for worker/inspire-video.js (downloads + Instagram copies). No network: synthetic trimmed fixtures in
+// Unit tests for worker/inspire-video.js (downloads + R2 copies of video posts). No network: synthetic trimmed fixtures in
 // tests/fixtures/video (see its README.md) and injected fetch stubs. Run from the repo root: node --test tests/
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,9 +9,10 @@ import {
   igRef, igPageUrl, igEmbedUrl, igShortcodeToPk, decodeOe, igCdnUrl, cleanCaption, igExtract, igPageProblem, igEmbedStatus,
   igNavHeaders, igEmbedHeaders, igResolve, igCheckEmbed, openMedia, cappedStream, asciiFilePart, unicodeFilePart, dlFilename,
   contentDisposition, titleSlug, dlHint, registerDlAdapter, DL_ADAPTERS, backoffS, vcItemFresh, vcBackingOff, itemToCache,
-  cacheToItem, VIDEO_CACHE_DDL, vcGet, vcFail, vcDefer, vcExtra,
+  cacheToItem, igCacheCaptionCut, VIDEO_CACHE_DDL, vcGet, vcFail, vcDefer, vcExtra, vcExtraJson, vcPut, copyTargetOf, copyKind, imageDims,
+  COPY_PLATFORMS, COPY_PLATFORM_TR, adToCache, adFromCache, xParse, ttParse, ttExtract, pinParse, redditRss,
 } from '../worker/inspire-video.js';
-import { sanitizeMedia } from '../worker/inspire-media.js';
+import { sanitizeMedia, COPY_SOURCES, MAX_MEDIA_JSON } from '../worker/inspire-media.js';
 import { parseLink } from '../assets/js/fikir-url.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -183,8 +184,9 @@ describe('igResolve / igCheckEmbed (stubbed network)', () => {
     const r = await igResolve(ref, { fetchImpl: f, brContent: async () => ({ refused: true, retry_s: 7, site: true }) });
     assert.deepEqual({ ok: r.ok, error: r.error, busy: r.busy, retry_s: r.retry_s, site: r.site, retry: r.retry },
       { ok: false, error: 'busy', busy: true, retry_s: 7, site: true, retry: undefined });
-    const p = await igResolve(ref, { fetchImpl: f, brContent: async () => ({ refused: true, retry_s: 5000, site: false }) });
-    assert.equal(p.busy, true); assert.equal(p.site, false);
+    const p = await igResolve(ref, { fetchImpl: f, brContent: async () => ({ refused: true, retry_s: 5000, site: false, scope: 'br_post' }) });
+    assert.equal(p.busy, true); assert.equal(p.site, false); assert.equal(p.scope, 'br_post', 'the refusing budget is passed on');
+    assert.equal(r.scope, null);
     const n = await igResolve(ref, { fetchImpl: f, brContent: async () => null });
     assert.equal(n.busy, undefined); assert.equal(n.error, 'redirect'); assert.equal(n.retry, 'soon');
   });
@@ -346,7 +348,7 @@ describe('dlHint (GET /posts, no network)', () => {
 
 describe('Instagram copy media + cache helpers', () => {
   const base = { kind: 'video', url: '/files/fikir/7/v-0123456789abcdef0123456789abcdef.mp4', poster: '/files/fikir/7/p-0123456789abcdef0123456789abcdef.jpg', w: 720, h: 1280, mime: 'video/mp4', bytes: 2468559, verified: true };
-  test('sanitizeMedia keeps credit/caption/audio for source instagram only', () => {
+  test('sanitizeMedia keeps credit/caption/audio for copy sources only', () => {
     const m = sanitizeMedia({ ...base, source: 'instagram', by: 'ornek.studio', caption: 'Merhaba‮ dünya', audio: true }, { allowFiles: true });
     assert.equal(m.source, 'instagram'); assert.equal(m.by, 'ornek.studio'); assert.equal(m.caption, 'Merhaba dünya'); assert.equal(m.audio, true);
     assert.equal(m.url, base.url); assert.equal(m.poster, base.poster);
@@ -355,8 +357,32 @@ describe('Instagram copy media + cache helpers', () => {
     const up = sanitizeMedia({ ...base, source: 'upload', by: 'x', caption: 'y' }, { allowFiles: true });
     assert.equal(up.by, undefined); assert.equal(up.caption, undefined);
     assert.equal(sanitizeMedia({ ...base, source: 'instagram' }), null, '/files paths need allowFiles');
-    const capped = sanitizeMedia({ ...base, source: 'instagram', caption: 'ş'.repeat(900) }, { allowFiles: true });
-    assert.equal(Array.from(capped.caption).length, 500);
+    const capped = sanitizeMedia({ ...base, source: 'instagram', caption: 'ş'.repeat(2600) }, { allowFiles: true });
+    assert.equal(Array.from(capped.caption).length, 2000, 'captions up to 2,000 code points');
+    for (const src of ['x', 'tiktok', 'facebook', 'pinterest', 'reddit']) {
+      const o = sanitizeMedia({ ...base, source: src, by: 'ornek_user-1', caption: 'Başlık\nikinci satır', audio: false }, { allowFiles: true });
+      assert.deepEqual({ source: o.source, by: o.by, caption: o.caption, audio: o.audio }, { source: src, by: 'ornek_user-1', caption: 'Başlık\nikinci satır', audio: false }, src);
+    }
+    assert.equal(sanitizeMedia({ ...base, source: 'instagram', by: 'with-dash' }, { allowFiles: true }).by, undefined, 'Instagram names have no dash');
+    assert.equal(sanitizeMedia({ ...base, source: 'youtube', by: 'a' }, { allowFiles: true }).source, undefined, 'never a YouTube copy');
+    assert.deepEqual([...COPY_SOURCES].sort(), [...COPY_PLATFORMS].sort());
+  });
+  test('a caption that would push the media JSON over its cap is shortened, never the media dropped', () => {
+    for (const ch of ['😀', '"', '\n', 'ş']) {
+      const m = sanitizeMedia({ ...base, source: 'tiktok', by: 'u', caption: ch.repeat(2000) + 'son' }, { allowFiles: true });
+      assert.ok(m && m.url === base.url, JSON.stringify(ch));
+      assert.ok(JSON.stringify(m).length <= MAX_MEDIA_JSON);
+      assert.ok(m.caption === undefined || m.caption.endsWith('…') || Array.from(m.caption).length <= 2000);
+    }
+    const short = sanitizeMedia({ ...base, source: 'x', caption: 'kısa' }, { allowFiles: true });
+    assert.equal(short.caption, 'kısa');
+  });
+  test('cache extra JSON: long captions are shortened, the JSON never cut', () => {
+    const s1 = vcExtraJson({ user: 'u', caption: '😀'.repeat(5000) }, 8000);
+    const o = JSON.parse(s1);
+    assert.equal(o.user, 'u'); assert.ok(s1.length <= 8000); assert.ok(o.caption.endsWith('…'));
+    assert.equal(vcExtraJson(null), null);
+    assert.equal(vcExtraJson({ a: 1 }), '{"a":1}');
   });
   test('cache freshness, backoff and row round trip', () => {
     const now = 1_800_000_000;
@@ -369,11 +395,18 @@ describe('Instagram copy media + cache helpers', () => {
     assert.equal(vcBackingOff({ error: 'no_data', retry_at: now - 5 }, now), false);
     assert.deepEqual([1, 2, 3, 4, 5, 9].map((n) => backoffS(n)), [600, 1800, 7200, 21600, 86400, 86400]);
     assert.equal(backoffS(1, 'gone'), 7 * 86400);
+    assert.equal(backoffS(1, 'never'), 30 * 86400, 'no video / too large: 30 days');
     const it = igExtract(FX('ig-reel.html'), 'DTestReel01');
     const c = itemToCache(it);
     const back = cacheToItem({ url: c.url, poster: c.poster, width: c.width, height: c.height, expires_at: c.expires_at, extra: JSON.stringify(c.extra), resolved_at: now }, 'DTestReel01');
     assert.equal(back.video.url, it.video.url); assert.equal(back.image.url, it.image.url);
     assert.equal(back.user, 'ornek.studio'); assert.equal(back.w, 720); assert.equal(back.has_audio, true);
+    // cv 2 rows keep the caption up to 2,000; a row from before whose caption the 300 cap cut is resolved again for a copy
+    assert.equal(c.extra.cv, 2); assert.equal(igCacheCaptionCut({ extra: JSON.stringify(c.extra) }), false);
+    assert.equal(igCacheCaptionCut({ extra: JSON.stringify({ user: 'a', caption: 'k'.repeat(299) + '…' }) }), true);
+    assert.equal(igCacheCaptionCut({ extra: JSON.stringify({ user: 'a', caption: 'kısa açıklama' }) }), false, 'not cut: whole');
+    assert.equal(igCacheCaptionCut({ extra: JSON.stringify({ user: 'a', caption: null }) }), false);
+    assert.equal(igCacheCaptionCut({ extra: JSON.stringify({ cv: 2, caption: 'k'.repeat(1999) + '…' }) }), false);
     assert.equal(cacheToItem({ url: 'https://evil.example/a.mp4', poster: null, extra: '{}' }, 'x'), null, 'only CDN links come back out of the cache');
     assert.match(VIDEO_CACHE_DDL, /PRIMARY KEY \(post_id, kind\)/);
   });
@@ -417,5 +450,90 @@ describe('config guard (downloads)', () => {
     const ads = String(v('FIKIR_DL_ADAPTERS') || '').split(',').map((x) => x.trim()).filter(Boolean);
     assert.ok(ads.every((a) => ['x', 'pinterest', 'tiktok', 'facebook', 'reddit'].includes(a)), 'known adapters only (YouTube / Vimeo cannot download)');
     assert.ok(Number(v('FIKIR_DL_AD_DAILY')) > 0 && Number(v('FIKIR_DL_AD_DAILY')) <= 1000);
+    const copies = String(v('FIKIR_COPY_ADAPTERS') || '').split(',').map((x) => x.trim()).filter(Boolean);
+    assert.ok(copies.every((a) => ads.includes(a)), 'copies only through download adapters that are on');
+    assert.ok(['0', '1'].includes(v('FIKIR_COPY_VIEW')), 'FIKIR_COPY_VIEW');
+    assert.ok(Number(v('FIKIR_COPY_VIEW_PER_SESSION')) <= Number(v('FIKIR_COPY_VIEW_PER_IP')) && Number(v('FIKIR_COPY_VIEW_PER_IP')) <= Number(v('FIKIR_COPY_VIEW_DAILY')));
+    assert.ok(Number(v('FIKIR_COPY_VIEW_DAILY')) <= Number(v('FIKIR_IG_COPY_DAILY')) && Number(v('FIKIR_IG_COPY_DAILY')) <= 300, 'daily copies stay bounded');
+    assert.ok(Number(v('FIKIR_UP_TOTAL_MB')) > 0 && Number(v('FIKIR_UP_TOTAL_MB')) <= 9000, 'the total storage guard stays under R2 Free 10 GB');
+  });
+});
+
+describe('R2 copies of every platform: targets, captions, sizes', () => {
+  const L = (u) => parseLink(u);
+  test('copyTargetOf: Instagram posts and the adapters that give a file; never YouTube / Vimeo / short links', () => {
+    assert.deepEqual(copyTargetOf(L('https://www.instagram.com/reel/DTestReel01/')), { platform: 'instagram', ref: { code: 'DTestReel01', kind: 'reel' } });
+    assert.equal(copyTargetOf(L('https://www.instagram.com/p/DTestPhoto1/')).platform, 'instagram');
+    for (const [u, pf] of [['https://x.com/ornek/status/1900000000000000001', 'x'], ['https://www.tiktok.com/@ornek/video/7000000000000000001', 'tiktok'],
+      ['https://www.facebook.com/reel/500000000000001', 'facebook'], ['https://tr.pinterest.com/pin/100000000000000001/', 'pinterest'],
+      ['https://www.reddit.com/r/ornek/comments/1abcdef/baslik/', 'reddit'], ['https://v.redd.it/testvid0001', 'reddit']]) {
+      const t = copyTargetOf(L(u));
+      assert.equal(t && t.platform, pf, u); assert.equal(t.ad.name, pf);
+    }
+    for (const u of ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://vimeo.com/76979871', 'https://vm.tiktok.com/ZMabc123/', 'https://example.com/a',
+      'https://www.instagram.com/ornek.studio/', 'https://pin.it/abc123']) assert.equal(copyTargetOf(L(u)), null, u);
+    assert.equal(copyTargetOf(L('https://x.com/ornek/status/1900000000000000001'), (pf) => pf !== 'x'), null, 'a platform switched off');
+    assert.equal(copyTargetOf(null), null);
+    assert.equal(copyKind('instagram'), 'ig_copy'); assert.equal(copyKind('reddit'), 'ad_copy');
+    assert.deepEqual(Object.keys(COPY_PLATFORM_TR).sort(), [...COPY_PLATFORMS].sort());
+  });
+  test('adapters keep the post text as the copy caption (<= 2,000), the title stays short', () => {
+    const x = xParse(JSON.parse(FX('x-video.json')), '1900000000000000001');
+    assert.equal(x.caption, 'Örnek klip — test https://t.co/TestLink01'); assert.equal(x.by, 'ornek_studio');
+    const t = ttParse(ttExtract(FX('tiktok-video.html')).item, '7000000000000000001', null);
+    assert.equal(t.caption, 'Örnek TikTok videosu #test');
+    assert.equal(pinParse(JSON.parse(FX('pin-video.json'))).caption, 'Örnek video pini');
+    const rr = redditRss(FX('reddit-post.rss'));
+    assert.ok(rr.caption && rr.caption.length >= rr.title.length);
+    const long = xParse({ ...JSON.parse(FX('x-video.json')), text: 'ç'.repeat(3000) }, '1');
+    assert.equal(Array.from(long.caption).length, 2000); assert.equal(Array.from(long.title).length, 140);
+    // the cache row keeps it (a copy from a cached resolution still has its caption)
+    const back = adFromCache('x', { url: x.video.url, poster: x.image.url, width: x.video.w, height: x.video.h, expires_at: 2e9, extra: JSON.stringify(adToCache('x', x).extra) });
+    assert.equal(back.caption, x.caption); assert.equal(back.by, 'ornek_studio');
+  });
+  test('imageDims: JPEG / PNG / GIF / WebP headers; anything else null', () => {
+    assert.deepEqual(imageDims(POSTER), { w: 32, h: 18 }, 'the fixture poster (tests/fixtures/media/poster.jpg)');
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]), Buffer.from('IHDR'), Buffer.from([0, 0, 2, 208, 0, 0, 5, 0]), Buffer.alloc(8)]);
+    assert.deepEqual(imageDims(png), { w: 720, h: 1280 });
+    const gif = Buffer.concat([Buffer.from('GIF89a'), Buffer.from([0x40, 0x01, 0xf0, 0x00]), Buffer.alloc(20)]);
+    assert.deepEqual(imageDims(gif), { w: 320, h: 240 });
+    const vp8x = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8X'), Buffer.alloc(8), Buffer.from([0xcf, 0x02, 0x00, 0xff, 0x04, 0x00])]);
+    assert.deepEqual(imageDims(vp8x), { w: 720, h: 1280 });
+    // a baseline JPEG: SOI, an APP0 segment, SOF0 (height 1280, width 720)
+    const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, ...Buffer.from('JFIF\0'), 1, 1, 0, 0, 1, 0, 1, 0, 0, 0xff, 0xc0, 0, 17, 8, 0x05, 0x00, 0x02, 0xd0, 3, ...Array(9).fill(0)]);
+    assert.deepEqual(imageDims(jpg), { w: 720, h: 1280 });
+    assert.equal(imageDims(CLIP), null); assert.equal(imageDims(Buffer.from('<svg></svg>xxxxxxxxxxxxxxxxxxx')), null); assert.equal(imageDims(null), null);
+  });
+  test('Reddit for a copy (deps.wantPost): the feed for author + title even when the preview knows the video; preview fallback without its generic title', async () => {
+    const ad = DL_ADAPTERS.find((a) => a.name === 'reddit');
+    const post = L('https://www.reddit.com/r/ornek/comments/1abcdef/ornek_makine/');
+    const calls = [];
+    const stub = (feedStatus) => async (url) => {
+      calls.push(url);
+      if (url.endsWith('/.rss')) return feedStatus === 200 ? new Response(FX('reddit-post.rss'), { headers: { 'Content-Type': 'application/atom+xml' } }) : new Response('x', { status: feedStatus });
+      if (url.endsWith('DASHPlaylist.mpd')) return new Response(FX('reddit-dash.mpd'), { headers: { 'Content-Type': 'application/dash+xml' } });
+      return new Response('nope', { status: 404 });
+    };
+    const preview = { video: 'https://v.redd.it/testvid0001/CMAF_480.mp4', image: null, title: 'Reddit - İnternetin kalbi' };
+    let r = await ad.resolve(post, { fetchImpl: stub(200), preview });
+    assert.equal(calls.filter((u) => u.endsWith('.rss')).length, 0, 'a download keeps skipping the feed');
+    assert.equal(r.caption, null, 'the generic page title is no caption');
+    assert.equal(ad.feed(post, { preview }), false); assert.equal(ad.feed(post, { preview, wantPost: true }), true);
+    r = await ad.resolve(post, { fetchImpl: stub(200), preview, wantPost: true });
+    assert.deepEqual({ by: r.by, caption: r.caption, mux: r.video.mux }, { by: 'ornek_user', caption: 'Örnek makine & test', mux: 'cmaf' });
+    r = await ad.resolve(post, { fetchImpl: stub(429), preview: { ...preview, title: 'Örnek makine : r/ornek' }, wantPost: true });
+    assert.equal(r.ok, true, 'feed refused: the preview video');
+    assert.deepEqual({ by: r.by, caption: r.caption }, { by: null, caption: 'Örnek makine : r/ornek' });
+    assert.equal((await ad.resolve(post, { fetchImpl: stub(429), preview: { video: null }, wantPost: true })).reason, 'blocked', 'no preview video: the feed result stands');
+  });
+  test('copy records: vcPut keeps a valid extra for a long caption', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const sq = new DatabaseSync(':memory:');
+    sq.exec(VIDEO_CACHE_DDL);
+    const stmt = (sql, args = []) => ({ bind: (...a) => stmt(sql, a), first: async () => sq.prepare(sql).get(...args) || null, run: async () => sq.prepare(sql).run(...args) });
+    const db = { prepare: (sql) => stmt(sql) };
+    await vcPut(db, 9, 'ad', { url: 'https://video.twimg.com/a.mp4', extra: { ad: 'x', caption: '"'.repeat(5000) } });
+    const row = await vcGet(db, 9, 'ad');
+    assert.equal(vcExtra(row).ad, 'x', 'still valid JSON');
   });
 });

@@ -62,16 +62,16 @@ FIKIR_DL = "1"                 # "0" turns the download links off
 FIKIR_DL_DAILY = "1500"        # downloads that fetch from elsewhere per UTC day, whole site (our R2 copies/uploads and the
                                # admin's ticketed links do not count; plus 40 per IP / 10 min in code)
 FIKIR_DL_MAX_MB = "200"        # largest file a download streams through
-FIKIR_IG_COPY = "1"            # "0" turns R2 copies of Instagram videos off (routes and cron)
-FIKIR_IG_AUTO = "all"          # Instagram copies without anyone asking (cron + cards in view): off | blocked (reels whose embed shows
+FIKIR_IG_COPY = "0"            # "0" turns R2 copies of Instagram videos off (routes and cron)
+FIKIR_IG_AUTO = "off"          # Instagram copies without anyone asking (cron + cards in view): off | blocked (reels whose embed shows
                                # "Instagram'da İzle") | all (every Instagram video post, /p/ and /tv/ links too, blocked first; photos drop out)
-FIKIR_COPY_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # other platforms whose video posts are copied (cron + cards in view),
+FIKIR_COPY_ADAPTERS = ""   # other platforms whose video posts are copied (cron + cards in view),
                                # through the download adapters (each must also be in FIKIR_DL_ADAPTERS); "" = Instagram only
 FIKIR_IG_COPY_DAILY = "150"    # R2 copies per UTC day, every platform: cron + cards in view + requests (guests' requests together at most
                                # half; admin exempt). Bytes count into FIKIR_UP_DAILY_MB (not the admin's) and FIKIR_UP_TOTAL_MB; a
                                # guest's requested copies also into FIKIR_UP_PER_CID_* / _PER_IP_*
 FIKIR_IG_COPY_MB = "40"        # largest video copied (any platform; a Reddit video is measured after joining picture + sound)
-FIKIR_COPY_VIEW = "1"          # "1": a card in view asks for its post's copy (POST .../copy, any board session); "0" off
+FIKIR_COPY_VIEW = "0"          # "1": a card in view asks for its post's copy (POST .../copy, any board session); "0" off
 FIKIR_COPY_VIEW_DAILY = "100"  # on-view copies per UTC day, whole site (inside FIKIR_IG_COPY_DAILY; admin exempt)
 FIKIR_COPY_VIEW_PER_SESSION = "20"   # ... per guest cid / user per UTC day (plus 60 requests / hour in code)
 FIKIR_COPY_VIEW_PER_IP = "40"  # ... per IP per UTC day (plus 120 requests / hour in code)

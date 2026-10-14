@@ -100,8 +100,11 @@ describe('wrangler.toml', () => {
     assert.ok(crons.length <= FREE_LIMITS.crons);
     assert.equal(vars.FIKIR_IG_CRON_COPIES, '2');
     assert.equal(vars.FIKIR_IG_CRON_CHECKS, '2');
-    assert.equal(vars.FIKIR_IG_AUTO, 'all');
-    assert.deepEqual(vars.FIKIR_COPY_ADAPTERS.split(','), ['x', 'pinterest', 'tiktok', 'facebook', 'reddit']);
+    // R2 copies are off in production (owner's decision, 2026-10-14); the copy paths are still tested with copies on (makeWorld)
+    assert.equal(vars.FIKIR_IG_COPY, '0');
+    assert.equal(vars.FIKIR_IG_AUTO, 'off');
+    assert.equal(vars.FIKIR_COPY_ADAPTERS, '');
+    assert.equal(vars.FIKIR_COPY_VIEW, '0');
     for (const f of ['worker/wrangler.mediatest.toml', 'worker/wrangler.sbtest.toml']) {
       assert.deepEqual(H.readWranglerToml(H.ROOT + '/' + f).crons, [CRON_MAIN, CRON_IG], f);
     }

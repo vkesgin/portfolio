@@ -300,6 +300,8 @@ export function makeWorld({ vars = {}, fetchOpts = {}, wfStatus = 'errored' } = 
   const toml = readWranglerToml();
   const env = {
     ...toml.vars,
+    // Production may run with R2 copies off; the harness keeps exercising the copy paths (callers can still override via vars)
+    FIKIR_IG_COPY: '1', FIKIR_IG_AUTO: 'all', FIKIR_COPY_ADAPTERS: 'x,pinterest,tiktok,facebook,reddit', FIKIR_COPY_VIEW: '1',
     ALLOWED_ORIGIN: 'https://board.example',
     JWT_SECRET: 'harness-secret',
     ADMIN_PASSWORD: 'harness-admin',

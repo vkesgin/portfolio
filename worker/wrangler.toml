@@ -42,7 +42,7 @@ FIKIR_BR_PER_CID = "15"        # per post author (guest cid / user) per UTC day,
 FIKIR_BR_PER_IP = "20"         # per requesting IP per UTC day (admin exempt; the cron is not charged)
 FIKIR_BR_MS_PER_CID = "60000"  # browser ms per post author per UTC day (admin exempt)
 FIKIR_BR_MS_PER_IP = "60000"   # browser ms per requesting IP per UTC day (admin exempt)
-FIKIR_MEDIA_UPLOADS = "all"    # off | admin | users | all ("all": every board session; the board is behind FIKIR_BOARD_PASSWORD,
+FIKIR_MEDIA_UPLOADS = "off"    # off | admin | users | all ("all": every board session; the board is behind FIKIR_BOARD_PASSWORD,
                                # and an upload still needs the post owner or the admin, plus the caps below)
 FIKIR_UP_PER_CID_N = "10"      # uploads per cid/user per UTC day (admin exempt from all upload caps but FIKIR_UP_TOTAL_MB)
 FIKIR_UP_PER_CID_MB = "100"

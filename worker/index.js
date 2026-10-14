@@ -173,9 +173,14 @@ const INSPIRE_GENERIC_TITLES = new Set([
   'soundcloud', 'login', 'log in', 'sign in', 'sign up', 'just a moment...', 'access denied', 'attention required! | cloudflare',
   'error', 'forbidden', 'page not found', '404 not found', 'not found',
 ]);
-// Uploaded previews (POST /posts/:id/media/upload): caps per file; the type comes from the magic bytes only.
+// Uploaded previews (POST /posts/:id/media/upload): caps per file; the type comes from the magic bytes only. The admin's
+// videos may be larger (a whole YouTube / Vimeo video added to its card): the Workers request body limit is 100 MB on
+// Free / Pro and the route streams the body to R2. Guests / users keep 25 MB (plus their daily caps); everyone stays
+// within FIKIR_UP_TOTAL_MB.
 const INSPIRE_UP_VIDEO_MB = 25;
+const INSPIRE_UP_VIDEO_MB_ADMIN = 95;
 const INSPIRE_UP_IMAGE_MB = 10;
+const inspireUpVideoMb = (actor) => (actor && actor.isAdmin ? INSPIRE_UP_VIDEO_MB_ADMIN : INSPIRE_UP_VIDEO_MB);
 const INSPIRE_UP_TYPES = ['video/mp4', 'video/webm', 'video/quicktime', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 // Per-isolate cache of POST /preview results (key: canonical URL, 10 min); POST /posts reuses it instead of refetching.
 const INSPIRE_PREVIEW_TTL_MS = 10 * 60e3;
@@ -615,6 +620,11 @@ const inspireMetaFailed = (m) => !!(m && m.failed);
 const inspireNowS = () => Math.floor(Date.now() / 1000);
 // Link posts that show a preview card (and may carry media): card platforms and legacy 'link' rows.
 const inspireCardish = (type) => INSPIRE_CARD_PLATFORMS.has(type) || type === 'link';
+// YouTube / Vimeo posts: the post owner (or the admin) may add the video file itself (an upload: POST …/media/upload
+// part=video|poster, removed with DELETE …/media); the card then plays that file and "İndir" gives it. No link media (PUT).
+const INSPIRE_OWN_VIDEO_TYPES = new Set(['youtube', 'vimeo']);
+// Posts whose media an upload may set: link cards and YouTube / Vimeo posts.
+const inspireUploadable = (type) => inspireCardish(type) || INSPIRE_OWN_VIDEO_TYPES.has(type);
 // meta v2 (worker/inspire-media.js): {v:2, title, description, image, site_name, provider, image_w?, image_h?, media?, via,
 // checked}. Failure / negative cache: '{"failed":1,"at":<s>,"v":2[,"retry_s":<n>][,"pending":"br"]}' (must start with
 // {"failed": - the UPDATEs below test it with LIKE). pending:"br" = a Browser Run attempt is queued (it may also sit on a
@@ -671,7 +681,7 @@ function inspirePostOut(r, isAdmin, notes) {
     author: r.author || '', author_role: r.author_role || 'user', is_mine: !!r.is_mine, can_delete: !!r.is_mine || !!isAdmin,
     meta, meta_failed: inspireMetaFresh(stored), meta_stale: inspireMetaStale(stored, r.type),
     meta_pending: inspireMetaPendingSoon(stored), media,
-    can_edit_media: (!!r.is_mine || !!isAdmin) && inspireCardish(r.type),
+    can_edit_media: (!!r.is_mine || !!isAdmin) && inspireUploadable(r.type),
     // download hint (no network): {video: true|false|null (maybe), image: bool} or null; link = /api/inspire/posts/:id/download
     dl: dlHint({ type: r.type, parsed: inspireParsedOut(r.url), media, meta }),
     notes: notes || [],
@@ -1707,10 +1717,12 @@ async function inspireDeleteOrphans(env, db, postId) {
 // Any failure after the reservation refunds it and removes the object and its row.
 async function inspireUpload(request, env, ctx, db, id, { fail, limited, origin }) {
   // A refusal of a body of allowed size reads (discards) the rest of it first, so the client gets the JSON error instead
-  // of a connection reset mid-upload (the upload modal shows the message). Bodies over the 25 MB cap are not read.
+  // of a connection reset mid-upload (the upload modal shows the message). Bodies over the caller's video cap (25 MB; the
+  // admin's 95 MB once the caller is known) are not read.
   const declared = Number(request.headers.get('Content-Length'));
+  let drainMb = INSPIRE_UP_VIDEO_MB;
   const drain = async (reader) => {
-    if (!request.body || !(declared > 0 && declared <= INSPIRE_UP_VIDEO_MB * 1048576)) return;
+    if (!request.body || !(declared > 0 && declared <= drainMb * 1048576)) return;
     let r = reader;
     try {
       if (!r) r = request.body.getReader();
@@ -1720,6 +1732,8 @@ async function inspireUpload(request, env, ctx, db, id, { fail, limited, origin 
   const refuse = async (...a) => { await drain(); return fail(...a); };
   const actor = await inspireActor(request, env);
   if (!actor) return refuse(401, 'unauthorized', 'Önce giriş yapın');
+  const videoMb = inspireUpVideoMb(actor);
+  drainMb = videoMb;
   if (!inspireUploadsAllowed(env, actor)) return refuse(403, 'uploads_disabled', 'Dosya yükleme şu anda kapalı');
   const q = new URL(request.url).searchParams;
   const part = q.get('part');
@@ -1729,14 +1743,16 @@ async function inspireUpload(request, env, ctx, db, id, { fail, limited, origin 
   if (!row) return refuse(404, 'not_found', 'Fikir bulunamadı');
   if (!(row.is_mine || actor.isAdmin)) return refuse(403, 'forbidden', 'Bu fikrin önizlemesini değiştirme yetkin yok');
   if (row.type === 'text') return refuse(400, 'not_link_post', 'Metin fikirlere önizleme eklenemez');
-  if (!inspireCardish(row.type)) return refuse(409, 'has_player', 'Bu link zaten kendi oynatıcısıyla gösteriliyor');
+  if (!inspireUploadable(row.type)) return refuse(409, 'has_player', 'Bu link zaten kendi oynatıcısıyla gösteriliyor');
+  // YouTube / Vimeo: the video file itself (and its poster), not a picture in the player's place
+  if (part === 'image' && INSPIRE_OWN_VIDEO_TYPES.has(row.type)) return refuse(415, 'video_only', 'Bu karta bir video dosyası ekle (MP4, WebM veya MOV)');
   const lenHeader = request.headers.get('Content-Length');
   const len = Number(lenHeader);
   if (!lenHeader || !/^\d{1,12}$/.test(lenHeader.trim()) || !Number.isSafeInteger(len) || len <= 0 || !request.body) {
     return refuse(411, 'length_required', 'Dosya boyutu (Content-Length) gerekli');
   }
-  const cap = (part === 'video' ? INSPIRE_UP_VIDEO_MB : INSPIRE_UP_IMAGE_MB) * 1048576;
-  if (len > cap) return refuse(413, 'file_too_large', 'Video en fazla 25 MB, görsel en fazla 10 MB olabilir');
+  const cap = (part === 'video' ? videoMb : INSPIRE_UP_IMAGE_MB) * 1048576;
+  if (len > cap) return refuse(413, 'file_too_large', `Video en fazla ${videoMb} MB, görsel en fazla ${INSPIRE_UP_IMAGE_MB} MB olabilir`);
   const current = inspireMediaOut(row.media);
   if (part === 'poster' && !(current && current.kind === 'video')) return refuse(409, 'no_video', 'Kapak görseli yalnızca yüklenmiş/eklenmiş bir videoya eklenebilir');
   const ipKey = await inspireIpKey(request);
@@ -2117,15 +2133,16 @@ async function inspireAdItem(env, db, postId, ad, parsed, { needVideo = false, f
   return { ...r, cached: false };
 }
 // Turkish text for a reason a post's video cannot be downloaded (download-info, error page). YouTube / Vimeo
-// (adapter support:false): their own text (INSPIRE_DL_PLATFORM_TR), never the generic one.
+// (adapter support:false): their own text (INSPIRE_DL_PLATFORM_TR), never the generic one: the card has no video file
+// yet (the post owner adds one: POST …/media/upload), never a "the platform does not allow it" message.
 const INSPIRE_DL_PLATFORM_TR = {
-  youtube: 'YouTube videoları siteden indirilemiyor — YouTube buna izin vermiyor.',
-  vimeo: 'Vimeo videoları siteden indirilemiyor — Vimeo bu videoları şifreli (DRM) yayınlıyor.',
+  youtube: 'Bu karta henüz video dosyası eklenmemiş. Fikri paylaşan kişi videoyu karta ekleyince buradan indirilebilir.',
+  vimeo: 'Bu karta henüz video dosyası eklenmemiş. Fikri paylaşan kişi videoyu karta ekleyince buradan indirilebilir.',
 };
 const INSPIRE_DL_REASON_TR = {
-  not_supported: 'Bu videonun biçimi siteden indirilemiyor. Kaynağında açabilirsin.',
-  drm: 'Bu video şifreli (DRM) yayınlanıyor; siteden indirilemiyor. Kaynağında açabilirsin.',
-  login_required: 'Bu video herkese açık değil (giriş gerekiyor); buradan indirilemiyor.',
+  not_supported: 'Bu videonun dosyası buradan alınamadı. Kaynağında açabilirsin.',
+  drm: 'Bu video şifreli (DRM) yayınlanıyor. Kaynağında açabilirsin.',
+  login_required: 'Bu video herkese açık değil (giriş gerekiyor). Kaynağında açabilirsin.',
   not_found: 'Gönderi kaldırılmış ya da bulunamadı.',
   no_video: 'Bu gönderide video yok.',
   disabled: 'Bu platformdan indirme şu anda kapalı.',
@@ -2143,15 +2160,16 @@ const INSPIRE_DL_AUTH_TR = 'İndirme bağlantısının süresi doldu ya da oturu
 
 // Failure page of a download link (opened as a navigation): tiny Turkish HTML, no scripts, every value escaped.
 // extra: {href (same-origin path), text} for one more link (e.g. "Kapak görselini indir" for a YouTube post)
-function inspireDlErrorPage(env, status, message, source, extra = null) {
+// heading: the page's title + h1 (default "İndirilemedi"; a YouTube / Vimeo post without its video file: "Video dosyası yok")
+function inspireDlErrorPage(env, status, message, source, extra = null, heading = 'İndirilemedi') {
   const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const src = typeof source === 'string' && /^https?:\/\//i.test(source) && inspireHostOk(source) ? source : null;
   const board = inspireBoardOrigin(env);
   const more = extra && typeof extra.href === 'string' && /^\/api\/inspire\/[A-Za-z0-9/_.?=&-]+$/.test(extra.href) ? extra : null;
   const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>İndirilemedi</title><style>body{font:16px/1.5 system-ui,-apple-system,sans-serif;margin:0;padding:40px 16px;background:#0b0b0b;color:#eee}
+<meta name="robots" content="noindex"><title>${esc(heading)}</title><style>body{font:16px/1.5 system-ui,-apple-system,sans-serif;margin:0;padding:40px 16px;background:#0b0b0b;color:#eee}
 main{max-width:560px;margin:0 auto}h1{font-size:22px;margin:0 0 12px}a{color:#7cc4ff;overflow-wrap:anywhere}p{margin:0 0 12px}</style></head>
-<body><main><h1>İndirilemedi</h1><p>${esc(message)}</p>${more ? `<p><a href="${esc(more.href)}" rel="nofollow">${esc(more.text)}</a></p>` : ''}${src ? `<p>Kaynağında aç: <a href="${esc(src)}" rel="noopener noreferrer nofollow">${esc(src)}</a></p>` : ''}${board ? `<p><a href="${esc(board + '/fikir')}">Fikir Havuzu’na dön</a></p>` : ''}</main></body></html>`;
+<body><main><h1>${esc(heading)}</h1><p>${esc(message)}</p>${more ? `<p><a href="${esc(more.href)}" rel="nofollow">${esc(more.text)}</a></p>` : ''}${src ? `<p>Kaynağında aç: <a href="${esc(src)}" rel="noopener noreferrer nofollow">${esc(src)}</a></p>` : ''}${board ? `<p><a href="${esc(board + '/fikir')}">Fikir Havuzu’na dön</a></p>` : ''}</main></body></html>`;
   return new Response(html, { status, headers: {
     'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
     'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
@@ -2196,9 +2214,9 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin, au
   const part = qp == null || qp === '' ? 'auto' : ['video', 'image', 'auto'].includes(qp) ? qp : null;
   const asJson = inspireDlAsJson(request);
   let source = null;
-  const fail = (status, error, message, extra, link = null) => (asJson
+  const fail = (status, error, message, extra, link = null, heading) => (asJson
     ? json({ error, message, ...(source ? { source } : {}), ...(extra || {}) }, status, origin)
-    : inspireDlErrorPage(env, status, message, source, link));
+    : inspireDlErrorPage(env, status, message, source, link, heading));
   if (!auth) return fail(401, 'unauthorized', INSPIRE_DL_AUTH_TR);
   if (!part) return fail(400, 'bad_request', 'Geçersiz istek (part=video|image)');
   const cfg = inspireVideoConfig(env);
@@ -2229,7 +2247,7 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin, au
       const coverHref = `/api/inspire/posts/${id}/download?part=image` + (k ? '&k=' + encodeURIComponent(k) : '');
       return fail(422, 'not_downloadable', inspireDlReasonText(unsupported.reason, unsupported.name),
         { reason: unsupported.reason, unsupported: true, platform: unsupported.name, image },
-        image ? { href: coverHref, text: 'Kapak görselini indir' } : null);
+        image ? { href: coverHref, text: 'Kapak görselini indir' } : null, 'Video dosyası yok');
     }
   }
   // Site-wide daily budget (FIKIR_DL_DAILY) of downloads that fetch from elsewhere: taken before the first upstream request
@@ -2245,6 +2263,8 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin, au
     return dayState === 'taken' || dayState === 'exempt';
   };
   const titleParts = ['fikir', id, titleSlug((meta && meta.title) || row.description || '')];
+  const ownType = parsed && INSPIRE_OWN_VIDEO_TYPES.has(parsed.platform) ? parsed.platform : null;
+  const ownParts = ownType ? [ownType, titleSlug((meta && meta.title) || row.description || ''), (parsed && parsed.id) || id] : null;
   const safeURL = inspireDlSafe(selfHost);
   let lastError = null, opens = 0, igRes = null, igRetried = false, adRes = null, adRetried = false, adReason = null;
   const igParts = (it) => ['instagram', it && it.user, ig.code];
@@ -2282,9 +2302,11 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin, au
     // 1. stored media: R2 copy / upload, or a manual direct link
     if (media) {
       const u = want === 'video' ? (media.kind === 'video' ? media.url : null) : (media.kind === 'image' ? media.url : media.kind === 'video' ? media.poster : null);
-      // our copy: "<platform>-<user>-<the platform's post id>.mp4", like a download straight from the platform
+      // our copy: "<platform>-<user>-<the platform's post id>.mp4", like a download straight from the platform;
+      // the video file added to a YouTube / Vimeo post: "youtube-<title>-<video id>.mp4"
       const rr = parsed && !ig && !parsed.id ? redditRef(parsed.canonical) : null;
-      const parts = COPY_SOURCES.has(media.source) ? [media.source, media.by, (ig && ig.code) || (parsed && parsed.id) || (rr && (rr.postId || rr.vid)) || id] : titleParts;
+      const parts = COPY_SOURCES.has(media.source) ? [media.source, media.by, (ig && ig.code) || (parsed && parsed.id) || (rr && (rr.postId || rr.vid)) || id]
+        : ownParts || titleParts;
       if (u && (res = await fromUrl(u, want, parts))) return res;
     }
     // 2. Instagram post (resolved once; a cached CDN link that fails is resolved again once). Instagram busy for a moment:
@@ -2719,6 +2741,7 @@ function inspireGateKind(cleanPath, method) {
   return 'session';
 }
 // Reads (discards) an upload body of allowed size before a refusal, so the client gets the JSON instead of a reset.
+// Without a session the caller is unknown: only up to the guest video cap (not the admin's larger one).
 async function inspireDrain(request) {
   const declared = Number(request.headers.get('Content-Length'));
   if (!request.body || !(declared > 0 && declared <= INSPIRE_UP_VIDEO_MB * 1048576)) return;
@@ -2817,7 +2840,7 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       const sb = sbReady ? await sbHook('config', () => sbConfigPayload(env, db, actor), null) : null;
       const vcfg = inspireVideoConfig(env);
       const media = {
-        attach: true, uploads: inspireUploadsAllowed(env, actor), max_video_mb: INSPIRE_UP_VIDEO_MB, max_image_mb: INSPIRE_UP_IMAGE_MB,
+        attach: true, uploads: inspireUploadsAllowed(env, actor), max_video_mb: inspireUpVideoMb(actor), max_image_mb: INSPIRE_UP_IMAGE_MB,
         types: INSPIRE_UP_TYPES,
         download: vcfg.dl, ig_copy: vcfg.igCopy && !!actor, ig_auto: vcfg.igAuto,   // GET /posts/:id/download, POST /posts/:id/ig-copy
         // POST /posts/:id/copy from cards in view (posts with copy_view), and the platforms copied without anyone asking
@@ -3180,7 +3203,8 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
       if (!(row.is_mine || actor.isAdmin)) return fail(403, 'forbidden', 'Bu fikrin önizlemesini değiştirme yetkin yok');
       if (row.type === 'text') return fail(400, 'not_link_post', 'Metin fikirlere önizleme eklenemez');
-      if (!inspireCardish(row.type)) return fail(409, 'has_player', 'Bu link zaten kendi oynatıcısıyla gösteriliyor');
+      // PUT (a media link): link cards only; DELETE also removes the video file added to a YouTube / Vimeo post
+      if (!(method === 'DELETE' ? inspireUploadable(row.type) : inspireCardish(row.type))) return fail(409, 'has_player', 'Bu link zaten kendi oynatıcısıyla gösteriliyor');
       if (await inspireOverLimit(db, [['media', inspireActorKey(actor)], ['media_ip', await inspireIpKey(request)]])) return limited();
       let media = null;
       if (method === 'PUT') {

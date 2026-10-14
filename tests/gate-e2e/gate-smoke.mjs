@@ -259,7 +259,7 @@ ok('/files: board uploads + storyboard frames only with the files token (200 / 2
 // ── YouTube Shorts ──
 const yi = await call('GET', `/api/inspire/posts/${yt}/download-info`, null, G);
 assert.deepEqual({ video: yi.data.video, image: yi.data.image, reason: yi.data.reason, unsupported: yi.data.unsupported, message: yi.data.message },
-  { video: false, image: true, reason: 'not_supported', unsupported: true, message: 'YouTube videoları siteden indirilemiyor — YouTube buna izin vermiyor.' });
+  { video: false, image: true, reason: 'not_supported', unsupported: true, message: 'Bu karta henüz video dosyası eklenmemiş. Fikri paylaşan kişi videoyu karta ekleyince buradan indirilebilir.' });
 r = await call('GET', yi.data.url + '&format=json');
 assert.equal(r.status, 422); assert.equal(r.data.error, 'not_downloadable'); assert.equal(r.data.unsupported, true); assert.equal(r.data.image, true);
 r = await call('GET', yi.data.url, null, null, { headers: { Accept: 'text/html' } });

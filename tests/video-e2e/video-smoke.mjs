@@ -263,7 +263,7 @@ ok('seeded ' + Object.keys(ids).length + ' posts: ' + JSON.stringify(ids));
   // YouTube Shorts: why not, up front; the download refuses auto / video with 422 (no thumbnail, no budget unit, no fetch)
   const y = await call('GET', `/api/inspire/posts/${ids.yt}/download-info`, null, g.token);
   assert.deepEqual({ video: y.data.video, image: y.data.image, reason: y.data.reason, unsupported: y.data.unsupported, message: y.data.message },
-    { video: false, image: true, reason: 'not_supported', unsupported: true, message: 'YouTube videoları siteden indirilemiyor — YouTube buna izin vermiyor.' });
+    { video: false, image: true, reason: 'not_supported', unsupported: true, message: 'Bu karta henüz video dosyası eklenmemiş. Fikri paylaşan kişi videoyu karta ekleyince buradan indirilebilir.' });
   const yk = y.data.url.split('?k=')[1];
   const yj = await dl(ids.yt, '?format=json', {}, { k: yk });
   assert.equal(yj.status, 422); const yd = JSON.parse(yj.text());

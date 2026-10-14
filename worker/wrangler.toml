@@ -42,7 +42,8 @@ FIKIR_BR_PER_CID = "15"        # per post author (guest cid / user) per UTC day,
 FIKIR_BR_PER_IP = "20"         # per requesting IP per UTC day (admin exempt; the cron is not charged)
 FIKIR_BR_MS_PER_CID = "60000"  # browser ms per post author per UTC day (admin exempt)
 FIKIR_BR_MS_PER_IP = "60000"   # browser ms per requesting IP per UTC day (admin exempt)
-FIKIR_MEDIA_UPLOADS = "admin"  # off | admin | users | all
+FIKIR_MEDIA_UPLOADS = "all"    # off | admin | users | all ("all": every board session; the board is behind FIKIR_BOARD_PASSWORD,
+                               # and an upload still needs the post owner or the admin, plus the caps below)
 FIKIR_UP_PER_CID_N = "10"      # uploads per cid/user per UTC day (admin exempt from all upload caps but FIKIR_UP_TOTAL_MB)
 FIKIR_UP_PER_CID_MB = "100"
 FIKIR_UP_PER_IP_N = "20"       # uploads per IP per UTC day (guest cids are client-chosen)
@@ -78,7 +79,7 @@ FIKIR_IG_FETCH_DAILY = "300"   # Instagram page + embed fetches by the worker pe
 FIKIR_IG_CRON_COPIES = "2"     # copies per "7-59/15" cron run (every 15 min, any platform; each also gated by the run's D1/subrequest
                                # budget: a second copy never uses Browser Run and starts only when its worst case still fits)
 FIKIR_IG_CRON_CHECKS = "2"     # Instagram embed checks per cron run (same gate)
-FIKIR_DL_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # platforms whose videos downloads resolve (drop one to turn it off; YouTube/Vimeo cannot be downloaded)
+FIKIR_DL_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # platforms whose videos downloads resolve (drop one to turn it off; YouTube/Vimeo posts: the post owner adds the video file to the card)
 FIKIR_DL_AD_DAILY = "400"      # platform page/API fetches for downloads + copies per UTC day (plus 20 per platform / 10 min in code)
 # Board password gate (worker/fikir-gate.js): every /api/inspire/* route but GET /config, POST /guest and POST /login needs
 # a session; guests get one with the secret FIKIR_BOARD_PASSWORD. The board's R2 files (/files/fikir/*, /files/sb/*) need

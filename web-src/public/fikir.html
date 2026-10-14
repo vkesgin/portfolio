@@ -228,6 +228,7 @@
     .board-status .status-text.error { color: #ff6b6b; }
 
     .post-card {
+      position: relative;   /* drop / upload overlays (.card-drop, .card-up) */
       background: var(--card-bg);
       border: 1px solid var(--border);
       border-radius: 16px;
@@ -427,6 +428,42 @@
     .dl-btn[aria-busy="true"] { color: var(--accent); border-color: rgba(0, 229, 255, 0.45); cursor: progress; }
     .dl-btn .dl-label { font-variant-numeric: tabular-nums; }
     @media (hover: hover) { .dl-btn:not([aria-busy="true"]):hover { color: var(--accent); border-color: rgba(0, 229, 255, 0.5); background: rgba(0, 229, 255, 0.08); } }
+    /* "Video ekle" (YouTube / Vimeo card, post owner / admin): the card's own video file from a file picker, in the meta row
+       where "İndir" is once the card has that file. Dropping a file on the card does the same. */
+    .up-btn {
+      display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 3px 11px 3px 9px; border-radius: 999px;
+      border: 1px solid rgba(0, 229, 255, 0.5); background: rgba(0, 229, 255, 0.09); color: var(--accent);
+      font: inherit; font-size: 12px; font-weight: 700; line-height: 1; cursor: pointer; white-space: nowrap; justify-content: center;
+    }
+    .up-btn svg { width: 14px; height: 14px; flex: none; }
+    .up-btn[aria-disabled="true"] { opacity: 0.55; cursor: progress; }
+    @media (hover: hover) { .up-btn:not([aria-disabled="true"]):hover { background: rgba(0, 229, 255, 0.17); border-color: rgba(0, 229, 255, 0.75); } }
+    /* A file dragged over a card the user may change: "Bırak, yükleyelim" over the whole card; then the upload progress over
+       the top of the card. Both are overlays: the card's height (and the columns) never change while they show. */
+    .post-card.drop-on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.55), 0 12px 32px rgba(0, 0, 0, 0.45); }
+    .card-drop {
+      position: absolute; inset: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; padding: 18px; text-align: center; pointer-events: none; border-radius: inherit;
+      background: rgba(3, 20, 24, 0.88); outline: 2px dashed var(--accent); outline-offset: -10px; color: #eafcff;
+      -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+    }
+    .card-drop b { font-size: 18px; font-weight: 700; }
+    .card-drop span { font-size: 13px; color: #9fdfe8; }
+    .card-up {
+      position: absolute; top: 10px; left: 10px; right: 10px; z-index: 7; padding: 9px 12px 10px; border-radius: 10px;
+      background: rgba(8, 8, 8, 0.88); border: 1px solid rgba(0, 229, 255, 0.4); color: #eee; font-size: 13px; font-weight: 600;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45); pointer-events: none; font-variant-numeric: tabular-nums;
+    }
+    .card-up .bar { height: 4px; margin-top: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+    .card-up .bar > span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.15s linear; }
+    /* YouTube / Vimeo card whose own video file this browser cannot play (the card shows the platform's player): a note
+       for the post owner / admin, above the meta row */
+    .own-note {
+      margin: 0 0 10px; padding: 7px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45; color: #ffd27a;
+      background: rgba(255, 210, 122, 0.08); border: 1px solid rgba(255, 210, 122, 0.22);
+    }
+    /* while a file is dragged over the page, embeds let the drag through to their card (a frame would swallow the drop) */
+    html.file-drag .board iframe { pointer-events: none; }
 
     /* Text idea card: [AI storyboard carousel] + label + idea text + storyboard info (assets/js/fikir-storyboard.mjs) */
     .text-idea { padding: var(--pad) var(--pad) 0; background: linear-gradient(160deg, rgba(0, 229, 255, 0.09), rgba(0, 229, 255, 0) 60%); }
@@ -699,7 +736,7 @@
       .clamp-btn, .btn-sm, .btn-mini { min-height: 40px; }
       .pv-btn:not(.pv-play) { width: 40px; height: 40px; }
       .pv-chip { min-height: 40px; padding: 8px 14px; }
-      .dl-btn { min-height: 40px; padding: 6px 15px 6px 13px; font-size: 13px; }
+      .dl-btn, .up-btn { min-height: 40px; padding: 6px 15px 6px 13px; font-size: 13px; }
       .toast-action { min-height: 40px; }
       .ig-open { padding: 11px 0; margin: -11px 0; }
       .text-btn { position: relative; min-width: 40px; }   /* a short label ("Sil") still gets a 40px wide box */
@@ -1145,7 +1182,11 @@
     const MEDIA_KINDS = new Set(['video', 'image', 'hls', 'player']);
     // post.media.source of our R2 copies (worker inspireCopy) and the card's "<Platform>'da aç ↗"
     const COPY_SOURCES = new Set(['instagram', 'x', 'tiktok', 'facebook', 'pinterest', 'reddit']);
-    const COPY_OPEN_TR = { instagram: "Instagram'da aç ↗", tiktok: "TikTok'ta aç ↗", x: "X'te aç ↗", facebook: "Facebook'ta aç ↗", pinterest: "Pinterest'te aç ↗", reddit: "Reddit'te aç ↗" };
+    const COPY_OPEN_TR = { instagram: "Instagram'da aç ↗", tiktok: "TikTok'ta aç ↗", x: "X'te aç ↗", facebook: "Facebook'ta aç ↗", pinterest: "Pinterest'te aç ↗", reddit: "Reddit'te aç ↗",
+      youtube: "YouTube'da aç ↗", vimeo: "Vimeo'da aç ↗" };
+    // YouTube / Vimeo posts: the post owner / admin adds the video file itself (drop it on the card or "Video ekle"); the card
+    // then plays that file like a copy ("YouTube'da aç ↗", the video's title / description) and "İndir" gives it.
+    const OWN_VIDEO_PLATFORMS = new Set(['youtube', 'vimeo']);
     const FILES_PATH_RE = /^\/files\/fikir\/\d{1,15}\/[vip]-[0-9a-f]{32}\.(?:mp4|webm|mov|jpg|png|webp|gif)(?:\?[A-Za-z0-9._~=&%-]{1,600})?$/;
     function dimOk(v) {
       const n = Number(v);
@@ -2169,6 +2210,15 @@
       if (platform === 'image') return { kind: 'image', platform, parsed, src };
       if (platform === 'video') return { kind: 'video', platform, parsed, src };
       const meta = normMeta(post.meta);
+      // YouTube / Vimeo post with its own video file (an upload by the post owner / admin): played here like a copy; a file
+      // that fails to load in this browser falls back to the embed.
+      const own = OWN_VIDEO_PLATFORMS.has(platform) ? ownVideoOf(post) : null;
+      if (own && !(bad && bad.has(own.url))) {
+        const plan = previewPlan(own, meta, true);
+        if (plan && plan.type === 'video') {
+          return { kind: 'igcopy', platform, parsed, plan, copy: { source: platform, by: '', caption: ownCaption(meta), audio: null, own: true } };
+        }
+      }
       // Post with our R2 copy (Instagram, X, TikTok, Facebook, Pinterest, Reddit; copied by the cron, on view or on request):
       // played here with the preview video; a copy that fails to load in this browser falls back to the embed / link card.
       const copy = copyOf(post);
@@ -2227,6 +2277,13 @@
       const m = normMedia(post.media);
       return m && COPY_SOURCES.has(m.source) && m.kind === 'video' ? m : null;
     }
+    // post.media of a YouTube / Vimeo post: the video file its owner added (upload), else null
+    function ownVideoOf(post) {
+      const m = normMedia(post.media);
+      return m && m.kind === 'video' && !COPY_SOURCES.has(m.source) ? m : null;
+    }
+    // the text under such a video: the YouTube / Vimeo video's own title and description (link preview), plain text
+    const ownCaption = (meta) => (meta ? [meta.title, meta.description].filter(Boolean).join('\n') : '');
     // Instagram links the server can check / copy (worker igRef: reel, p, tv with a shortcode)
     const IG_POST_KINDS = new Set(['reel', 'p', 'tv']);
     const isIgPost = (view) => !!(view && view.platform === 'instagram' && view.parsed && IG_POST_KINDS.has(view.parsed.subtype) && view.parsed.id);
@@ -2569,11 +2626,12 @@
     /* Post played from our R2 copy: "@user · <Platform>" + "<Platform>'da aç ↗" (Instagram'da, TikTok'ta, X'te,
        Facebook'ta, Pinterest'te, Reddit'te), the preview video (poster, muted autoplay while visible, shares the mount cap,
        ⏸ / sound), then the post's caption (plain text, collapsible). The video box is sized from media.w/h before anything
-       loads. */
+       loads. A YouTube / Vimeo post with its own video file (copy.own): "YouTube" + "YouTube'da aç ↗", that file, then the
+       video's title / description. */
     function buildIgCopyMedia(entry) {
       const { parsed, plan, copy } = entry.view;
       const r = entry.refs;
-      const src = COPY_SOURCES.has(copy.source) ? copy.source : 'instagram';
+      const src = COPY_SOURCES.has(copy.source) || (copy.own && OWN_VIDEO_PLATFORMS.has(copy.source)) ? copy.source : 'instagram';
       const info = platformInfo(src);
       const href = safeHttpUrl(parsed.canonical);
       // "@user · Instagram": a long user name is shortened (…), the site name stays
@@ -2741,10 +2799,20 @@
       r.mediaBtn = h('button', { type: 'button', class: 'text-btn', 'data-action': 'media-edit', hidden: true }, 'Önizleme ekle');
       // Post owner / admin of a card played from our copy: remove the copy (back to the platform's embed / link card)
       r.copyDel = h('button', { type: 'button', class: 'text-btn', 'data-action': 'ig-copy-del', hidden: true }, 'Kopyayı kaldır');
+      // Post owner / admin of a YouTube / Vimeo card: "Video ekle" (file picker; dropping a file on the card does the same) in
+      // the place of "İndir" until the card has its video file; then "Videoyu kaldır" (back to the platform's player)
+      r.addBtn = h('button', { type: 'button', class: 'up-btn', 'data-action': 'add-video', hidden: true, title: 'Videoyu seç ya da karta sürükleyip bırak' },
+        svgIcon(['M12 20V9', 'M7 13.5l5-5 5 5', 'M5 4h14']), h('span', null, 'Video ekle'));
+      r.ownDel = h('button', { type: 'button', class: 'text-btn', 'data-action': 'own-video-del', hidden: true }, 'Videoyu kaldır');
       r.del = h('button', { type: 'button', class: 'text-btn danger', 'data-action': 'delete-post', hidden: !post.can_delete }, 'Sil');
       r.dlBtn = buildDlButton();
-      right.prepend(r.dlBtn);
-      right.append(r.mediaBtn, r.copyDel, r.del);
+      right.prepend(r.addBtn, r.dlBtn);
+      right.append(r.mediaBtn, r.copyDel, r.ownDel, r.del);
+      // Post owner / admin of a YouTube / Vimeo card whose own file this browser cannot play (ownFileUnplayable)
+      r.ownNote = view.kind !== 'text'
+        ? h('p', { class: 'own-note', hidden: true }, 'Bu tarayıcı karta eklenen video dosyasını oynatamıyor; mümkünse MP4 ekle.')
+        : null;
+      if (r.ownNote) info.append(r.ownNote);
       info.append(h('div', { class: 'post-meta' }, h('div', { class: 'post-meta-left' }, r.author, roleBadge(post), r.date), right));
 
       r.notesTitle = h('div', { class: 'notes-title', hidden: true }, 'Notlar');
@@ -2764,9 +2832,12 @@
 
     /* Card actions that follow the post (dl hint, can_delete, a copy) and the server flags (config.video): "İndir",
        "Kopyayı kaldır", "Oynamıyor mu?"; the source link is hidden while the copy's credit line carries it. */
+    // A YouTube / Vimeo post without its video file (dl.reason: the platform's video is never fetched): no "İndir" (the
+    // post owner / admin gets "Video ekle" there instead)
     function dlShown(entry) {
       const dl = entry.post.dl;
-      return config.video.download !== false && !!dl && typeof dl === 'object' && (dl.video !== false || dl.image === true);
+      return config.video.download !== false && !!dl && typeof dl === 'object' && (dl.video !== false || dl.image === true) &&
+        !(dl.video === false && dl.reason);
     }
     // "Oynamıyor mu?": not while the card is copied on view anyway (post.copy_view; the list refresh shows the button once
     // the server stops offering that copy)
@@ -2776,7 +2847,10 @@
       const r = entry.refs;
       return [
         [r.dlBtn, !dlShown(entry)],
-        [r.copyDel, !(entry.view.kind === 'igcopy' && entry.post.can_delete)],
+        [r.copyDel, !(entry.view.kind === 'igcopy' && !entry.view.copy.own && entry.post.can_delete)],
+        [r.addBtn, !addVideoShown(entry)],
+        [r.ownDel, !(hasOwnFile(entry) && canUploadTo(entry))],
+        [r.ownNote, !ownFileUnplayable(entry)],
         [r.srcLink, entry.view.kind === 'igcopy'],
         [r.igHelp, !igHelpShown(entry)],
       ].filter(([el]) => !!el);
@@ -2786,9 +2860,7 @@
       const b = entry.refs.dlBtn;
       if (b && !b.hidden && !b.dataset.busy) {
         const dl = entry.post.dl || {};
-        const label = dl.video === true ? 'Videoyu indir' : dl.video === false
-          ? (dl.reason && dl.reason !== 'no_video' ? 'Bu video siteden indirilemiyor; kapak görseli indirilebilir' : 'Görseli indir')
-          : 'Videoyu ya da görseli indir';
+        const label = dl.video === true ? 'Videoyu indir' : dl.video === false ? 'Görseli indir' : 'Videoyu ya da görseli indir';
         if (b.title !== label) { b.title = label; b.setAttribute('aria-label', label); }
       }
     }
@@ -2840,7 +2912,22 @@
     }
 
     // Media controls of a link card: the info-row button, the "+ Önizleme ekle" chip, the "preparing" label.
-    const canEditMedia = (entry) => !!(entry.post.can_edit_media && entry.view.base === 'card');
+    const canEditMedia = (entry) => !!(entry.post.can_edit_media && entry.view.base === 'card') && !isOwnVideoPost(entry);
+    // YouTube / Vimeo post (also a legacy 'link' row of such a video): its own video file can be added (worker
+    // inspireUploadable; type youtube / vimeo accepts only a video there)
+    const isOwnVideoPost = (entry) => OWN_VIDEO_PLATFORMS.has(String(entry.post.type)) ||
+      (entry.view.base !== 'card' && OWN_VIDEO_PLATFORMS.has(entry.view.platform));
+    // uploads are on for this session (config.media.uploads) and the server lets this user change the post's media
+    const canUploadTo = (entry) => uploadsOn() && entry.post.can_edit_media === true;
+    // the card holds its own video file (the stored media decides, not the view: a file this browser cannot play falls
+    // back to the platform's player, yet it is still there for "Videoyu kaldır", "İndir" and other browsers)
+    const hasOwnFile = (entry) => isOwnVideoPost(entry) && !!ownVideoOf(entry.post);
+    const addVideoShown = (entry) => isOwnVideoPost(entry) && canUploadTo(entry) && !hasOwnFile(entry);
+    // ... and this browser could not play it (mediaFailed): the owner / admin is told why the platform's player is back
+    const ownFileUnplayable = (entry) => {
+      const own = canUploadTo(entry) && hasOwnFile(entry) ? ownVideoOf(entry.post) : null;
+      return !!(own && entry.badMedia && entry.badMedia.has(own.url));
+    };
     const hasShownMedia = (entry) => !!(entry.view.plan || entry.view.player);
     function updateMediaControls(entry) {
       const r = entry.refs;
@@ -3149,6 +3236,8 @@
       if (action === 'download') { downloadPost(entry); return; }
       if (action === 'ig-blocked') { igNotPlaying(entry); return; }
       if (action === 'ig-copy-del') { removeIgCopy(entry); return; }
+      if (action === 'add-video') { pickFileFor(entry); return; }
+      if (action === 'own-video-del') { removeOwnVideo(entry); return; }
       if (action === 'pv-open') return;   // plain link to the source page
       const pm = entry.media && entry.media.type === 'video' ? entry.media : null;
       if (pm && (action === 'pv-play' || action === 'pv-pause' || action === 'pv-sound' || action === 'pv-toggle')) {
@@ -4313,24 +4402,202 @@
     }
 
     // Upload a chosen file as the media of post `target.id` (+ an automatic poster for a video).
-    // -> {ok:true} | {ok:false, status, message}. The card follows the server's answer.
-    async function uploadPicked(target, pick, onProgress) {
+    // -> {ok:true} | {ok:false, status, code, message}. The card follows the server's answer once, after the poster (one
+    // media swap, not two). opts.shot: the poster already made (makeVideoPoster() result or null: none); opts.onPoster():
+    // called when the video is in and the poster is next.
+    async function uploadPicked(target, pick, onProgress, opts = {}) {
+      let post = null;
       try {
         const res = await mutate(() => uploadMediaFile(target.id, pick.file, pick.part, onProgress, pick, pick.type));
-        applyServerPost(res && res.post);
+        post = res && res.post;
       } catch (e) {
-        return { ok: false, status: e.status, message: e.message || 'Yükleme başarısız.' };
+        return { ok: false, status: e.status, code: e.code, message: e.message || 'Yükleme başarısız.' };
       }
       if (pick.part === 'video') {
+        if (opts.onPoster) opts.onPoster();
         try {
-          const shot = await makeVideoPoster(pick.file);
+          const shot = opts.shot !== undefined ? opts.shot : await makeVideoPoster(pick.file);
           if (shot) {
             const res = await mutate(() => uploadMediaFile(target.id, shot.blob, 'poster', null, null, 'image/jpeg'));
-            applyServerPost(res && res.post);
+            if (res && res.post) post = res.post;
           }
         } catch (_) { /* the poster is optional */ }
       }
+      applyServerPost(post);
       return { ok: true };
+    }
+
+    /* ====================================================== CARD FILE DROP
+     * The post owner / admin drops a video or image file on a card (or picks one with "Video ekle" on a YouTube / Vimeo
+     * card, e.g. on a phone). It is uploaded at once through the route of "Önizleme ekle" (POST …/media/upload; for a
+     * video, a poster frame made here first, then sent after it), with the progress over the top of the card. Then only
+     * that card's media block is swapped (applyServerPost → swapMedia through applyOrDefer): a YouTube / Vimeo card plays
+     * the file with our player ("YouTube'da aç ↗" + the video's title) and "İndir" gives it; another card shows it as its
+     * preview. Cards the user may not change get no highlight and refuse the drop (dropEffect none; the server checks the
+     * owner too). A file dropped anywhere else is never opened by the browser in the board's place. Native file inputs
+     * (the add / media dialogs) keep their own drop.
+     * ================================================================== */
+    const canDropOn = (entry) => !!entry && entry.view.kind !== 'text' && canUploadTo(entry) && (isOwnVideoPost(entry) || canEditMedia(entry));
+    // inPage: a drag that started on this page (a card's picture, a link; dragstart … dragend). Not a file from outside,
+    // even though Chrome lists a dragged picture under "Files": it is never uploaded and keeps the browser's own handling.
+    const fileDrag = { entry: null, el: null, timer: 0, inPage: false };
+    const dragTypes = (ev) => (ev.dataTransfer && ev.dataTransfer.types ? Array.from(ev.dataTransfer.types) : []);
+    // An in-page drag always carries its link / HTML / text along with "Files"; a file from the computer carries none of
+    // them. So "Files" alone ends a stale inPage (its dragend was lost: the dragged element left the page mid-drag and the
+    // drag was released outside the window), and the file is handled, never opened by the browser in the board's place.
+    const dragHasFiles = (ev) => {
+      const types = dragTypes(ev);
+      if (!types.includes('Files')) return false;
+      if (fileDrag.inPage && !types.some((t) => t === 'text/uri-list' || t === 'text/html' || t === 'text/plain')) fileDrag.inPage = false;
+      return !fileDrag.inPage;
+    };
+    // A field's own drop: a file input takes the file; a text field takes the link / text that a picture or link dragged
+    // from another page brings along (a bare file from the computer is still kept from opening in the board's place).
+    const intoField = (ev) => ev.target instanceof Element && (!!ev.target.closest('input[type="file"]') ||
+      (dragTypes(ev).some((t) => t === 'text/uri-list' || t === 'text/plain') && !!ev.target.closest('input, textarea, [contenteditable]')));
+    function dropEntryAt(target) {
+      if (modalStack.length || !board.el || !(target instanceof Element)) return null;
+      const card = target.closest('.post-card');
+      if (!card || !board.el.contains(card)) return null;
+      const entry = posts.get(card.dataset.id);
+      return entry && entry.el === card && !entry.uploading && canDropOn(entry) ? entry : null;
+    }
+    function setDropTarget(entry) {
+      if (fileDrag.entry === entry) return;
+      if (fileDrag.entry) fileDrag.entry.el.classList.remove('drop-on');
+      if (fileDrag.el) fileDrag.el.remove();
+      fileDrag.entry = entry;
+      fileDrag.el = null;
+      if (!entry) return;
+      const lim = mediaLimits();   // this user's caps (config.media: the admin's videos may be larger)
+      fileDrag.el = h('div', { class: 'card-drop', 'aria-hidden': 'true' }, h('b', null, 'Bırak, yükleyelim'),
+        h('span', null, isOwnVideoPost(entry) ? `Video dosyası (MP4, WebM, MOV · en fazla ${lim.video} MB)`
+          : `Video ya da görsel (video en fazla ${lim.video} MB, görsel ${lim.image} MB)`));
+      entry.el.classList.add('drop-on');
+      entry.el.append(fileDrag.el);
+    }
+    function endFileDrag() {
+      clearTimeout(fileDrag.timer);
+      fileDrag.timer = 0;
+      document.documentElement.classList.remove('file-drag');
+      setDropTarget(null);
+    }
+    function onFileDragOver(ev) {
+      if (!dragHasFiles(ev) || intoField(ev)) return;
+      ev.preventDefault();
+      document.documentElement.classList.add('file-drag');
+      const entry = dropEntryAt(ev.target);
+      ev.dataTransfer.dropEffect = entry ? 'copy' : 'none';
+      setDropTarget(entry);
+      // no dragover for a while: the file left the window or the drag was cancelled
+      clearTimeout(fileDrag.timer);
+      fileDrag.timer = setTimeout(endFileDrag, 800);
+    }
+    function onFileDragLeave(ev) {
+      if (!fileDrag.timer || ev.relatedTarget) return;
+      const x = ev.clientX, y = ev.clientY;
+      if (x <= 0 || y <= 0 || x >= window.innerWidth || y >= window.innerHeight) endFileDrag();   // left the window
+    }
+    function onFileDrop(ev) {
+      if (!dragHasFiles(ev) || intoField(ev)) return;
+      ev.preventDefault();
+      const entry = dropEntryAt(ev.target);
+      endFileDrag();
+      const files = ev.dataTransfer.files;
+      if (!entry || !files || !files.length) return;
+      if (files.length > 1) toast('Tek seferde bir dosya eklenir; ilki yükleniyor.', 'info', 5000);
+      cardUpload(entry, files[0]);
+    }
+    // "Video ekle": one hidden file input for the whole board
+    const filePick = { input: null, entry: null };
+    function pickFileFor(entry) {
+      if (!canDropOn(entry) || entry.uploading) return;
+      if (!filePick.input) {
+        const input = h('input', { type: 'file', accept: 'video/*,image/*', hidden: true, tabindex: '-1', 'aria-hidden': 'true' });
+        input.addEventListener('change', () => {
+          const f = input.files && input.files[0];
+          const e = filePick.entry;
+          filePick.entry = null;
+          input.value = '';
+          if (f && e && posts.get(e.id) === e) cardUpload(e, f);
+        });
+        document.body.append(input);
+        filePick.input = input;
+      }
+      filePick.entry = entry;
+      filePick.input.value = '';
+      filePick.input.click();
+    }
+    // Progress over the top of the card (an overlay: the card keeps its height). frac null removes it.
+    function setCardUpload(entry, frac, label = '') {
+      const r = entry.refs;
+      if (frac == null) {
+        if (r.upBox) { r.upBox.remove(); r.upBox = null; }
+        return;
+      }
+      if (!r.upBox) {
+        r.upBox = h('div', { class: 'card-up', role: 'status' }, h('span', { class: 'card-up-text' }), h('div', { class: 'bar' }, h('span')));
+        entry.el.append(r.upBox);
+      }
+      const pct = Math.max(0, Math.min(100, Math.round(frac * 100)));
+      setText(r.upBox.firstChild, label || `Yükleniyor… %${pct}`);
+      r.upBox.querySelector('.bar > span').style.width = pct + '%';
+    }
+    async function imageDims(file) {
+      try {
+        if (typeof createImageBitmap !== 'function') return null;
+        const b = await createImageBitmap(file);
+        const d = { w: b.width, h: b.height };
+        if (typeof b.close === 'function') b.close();
+        return d;
+      } catch (_) { return null; }
+    }
+    async function cardUpload(entry, file) {
+      if (posts.get(entry.id) !== entry || entry.uploading || !canDropOn(entry)) return;
+      const c = checkMediaFile(file);
+      if (c.error) { toast(c.error, 'error', 7000); return; }
+      const own = isOwnVideoPost(entry);
+      if (own && c.part !== 'video') { toast('Bu karta bir video dosyası ekle (MP4, WebM veya MOV).', 'error', 7000); return; }
+      entry.uploading = true;
+      const btn = entry.refs.addBtn;
+      if (btn) btn.setAttribute('aria-disabled', 'true');
+      setCardUpload(entry, 0, 'Hazırlanıyor…');
+      try {
+        // a video's poster frame and size first: the player box gets the right shape at once and is swapped only once
+        const shot = c.part === 'video' ? await makeVideoPoster(file) : null;
+        const dims = c.part === 'video' ? shot : await imageDims(file);
+        const pick = { file, part: c.part, type: c.type, w: dims ? dims.w : null, h: dims ? dims.h : null };
+        const up = await uploadPicked({ id: entry.id }, pick, (f) => setCardUpload(entry, f),
+          { shot, onPoster: () => setCardUpload(entry, 1, shot ? 'Kapak görseli kaydediliyor…' : 'Kaydediliyor…') });
+        if (up.ok) {
+          // no poster frame: this browser could not decode the file (e.g. a MOV / HEVC video in Firefox); others may play it
+          if (c.part === 'video' && !shot) toast('Video eklendi, ama bu tarayıcı dosyayı oynatamıyor. Mümkünse MP4 (H.264) ekle.', 'info', 9000);
+          else toast(own ? 'Video eklendi.' : 'Önizleme kaydedildi.', 'ok');
+          return;
+        }
+        if (up.status === 404 && up.code === 'not_found') {
+          toast('Bu fikir artık mevcut değil.', 'error');
+          if (posts.get(entry.id) === entry) { removeEntry(entry); updateEmptyState(); }
+        } else if (up.status !== 401) toast(up.message || 'Yükleme başarısız.', 'error', 8000);
+      } finally {
+        entry.uploading = false;
+        if (btn) btn.removeAttribute('aria-disabled');
+        setCardUpload(entry, null);
+      }
+    }
+    async function removeOwnVideo(entry) {
+      const name = platformInfo(entry.view.platform).name;
+      if (!(await confirmDialog(`Bu karta eklenen video kaldırılsın mı? Kart yeniden ${name} oynatıcısını gösterir.`, 'Kaldır'))) return;
+      try {
+        const res = await mutate(() => api('DELETE', `/api/inspire/posts/${encodeURIComponent(entry.id)}/media`));
+        applyServerPost(res && res.post);
+        toast('Video kaldırıldı.', 'ok');
+      } catch (e) {
+        if (e.status === 404 && e.code === 'not_found') {
+          toast('Bu fikir artık mevcut değil.', 'error');
+          if (posts.get(entry.id) === entry) { removeEntry(entry); updateEmptyState(); }
+        } else if (e.status !== 401) toast(e.message || 'Video kaldırılamadı.', 'error');
+      }
     }
 
     // PostOut from a media route: the card is patched like a refresh (notes are kept as shown).
@@ -4521,16 +4788,14 @@
       // a known video: only the video (never its poster in its place); "maybe": the video, else the image
       await fetchDownload(entry, btn, info, info.video === true ? 'video' : 'auto');
     }
-    // "YouTube videoları siteden indirilemiyor …" with a "Kapak görselini indir" button (when there is a cover)
-    const DL_BLOCKED_TEXT = {
-      youtube: 'YouTube videoları siteden indirilemiyor — YouTube buna izin vermiyor.',
-      vimeo: 'Vimeo videoları siteden indirilemiyor — Vimeo bu videoları şifreli (DRM) yayınlıyor.',
-    };
+    // No video file to give (a YouTube / Vimeo card without its own file, a private / removed post …): why, with a
+    // "Kapak görselini indir" button when there is a cover. A YouTube / Vimeo card's owner is told how to add the file.
     function offerCover(entry, info) {
-      const platform = (info && info.platform) || (entry.view && entry.view.platform) || '';
-      // the server's text for a platform it never downloads (unsupported: YouTube / Vimeo), else the built-in one
-      const serverMsg = info && info.unsupported === true && typeof info.message === 'string' ? info.message : '';
-      const msg = serverMsg || DL_BLOCKED_TEXT[platform] || (info && info.message) || 'Bu video siteden indirilemiyor.';
+      const serverMsg = info && typeof info.message === 'string' ? info.message : '';
+      const msg = isOwnVideoPost(entry)
+        ? (canUploadTo(entry) ? 'Bu karta henüz video dosyası eklenmemiş. Videoyu karta sürükleyip bırak ya da «Video ekle»ye bas.'
+          : 'Bu karta henüz video dosyası eklenmemiş.')
+        : serverMsg || 'Bu videonun dosyası buradan alınamadı. Kaynağında açabilirsin.';
       if (entry.dlToast) entry.dlToast();
       entry.dlToast = info && info.image
         ? toast(msg, 'info', 15000, { label: 'Kapak görselini indir', run: () => { entry.dlToast = null; downloadPost(entry, 'image'); } })
@@ -5043,6 +5308,16 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
         window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
       });
       window.addEventListener('scroll', onScrollPending, { passive: true });
+      // files dragged over the page: a card the user may change takes the drop (CARD FILE DROP); anywhere else it is ignored
+      document.addEventListener('dragenter', onFileDragOver);
+      document.addEventListener('dragover', onFileDragOver);
+      document.addEventListener('dragleave', onFileDragLeave);
+      document.addEventListener('drop', onFileDrop);
+      // a drag that starts on the page (a picture, a link) is not a dropped file; dragend is lost when its element goes away
+      // mid-drag, so the next pointer move (none during a drag) or a drag of files only (dragHasFiles) ends it too
+      document.addEventListener('dragstart', () => { fileDrag.inPage = true; endFileDrag(); });
+      document.addEventListener('dragend', () => { fileDrag.inPage = false; });
+      document.addEventListener('pointermove', () => { if (fileDrag.inPage) fileDrag.inPage = false; }, { passive: true });
       window.addEventListener('message', onEmbedMessage);
       window.addEventListener('blur', onWindowBlur);
       document.addEventListener('visibilitychange', () => {

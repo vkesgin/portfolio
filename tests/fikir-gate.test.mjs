@@ -547,7 +547,7 @@ describe('board password gate (worker, Node harness)', { skip: !H.HARNESS_SUPPOR
     assert.equal(info.status, 200);
     const { video, image, reason, message, unsupported, adapter } = info.json;
     assert.deepEqual({ video, image, reason, message, unsupported, adapter },
-      { video: false, image: true, reason: 'not_supported', message: 'YouTube videoları siteden indirilemiyor — YouTube buna izin vermiyor.', unsupported: true, adapter: 'youtube' });
+      { video: false, image: true, reason: 'not_supported', message: 'Bu karta henüz video dosyası eklenmemiş. Fikri paylaşan kişi videoyu karta ekleyince buradan indirilebilir.', unsupported: true, adapter: 'youtube' });
     const day = new Date(H.nowS() * 1000).toISOString().slice(0, 10);
     const dlUnits = () => (H.sqlAll(w, "SELECT n FROM inspire_quota WHERE day=? AND scope='dl'", day)[0] || { n: 0 }).n;
     const u0 = dlUnits();
@@ -561,7 +561,8 @@ describe('board password gate (worker, Node harness)', { skip: !H.HARNESS_SUPPOR
     const page = await req('GET', info.json.url, { headers: { Accept: 'text/html' } });
     assert.equal(page.status, 422); assert.match(page.headers['content-type'], /^text\/html/);
     const t = page.text();
-    assert.ok(t.includes('YouTube videoları siteden indirilemiyor'));
+    assert.ok(t.includes('Bu karta henüz video dosyası eklenmemiş') && t.includes('<h1>Video dosyası yok</h1>'));
+    assert.ok(!/indirilem[i]yor|izin verm[i]yor/.test(t), 'no "cannot be downloaded / not allowed" wording');
     assert.ok(t.includes(`href="/api/inspire/posts/${ids.yt}/download?part=image&amp;k=`), 'a "Kapak görselini indir" link with the same ticket');
     assert.ok(t.includes('Kapak görselini indir'));
     const img = await req('GET', info.json.url + '&part=image');
@@ -574,7 +575,7 @@ describe('board password gate (worker, Node harness)', { skip: !H.HARNESS_SUPPOR
     const vi = await req('GET', `/api/inspire/posts/${ids.vimeo}/download-info`, { token: tok });
     assert.deepEqual({ video: vi.json.video, image: vi.json.image, reason: vi.json.reason, unsupported: vi.json.unsupported },
       { video: false, image: true, reason: 'drm', unsupported: true });
-    assert.match(vi.json.message, /^Vimeo videoları siteden indirilemiyor/);
+    assert.equal(vi.json.message, 'Bu karta henüz video dosyası eklenmemiş. Fikri paylaşan kişi videoyu karta ekleyince buradan indirilebilir.');
     const va = await req('GET', vi.json.url + '&format=json');
     assert.equal(va.status, 422); assert.equal(va.json.reason, 'drm'); assert.equal(va.json.image, true);
     // the board's hint (GET /posts) keeps saying so up front

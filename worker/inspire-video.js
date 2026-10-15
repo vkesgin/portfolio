@@ -10,7 +10,9 @@
 // of HTML whose <script type="application/json"> blocks carry the post (xig_polaris_media.if_not_gated_logged_out):
 // video_versions (720p progressive MP4 with AAC audio), image_versions2 (poster), original_width/height, has_audio,
 // caption, user.username. A mobile UA or missing Sec-Fetch-* headers get an empty shell. CDN links expire (oe= hex
-// unix time, 33-107 h), so the board copies the files into R2 instead of linking them.
+// unix time, 33-107 h) and the CDN's Cross-Origin-Resource-Policy refuses other sites, so the board never links them:
+// it copies the files into R2 (FIKIR_IG_COPY) or plays them live through the API worker (FIKIR_IG_LIVE: GET
+// /api/inspire/posts/:id/play streams the post's own CDN file, Range requests passed on: openMedia range / hostOk).
 // Embed check: /{kind}/{code}/embed/ of a reel whose owner disabled embedded playback renders a poster with
 // class="WatchOnInstagram" ("Instagram'da İzle") and its gql_data has is_video:true without video_url; playable embeds
 // carry video_url. The embed iframe's postMessages (LOADING / MEASURE / MOUNTED) are identical in both cases.
@@ -167,6 +169,8 @@ function igNormalize(item, code) {
     product_type: typeof item.product_type === 'string' ? item.product_type.slice(0, 40) : null,
     video: videos[0] || null, videos, image,
     expires_at: exps.length ? Math.min(...exps) : null,
+    // the video is the post itself or its carousel's first item (a carousel that starts with a photo is no live video)
+    lead_video: !!vsrc && (vsrc === item || kids[0] === vsrc),
   };
 }
 // Reel/post page HTML -> normalized item {code, user, caption, has_audio, w, h, duration, video: {url,w,h}|null,
@@ -309,7 +313,7 @@ export async function igCheckEmbed(ref, { fetchImpl = fetch, referer = null, tim
   return { status: igEmbedStatus(page.html) };
 }
 
-/* ------------------------------------------------------------------ guarded media open (download + R2 copy) */
+/* ------------------------------------------------------------------ guarded media open (download, R2 copy, live play) */
 
 const VIDEO_ACCEPT = 'video/mp4,video/webm,video/*;q=0.9,*/*;q=0.5';
 const IMAGE_ACCEPT = 'image/avif,image/webp,image/jpeg,image/png,image/*;q=0.9,*/*;q=0.5';
@@ -359,12 +363,67 @@ export function extraHeaders(h) {
   }
   return out;
 }
+// The 206 answer to openMedia's range: checked (see openMedia), then the slice streamed through like a whole file
+// (FixedLengthStream of the slice's length: the sniffed head, then the upstream body piped natively, no JS per chunk).
+async function openSlice(res, rq, { want, maxBytes, finalUrl, clear }) {
+  const fail = (error) => { try { res.body && res.body.cancel(); } catch (e) {} return { ok: false, error, status: 206 }; };
+  const cr = /^bytes (\d{1,15})-(\d{1,15})\/(\d{1,15}|\*)$/.exec((res.headers.get('Content-Range') || '').trim());
+  if (!cr || !res.body) return fail('bad_range');
+  const start = Number(cr[1]), end = Number(cr[2]), total = cr[3] === '*' ? null : Number(cr[3]);
+  const len = end - start + 1;
+  if (!(end >= start) || (rq[1] != null && start !== Number(rq[1])) || (total != null && end >= total)) return fail('bad_range');
+  const enc = (res.headers.get('Content-Encoding') || '').trim().toLowerCase();
+  const lenH = (res.headers.get('Content-Length') || '').trim();
+  if ((enc && enc !== 'identity') || (lenH && (!/^\d{1,15}$/.test(lenH) || Number(lenH) !== len))) return fail('bad_range');
+  if ((total != null && total > maxBytes) || len > maxBytes) return fail('too_large');
+  const type = (res.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (!RANGE_TYPES[want] || !RANGE_TYPES[want].test(type)) return fail('not_media');
+  const [mime, ext] = IG_PLAY_MIMES[type];
+  const reader = res.body.getReader();
+  let head = new Uint8Array(0);
+  if (start === 0 && len >= 64) {
+    while (head.byteLength < 64) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      head = concatBytes(head, value);
+    }
+    const sniff = sniffMagic(head.subarray(0, 64));
+    if (!sniff || sniff.kind !== want || head.byteLength > len) { reader.cancel().catch(() => {}); return { ok: false, error: head.byteLength ? 'not_media' : 'empty', status: 206 }; }
+  }
+  const out = { ok: true, length: len, mime, ext, finalUrl, status: 206, start, end, total };
+  if (typeof FixedLengthStream === 'function') {
+    reader.releaseLock();
+    const fixed = new FixedLengthStream(len);
+    (async () => {
+      if (head.byteLength) { const w = fixed.writable.getWriter(); await w.write(head); w.releaseLock(); }
+      await res.body.pipeTo(fixed.writable);
+    })().catch(() => {}).finally(clear);
+    return { ...out, body: fixed.readable, fixed: true };
+  }
+  return { ...out, body: cappedStream(head, reader, { length: len, limit: len, onEnd: clear }), fixed: false };
+}
+// Live playback (GET /api/inspire/posts/:id/play): the types a 206 slice may have (its Content-Type, base type only), and
+// the Content-Type / extension the play route answers with: a fixed map, never the upstream's header echoed.
+export const IG_PLAY_MIMES = Object.freeze({
+  'video/mp4': ['video/mp4', 'mp4'], 'video/quicktime': ['video/quicktime', 'mov'], 'video/webm': ['video/webm', 'webm'],
+  'image/jpeg': ['image/jpeg', 'jpg'], 'image/png': ['image/png', 'png'], 'image/webp': ['image/webp', 'webp'], 'image/gif': ['image/gif', 'gif'],
+});
+const RANGE_TYPES = { video: /^video\/(mp4|quicktime|webm)$/, image: /^image\/(jpeg|png|webp|gif)$/ };
+const RANGE_RE = /^bytes=(?:(\d{1,12})-(\d{0,12})|-(\d{1,12}))$/;
 // GET a media file for download/copy: SSRF guard (deps.safeURL) on every hop, <= 3 redirects, headers within
 // timeoutMs, whole transfer within totalMs, size <= maxBytes, and the first bytes must sniff as `want` (video|image).
 // headers: see extraHeaders() (sent to the first URL's host only).
-// -> {ok: true, body: ReadableStream, length: n|null, fixed (body already a FixedLengthStream), mime, ext, finalUrl}
-//  | {ok: false, error: 'unsafe'|'redirects'|'gone'|'upstream_<n>'|'not_media'|'too_large'|'empty'|'timeout'|'fetch_error'}
-export async function openMedia(href, { want, maxBytes, safeURL, fetchImpl = fetch, userAgent = IG_UA, timeoutMs = 10000, totalMs = 15 * 60e3, headers = null } = {}) {
+// hostOk: a check every hop's href must pass too (live playback: igCdnUrl, so a redirect off Instagram's CDN is 'unsafe').
+// range: one validated byte range ('bytes=a-b' / 'bytes=a-' / 'bytes=-n'; anything else is ignored), sent like `headers`
+// (first host and its same-host hops). 200 (the upstream ignored it): the whole file as without a range. 206: Content-Range
+// must parse (end >= start, the start asked for, Content-Length = the slice, total <= maxBytes) else 'bad_range', the
+// Content-Type must be an allowed type of `want` (IG_PLAY_MIMES) else 'not_media'; a slice from byte 0 of >= 64 bytes is
+// sniffed too, a later one or a tiny probe (Safari's bytes=0-1) is not. 416 -> {error: 'range', total}.
+// -> {ok: true, body: ReadableStream, length: n|null, fixed (body already a FixedLengthStream), mime, ext, finalUrl, status: 200}
+//  | {ok: true, ..., status: 206, start, end, total: n|null} (range only; length = the slice)
+//  | {ok: false, error: 'unsafe'|'redirects'|'gone'|'upstream_<n>'|'not_media'|'too_large'|'empty'|'timeout'|'fetch_error'
+//    |'bad_range'|'range'}
+export async function openMedia(href, { want, maxBytes, safeURL, fetchImpl = fetch, userAgent = IG_UA, timeoutMs = 10000, totalMs = 15 * 60e3, headers = null, range = null, hostOk = null } = {}) {
   if (want !== 'video' && want !== 'image') return { ok: false, error: 'bad_request' };
   const ctrl = new AbortController();
   const total = setTimeout(() => ctrl.abort(), totalMs);
@@ -373,12 +432,14 @@ export async function openMedia(href, { want, maxBytes, safeURL, fetchImpl = fet
   let handedOff = false;
   const fail = (error, status) => ({ ok: false, error, ...(status ? { status } : {}) });
   const extra = extraHeaders(headers);
+  const rq = typeof range === 'string' ? RANGE_RE.exec(range) : null;
+  if (rq) extra.Range = range;
   let current = href, firstHost = null;
   try {
     let res = null;
     for (let hop = 0; ; hop++) {
       const u = typeof safeURL === 'function' ? safeURL(current) : null;
-      if (!u) return fail('unsafe');
+      if (!u || (typeof hostOk === 'function' && !hostOk(u.href))) return fail('unsafe');
       if (hop === 0) firstHost = u.host;
       res = await fetchImpl(u.href, {
         method: 'GET', redirect: 'manual', signal: ctrl.signal,
@@ -391,6 +452,16 @@ export async function openMedia(href, { want, maxBytes, safeURL, fetchImpl = fet
       current = new URL(loc, u.href).href;
     }
     clearTimeout(headersTimer);
+    if (rq && res.status === 416) {
+      try { res.body && res.body.cancel(); } catch (e) {}
+      const t = /^bytes \*\/(\d{1,15})$/.exec((res.headers.get('Content-Range') || '').trim());
+      return { ok: false, error: 'range', status: 416, total: t ? Number(t[1]) : null };
+    }
+    if (rq && res.status === 206) {
+      const r = await openSlice(res, rq, { want, maxBytes, finalUrl: current, clear: () => clearTimeout(total) });
+      handedOff = r.ok;
+      return r;
+    }
     if (res.status !== 200) {
       try { res.body && res.body.cancel(); } catch (e) {}
       return fail(res.status === 404 || res.status === 410 ? 'gone' : 'upstream_' + res.status, res.status);
@@ -423,10 +494,10 @@ export async function openMedia(href, { want, maxBytes, safeURL, fetchImpl = fet
         w.releaseLock();
         await res.body.pipeTo(fixed.writable);
       })().catch(() => {}).finally(() => clearTimeout(total));
-      return { ok: true, body: fixed.readable, length, fixed: true, mime: sniff.mime, ext: sniff.ext, finalUrl: current };
+      return { ok: true, body: fixed.readable, length, fixed: true, mime: sniff.mime, ext: sniff.ext, finalUrl: current, status: 200 };
     }
     const body = cappedStream(head, reader, { length, limit: maxBytes, onEnd: () => clearTimeout(total) });
-    return { ok: true, body, length, fixed: false, mime: sniff.mime, ext: sniff.ext, finalUrl: current };
+    return { ok: true, body, length, fixed: false, mime: sniff.mime, ext: sniff.ext, finalUrl: current, status: 200 };
   } catch (e) {
     return fail(ctrl.signal.aborted ? 'timeout' : 'fetch_error');
   } finally {
@@ -1231,13 +1302,17 @@ export function vcBackingOff(row, now = nowS()) {
   return !!(row && row.error && Number(row.retry_at) > now);
 }
 // Item (igExtract shape) <-> cache row. cv 2: the caption is kept up to COPY_CAPTION_MAX (older rows cut it at 300 code points).
+// cv 3: lv = 1 when the video is the post or its carousel's first item (igLiveVideo; GET /posts reads it with json_extract).
 export function itemToCache(item) {
   return {
     url: item.video ? item.video.url : null, poster: item.image ? item.image.url : null, width: item.w, height: item.h,
-    expires_at: item.expires_at, extra: { cv: 2, user: item.user, caption: item.caption ? cleanCaption(item.caption, COPY_CAPTION_MAX) : null,
-      has_audio: item.has_audio, duration: item.duration, media_type: item.media_type },
+    expires_at: item.expires_at, extra: { cv: 3, user: item.user, caption: item.caption ? cleanCaption(item.caption, COPY_CAPTION_MAX) : null,
+      has_audio: item.has_audio, duration: item.duration, media_type: item.media_type, lv: item.lead_video ? 1 : 0 },
   };
 }
+// A resolved Instagram item plays in the board's own player: it has a video and is no carousel that starts with a photo.
+// (Rows cached before cv 3 have no lv: a video counts as the lead one unless the post is a carousel, media_type 8.)
+export function igLiveVideo({ hasVideo, mediaType, lv }) { return !!hasVideo && (Number(mediaType) !== 8 || Number(lv) === 1); }
 // A cached Instagram row from before cv 2 whose caption the old 300-code-point cap cut ('…' at its end): an R2 copy (kept
 // for good) resolves the post once more for the whole caption instead of using it.
 export function igCacheCaptionCut(row) {
@@ -1254,5 +1329,6 @@ export function cacheToItem(row, code) {
     caption: cleanCaption(x.caption, COPY_CAPTION_MAX), has_audio: typeof x.has_audio === 'boolean' ? x.has_audio : null,
     w: row.width || null, h: row.height || null, duration: Number(x.duration) || null, media_type: Number(x.media_type) || null,
     video, videos: video ? [video] : [], image, expires_at: Number(row.expires_at) || null,
+    lead_video: Number(x.lv) === 1 || (Number(x.media_type) !== 8 && !!video),
   };
 }

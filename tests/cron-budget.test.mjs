@@ -87,6 +87,10 @@ describe('budget.js', () => {
     assert.deepEqual(Object.keys(CRON_COSTS.adCopyBy).sort(), ['facebook', 'pinterest', 'reddit', 'tiktok', 'x']);
     // the second Instagram copy of a run (no Browser Run) is cheaper than the first
     assert.ok(CRON_COSTS.igCopyPlain.d1 <= CRON_COSTS.igCopy.d1 && CRON_COSTS.igCopyPlain.sub <= CRON_COSTS.igCopy.sub);
+    // a live-playback run (copies off): cleanup + queue select, a deferral, one resolve with Browser Run, one without
+    assert.ok(2 + 1 + CRON_COSTS.igLive.d1 + CRON_COSTS.igLivePlain.d1 <= CRON_BUDGET.d1);
+    assert.ok(CRON_COSTS.igLive.sub + CRON_COSTS.igLivePlain.sub <= CRON_BUDGET.sub);
+    assert.ok(CRON_COSTS.igLivePlain.d1 <= CRON_COSTS.igLive.d1 && CRON_COSTS.igLivePlain.sub <= CRON_COSTS.igLive.sub);
     // a main run: the storyboard share, the fixed housekeeping (probe, select, delete, prune batch of 2), one retry
     assert.ok(CRON_COSTS.sbShare.d1 + 5 + 1 + CRON_COSTS.brRetry.d1 <= CRON_BUDGET.d1);
     assert.ok(CRON_COSTS.sbShare.sub + 1 + CRON_COSTS.brRetry.sub <= CRON_BUDGET.sub);
@@ -105,6 +109,10 @@ describe('wrangler.toml', () => {
     assert.equal(vars.FIKIR_IG_AUTO, 'off');
     assert.equal(vars.FIKIR_COPY_ADAPTERS, '');
     assert.equal(vars.FIKIR_COPY_VIEW, '0');
+    // ... and Instagram videos play live instead (nothing stored): GET /posts/:id/play, the cron resolves the backlog
+    assert.equal(vars.FIKIR_IG_LIVE, '1');
+    assert.match(vars.FIKIR_IG_LIVE_CRON, /^\d+$/); assert.ok(Number(vars.FIKIR_IG_LIVE_CRON) >= 0);
+    assert.ok(!('ADMIN_PASSWORD' in vars) && !('FIKIR_BOARD_PASSWORD' in vars), 'secrets never in [vars]');
     for (const f of ['worker/wrangler.mediatest.toml', 'worker/wrangler.sbtest.toml']) {
       assert.deepEqual(H.readWranglerToml(H.ROOT + '/' + f).crons, [CRON_MAIN, CRON_IG], f);
     }
@@ -147,6 +155,13 @@ describe('scheduled() and heavy requests under the Free per-invocation limits', 
     // the worst copy path really is near its bound (keeps the bound honest)
     const worst = pick('ig, worst copy (slot wait, redirects, commit lost), warm');
     assert.ok(worst.m.d1 - worst.fixed >= CRON_COSTS.igCopy.d1 - 4 && worst.m.sub === CRON_COSTS.igCopy.sub, show(worst));
+    // live resolves (copies off): the measured worst cases are the declared ones minus their margin of 2
+    const lw = pick('ig, live resolve worst (slot wait, Browser Run, failure), warm');
+    assert.equal(lw.m.d1 - lw.fixed, CRON_COSTS.igLive.d1 - 2, show(lw)); assert.equal(lw.m.sub, CRON_COSTS.igLive.sub, show(lw));
+    assert.equal(lw.m.br, 1); assert.equal(lw.facts.failed, 1);
+    const lp = pick('ig, live resolve plain worst (failure), warm');
+    assert.equal(lp.m.d1 - lp.fixed, CRON_COSTS.igLivePlain.d1 - 2, show(lp)); assert.equal(lp.m.sub, CRON_COSTS.igLivePlain.sub, show(lp));
+    assert.equal(lp.m.br, 0); assert.equal(lp.facts.failed, 1);
     const plain = pick('ig, plain copy worst (3-hop CDN, commit lost), warm');
     assert.ok(plain.m.d1 - plain.fixed >= CRON_COSTS.igCopyPlain.d1 - 4 && plain.m.sub === CRON_COSTS.igCopyPlain.sub, show(plain));
     assert.equal(plain.m.br, 0, 'no Browser Run');
@@ -197,9 +212,30 @@ describe('scheduled() and heavy requests under the Free per-invocation limits', 
     assert.equal(dead.m.br + dead.m.urls.filter((u) => /www\.instagram\.com/.test(u)).length, 0, 'no second resolve in the same run');
     assert.equal(pick('ig, next run resolves it again, warm').facts.copied, 1);
   });
+  test('live playback (copies off): the cron resolves the Instagram backlog two posts a run, stores no bytes; copies on: it never runs', () => {
+    const r1 = pick('ig, live backlog (copies off), cold'), r2 = pick('ig, live backlog (2nd run), warm');
+    assert.deepEqual({ resolved: r1.facts.resolved, deferred: r1.facts.deferred, failed: r1.facts.failed }, { resolved: 2, deferred: 1, failed: 0 }, 'two resolves, the non-post deferred');
+    assert.equal(r2.facts.resolved, 4, 'the next run moves on to the next posts');
+    for (const s of [r1, r2]) {
+      assert.ok(s.m.d1 <= CRON_BUDGET.d1 && s.m.sub <= 35, show(s));
+      assert.deepEqual({ r2: s.facts.r2Objects, media: s.facts.mediaRows, copied: s.facts.copied }, { r2: 0, media: 0, copied: 0 }, 'nothing stored');
+      assert.ok(!s.m.urls.some((u) => /cdninstagram|fbcdn/.test(u)), `${s.label}: resolve only, no media bytes`);
+      assert.ok(!s.m.ops.some((o) => o.startsWith('r2.')), s.label);
+      assert.equal(s.m.br, 0, 'plain fetches found the posts');
+    }
+    for (const s of all.filter((x) => x.kind !== 'request' && /^ig,/.test(x.label) && !/live/.test(x.label))) {
+      assert.ok(!s.m.lines.some((l) => /inspire live cron/.test(l[1])), `${s.label}: the live backlog runs only while Instagram is not copied`);
+    }
+  });
   test('heavy requests on cold isolates stay well under the per-request limits', () => {
     const reqs = all.filter((s) => s.kind === 'request');
     assert.ok(reqs.length >= 6);
+    for (const label of ['GET play (live: cached link dead, Browser Run re-resolve, 3-hop CDN), cold', 'GET play (live: cached, a Range in the middle), cold',
+      'POST live (unknown reel, login wall: plain resolve only), cold', 'GET /posts (live objects), cold']) pick(label);
+    const dead = pick('GET play (live: cached link dead, Browser Run re-resolve, 3-hop CDN), cold');
+    assert.equal(dead.m.br, 1); assert.ok(dead.m.d1 <= 20 && dead.m.sub <= 12, show(dead));
+    assert.equal(pick('POST live (unknown reel, login wall: plain resolve only), cold').m.br, 0, 'an ask never uses Browser Run');
+    assert.equal(pick('GET /posts (live objects), cold').m.sub, 0);
     for (const s of reqs) {
       assert.equal(s.m.result.status, s.status, `${s.label}: HTTP status`);
       assert.ok(s.m.d1 <= CRON_BUDGET.d1, `${show(s)}: D1 statements`);

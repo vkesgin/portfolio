@@ -5,6 +5,7 @@ up, and only the keys the parser reads are kept, plus decoys (another post of th
 
 - ig-reel.html: reel page, post JSON at require[0][3][0].__bbox.require[0][3][1].__bbox.result.data.xig_polaris_media.if_not_gated_logged_out
 - ig-carousel.html: /p/ carousel whose second item is a video (no top-level video_versions)
+- ig-photo.html: /p/ photo post (media_type 1, image_versions2 only; live playback: a post that is no video)
 - ig-embed-blocked.html, ig-embed-ok.html, ig-embed-photo.html: the parts of /reel/{code}/embed/ the classifier reads
 
 Download adapters (tests/inspire-video-adapters.test.mjs), same rule: the structure copies what each platform served

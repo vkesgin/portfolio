@@ -9,6 +9,18 @@
 //   GET  /cdn/...                           Range-capable media: *.mp4 *.webm *.jpg *.png *.svg *.m3u8, plus
 //                                           html-as-mp4.mp4 (text/html), 403.mp4, 404.mp4, redirect-169.mp4, big.mp4
 //   POST /__br/scrape                       fake Quick Action `scrape` (X-Browser-Ms-Used); GET /__br/calls, POST /__br/reset
+//   GET  /igfx/<host><path>                 stand-in for Instagram / its CDN (a worker with INSPIRE_TEST_IG="1" sends every
+//                                           Instagram / Meta fetch here, see worker/index.js inspireTestHooks), built from the
+//                                           synthetic tests/fixtures/video/ig-*.html with the asked shortcode and links that
+//                                           expire in 48 h:
+//        www.instagram.com/{reel|p|tv}/<code>/        post page: a reel (video + poster + caption); codes starting with
+//                                                     "DPho": a photo post; codes containing "Gone": 404 (removed)
+//        www.instagram.com/{reel|p|tv}/<code>/embed/  embed page: blocked ("Instagram'da İzle"), "DPho*": a photo
+//        <*.cdninstagram.com|*.fbcdn.net>/.../<code>.mp4   the reel's video (Range-capable; $FIXTURE_IG_LONG if that file
+//                                                     exists, else clip.mp4), sent at ~1.3 MB/s so a <video> seeks with
+//                                                     Range requests; codes containing "Dead": 403 (CDN refuses the video)
+//        <cdn host>/....jpg                           the poster (poster.jpg)
+//                                           GET /__igfx/calls lists them ({path, range, status}), POST /__igfx/reset clears
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,6 +33,9 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const read = (f) => fs.readFileSync(path.join(FX, f));
 const CLIP_MP4 = read('clip.mp4'), CLIP_WEBM = read('clip.webm'), POSTER = read('poster.jpg');
 const calls = [];
+const igCalls = [];
+const VFX = path.join(path.dirname(fileURLToPath(import.meta.url)), '../fixtures/video');
+const readV = (f) => fs.readFileSync(path.join(VFX, f), 'utf8');
 
 function vecteezyPage() {
   const parts = read('vecteezy-video.parts.html').toString('utf8').replaceAll('https://static.vecteezy.com/', `${BASE}/cdn/vecteezy/`)
@@ -72,6 +87,73 @@ function cdn(req, res, p) {
   res.writeHead(404); res.end();
 }
 
+// ── Instagram stand-in (/igfx/...) ──
+const IG_CODE = /^[A-Za-z0-9_-]{5,40}$/;
+const oeHex = () => (Math.floor(Date.now() / 1000) + 48 * 3600).toString(16).toUpperCase();
+function igPage(kind, code) {
+  const oe = oeHex();
+  if (code.startsWith('DPho')) {
+    return readV('ig-photo.html').replaceAll('DTestPhoto1', code).replaceAll('oe=6ACD0906', 'oe=' + oe)
+      .replaceAll('photo_1080.jpg', `${code}_1080.jpg`).replaceAll('photo_640.jpg', `${code}_640.jpg`);
+  }
+  return readV('ig-reel.html').replaceAll('DTestReel01', code).replaceAll('oe=6AC94349', 'oe=' + oe).replaceAll('oe=6ACD0906', 'oe=' + oe)
+    .replaceAll('/REEL.mp4', `/${code}.mp4`).replaceAll('poster_720.jpg', `${code}_720.jpg`).replaceAll('poster_640.jpg', `${code}_640.jpg`)
+    .replaceAll('Şehir ışıkları\u202e test', `Şehir ışıkları ${code}`);
+}
+function igEmbed(code) {
+  if (code.startsWith('DPho')) return readV('ig-embed-photo.html').replaceAll('DTestPhoto1', code);
+  return readV('ig-embed-blocked.html').replaceAll('DTestReel01', code);
+}
+// Range-capable like sendMedia, but the body goes out in 64 KB slices every 50 ms (~1.3 MB/s) and stops when the client goes
+function sendSlow(req, res, body, type) {
+  const size = body.length;
+  const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+  const h = { 'Content-Type': type, 'Accept-Ranges': 'bytes' };
+  let start = 0, end = size - 1, status = 200;
+  if (m && (m[1] !== '' || m[2] !== '')) {
+    start = m[1] === '' ? Math.max(0, size - Number(m[2])) : Number(m[1]);
+    end = m[1] === '' || m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1);
+    if (start >= size) { res.writeHead(416, { ...h, 'Content-Range': `bytes */${size}` }); res.end(); return 416; }
+    status = 206; h['Content-Range'] = `bytes ${start}-${end}/${size}`;
+  }
+  res.writeHead(status, { ...h, 'Content-Length': end - start + 1 });
+  if (req.method === 'HEAD') { res.end(); return status; }
+  let off = start, timer = null;
+  const step = () => {
+    if (res.destroyed) return;
+    const next = Math.min(off + 65536, end + 1);
+    res.write(body.subarray(off, next));
+    off = next;
+    if (off > end) res.end(); else timer = setTimeout(step, 50);
+  };
+  res.on('close', () => clearTimeout(timer));
+  step();
+  return status;
+}
+function igfx(req, res, p) {
+  const m = /^\/igfx\/([a-z0-9.-]+)(\/.*)$/.exec(p);
+  const host = m ? m[1] : '', rest = m ? m[2] : '';
+  const done = (status) => { igCalls.push({ host, path: rest, range: req.headers.range || null, status, at: Date.now() }); };
+  if (host === 'www.instagram.com') {
+    const pm = /^\/(reel|p|tv)\/([A-Za-z0-9_-]+)\/(embed\/(?:captioned\/)?)?$/.exec(rest);
+    if (!pm || !IG_CODE.test(pm[2]) || pm[2].includes('Gone')) { res.writeHead(404, { 'Content-Type': 'text/html' }); res.end('<!doctype html><title>Sayfa bulunamadı</title>'); return done(404); }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(pm[3] ? igEmbed(pm[2]) : igPage(pm[1], pm[2]));
+    return done(200);
+  }
+  if (/(^|\.)(cdninstagram\.com|fbcdn\.net)$/.test(host)) {
+    if (/\.mp4$/.test(rest.split('?')[0])) {
+      if (/Dead/.test(rest)) { res.writeHead(403, { 'Content-Type': 'text/plain' }); res.end('URL signature expired'); return done(403); }
+      const long = process.env.FIXTURE_IG_LONG;
+      const body = long && fs.existsSync(long) ? fs.readFileSync(long) : CLIP_MP4;
+      return done(sendSlow(req, res, body, 'video/mp4'));
+    }
+    if (/\.(jpe?g|webp|png)$/.test(rest.split('?')[0])) { sendMedia(req, res, POSTER, 'image/jpeg'); return done(200); }
+  }
+  res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('not found');
+  return done(404);
+}
+
 function fakeScrape(req, res) {
   let raw = '';
   req.on('data', (c) => { raw += c; });
@@ -105,6 +187,9 @@ const server = http.createServer((req, res) => {
     if (p === '/__br/calls') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ count: calls.length, calls })); }
     if (p === '/__br/reset' && req.method === 'POST') { calls.length = 0; res.writeHead(204); return res.end(); }
     if (p.startsWith('/cdn/')) return cdn(req, res, p);
+    if (p.startsWith('/igfx/')) return igfx(req, res, p);
+    if (p === '/__igfx/calls') { res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ count: igCalls.length, calls: igCalls })); }
+    if (p === '/__igfx/reset' && req.method === 'POST') { igCalls.length = 0; res.writeHead(204); return res.end(); }
     if (p.startsWith('/page/vecteezy/')) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(VECTEEZY); }
     if (/^\/page\/(blocked|datadome|br429|brlimit|br404|brempty)\//.test(p)) {
       res.writeHead(403, { 'Content-Type': 'text/html' });

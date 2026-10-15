@@ -13,7 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   safeEqual, boardPv, boardLocked, checkBoardPassword, guestPvOk, dlTicket, dlTicketRole, DL_TICKET_S,
-  filesToken, filesTokenTtl, FILES_WINDOW_S, filesGateOn, signFilesJson,
+  filesToken, filesTokenTtl, FILES_WINDOW_S, filesGateOn, signFilesJson, playToken, playTokenTtl, PLAY_TOKEN_RE,
 } from '../worker/fikir-gate.js';
 import { inspireRoutes, OPEN_ROUTES, isOpen, isDownload, fill } from './gate-routes.mjs';
 import * as H from './cron-harness.mjs';
@@ -103,6 +103,39 @@ describe('fikir-gate.js (pure helpers)', () => {
     const admin = await filesToken({ JWT_SECRET: 'unit-secret' }, w0 + 10);
     assert.ok(await filesTokenTtl({ JWT_SECRET: 'unit-secret' }, admin, w0 + 10) > 0, 'locked board: the admin still gets file tokens');
     assert.equal(filesGateOn({}), true); assert.equal(filesGateOn({ FIKIR_FILES_GATE: '1' }), true); assert.equal(filesGateOn({ FIKIR_FILES_GATE: '0' }), false);
+  });
+
+  test('play tokens: bound to one post, 12-24 h (same URL within a 12-hour window), pv; forged / malformed ones refused', async () => {
+    const w0 = Math.floor(T0 / FILES_WINDOW_S) * FILES_WINDOW_S;
+    const t = await playToken(ENV, 42, w0 + 10);
+    assert.match(t, PLAY_TOKEN_RE); assert.match(t, /^[0-9a-z]{1,10}\.[A-Za-z0-9_-]{22}$/);
+    assert.equal(await playToken(ENV, 42, w0 + FILES_WINDOW_S - 1), t, 'stable within the window');
+    assert.equal(await playToken(ENV, '42', w0 + 10), t, 'the id as a string');
+    assert.notEqual(await playToken(ENV, 42, w0 + FILES_WINDOW_S), t, 'a new one in the next window');
+    assert.notEqual(await playToken(ENV, 43, w0 + 10), t);
+    assert.notEqual(t.split('.')[1], (await filesToken(ENV, w0 + 10)).split('.')[1], 'not a files token');
+    assert.equal(await playTokenTtl(ENV, 42, t, w0 + 10), 2 * FILES_WINDOW_S - 10);
+    assert.ok(await playTokenTtl(ENV, '42', t, w0 + 10) > 0);
+    assert.equal(await playTokenTtl(ENV, 43, t, w0 + 10), 0, 'another post');
+    assert.equal(await playTokenTtl(ENV, 42, t, w0 + 2 * FILES_WINDOW_S - 1), 1);
+    assert.equal(await playTokenTtl(ENV, 42, t, w0 + 2 * FILES_WINDOW_S), 0, 'expired at exp');
+    assert.equal(await playTokenTtl(ENV, 42, t, w0 + 3 * FILES_WINDOW_S), 0, 'expired after exp');
+    assert.equal(await playTokenTtl({ ...ENV, FIKIR_BOARD_PASSWORD: 'changed' }, 42, t, w0 + 10), 0, 'password changed');
+    assert.equal(await playTokenTtl({ ...ENV, JWT_SECRET: 'other' }, 42, t, w0 + 10), 0);
+    assert.equal(await playTokenTtl(ENV, 42, t.split('.')[0] + '.' + 'A'.repeat(22), w0 + 10), 0, 'forged');
+    const far = (w0 + 2 * FILES_WINDOW_S + 61 + 3 * 86400).toString(36);
+    assert.equal(await playTokenTtl(ENV, 42, far + '.' + t.split('.')[1], w0 + 10), 0, 'exp more than 2 windows + 60 s ahead');
+    for (const bad of [null, '', 'abc', t + '.x', 'Z' + t]) assert.equal(await playTokenTtl(ENV, 42, bad, w0 + 10), 0, String(bad));
+    for (const id of [0, -1, 1.5, 'x', null, 2 ** 53]) {
+      assert.equal(await playToken(ENV, id, w0 + 10), null, `id ${id}`);
+      assert.equal(await playTokenTtl(ENV, id, t, w0 + 10), 0, `id ${id}`);
+    }
+    const locked = { JWT_SECRET: 'unit-secret' };   // no board password: still minted (pv '-'), and verified
+    const lt = await playToken(locked, 42, w0 + 10);
+    assert.ok(lt && (await playTokenTtl(locked, 42, lt, w0 + 10)) > 0);
+    assert.equal(await playTokenTtl(ENV, 42, lt, w0 + 10), 0, "a locked board's token is not the open board's");
+    assert.equal(await playToken({ FIKIR_BOARD_PASSWORD: 'p' }, 42, w0 + 10), null, 'no JWT_SECRET: no token');
+    assert.equal(await playTokenTtl({ FIKIR_BOARD_PASSWORD: 'p' }, 42, t, w0 + 10), 0);
   });
 
   test('signFilesJson: exactly the board file paths, any key, arrays; text and other files untouched', () => {

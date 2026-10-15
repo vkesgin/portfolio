@@ -37,6 +37,14 @@ export const CRON_COSTS = Object.freeze({
   }),
   // embed check (inspireIgEmbed): cache read, fetch window, daily quota (+ its lookup), result (a failure: 2) <= 5; 1 fetch
   igCheck: Object.freeze({ d1: 6, sub: 1 }),
+  // live playback backlog (inspireLiveBacklog, R2 copies of Instagram off): one resolve, no bytes. Worst measured: 9
+  // statements (cache read, fetch window, daily quota, Browser Run reservation, slot taken + again after the wait, ms adjust,
+  // the failure record of 2; an overflow lookup or a refund only on paths that stop early); 2 subrequests = the Instagram
+  // page + Browser Run
+  igLive: Object.freeze({ d1: 11, sub: 2 }),
+  // ... a second one in the same run: never Browser Run. Worst measured: 5 statements (cache read, window, quota, failure
+  // record of 2), the page
+  igLivePlain: Object.freeze({ d1: 7, sub: 1 }),
   // link-preview Browser Run retry (inspireBrAndStore, mode cron): <= 8 statements (rate count, reservation, slot, ms
   // adjust, 2 strike counters, meta write of 2); 1 Browser Run + <= 3 media probes x 4 hops
   brRetry: Object.freeze({ d1: 10, sub: 14 }),
@@ -45,7 +53,8 @@ export const CRON_COSTS = Object.freeze({
 });
 // wrangler.toml [triggers] crons; scheduled() dispatches on controller.cron (each fires its own invocation, own limits)
 export const CRON_MAIN = '*/15 * * * *';      // storyboard reconcile + board housekeeping + link-preview Browser Run retries
-export const CRON_IG = '7-59/15 * * * *';     // R2 copies of video posts (all copy platforms) + Instagram embed checks (minutes 7, 22, 37, 52)
+export const CRON_IG = '7-59/15 * * * *';     // R2 copies of video posts (all copy platforms) + Instagram embed checks + Instagram live
+                                              // resolves (minutes 7, 22, 37, 52)
 
 export class BudgetExceeded extends Error {
   constructor(kind, budget) {

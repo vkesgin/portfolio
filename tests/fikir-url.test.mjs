@@ -8,6 +8,9 @@ import {
   mediaKindOf,
   TRACKING_PARAMS,
   MAX_URL_LENGTH,
+  PLAY_PATH_RE,
+  liveMediaOf,
+  liveKey,
 } from '../assets/js/fikir-url.mjs';
 
 const RESULT_KEYS = ['canonical', 'embed', 'id', 'key', 'needsResolve', 'platform', 'subtype', 'thumb'];
@@ -395,5 +398,58 @@ describe('mediaKindOf', () => {
       'ftp://cdn.example.com/a.mp4', '', null, undefined, 42, 'not a url']) {
       assert.equal(mediaKindOf(u), null, String(u));
     }
+  });
+});
+
+describe('live Instagram playback: liveMediaOf / liveKey (post.live -> the board\'s player)', () => {
+  const T = '1abcdef.' + 'A'.repeat(21) + '_';
+  const API = 'https://api.example';
+  const good = (id = 42, extra = {}) => ({
+    kind: 'video', source: 'instagram', url: `/api/inspire/posts/${id}/play?part=video&t=${T}`, poster: `/api/inspire/posts/${id}/play?part=image&t=${T}`,
+    w: 720, h: 1280, by: 'ornek.studio', caption: 'Şehir ışıkları', audio: true, ...extra,
+  });
+  test('a good object of the same post: absolute play paths on the API, credit, caption, size, sound', () => {
+    const m = liveMediaOf(good(), 42, API);
+    assert.deepEqual(m, {
+      kind: 'video', source: 'instagram', url: `${API}/api/inspire/posts/42/play?part=video&t=${T}`, poster: `${API}/api/inspire/posts/42/play?part=image&t=${T}`,
+      w: 720, h: 1280, by: 'ornek.studio', caption: 'Şehir ışıkları', audio: true, autoplay: true, live: true,
+    });
+    assert.ok(liveMediaOf(good(), '42', API + '/'), 'string id, trailing slash');
+    assert.ok(PLAY_PATH_RE.test(good().url) && PLAY_PATH_RE.test(good().poster));
+  });
+  test('refused: another post, absolute / foreign / /files URLs, a missing token, part=image as the video, another source', () => {
+    assert.equal(liveMediaOf(good(43), 42, API), null, 'another id');
+    assert.equal(liveMediaOf(good(42, { url: `${API}/api/inspire/posts/42/play?part=video&t=${T}` }), 42, API), null, 'absolute');
+    assert.equal(liveMediaOf(good(42, { url: 'https://scontent.cdninstagram.com/o1/v/a.mp4' }), 42, API), null, 'a CDN link');
+    assert.equal(liveMediaOf(good(42, { url: '//evil.example/api/inspire/posts/42/play?part=video&t=' + T }), 42, API), null);
+    assert.equal(liveMediaOf(good(42, { url: '/files/fikir/42/v-' + '0'.repeat(32) + '.mp4' }), 42, API), null, '/files');
+    assert.equal(liveMediaOf(good(42, { url: '/api/inspire/posts/42/play?part=video' }), 42, API), null, 'no token');
+    assert.equal(liveMediaOf(good(42, { url: `/api/inspire/posts/42/play?part=video&t=${T}&x=1` }), 42, API), null, 'extra parameters');
+    assert.equal(liveMediaOf(good(42, { url: good().poster }), 42, API), null, 'part=image as the video');
+    assert.equal(liveMediaOf(good(42, { source: 'tiktok' }), 42, API), null);
+    assert.equal(liveMediaOf(good(42, { kind: 'image' }), 42, API), null);
+    for (const x of [null, undefined, 'x', [], 5]) assert.equal(liveMediaOf(x, 42, API), null, String(x));
+    for (const base of ['', null, 'javascript:alert(1)', 'ftp://api.example']) assert.equal(liveMediaOf(good(), 42, base), null, String(base));
+  });
+  test('cleaned fields: poster of another part / post dropped, size both or none, user name, caption <= 2000 code points, audio', () => {
+    assert.equal(liveMediaOf(good(42, { poster: good().url }), 42, API).poster, null);
+    assert.equal(liveMediaOf(good(42, { poster: good(43).poster }), 42, API).poster, null);
+    assert.equal(liveMediaOf(good(42, { poster: null }), 42, API).poster, null);
+    const half = liveMediaOf(good(42, { h: 0 }), 42, API);
+    assert.deepEqual([half.w, half.h], [null, null]);
+    assert.deepEqual([liveMediaOf(good(42, { w: 10001 }), 42, API).w, liveMediaOf(good(42, { w: 1.5 }), 42, API).w], [null, null]);
+    for (const by of ['bad user', '<b>', 'a'.repeat(31), 5, null]) assert.equal(liveMediaOf(good(42, { by }), 42, API).by, '', String(by));
+    const long = liveMediaOf(good(42, { caption: '  ' + '🌙'.repeat(2500) + '  ' }), 42, API).caption;
+    assert.equal(Array.from(long).length, 2000);
+    assert.equal(liveMediaOf(good(42, { caption: 7 }), 42, API).caption, '');
+    for (const [audio, want] of [[true, true], [false, false], [null, null], ['yes', null], [1, null]]) assert.equal(liveMediaOf(good(42, { audio }), 42, API).audio, want);
+  });
+  test('liveKey strips only the token', () => {
+    const u = `${API}/api/inspire/posts/42/play?part=video&t=${T}`;
+    assert.equal(liveKey(u), `${API}/api/inspire/posts/42/play?part=video`);
+    assert.equal(liveKey(u.replace(T, '2zzzzzz.' + 'B'.repeat(22))), liveKey(u), 'a new token: the same key');
+    assert.notEqual(liveKey(u.replace('part=video', 'part=image')), liveKey(u));
+    assert.equal(liveKey('https://cdn.example/a.mp4?x=1'), 'https://cdn.example/a.mp4?x=1');
+    assert.equal(liveKey(null), '');
   });
 });

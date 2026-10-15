@@ -1062,3 +1062,48 @@ export function parseEmbedMessage(origin, data) {
   }
   return null;
 }
+
+/* ------------------------------------------------- live Instagram playback */
+
+// Play path of a post's live Instagram media (worker GET /api/inspire/posts/:id/play; t = the post's play token, see
+// worker/fikir-gate.js playToken). The worker builds its paths through this pattern (index.js INSPIRE_LIVE_PATH) and the
+// board accepts only these, so the two cannot drift.
+export const PLAY_PATH_RE = /^\/api\/inspire\/posts\/(\d{1,15})\/play\?part=(video|image)&t=([0-9a-z]{1,10}\.[A-Za-z0-9_-]{22})$/;
+const LIVE_BY_RE = /^[A-Za-z0-9._]{1,30}$/;
+const liveDim = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 10000 ? n : null; };
+
+/**
+ * post.live (GET /api/inspire/posts, POST /api/inspire/posts/:id/live) -> media object for the board's own player:
+ *   {kind: 'video', source: 'instagram', url, poster|null, w, h, by, caption, audio, autoplay: true, live: true} | null
+ * url / poster are absolute on apiBase and only this post's play paths (part=video / part=image); never another URL.
+ * w / h both valid (1..10000) or both null; by '' unless an Instagram user name; caption <= 2000 code points (plain text);
+ * audio true | false | null.
+ */
+export function liveMediaOf(x, postId, apiBase) {
+  if (!x || typeof x !== 'object' || Array.isArray(x) || x.kind !== 'video' || x.source !== 'instagram') return null;
+  const base = typeof apiBase === 'string' ? apiBase.replace(/\/+$/, '') : '';
+  if (!/^https?:\/\/[^?#\s]+$/i.test(base)) return null;
+  const id = String(postId);
+  const path = (p, part) => {
+    const m = typeof p === 'string' ? PLAY_PATH_RE.exec(p) : null;
+    return m && m[1] === id && m[2] === part ? base + p : null;
+  };
+  const url = path(x.url, 'video');
+  if (!url) return null;
+  let w = liveDim(x.w), h = liveDim(x.h);
+  if (!w || !h) w = h = null;   // a ratio needs both
+  return {
+    kind: 'video', source: 'instagram', url, poster: path(x.poster, 'image'), w, h,
+    by: typeof x.by === 'string' && LIVE_BY_RE.test(x.by) ? x.by : '',
+    caption: typeof x.caption === 'string' ? Array.from(x.caption.trim()).slice(0, 2000).join('') : '',
+    audio: typeof x.audio === 'boolean' ? x.audio : null, autoplay: true, live: true,
+  };
+}
+
+/**
+ * A play URL without its token (&t=…): the board's keyed rendering compares this, so a token rollover (every 12 h, or a
+ * fresh token after a failed load) never rebuilds the card.
+ */
+export function liveKey(url) {
+  return typeof url === 'string' ? url.replace(/&t=[^&#]*$/, '') : '';
+}

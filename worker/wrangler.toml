@@ -79,13 +79,18 @@ FIKIR_IG_FETCH_DAILY = "300"   # Instagram page + embed fetches by the worker pe
 FIKIR_IG_CRON_COPIES = "2"     # copies per "7-59/15" cron run (every 15 min, any platform; each also gated by the run's D1/subrequest
                                # budget: a second copy never uses Browser Run and starts only when its worst case still fits)
 FIKIR_IG_CRON_CHECKS = "2"     # Instagram embed checks per cron run (same gate)
+FIKIR_IG_LIVE = "1"            # "1": Instagram video posts play in the board's own player, streamed live from Instagram through
+                               # GET /api/inspire/posts/:id/play (nothing stored; R2 copies stay off). "0": the embed, as before
+FIKIR_IG_LIVE_CRON = "2"       # Instagram posts resolved per "7-59/15" cron run so the board knows video vs photo, then live videos
+                               # whose CDN links expire within 12 h refreshed (only while R2 copies of Instagram are off; each also
+                               # gated by the run's D1/subrequest budget)
 FIKIR_DL_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # platforms whose videos downloads resolve (drop one to turn it off; YouTube/Vimeo posts: the post owner adds the video file to the card)
 FIKIR_DL_AD_DAILY = "400"      # platform page/API fetches for downloads + copies per UTC day (plus 20 per platform / 10 min in code)
 # Board password gate (worker/fikir-gate.js): every /api/inspire/* route but GET /config, POST /guest and POST /login needs
 # a session; guests get one with the secret FIKIR_BOARD_PASSWORD. The board's R2 files (/files/fikir/*, /files/sb/*) need
 # the files token (?t=) the API appends for a session; "0" serves them public by unguessable URL again (rollback switch).
 FIKIR_FILES_GATE = "1"
-# Never set in production: INSPIRE_TEST_FETCH_ALLOW, INSPIRE_FAKE_BR (test-only: wrangler.mediatest.toml).
+# Never set in production: INSPIRE_TEST_FETCH_ALLOW, INSPIRE_FAKE_BR, INSPIRE_TEST_IG (test-only: wrangler.mediatest.toml, tests/video-e2e).
 # Never set in production: SB_FAKE_AI, SB_FAKE_TAVILY, SB_FAKE_DELAY_MS, SB_FAKE_FAIL (test-only: wrangler.sbtest.toml).
 # Secrets (never in [vars], never in the repo): JWT_SECRET, ADMIN_PASSWORD, TAVILY_API_KEY, FIKIR_BOARD_PASSWORD.
 #   FIKIR_BOARD_PASSWORD  the shared board password for guests (anonymous ones too). Missing = the board is locked for
@@ -111,6 +116,7 @@ class_name = "StoryboardWorkflow"   # exported from index.js; same script, so no
 # its own Workers Free limits (50 D1 queries, 50 external subrequests, 10 ms CPU), and every run is metered to stay under
 # 40 D1 statements / 35 subrequests (tests/cron-budget.test.mjs). Free allows 5 Cron Triggers per ACCOUNT: this worker uses 2.
 #   "*/15 * * * *"     stale storyboard jobs, orphan sweep, quota/ledger/rate pruning, upload cleanup, link-preview Browser Run retries
-#   "7-59/15 * * * *"  R2 copies of video posts (FIKIR_IG_AUTO, FIKIR_COPY_ADAPTERS) + Instagram embed checks, minutes 7/22/37/52
+#   "7-59/15 * * * *"  R2 copies of video posts (FIKIR_IG_AUTO, FIKIR_COPY_ADAPTERS) + Instagram embed checks + Instagram live
+#                      resolves (FIKIR_IG_LIVE), minutes 7/22/37/52
 [triggers]
 crons = ["*/15 * * * *", "7-59/15 * * * *"]

@@ -146,12 +146,21 @@ for (const rt of routes) {
 }
 for (const rt of routes.filter((x) => x.method === 'GET' && !isOpen(x))) {
   const x = await call('GET', fill(rt.path, ids), null, ADM);
+  // GET /posts/:id/play (live Instagram playback) needs ?part= and an Instagram post: 400 = past the gate
+  if (/\/play$/.test(rt.path)) { assert.equal(x.status, 400, `admin GET ${rt.path}: ${x.status}`); continue; }
   assert.equal(x.status, 200, `admin GET ${rt.path}: ${x.status}`);
+}
+// /play takes the post's play token (?t=) instead of a session header: none / forged -> 401 (CORP cross-origin, no-store)
+for (const t of ['', '?part=video', `?part=video&t=${(nowS() + 3600).toString(36)}.${'A'.repeat(22)}`]) {
+  const x = await call('GET', `/api/inspire/posts/${link}/play${t}`);
+  assert.equal(x.status, 401, `play ${t}: ${x.status}`);
+  assert.equal(x.headers.get('cross-origin-resource-policy'), 'cross-origin');
+  assert.equal(x.headers.get('cache-control'), 'no-store');
 }
 assert.equal((await call('GET', '/api/inspire/sb-admin/usage', null, G)).status, 403);
 assert.equal((await call('GET', '/api/inspire/posts', null, G, { legacy: true })).status, 200, 'a current token works for the old page shape too');
 assert.equal((await call('GET', '/api/inspire/posts', null, bad.stale, { legacy: true })).status, 401, 'an old cached page with its old token: 401');
-ok('valid guest: every gated route passes (reads 200); admin: every GET 200 (sb-admin included); old pages with old tokens 401');
+ok('valid guest: every gated route passes (reads 200); admin: every GET 200 (sb-admin included; /play 400 without part); /play without / with a forged play token 401; old pages with old tokens 401');
 
 // ── rename, lockout ──
 r = await call('POST', '/api/inspire/guest/rename', { name: 'Ayşe K.' }, G);

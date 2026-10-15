@@ -10,7 +10,7 @@ import {
   igNavHeaders, igEmbedHeaders, igResolve, igCheckEmbed, openMedia, cappedStream, asciiFilePart, unicodeFilePart, dlFilename,
   contentDisposition, titleSlug, dlHint, registerDlAdapter, DL_ADAPTERS, backoffS, vcItemFresh, vcBackingOff, itemToCache,
   cacheToItem, igCacheCaptionCut, VIDEO_CACHE_DDL, vcGet, vcFail, vcDefer, vcExtra, vcExtraJson, vcPut, copyTargetOf, copyKind, imageDims,
-  COPY_PLATFORMS, COPY_PLATFORM_TR, adToCache, adFromCache, xParse, ttParse, ttExtract, pinParse, redditRss,
+  COPY_PLATFORMS, COPY_PLATFORM_TR, adToCache, adFromCache, xParse, ttParse, ttExtract, pinParse, redditRss, igLiveVideo, IG_PLAY_MIMES,
 } from '../worker/inspire-video.js';
 import { sanitizeMedia, COPY_SOURCES, MAX_MEDIA_JSON } from '../worker/inspire-media.js';
 import { parseLink } from '../assets/js/fikir-url.mjs';
@@ -99,6 +99,18 @@ describe('igExtract (reel / post page)', () => {
     assert.equal(it.image.url, 'https://scontent.cdninstagram.com/v/t51.0-15/c2.jpg?oe=6ACD0906');
     assert.equal(it.user, 'ornek_marka');
     assert.equal(it.caption, null);
+  });
+  test('lead_video: the reel itself, a carousel whose first item is the video; not one that starts with a photo', () => {
+    assert.equal(igExtract(html, 'DTestReel01').lead_video, true);
+    assert.equal(igExtract(FX('ig-carousel.html'), 'DTestCarou1').lead_video, false, 'photo first (ig-carousel.html)');
+    const kid = (n, video) => ({ pk: String(4000 + n), media_type: video ? 2 : 1,
+      image_versions2: { candidates: [{ url: `https://scontent.cdninstagram.com/v/k${n}.jpg`, width: 1080, height: 1920 }] },
+      ...(video ? { video_versions: [{ type: 101, width: 720, height: 1280, url: `https://scontent.cdninstagram.com/o1/v/k${n}.mp4` }] } : {}) });
+    const page = (kids) => `<script type="application/json">${JSON.stringify({ d: { code: 'DTestCarou2', media_type: 8, carousel_media: kids } })}</script>`;
+    const first = igExtract(page([kid(1, true), kid(2, false)]), 'DTestCarou2');
+    assert.equal(first.lead_video, true); assert.equal(first.video.url, 'https://scontent.cdninstagram.com/o1/v/k1.mp4');
+    assert.equal(igExtract(page([kid(1, false), kid(2, true)]), 'DTestCarou2').lead_video, false);
+    assert.equal(igExtract(FX('ig-photo.html'), 'DTestPhoto1').lead_video, false, 'a photo has no video');
   });
   test('an object without a code field matches by pk; image-only posts give an image', () => {
     const pk = igShortcodeToPk('DTestReel01');
@@ -284,6 +296,79 @@ describe('openMedia (guarded download/copy fetch)', () => {
     const s = cappedStream(new Uint8Array([1, 2, 3]), src.getReader(), { length: 10, limit: 100 });
     await assert.rejects(readAll(s), /shorter than Content-Length/);
   });
+  // live playback (GET /api/inspire/posts/:id/play): one Range passed on, the 206 checked, the slice streamed through
+  const slice = (body, type, { start = 0, end = body.length - 1, total = body.length, len = end - start + 1, extra = {} } = {}) => () =>
+    new Response(body.subarray(start, end + 1), { status: 206, headers: { 'Content-Type': type, 'Content-Range': `bytes ${start}-${end}/${total}`, ...(len == null ? {} : { 'Content-Length': String(len) }), ...extra } });
+  const ranged = (f, u, range, opts = {}) => openMedia(u, { want: 'video', maxBytes: 1e6, safeURL: safe, fetchImpl: f, range, ...opts });
+  test('range: the Range header goes out; a 206 from byte 0 is sniffed, a later slice / a tiny probe is not', async () => {
+    const big = Buffer.concat([CLIP, Buffer.alloc(3000, 7)]);
+    const f = stubFetch({
+      'https://cdn.example/a.mp4': (init) => {
+        const m = /^bytes=(\d+)-(\d*)$/.exec(init.headers.Range || '');
+        if (!m) return media(big, 'video/mp4')();
+        const a = Number(m[1]), b = m[2] === '' ? big.length - 1 : Math.min(Number(m[2]), big.length - 1);
+        return slice(big, 'video/mp4', { start: a, end: b })();
+      },
+    });
+    const r = await ranged(f, 'https://cdn.example/a.mp4', 'bytes=1000-1999');
+    assert.equal(f.calls[0].init.headers.Range, 'bytes=1000-1999');
+    assert.equal(r.ok, true, JSON.stringify(r)); assert.equal(r.status, 206);
+    assert.deepEqual([r.start, r.end, r.total, r.length, r.mime, r.ext], [1000, 1999, big.length, 1000, 'video/mp4', 'mp4']);
+    assert.deepEqual(Buffer.from(await readAll(r.body)), big.subarray(1000, 2000), 'the slice, no sniff of its (non-MP4) bytes');
+    const head = await ranged(f, 'https://cdn.example/a.mp4', 'bytes=0-');
+    assert.equal(head.status, 206); assert.equal(head.length, big.length);
+    assert.deepEqual(Buffer.from(await readAll(head.body)), big);
+    const probe = await ranged(f, 'https://cdn.example/a.mp4', 'bytes=0-1');
+    assert.equal(probe.ok, true); assert.equal(probe.length, 2);
+    assert.deepEqual(Buffer.from(await readAll(probe.body)), big.subarray(0, 2));
+    const whole = await ranged(f, 'https://cdn.example/a.mp4', 'bytes=0-10,20-30');
+    assert.equal(f.calls[f.calls.length - 1].init.headers.Range, undefined, 'a multi-range is never sent');
+    assert.equal(whole.status, 200); await whole.body.cancel();
+  });
+  test('range: a 206 from byte 0 that is no video, a wrong start, html, a lying length -> refused; 200 is sniffed; 416 -> range', async () => {
+    const page = Buffer.from('<!doctype html><title>x</title>' + ' '.repeat(120));
+    const f = stubFetch({
+      'https://cdn.example/fake.mp4': slice(page, 'video/mp4'),
+      'https://cdn.example/shift.mp4': slice(CLIP, 'video/mp4', { start: 10 }),
+      'https://cdn.example/html.mp4': slice(CLIP, 'text/html', { start: 100, end: 199 }),
+      'https://cdn.example/len.mp4': slice(CLIP, 'video/mp4', { start: 100, end: 199, len: 50 }),
+      'https://cdn.example/back.mp4': slice(CLIP, 'video/mp4', { start: 300, end: 200 }),
+      'https://cdn.example/huge.mp4': slice(CLIP, 'video/mp4', { start: 100, end: 199, total: 5e6 }),
+      'https://cdn.example/full.mp4': media(CLIP, 'video/mp4'),
+      'https://cdn.example/fullhtml.mp4': media(page, 'video/mp4'),
+      'https://cdn.example/past.mp4': () => new Response('', { status: 416, headers: { 'Content-Range': `bytes */${CLIP.length}` } }),
+    });
+    assert.equal((await ranged(f, 'https://cdn.example/fake.mp4', 'bytes=0-')).error, 'not_media');
+    assert.equal((await ranged(f, 'https://cdn.example/shift.mp4', 'bytes=0-')).error, 'bad_range', 'not the start asked for');
+    assert.equal((await ranged(f, 'https://cdn.example/html.mp4', 'bytes=100-199')).error, 'not_media');
+    assert.equal((await ranged(f, 'https://cdn.example/len.mp4', 'bytes=100-199')).error, 'bad_range');
+    assert.equal((await ranged(f, 'https://cdn.example/back.mp4', 'bytes=300-')).error, 'bad_range');
+    assert.equal((await ranged(f, 'https://cdn.example/huge.mp4', 'bytes=100-199')).error, 'too_large');
+    const full = await ranged(f, 'https://cdn.example/full.mp4', 'bytes=100-');
+    assert.equal(full.ok, true); assert.equal(full.status, 200, 'the upstream ignored the Range'); assert.equal(full.length, CLIP.length);
+    await full.body.cancel();
+    assert.equal((await ranged(f, 'https://cdn.example/fullhtml.mp4', 'bytes=100-')).error, 'not_media', 'a 200 is sniffed as always');
+    assert.deepEqual(await ranged(f, 'https://cdn.example/past.mp4', 'bytes=999999-'), { ok: false, error: 'range', status: 416, total: CLIP.length });
+    const img = await openMedia('https://cdn.example/p.jpg', { want: 'image', maxBytes: 1e6, safeURL: safe, range: 'bytes=0-',
+      fetchImpl: stubFetch({ 'https://cdn.example/p.jpg': slice(POSTER, 'image/jpeg; charset=binary') }) });
+    assert.equal(img.ok, true); assert.equal(img.mime, 'image/jpeg'); await img.body.cancel();
+    assert.equal(IG_PLAY_MIMES['video/mp4'][0], 'video/mp4'); assert.equal(IG_PLAY_MIMES['text/html'], undefined);
+  });
+  test('hostOk: every hop must pass it too (a redirect off the Instagram CDN is never fetched)', async () => {
+    const igSafe = (href) => { try { const u = new URL(href); return u.protocol === 'https:' ? u : null; } catch { return null; } };
+    const f = stubFetch({
+      'https://scontent.cdninstagram.com/o1/v/a.mp4': () => new Response(null, { status: 302, headers: { Location: 'https://evil.example/a.mp4' } }),
+      'https://scontent.cdninstagram.com/o1/v/b.mp4': () => new Response(null, { status: 302, headers: { Location: 'https://video.fbcdn.net/b.mp4' } }),
+      'https://video.fbcdn.net/b.mp4': media(CLIP, 'video/mp4'),
+      'https://evil.example/a.mp4': media(CLIP, 'video/mp4'),
+    });
+    const o = (u) => openMedia(u, { want: 'video', maxBytes: 1e6, safeURL: igSafe, fetchImpl: f, hostOk: igCdnUrl });
+    assert.equal((await o('https://scontent.cdninstagram.com/o1/v/a.mp4')).error, 'unsafe');
+    assert.ok(!f.calls.some((c) => c.url.includes('evil.example')), 'the other host is never fetched');
+    const ok = await o('https://scontent.cdninstagram.com/o1/v/b.mp4');
+    assert.equal(ok.ok, true); await ok.body.cancel();
+    assert.equal((await o('https://evil.example/a.mp4')).error, 'unsafe');
+  });
 });
 
 describe('download filenames', () => {
@@ -401,14 +486,33 @@ describe('Instagram copy media + cache helpers', () => {
     const back = cacheToItem({ url: c.url, poster: c.poster, width: c.width, height: c.height, expires_at: c.expires_at, extra: JSON.stringify(c.extra), resolved_at: now }, 'DTestReel01');
     assert.equal(back.video.url, it.video.url); assert.equal(back.image.url, it.image.url);
     assert.equal(back.user, 'ornek.studio'); assert.equal(back.w, 720); assert.equal(back.has_audio, true);
-    // cv 2 rows keep the caption up to 2,000; a row from before whose caption the 300 cap cut is resolved again for a copy
-    assert.equal(c.extra.cv, 2); assert.equal(igCacheCaptionCut({ extra: JSON.stringify(c.extra) }), false);
+    // cv 2 rows keep the caption up to 2,000; a row from before whose caption the 300 cap cut is resolved again for a copy;
+    // cv 3 adds lv (the lead item is the video: live playback)
+    assert.equal(c.extra.cv, 3); assert.equal(c.extra.lv, 1); assert.equal(back.lead_video, true);
+    assert.equal(igCacheCaptionCut({ extra: JSON.stringify(c.extra) }), false);
     assert.equal(igCacheCaptionCut({ extra: JSON.stringify({ user: 'a', caption: 'k'.repeat(299) + '…' }) }), true);
     assert.equal(igCacheCaptionCut({ extra: JSON.stringify({ user: 'a', caption: 'kısa açıklama' }) }), false, 'not cut: whole');
     assert.equal(igCacheCaptionCut({ extra: JSON.stringify({ user: 'a', caption: null }) }), false);
     assert.equal(igCacheCaptionCut({ extra: JSON.stringify({ cv: 2, caption: 'k'.repeat(1999) + '…' }) }), false);
     assert.equal(cacheToItem({ url: 'https://evil.example/a.mp4', poster: null, extra: '{}' }, 'x'), null, 'only CDN links come back out of the cache');
     assert.match(VIDEO_CACHE_DDL, /PRIMARY KEY \(post_id, kind\)/);
+  });
+  test('lv in the cache (cv 3) and igLiveVideo: a video that is the post or its first carousel item', () => {
+    const now = 1_800_000_000;
+    const row = (it) => { const c = itemToCache(it); return { url: c.url, poster: c.poster, width: c.width, height: c.height, expires_at: c.expires_at, resolved_at: now, extra: JSON.stringify(c.extra) }; };
+    const car = igExtract(FX('ig-carousel.html'), 'DTestCarou1');
+    const back = cacheToItem(row(car), 'DTestCarou1');
+    assert.equal(itemToCache(car).extra.lv, 0); assert.equal(back.lead_video, false); assert.equal(back.media_type, 8);
+    // rows from before cv 3 (no lv): a video is the lead one unless the post is a carousel
+    const old = (mt) => cacheToItem({ url: 'https://scontent.cdninstagram.com/o1/v/a.mp4', poster: null, extra: JSON.stringify({ cv: 2, media_type: mt }) }, 'x');
+    assert.equal(old(2).lead_video, true); assert.equal(old(8).lead_video, false);
+    assert.equal(cacheToItem({ url: null, poster: 'https://scontent.cdninstagram.com/v/p.jpg', extra: '{}' }, 'x').lead_video, false, 'photo');
+    const T = [
+      [{ hasVideo: true, mediaType: 2, lv: 1 }, true], [{ hasVideo: true, mediaType: 2, lv: null }, true], [{ hasVideo: true, mediaType: null, lv: undefined }, true],
+      [{ hasVideo: true, mediaType: 8, lv: 1 }, true], [{ hasVideo: true, mediaType: 8, lv: 0 }, false], [{ hasVideo: true, mediaType: '8', lv: null }, false],
+      [{ hasVideo: false, mediaType: 2, lv: 1 }, false], [{ hasVideo: 0, mediaType: 1, lv: 0 }, false], [{ hasVideo: true, mediaType: 1, lv: 0 }, true],
+    ];
+    for (const [arg, want] of T) assert.equal(igLiveVideo(arg), want, JSON.stringify(arg));
   });
   test('vcDefer keeps a row out of the queue without counting a failure (node:sqlite stand-in for D1)', async () => {
     const { DatabaseSync } = await import('node:sqlite');
@@ -456,6 +560,9 @@ describe('config guard (downloads)', () => {
     assert.ok(Number(v('FIKIR_COPY_VIEW_PER_SESSION')) <= Number(v('FIKIR_COPY_VIEW_PER_IP')) && Number(v('FIKIR_COPY_VIEW_PER_IP')) <= Number(v('FIKIR_COPY_VIEW_DAILY')));
     assert.ok(Number(v('FIKIR_COPY_VIEW_DAILY')) <= Number(v('FIKIR_IG_COPY_DAILY')) && Number(v('FIKIR_IG_COPY_DAILY')) <= 300, 'daily copies stay bounded');
     assert.ok(Number(v('FIKIR_UP_TOTAL_MB')) > 0 && Number(v('FIKIR_UP_TOTAL_MB')) <= 9000, 'the total storage guard stays under R2 Free 10 GB');
+    // live playback (nothing stored): on, its cron share small
+    assert.ok(['0', '1'].includes(v('FIKIR_IG_LIVE')), 'FIKIR_IG_LIVE');
+    assert.ok(/^\d+$/.test(v('FIKIR_IG_LIVE_CRON') || '') && Number(v('FIKIR_IG_LIVE_CRON')) <= 3, 'FIKIR_IG_LIVE_CRON stays gentle');
   });
 });
 

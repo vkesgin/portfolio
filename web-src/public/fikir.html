@@ -291,6 +291,10 @@
     .facade-spin { display: none; }
     .media-box.is-mounted .facade-play, .media-box.is-mounted .facade-label { display: none; }
     .media-box.is-mounted .facade-spin { display: inline-block; }
+    /* an Instagram embed held while the server is asked whether the post is a video (POST /live): a spinner, no "Göster" */
+    .media-box.live-held .facade { cursor: progress; }
+    .media-box.live-held .facade-play, .media-box.live-held .facade-label { display: none; }
+    .media-box.live-held .facade-spin { display: inline-block; }
     .facade-title {
       font-size: 13px; color: #ddd; max-width: 100%; overflow: hidden;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere;
@@ -395,7 +399,18 @@
     /* Post played from our R2 copy (post.media.source = instagram | x | tiktok | facebook | pinterest | reddit): credit line
        "@user · Platform" + "…'da aç ↗", the preview video, the caption (plain text, collapsible). "Oynamıyor mu?" under an
        Instagram embed asks the server to check / copy it. */
-    .media.media-igcopy { display: block; background: var(--card-bg); }
+    .media.media-igcopy, .media.media-livepend { display: block; background: var(--card-bg); }
+    /* An Instagram reel not resolved yet (post.live_ask) while it waits for POST /live: our player's credit line and video
+       box (same place and size) with "Video hazırlanıyor…"; never the embed. */
+    .media-box.preview.live-pend {
+      background: radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, #E1306C 26%, transparent), transparent 62%), linear-gradient(160deg, #1d1d1d, #0c0c0c);
+    }
+    .media-box.preview.live-pend .facade-thumb { opacity: 0.5; }
+    .live-pend-msg {
+      position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 16px; text-align: center; color: #ddd; font-size: 12px; font-weight: 600; pointer-events: none;
+    }
+    .live-pend-msg .spinner { width: 26px; height: 26px; }
     .ig-head {
       display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px;
       padding: 8px var(--pad); font-size: 12px; color: var(--muted);
@@ -416,6 +431,24 @@
     .ig-help .text-btn { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; min-height: 22px; }
     .ig-help .text-btn .spinner { width: 11px; height: 11px; border-width: 2px; }
     @media (hover: hover) { .ig-help .text-btn:hover { color: var(--accent); } }
+    /* An Instagram video played live (post.live, streamed through the API) that could not be played here: the player's place
+       and size, its poster dimmed (or a dark box), "Video şu anda oynatılamıyor" + "Tekrar dene"; never the embed's
+       "Instagram'da İzle". */
+    .media-box.preview.live-dead { background: #111; }
+    .media-box.preview.live-dead .facade-thumb { opacity: 0.4; }
+    .live-dead-msg {
+      position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 16px; text-align: center;
+    }
+    .live-dead-msg span {
+      background: rgba(0, 0, 0, 0.65); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff;
+      padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+    }
+    .live-dead-msg .text-btn {
+      display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 14px; border-radius: 999px;
+      border: 1px solid rgba(0, 229, 255, 0.5); background: rgba(0, 0, 0, 0.6); font-weight: 700;
+    }
+    @media (hover: hover) { .live-dead-msg .text-btn:hover { background: rgba(0, 229, 255, 0.18); } }
 
     /* "İndir": download of a card's video / image (GET …/download-info, then the file), in the meta row */
     .dl-btn {
@@ -966,7 +999,7 @@
     // Loaded together: the link parser is required; the Markdown module (idea texts / descriptions) is optional - without
     // it texts are shown as plain text.
     const [urlRes, mdRes] = await Promise.allSettled([
-      import('/assets/js/fikir-url.mjs?v=20261007'),
+      import('/assets/js/fikir-url.mjs?v=20261015'),
       import('/assets/js/fikir-md.mjs?v=20261008'),
     ]);
     if (urlRes.status !== 'fulfilled') {
@@ -986,6 +1019,10 @@
       if (/\.svg$/i.test(path)) return null;
       return /\.(?:jpe?g|png|gif|webp|avif)$/i.test(path) ? 'image' : null;
     };
+    // post.live -> the board's own player for an Instagram video streamed live through the API (shared module; an older
+    // cached module without these exports: no live videos, the embed as before)
+    const liveMediaOf = typeof urlLib.liveMediaOf === 'function' ? urlLib.liveMediaOf : () => null;
+    const liveKey = typeof urlLib.liveKey === 'function' ? urlLib.liveKey : (u) => String(u || '');
 
     /* ---------------------------------------------------------------- config */
     const PROD_API = 'https://vk-portfolio-api.vkesgin38.workers.dev';
@@ -1027,8 +1064,10 @@
     // (copy_view hides "Oynamıyor mu?" on cards copied on view); "off" hides "İndir" / "Oynamıyor mu?" again or stops the
     // on-view copies. ig_copy / copy_view are taken only from a config loaded with the session. copy_view: cards of posts
     // with post.copy_view (set by the server only while its copy_view is on) ask for their copy when they come into view.
+    // live (config.media.live, default on like production): Instagram videos play in our own player, streamed through the
+    // API (post.live); unknown Instagram posts (post.live_ask) ask POST /live when their card comes near.
     const config = { storyboard: false, max_note_len: 1000, max_text_len: 2000, sb: null, media: null, video: videoDefaults(), locked: false };
-    function videoDefaults() { return { download: true, ig_copy: true, ig_auto: 'off', copy_view: true }; }
+    function videoDefaults() { return { download: true, ig_copy: true, ig_auto: 'off', copy_view: true, live: true }; }
     const SB_MODULE = '/assets/js/fikir-storyboard.mjs?v=20261008';
     window.fikirConfig = config;
 
@@ -1222,7 +1261,8 @@
         audio: typeof x.audio === 'boolean' ? x.audio : null,
       };
     }
-    const mediaSig = (post) => JSON.stringify([normMeta(post.meta), normMedia(post.media)]);
+    // post.live raw (with its play token): a new token reaches patchMeta, which swaps it in without rebuilding the card
+    const mediaSig = (post) => JSON.stringify([normMeta(post.meta), normMedia(post.media), post.live || null]);
 
     function upsertById(list, item) {
       const arr = Array.isArray(list) ? list.slice() : [];
@@ -1457,12 +1497,16 @@
           config.sb = c.sb && typeof c.sb === 'object' ? c.sb : null;
           config.media = normMediaConfig(c.media);
           const vm = c.media && typeof c.media === 'object' ? c.media : {};
+          const liveWas = config.video.live;
           config.video = {
             download: vm.download !== false,
             ig_copy: authed && session.token ? vm.ig_copy === true : config.video.ig_copy,
             ig_auto: ['off', 'blocked', 'all'].includes(vm.ig_auto) ? vm.ig_auto : 'off',
             copy_view: authed && session.token ? vm.copy_view === true : config.video.copy_view,
+            live: authed && session.token ? vm.live === true : config.video.live,
           };
+          // live playback switched: only the cards whose view changes are swapped (viewSig)
+          if (config.video.live !== liveWas) for (const e of posts.values()) patchMeta(e);
           for (const k of ['max_note_len', 'max_text_len']) {
             if (Number.isInteger(c[k]) && c[k] > 0 && c[k] <= 100000) config[k] = c[k];
           }
@@ -2127,6 +2171,8 @@
       if (clampRO) for (const c of [e.refs.textClamp, e.refs.descClamp, e.refs.capClamp]) if (c) clampRO.unobserve(c.body);
       clearTimeout(e.igPollTimer);
       clearTimeout(e.copyTimer);
+      clearTimeout(e.liveTimer);
+      clearTimeout(e.liveAgainTimer);
       if (copyIO) copyIO.unobserve(e.el);
       if (nearIO) nearIO.unobserve(e.el);
       if (farIO) farIO.unobserve(e.el);
@@ -2161,6 +2207,10 @@
       copyView.hold.clear();
       clearTimeout(copyView.timer);
       copyView.asked = 0;
+      liveAsk.queue.length = 0;
+      liveAsk.paused = false;
+      clearTimeout(liveAsk.timer);
+      liveAsk.asked = 0;
       board.loaded = false;
       if (board.el) { board.el.textContent = ''; board.cols = []; board.n = 0; }
       setStatus('none');
@@ -2228,6 +2278,19 @@
           return { kind: 'igcopy', platform, parsed, plan, copy: { source: copy.source, by: copy.by, caption: copy.caption, audio: copy.audio } };
         }
       }
+      // Instagram video without our R2 copy (or a copy that failed here): played live through the API worker (post.live).
+      // A live video that failed twice keeps this layout with its poster + "Tekrar dene" (never the embed's "Instagram'da İzle").
+      if (isIgPost({ platform, parsed })) {
+        const live = liveOf(post);
+        if (live) {
+          const dead = !!(bad && bad.has(liveKey(live.url)));
+          const plan = dead ? { type: 'image', url: live.poster, w: live.w, h: live.h, atSource: false } : previewPlan(live, null, true);
+          // the fallback of a copy that failed here comes without credit / caption (the server leaves them out): the copy's
+          const cp = copy && copy.source === 'instagram' ? copy : null;
+          const by = live.by || (cp && cp.by) || '', caption = live.caption || (cp && cp.caption) || '';
+          if (plan) return { kind: 'igcopy', platform, parsed, plan, copy: { source: 'instagram', by, caption, audio: live.audio, live: true, dead } };
+        }
+      }
       // a private Drive/Docs file only frames Google's "refused to connect" page: preview card instead
       if (parsed.embed && !parsed.needsResolve && !(meta && meta.login_wall)) return { kind: 'embed', platform, parsed };
       // Link card ("base" card: media previews may replace its visual). bad = media URLs that failed to load here.
@@ -2277,6 +2340,9 @@
       const m = normMedia(post.media);
       return m && COPY_SOURCES.has(m.source) && m.kind === 'video' ? m : null;
     }
+    // post.live of an Instagram video played live through the API worker (GET /posts/:id/play) as liveMediaOf() output
+    // ({kind 'video', url, poster, w, h, by, caption, audio, live: true}; only this post's play paths), else null
+    const liveOf = (post) => (config.video.live !== false ? liveMediaOf(post.live, post.id, API_BASE) : null);
     // post.media of a YouTube / Vimeo post: the video file its owner added (upload), else null
     function ownVideoOf(post) {
       const m = normMedia(post.media);
@@ -2287,13 +2353,25 @@
     // Instagram links the server can check / copy (worker igRef: reel, p, tv with a shortcode)
     const IG_POST_KINDS = new Set(['reel', 'p', 'tv']);
     const isIgPost = (view) => !!(view && view.platform === 'instagram' && view.parsed && IG_POST_KINDS.has(view.parsed.subtype) && view.parsed.id);
-    // Compared on refresh: the card's media block is rebuilt only when this changes.
+    // Compared on refresh: the card's media block is rebuilt only when this changes. A live video is compared without its play
+    // token (liveKey): a new token is swapped in by patchMeta, the card stays.
     function viewSig(view) {
       if (view.kind === 'card') return JSON.stringify(['card', view.plan]);
+      if (view.kind === 'igcopy' && view.copy.live) {
+        return JSON.stringify(['igcopy', { ...view.plan, url: liveKey(view.plan.url), poster: view.plan.poster ? liveKey(view.plan.poster) : null }, view.copy]);
+      }
       if (view.kind === 'igcopy') return JSON.stringify(['igcopy', view.plan, view.copy]);
       if (view.kind === 'embed') return JSON.stringify(['embed', view.parsed.embed.src]);
       return view.kind;
     }
+    // An Instagram reel / IGTV card the server has not resolved yet (post.live_ask) that will ask POST /live: until the answer
+    // it shows our player's layout (buildLivePendMedia) instead of the embed facade. Decided when the card is built
+    // (entry.livePend); it only ever ends (liveUnpend, or the conditions below no longer hold): a card that showed its embed
+    // never turns into this. Part of the card's signature, so the end of the wait rebuilds the media block (swapMedia).
+    const LIVE_PEND_KINDS = new Set(['reel', 'tv']);
+    const livePendNow = (e, view) => view.kind === 'embed' && isIgPost(view) && LIVE_PEND_KINDS.has(view.parsed.subtype) &&
+      config.video.live === true && e.post.live_ask === true && !!session.token && !liveAsk.paused;
+    const entrySig = (e, view) => viewSig(view) + (e.livePend && livePendNow(e, view) ? '|pend' : '');
 
     function createEntry(post) {
       const view = classify(post);
@@ -2319,7 +2397,8 @@
 
     function buildCard(entry) {
       const kind = entry.view.kind;
-      entry.shown.viewSig = viewSig(entry.view);
+      entry.livePend = livePendNow(entry, entry.view);
+      entry.shown.viewSig = entrySig(entry, entry.view);
       const card = h('article', { class: 'post-card kind-' + kind + (entry.view.plan ? ' has-media' : ''), 'data-id': entry.id });
       let media = null;
       if (kind === 'embed') media = buildEmbedMedia(entry);
@@ -2336,8 +2415,10 @@
 
     /* Embeds: a facade of fixed size; the real iframe is mounted on demand. */
     function buildEmbedMedia(entry) {
+      if (entry.livePend && livePendNow(entry, entry.view)) return buildLivePendMedia(entry);
       const { parsed, platform } = entry.view;
-      const box = h('div', { class: 'media-box' });
+      // held while the server is asked about the post (POST /live): a spinner instead of "Göster" (setLiveHeld)
+      const box = h('div', { class: 'media-box' + (entry.liveHoldUntil > performance.now() ? ' live-held' : '') });
       const m = {
         entry, box, platform, embed: parsed.embed, iframe: null, facade: null, thumb: null, titleEl: null,
         // last measured height of this Instagram/X embed (earlier visit): reserved instead of the default
@@ -2355,6 +2436,35 @@
       entry.refs.igHelp = h('div', { class: 'ig-help', hidden: !igHelpShown(entry) }, btn);
       entry.refs.igHelpBtn = btn;
       return h('div', { class: 'media media-ig' }, box, entry.refs.igHelp);
+    }
+
+    /* An Instagram reel / IGTV post not resolved yet (entry.livePend) while it waits for POST /live: our player's layout
+       (buildIgCopyMedia) without the parts only the answer brings: the credit line "Instagram" + "Instagram'da aç ↗", the
+       video box (9:16, or the ratio measured here earlier) with "Video hazırlanıyor…". The answer 'video' swaps in the
+       player at the same place and size (only the user name and the caption under the video are added); there is no
+       "Göster", so the embed (and its "Instagram'da İzle") is never mounted meanwhile (mount() skips m.pend). Any other end
+       of the wait (photo, removed, timeout, the queue stopped): the usual embed facade (liveUnpend). */
+    function buildLivePendMedia(entry) {
+      const { parsed } = entry.view;
+      const info = platformInfo('instagram');
+      const href = safeHttpUrl(parsed.canonical);
+      const head = h('div', { class: 'ig-head' },
+        h('span', { class: 'ig-by', translate: 'no' }, h('span', { class: 'dot' }), h('span', { class: 'ig-site' }, info.name)),
+        href ? h('a', { class: 'ig-open', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', translate: 'no' }, COPY_OPEN_TR.instagram) : null);
+      head.style.setProperty('--pc', info.color);
+      const box = h('div', { class: 'media-box preview live-pend', 'aria-busy': 'true' });
+      sizePreviewBox(box, clampRatio(Number(aspectCache[entry.id]) || 9 / 16, 'video'));
+      const meta = normMeta(entry.post.meta);
+      const thumbUrl = safeHttpUrl(parsed.thumb) || (meta && meta.image) || null;
+      if (thumbUrl) box.append(makeThumb(thumbUrl));
+      box.append(h('div', { class: 'live-pend-msg', role: 'status' }, h('span', { class: 'spinner', 'aria-hidden': 'true' }), h('span', null, 'Video hazırlanıyor…')));
+      entry.media = {
+        entry, box, platform: 'instagram', embed: parsed.embed, iframe: null, facade: null, thumb: null, titleEl: null,
+        knownHeight: null, lastUsed: 0, revealTimer: 0, pend: true,
+      };
+      entry.refs.igHelp = null;
+      entry.refs.igHelpBtn = null;
+      return h('div', { class: 'media media-livepend' }, head, h('div', { class: 'media-stage' }, box));
     }
 
     function sizeEmbedBox(m) {
@@ -2627,7 +2737,8 @@
        Facebook'ta, Pinterest'te, Reddit'te), the preview video (poster, muted autoplay while visible, shares the mount cap,
        ⏸ / sound), then the post's caption (plain text, collapsible). The video box is sized from media.w/h before anything
        loads. A YouTube / Vimeo post with its own video file (copy.own): "YouTube" + "YouTube'da aç ↗", that file, then the
-       video's title / description. */
+       video's title / description. An Instagram video played live (copy.live: post.live, streamed through the API) looks
+       the same; one that could not be played here (copy.dead) keeps the layout with its poster and "Tekrar dene". */
     function buildIgCopyMedia(entry) {
       const { parsed, plan, copy } = entry.view;
       const r = entry.refs;
@@ -2641,11 +2752,28 @@
       const head = h('div', { class: 'ig-head' }, by,
         href ? h('a', { class: 'ig-open', href, target: '_blank', rel: 'noopener noreferrer nofollow ugc', translate: 'no' }, COPY_OPEN_TR[src]) : null);
       head.style.setProperty('--pc', info.color);
-      const box = buildPreviewVideo(entry, plan, href, { open: false, sound: copy.audio !== false });
+      const box = copy.dead ? buildLiveDeadBox(entry, plan) : buildPreviewVideo(entry, plan, href, { open: false, sound: copy.audio !== false });
+      if (copy.live && !copy.dead && entry.media) entry.media.live = true;
       const wrap = h('div', { class: 'media media-igcopy' }, head, h('div', { class: 'media-stage' }, box));
       r.capClamp = copy.caption ? buildClamp(entry, 'cap', 'ig-caption', copy.caption, { plain: true }) : null;
       if (r.capClamp) wrap.append(h('div', { class: 'ig-cap' }, r.capClamp.wrap));
       return wrap;
+    }
+
+    // A live Instagram video that could not be played here (a fresh token did not help): the player's place and size (the
+    // video's ratio), its poster when it loads (an <img> that fails just goes; not a media failure) or a dark box, and
+    // "Video şu anda oynatılamıyor" + "Tekrar dene" (live-retry). Never the embed.
+    function buildLiveDeadBox(entry, plan) {
+      const box = h('div', { class: 'media-box preview is-image live-dead' });
+      sizePreviewBox(box, previewRatio(entry, { ...plan, type: 'video' }));
+      if (plan.url) {
+        const img = h('img', { class: 'facade-thumb', src: plan.url, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+        img.addEventListener('error', () => img.remove(), { once: true });
+        box.append(img);
+      }
+      box.append(h('div', { class: 'live-dead-msg' }, h('span', null, 'Video şu anda oynatılamıyor'),
+        h('button', { type: 'button', class: 'text-btn', 'data-action': 'live-retry' }, 'Tekrar dene')));
+      return box;
     }
 
     function showLinkPlaceholder(visual, host) {
@@ -2847,11 +2975,11 @@
       const r = entry.refs;
       return [
         [r.dlBtn, !dlShown(entry)],
-        [r.copyDel, !(entry.view.kind === 'igcopy' && !entry.view.copy.own && entry.post.can_delete)],
+        [r.copyDel, !(entry.view.kind === 'igcopy' && !entry.view.copy.own && !entry.view.copy.live && entry.post.can_delete)],
         [r.addBtn, !addVideoShown(entry)],
         [r.ownDel, !(hasOwnFile(entry) && canUploadTo(entry))],
         [r.ownNote, !ownFileUnplayable(entry)],
-        [r.srcLink, entry.view.kind === 'igcopy'],
+        [r.srcLink, entry.view.kind === 'igcopy' || !!(entry.media && entry.media.pend)],   // the credit line has "Instagram'da aç"
         [r.igHelp, !igHelpShown(entry)],
       ].filter(([el]) => !!el);
     }
@@ -2953,10 +3081,18 @@
     // height) through applyOrDefer, comparing against what is shown.
     function patchCard(entry, post, above) {
       const old = entry.post;
+      // single-post answers (PATCH, media, copy routes) carry no live fields: the list's stay
+      if (post.live === undefined && old.live !== undefined) post = { ...post, live: old.live, live_ask: old.live_ask };
       entry.post = post;
       applyOrDefer(entry, 'text', () => renderPatch(entry), above);
       if (mediaSig(old) !== mediaSig(post)) patchMeta(entry, above);
       if (post.copy_view === true && old.copy_view !== true) observeCopy(entry);
+      // the server now wants this Instagram card asked (live_ask turned true after it was built): onNear() runs again for
+      // it, so a card that is already near holds its embed and asks (no "Instagram'da İzle" until the next scroll)
+      if (post.live_ask === true && old.live_ask !== true && !entry.liveAsked && nearIO && posts.get(entry.id) === entry) {
+        nearIO.unobserve(entry.el);
+        nearIO.observe(entry.el);
+      }
     }
     function renderPatch(entry) {
       const post = entry.post;
@@ -2991,12 +3127,19 @@
       const kind = entry.view.kind;
       if (!SWAPPABLE.has(kind)) return;
       const meta = normMeta(entry.post.meta);
-      if (viewSig(classify(entry.post, entry.badMedia)) !== entry.shown.viewSig) {
+      const view = classify(entry.post, entry.badMedia);
+      if (entrySig(entry, view) !== entry.shown.viewSig) {
         applyOrDefer(entry, 'media', () => swapMedia(entry), above);
         return;
       }
+      if (kind === 'igcopy' && entry.view.copy && entry.view.copy.live) {
+        // the same live video with a new play token: the next mount uses it; a mounted <video> keeps its stream
+        entry.view = view;
+        if (entry.media && entry.media.type === 'video' && view.plan.type === 'video') entry.media.url = view.plan.url;
+        return;
+      }
       if (kind === 'card') { applyOrDefer(entry, 'meta', () => fillLinkCard(entry), above); return; }
-      if (kind === 'embed' && entry.media) { // overlay title / thumb inside the fixed box: no size change
+      if (kind === 'embed' && entry.media && entry.media.facade) { // overlay title / thumb inside the fixed box: no size change
         const m = entry.media;
         setText(m.titleEl, meta ? meta.title : '');
         if (!m.thumb && meta && meta.image) {
@@ -3013,7 +3156,8 @@
     function swapMedia(entry) {
       if (!posts.has(entry.id) || posts.get(entry.id) !== entry) return;
       const view = classify(entry.post, entry.badMedia);
-      const sig = viewSig(view);
+      if (entry.livePend && !livePendNow(entry, view)) entry.livePend = false;   // the wait for POST /live is over
+      const sig = entrySig(entry, view);
       if (sig === entry.shown.viewSig || !SWAPPABLE.has(view.kind) || !SWAPPABLE.has(entry.view.kind)) return;
       const old = entry.media;
       const userStarted = !!(old && old.type === 'video' && old.user);   // a tapped video that failed: its fallback plays too
@@ -3229,7 +3373,9 @@
       const entry = card && posts.get(card.dataset.id);
       if (!entry) return;
       const action = t.dataset.action;
-      if (action === 'mount') { ev.preventDefault(); if (entry.media) forceMount(entry.media); return; }
+      // held while POST /live is asked (spinner, no "Göster"): a tap does not mount the embed, whose "Instagram'da İzle" our
+      // player may be about to replace
+      if (action === 'mount') { ev.preventDefault(); if (entry.media && !(entry.liveHoldUntil > performance.now())) forceMount(entry.media); return; }
       if (action === 'clamp') { toggleClamp(entry, t.dataset.field); return; }
       if (action === 'delete-post') { deletePost(entry); return; }
       if (action === 'media-edit') { openMediaModal(entry); return; }
@@ -3238,6 +3384,7 @@
       if (action === 'ig-copy-del') { removeIgCopy(entry); return; }
       if (action === 'add-video') { pickFileFor(entry); return; }
       if (action === 'own-video-del') { removeOwnVideo(entry); return; }
+      if (action === 'live-retry') { liveRetry(entry); return; }
       if (action === 'pv-open') return;   // plain link to the source page
       const pm = entry.media && entry.media.type === 'video' ? entry.media : null;
       if (pm && (action === 'pv-play' || action === 'pv-pause' || action === 'pv-sound' || action === 'pv-toggle')) {
@@ -3283,11 +3430,19 @@
     const canAutoplay = (m) => m.autoplay !== false && !reducedMotionMQ.matches && !saveData() && document.visibilityState === 'visible';
 
     function onNear(records) {
+      let asks = false;
       for (const rec of records) {
         const e = cardOwner.get(rec.target);
         if (!e || !posts.has(e.id)) continue;
+        e.near = rec.isIntersecting;   // a queued live ask is skipped once its card is no longer near (pumpLive)
         if (rec.isIntersecting) {
-          if (e.media && (e.media.type !== 'video' || (canAutoplay(e.media) && !e.media.failed))) wanted.add(e.media);
+          if (wantsLive(e)) { holdForLive(e); asks = true; }
+          // an Instagram embed whose post may be a live video waits (queued, then <= LIVE_HOLD_MS) for the server's answer, so the
+          // embed's "Instagram'da İzle" never flashes before our player replaces it; a tap does not mount it meanwhile (a reel
+          // shows our player's layout, other posts a spinner on the facade)
+          const held = e.view.kind === 'embed' && e.liveHoldUntil > performance.now();
+          if (e.livePend && !held) liveUnpend(e);   // near but not asked (no session, queue stopped, ask limit): the embed facade
+          if (e.media && !held && !e.media.pend && (e.media.type !== 'video' || (canAutoplay(e.media) && !e.media.failed))) wanted.add(e.media);
           if ((e.view.kind === 'card' || e.view.platform === 'pinterest') && (!normMeta(e.post.meta) || e.post.meta_stale || e.post.meta_pending) &&
               !e.post.meta_failed && !e.metaRequested) requestMeta(e);
           if (e.refs.video && e.refs.video.preload === 'none') e.refs.video.preload = 'metadata';
@@ -3295,6 +3450,7 @@
           wanted.delete(e.media);
         }
       }
+      if (asks) pumpLive();
       schedulePump();
     }
 
@@ -3361,7 +3517,7 @@
 
     function mount(m) {
       if (m.type === 'video') { mountVideo(m); return; }
-      if (m.iframe || !m.box.isConnected) return;
+      if (m.pend || m.iframe || !m.box.isConnected) return;   // m.pend: a reel waiting for POST /live never mounts its embed
       const src = safeHttpUrl(m.embed.src);
       if (!src) return;
       const f = document.createElement('iframe');
@@ -3411,7 +3567,7 @@
 
     /* ---- preview videos: muted, looping, inline; src set last (after safeHttpUrl), no poster/crossorigin attribute */
     function mountVideo(m) {
-      if (m.video || m.failed || !m.box.isConnected) return;
+      if (m.video || m.failed || m.retrying || !m.box.isConnected) return;
       const src = safeHttpUrl((COARSE || saveData()) && m.small ? m.small : m.url);
       if (!src) { videoFailed(m); return; }
       const v = document.createElement('video');
@@ -3433,12 +3589,14 @@
       v.addEventListener('volumechange', () => { if (m.video === v) updateSoundBtn(m); });
       v.addEventListener('error', () => {
         if (m.video !== v) return;
-        if (m.src !== m.url && m.url) {   // the lighter variant failed: try the main file once
+        if (m.src !== m.url && m.url) {   // the lighter variant failed (a live video: its token was renewed): try the main file once
           m.small = null;
           unmountVideo(m);
           mountVideo(m);
           return;
         }
+        if (m.live && !m.liveRetried) { m.liveRetried = true; liveRefresh(m); return; }   // a stale token / a passing upstream error: once
+        if (m.live) { liveLater(m); return; }   // failed again: Instagram busy / too many requests -> after the server's wait
         videoFailed(m);
       }, { once: true });
       m.src = src;
@@ -3471,7 +3629,71 @@
       m.failed = true;
       unmountVideo(m);
       wanted.delete(m);
-      mediaFailed(m.entry, m.url);
+      // a live video: keyed without its token, so classify() gives the same layout with the poster + "Tekrar dene"
+      mediaFailed(m.entry, m.live ? liveKey(m.url) : m.url);
+    }
+
+    // A live video that failed to load (its token outlived the window, the board password changed, a passing upstream error):
+    // a fresh play token (POST /live {refresh: true}: answered from the server's cache), then mounted again (a tapped video
+    // at once, an autoplaying one through the pump). No video in the answer, or an error: videoFailed().
+    async function liveRefresh(m) {
+      const e = m.entry;
+      m.retrying = true;
+      unmountVideo(m);
+      let r = null;
+      try { r = await api('POST', `/api/inspire/posts/${encodeURIComponent(e.id)}/live`, { refresh: true }); } catch (_) { r = null; }
+      m.retrying = false;
+      if (posts.get(e.id) !== e || e.media !== m || m.failed) return;
+      const lm = r && r.state === 'video' ? liveMediaOf(r.live, e.id, API_BASE) : null;
+      if (!lm) { videoFailed(m); return; }
+      mut.epoch++;   // a list request sent before this token is stale now
+      e.post = { ...e.post, live: r.live, live_ask: false };
+      if (e.view.kind === 'igcopy' && e.view.copy.live && e.view.plan.type === 'video') e.view.plan.url = lm.url;
+      m.url = lm.url;
+      if (m.user) forceMount(m);
+      else if (canAutoplay(m)) { wanted.add(m); schedulePump(); }
+    }
+    // A live video that failed again with a fresh token: the <video> element never tells the HTTP status, so the play path is
+    // asked once more (a plain GET, its body dropped at once). 503 (Instagram busy) / 429 (too many requests from this
+    // network): the poster stays and the player is mounted again after the server's wait (retry_s / Retry-After, 5..120 s),
+    // at most LIVE_LATER_MAX times per video. Any other answer, or no network: videoFailed().
+    const LIVE_LATER_MAX = 2;
+    async function liveLater(m) {
+      const e = m.entry;
+      if ((m.laterTries || 0) >= LIVE_LATER_MAX || !m.url) { videoFailed(m); return; }
+      m.retrying = true;   // mountVideo() waits until the timer below
+      unmountVideo(m);
+      let wait = 0;
+      try {
+        const res = await fetch(m.url, { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
+        if (res.status === 503 || res.status === 429) {
+          let s = Number(res.headers.get('Retry-After'));
+          try { const j = await res.json(); if (Number(j.retry_s) > 0) s = Number(j.retry_s); } catch (_) { /* not JSON */ }
+          wait = Math.min(Math.max(Number.isFinite(s) && s > 0 ? s : 60, 5), 120);
+        } else if (res.body) res.body.cancel().catch(() => {});
+      } catch (_) { /* no network: the usual failure */ }
+      if (posts.get(e.id) !== e || e.media !== m || m.failed) { m.retrying = false; return; }
+      if (!wait) { m.retrying = false; videoFailed(m); return; }
+      m.laterTries = (m.laterTries || 0) + 1;
+      clearTimeout(m.laterTimer);
+      m.laterTimer = setTimeout(() => {
+        m.retrying = false;
+        if (posts.get(e.id) !== e || e.media !== m || m.failed) return;
+        if (m.user) forceMount(m);
+        else if (canAutoplay(m)) { wanted.add(m); schedulePump(); }
+      }, wait * 1000);
+    }
+    // "Tekrar dene" under a live video that could not be played: the player again, after a fresh token
+    function liveRetry(e) {
+      const lm = e.view.kind === 'igcopy' && e.view.copy.live && e.view.copy.dead ? liveOf(e.post) : null;
+      if (!lm || !e.badMedia) return;
+      e.badMedia.delete(liveKey(lm.url));
+      swapMedia(e);
+      const m = e.media;
+      if (!m || m.type !== 'video' || !m.live) return;
+      m.liveRetried = true;   // the token is renewed right now: a second failure shows the message again
+      m.user = true;
+      liveRefresh(m);
     }
 
     // Automatic play: only while >= 50% visible, the tab is visible and autoplay is allowed for this video
@@ -4924,7 +5146,7 @@
     const COPY_HOLD_MAX_S = 60;
     const copyView = { queue: [], active: false, asked: 0, paused: false, skip: new Set(), hold: new Map(), timer: 0 };
     const wantsCopy = (e) => config.video.copy_view === true && e.post.copy_view === true && !e.copyAsked && !copyOf(e.post) &&
-      (e.view.kind === 'embed' || e.view.kind === 'card');
+      (e.view.kind === 'embed' || e.view.kind === 'card' || (e.view.kind === 'igcopy' && e.view.copy.live));
     function observeCopy(e) {
       if (copyIO && e.el && posts.get(e.id) === e && wantsCopy(e)) copyIO.observe(e.el);
     }
@@ -4981,6 +5203,126 @@
       } finally {
         copyView.active = false;
         if (!copyView.paused && copyView.queue.length) setTimeout(pumpCopy, 300);
+      }
+    }
+
+    /* Live asks: an Instagram card the server has not resolved yet (post.live_ask; config.video.live) asks POST /live once it
+       comes near (nearIO, 800 px): resolve-only on the server (plain fetch, no Browser Run). Meanwhile its embed iframe is
+       held back: while it waits in the queue, and then until its own answer (<= LIVE_HOLD_MS from when its request starts;
+       the server's Instagram fetch gives up after 8 s), so a reel whose embed only shows "Instagram'da İzle" never flashes
+       it before the swap. One request at a time, 300 ms apart, at most LIVE_ASK_MAX per page load; a card that is no longer
+       near when its turn comes is skipped (asked when it comes back). 'video': applyServerPost() swaps only this card's
+       media block to our player (swapMedia through applyOrDefer: a card above the viewport waits until it is back in view);
+       a list response asked for before it is dropped (epoch). 'photo' / 'never': the embed stays. 'later' because Instagram
+       is busy (busy: the site-wide fetch window / daily budget): the queue waits retry_s (<= LIVE_BUSY_WAIT_S) with this
+       card first and every queued card still held, then asks again, at most LIVE_BUSY_MAX times per page load (then the
+       held cards get their embeds). Any other 'later' within a minute: asked once more; later than that (a failure backing
+       off): not again on this page load (the cron resolves it meanwhile). 429 / 401 / no network: the queue stops. After
+       every answer the hold ends and the card is observed again, so onNear() mounts what it shows now. */
+    const LIVE_ASK_MAX = 60;
+    const LIVE_HOLD_MS = 10000;
+    const LIVE_BUSY_WAIT_S = 120;
+    const LIVE_BUSY_MAX = 6;
+    const liveAsk = { queue: [], active: false, asked: 0, paused: false, timer: 0, busy: 0, waiting: false };
+    const wantsLive = (e) => config.video.live === true && e.post.live_ask === true && !e.liveAsked && e.view.kind === 'embed' && isIgPost(e.view) &&
+      !liveAsk.paused && liveAsk.asked + liveAsk.queue.length < LIVE_ASK_MAX && !!session.token;
+    function holdForLive(e) {
+      e.liveAsked = true;
+      e.liveHoldUntil = Infinity;   // held while queued; its own request sets the deadline (pumpLive)
+      clearTimeout(e.liveTimer);
+      e.liveTimer = 0;
+      setLiveHeld(e, true);
+      liveAsk.queue.push(e);
+    }
+    // the held look of an embed facade: a spinner instead of "Göster" (a reel waiting in our player's layout has no facade)
+    function setLiveHeld(e, on) {
+      const m = e.media;
+      if (!m || !m.facade || !m.box) return;
+      m.box.classList.toggle('live-held', on);
+      if (on) m.facade.setAttribute('aria-busy', 'true'); else m.facade.removeAttribute('aria-busy');
+    }
+    // the wait of a reel shown in our player's layout is over without our player (photo, removed, timeout, the queue
+    // stopped, not asked): the embed facade, through applyOrDefer (a card above the viewport changes once it is back in view)
+    function liveUnpend(e) {
+      if (!e.livePend) return;
+      e.livePend = false;
+      if (e.media && e.media.pend && posts.get(e.id) === e) applyOrDefer(e, 'media', () => swapMedia(e));
+    }
+    // keep: the card is asked again when it comes back near (pumpLive skipped it): a reel keeps our player's layout
+    function liveRelease(e, keep = false) {
+      clearTimeout(e.liveTimer);
+      e.liveTimer = 0;
+      if (!keep) liveUnpend(e);
+      if (!e.liveHoldUntil) return;
+      e.liveHoldUntil = 0;
+      setLiveHeld(e, false);
+      if (!nearIO || posts.get(e.id) !== e) return;
+      nearIO.unobserve(e.el);   // still near: onNear() marks what the card shows now (the embed, or our player) wanted
+      nearIO.observe(e.el);
+    }
+    function liveStop() {   // the queue gives up for this page load: every held card gets what it shows now
+      liveAsk.paused = true;
+      for (const x of liveAsk.queue.splice(0)) liveRelease(x);
+    }
+    async function pumpLive() {
+      if (liveAsk.active || liveAsk.paused || liveAsk.waiting) return;
+      let e = null;
+      while (liveAsk.queue.length && !e) {
+        const x = liveAsk.queue.shift();
+        if (posts.get(x.id) !== x || x.view.kind !== 'embed' || x.post.live_ask !== true) liveRelease(x);
+        else if (x.near === false) { x.liveAsked = false; liveRelease(x, true); }   // scrolled away: asked when it comes back
+        else e = x;
+      }
+      if (!e) return;
+      if (liveAsk.asked >= LIVE_ASK_MAX || !session.token) { liveRelease(e); return; }
+      liveAsk.active = true;
+      liveAsk.asked++;
+      e.liveHoldUntil = performance.now() + LIVE_HOLD_MS;
+      setLiveHeld(e, true);
+      clearTimeout(e.liveTimer);
+      e.liveTimer = setTimeout(() => liveRelease(e), LIVE_HOLD_MS);
+      let wait = 0;
+      try {
+        const r = await api('POST', `/api/inspire/posts/${encodeURIComponent(e.id)}/live`);
+        if (posts.get(e.id) === e && r) {
+          if (r.state === 'video' && liveMediaOf(r.live, e.id, API_BASE)) {
+            mut.epoch++;   // a list request sent before this answer is stale now
+            applyServerPost({ ...e.post, live: r.live, live_ask: false });
+          } else if (r.state === 'photo' || r.state === 'never') {
+            e.post = { ...e.post, live_ask: false };
+          } else if (r.state === 'later' && r.busy) {
+            // Instagram busy for the whole site: every card waits (held) and this one is asked first again
+            if (++liveAsk.busy > LIVE_BUSY_MAX) liveStop();
+            else {
+              wait = Math.min(Math.max(Number(r.retry_s) || 60, 5), LIVE_BUSY_WAIT_S);
+              liveAsk.asked--;   // a refused ask fetched nothing: it does not count
+              liveAsk.queue.unshift(e);
+            }
+          } else if (r.state === 'later' && Number(r.retry_s) <= 60 && !e.liveAgain) {
+            e.liveAgain = true;
+            clearTimeout(e.liveAgainTimer);
+            e.liveAgainTimer = setTimeout(() => {
+              if (posts.get(e.id) !== e || e.view.kind !== 'embed' || e.post.live_ask !== true || liveAsk.paused) return;
+              liveAsk.queue.push(e);
+              pumpLive();
+            }, Math.max(1, Number(r.retry_s) || 1) * 1000 + 250);
+          }
+        }
+      } catch (err) {
+        if (err && (err.status === 429 || err.status === 401 || err.status === 0)) liveAsk.paused = true;
+      } finally {
+        liveAsk.active = false;
+        if (wait) {   // still held (queued again): no deadline while the queue waits
+          clearTimeout(e.liveTimer);
+          e.liveTimer = 0;
+          e.liveHoldUntil = Infinity;
+        } else liveRelease(e);
+        if (liveAsk.paused) liveStop();
+        else if (wait) {
+          liveAsk.waiting = true;
+          clearTimeout(liveAsk.timer);
+          liveAsk.timer = setTimeout(() => { liveAsk.waiting = false; pumpLive(); }, wait * 1000);
+        } else if (liveAsk.queue.length) { clearTimeout(liveAsk.timer); liveAsk.timer = setTimeout(pumpLive, 300); }
       }
     }
 

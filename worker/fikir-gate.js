@@ -13,6 +13,8 @@
 // short-lived ticket (dlTicket, ?k= on the download link) bound to the post id, its expiry, the role and pv.
 // R2 media of the board (/files/fikir/*, /files/sb/*) need a files token (?t=, filesToken) that the API appends to every
 // such path in the JSON it returns to a session (signFilesJson); other /files keys (portfolio, UI library) stay public.
+// Instagram videos played live (GET /api/inspire/posts/:id/play, <video src> / <img src>) need the post's play token
+// (?t=, playToken), which GET /posts and POST /posts/:id/live put into the play paths of post.live.
 
 const enc = new TextEncoder();
 const keyCache = new Map();   // JWT_SECRET -> Promise<CryptoKey> (one entry in practice)
@@ -128,6 +130,44 @@ export async function filesTokenTtl(env, t, now = nowSec()) {
   const exp = parseInt(m[1], 36);
   if (!(exp > now && exp <= now + 2 * FILES_WINDOW_S + 60)) return 0;
   return (await safeEqual(m[2], await filesSig(env, exp))) ? exp - now : 0;
+}
+// ---------------------------------------------------------------- play tokens (?t= on /api/inspire/posts/:id/play)
+// `<exp base36>.<sig>` like a files token, but bound to ONE post: sig = 16 bytes of HMAC(JWT_SECRET,
+// 'fikir-play:<post id>:<exp>:<pv>'). Same window as files (FILES_WINDOW_S: lives 12-24 h, the URL stays the same for
+// 12 h so the board's keyed rendering and the browser cache keep it); a new board password invalidates every one.
+// Independent of FIKIR_FILES_GATE (live streams always need it). JWT_SECRET missing -> null (no live posts).
+// Signatures are memoized per isolate (key: secret, post, exp, pv; <= 4000, cleared when full): GET /posts signs every
+// live post of a page on each refresh, and within one window every refresh after the first is a Map hit (no HMAC).
+export const PLAY_TOKEN_RE = FILES_TOKEN_RE;
+const playMemo = new Map();
+const playPostId = (id) => { const n = Number(id); return Number.isSafeInteger(n) && n >= 1 ? n : 0; };
+async function playSig(env, id, exp) {
+  const pv = (await boardPv(env)) || '-';
+  const k = `${env.JWT_SECRET}|${id}|${exp}|${pv}`;
+  let sig = playMemo.get(k);
+  if (sig === undefined) {
+    sig = b64url((await hmac(env.JWT_SECRET, `fikir-play:${id}:${exp}:${pv}`)).subarray(0, 16));
+    if (playMemo.size >= 4000) playMemo.clear();
+    playMemo.set(k, sig);
+  }
+  return sig;
+}
+// -> string | null
+export async function playToken(env, id, now = nowSec()) {
+  const pid = playPostId(id);
+  if (!env || !env.JWT_SECRET || !pid) return null;
+  const exp = (Math.floor(now / FILES_WINDOW_S) + 2) * FILES_WINDOW_S;
+  return `${exp.toString(36)}.${await playSig(env, pid, exp)}`;
+}
+// -> seconds the token is still valid for this post (> 0), or 0 (missing, malformed, expired, another post, forged,
+// old password)
+export async function playTokenTtl(env, id, t, now = nowSec()) {
+  const m = PLAY_TOKEN_RE.exec(String(t || ''));
+  const pid = playPostId(id);
+  if (!m || !pid || !env || !env.JWT_SECRET) return 0;
+  const exp = parseInt(m[1], 36);
+  if (!(exp > now && exp <= now + 2 * FILES_WINDOW_S + 60)) return 0;
+  return (await safeEqual(m[2], await playSig(env, pid, exp))) ? exp - now : 0;
 }
 // Appends ?t=<token> to every JSON string value that is exactly a gated /files path ("/files/fikir/…", "/files/sb/…").
 // Works on the serialized text: an unescaped `"` right after `{ [ , :` always opens a string (a quote inside a string is

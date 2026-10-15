@@ -185,7 +185,7 @@ export function makeBrowser(stats, net) {
       const h = { 'X-Browser-Ms-Used': '1500' };
       if (action === 'content') {
         const code = /\/(?:reel|p|tv)\/([^/]+)\//.exec(opts.url)[1];
-        return new Response(net.igPage(code), { status: 200, headers: { ...h, 'Content-Type': 'text/html; charset=utf-8' } });
+        return new Response(net.brPage(code), { status: 200, headers: { ...h, 'Content-Type': 'text/html; charset=utf-8' } });
       }
       return new Response(FX('media/br-scrape-magnific.json'), { status: 200, headers: { ...h, 'Content-Type': 'application/json' } });
     }),
@@ -203,18 +203,38 @@ export function makeAI(stats) {
 // tt_chain_token cookie), Pinterest PinResource (pin id 1… video pin, 2… idea pin: HLS only, 3… image pin) and the HEADs of
 // an idea pin's progressive file, the Reddit feed + DASH playlist + CMAF picture / sound files (tests/fmp4.mjs), the
 // Facebook reel page.
-//   ig: 'ok' (plain fetch finds the post) | 'login' (redirect to the login page: Browser Run needed)
+//   ig: 'ok' (plain fetch finds the post) | 'login' (redirect to the login page: Browser Run needed) | 'photo' (every code is
+//       a photo post: tests/fixtures/video/ig-photo.html)
 //   embed(code): 'blocked' | 'ok' | 'photo' | 'fail' (HTTP 500)
 //   deadCached: Instagram CDN links seeded by seedIgCache answer 404 (cached links that died; fresh ones work)
+//   cdnStatus: every Instagram / Facebook CDN request answers this HTTP status (e.g. 403 / 429: the CDN refuses our egress,
+//              fresh links too)
 //   redirects: hops every non-Instagram request goes through first (the worker follows <= 3 for files, <= 2 for a
 //              platform's page / API); a number, or (url) => number
 //   pinHeadOk: the n-th HEAD of an idea pin's progressive-file candidates that answers 200 (the others 403)
 //   redditFeed: HTTP status of Reddit's post feed (200, or e.g. 429: rate-limited)
+//   cdnRange: 'exact' -> Instagram / Facebook CDN files answer a Range (bytes=a-b | a- | -n) with the exact 206 slice
+//              (Content-Range, Content-Length), 416 bytes */n past the end, and send Cross-Origin-Resource-Policy: same-origin +
+//              a Set-Cookie (live playback must not forward them); default: the old 1-byte 206 of the copy paths
+//   redirectHost: every Instagram / Facebook CDN request is redirected (302) to this host (the same path)
+//   oeAhead: seconds: the Instagram pages' CDN links expire (oe=) that long after now (the fixture's oe values are fixed)
+//   brEmpty: Browser Run's 'content' of an Instagram page is an empty shell too (a resolve that fails after Browser Run)
+export const HARNESS_VIDEO_HEAD = [0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0, 0x69, 0x73, 0x6f, 0x6d];
+// The CDN video body of makeFetch: n bytes, an MP4 ftyp box first
+export function harnessVideo(n = 300000) {
+  const b = new Uint8Array(n);
+  b.set(HARNESS_VIDEO_HEAD, 0);
+  for (let i = HARNESS_VIDEO_HEAD.length; i < n; i++) b[i] = i % 251;   // not all zeros: a wrong slice shows
+  return b;
+}
 export function makeFetch(stats, opts = {}) {
-  const o = { ig: 'ok', embed: () => 'ok', padKB: 0, deadCached: false, redirects: 0, videoBytes: 300000, pinHeadOk: 1, redditFeed: 200, ...opts };
+  const o = { ig: 'ok', embed: () => 'ok', padKB: 0, deadCached: false, redirects: 0, videoBytes: 300000, pinHeadOk: 1, redditFeed: 200,
+    cdnRange: null, redirectHost: null, oeAhead: 0, brEmpty: false, cdnStatus: 0, ...opts };
   const pad = o.padKB ? `<script type="application/json" data-sjs>{"pad":"${'x'.repeat(o.padKB * 1024)}"}</script>` : '';
   const reel = FX('video/ig-reel.html').toString('utf8');
-  const igPage = (code) => reel.replaceAll('DTestReel01', code).replace('</body>', pad + '</body>');
+  const photo = FX('video/ig-photo.html').toString('utf8');
+  const oe = (html) => (o.oeAhead ? html.replace(/oe=6AC(94349|D0906)/g, () => 'oe=' + (nowS() + o.oeAhead).toString(16).toUpperCase()) : html);
+  const igPage = (code) => oe(o.ig === 'photo' ? photo.replaceAll('DTestPhoto1', code) : reel.replaceAll('DTestReel01', code)).replace('</body>', pad + '</body>');
   const embeds = { blocked: FX('video/ig-embed-blocked.html').toString('utf8'), ok: FX('video/ig-embed-ok.html').toString('utf8'), photo: FX('video/ig-embed-photo.html').toString('utf8') };
   const hops = new Map();
   let pinHeads = 0;
@@ -275,11 +295,25 @@ export function makeFetch(stats, opts = {}) {
     }
     if (u.hostname === 'www.facebook.com' && u.pathname.startsWith('/reel/')) return html(FX('video/fb-reel.html'));
     const video = /video/.test(accept) || /\.mp4$/.test(u.pathname);
-    if (o.deadCached && /(cdninstagram\.com|fbcdn\.net)$/.test(u.hostname) && u.pathname.includes('/CACHED-')) return new Response('gone', { status: 404 });
+    const cdn = /(cdninstagram\.com|fbcdn\.net)$/.test(u.hostname);
+    if (o.deadCached && cdn && u.pathname.includes('/CACHED-')) return new Response('gone', { status: 404 });
+    if (o.cdnStatus && cdn) return new Response('refused', { status: o.cdnStatus });
+    if (o.redirectHost && cdn) return new Response(null, { status: 302, headers: { Location: `https://${o.redirectHost}${u.pathname}${u.search}` } });
+    if (o.cdnRange === 'exact' && cdn) {
+      const body = video ? harnessVideo(o.videoBytes) : new Uint8Array(FX('media/poster.jpg'));
+      const n = body.length, type = video ? 'video/mp4' : 'image/jpeg';
+      const up = { 'Cross-Origin-Resource-Policy': 'same-origin', 'Set-Cookie': 'cdn_test=HarnessCookie01; path=/; secure', 'Timing-Allow-Origin': '*' };
+      const m = range ? /^bytes=(?:(\d+)-(\d*)|-(\d+))$/.exec(range) : null;
+      if (!m) return new Response(body, { status: 200, headers: { 'Content-Type': type, 'Content-Length': String(n), ...up } });
+      const a = m[3] != null ? Math.max(0, n - Number(m[3])) : Number(m[1]);
+      const b = m[3] != null || m[2] === '' ? n - 1 : Math.min(Number(m[2]), n - 1);
+      if (a >= n || b < a) return new Response('', { status: 416, headers: { 'Content-Range': `bytes */${n}`, ...up } });
+      return new Response(body.subarray(a, b + 1), { status: 206, headers: { 'Content-Type': type, 'Content-Range': `bytes ${a}-${b}/${n}`, 'Content-Length': String(b - a + 1), ...up } });
+    }
     if (video) {
       const n = o.videoBytes;
       const b = new Uint8Array(n);
-      b.set([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0, 0x69, 0x73, 0x6f, 0x6d], 0);
+      b.set(HARNESS_VIDEO_HEAD, 0);
       if (range) return new Response(b.subarray(0, 1), { status: 206, headers: { 'Content-Type': 'video/mp4', 'Content-Range': `bytes 0-0/${n}` } });
       return new Response(b, { status: 200, headers: { 'Content-Type': 'video/mp4', 'Content-Length': String(n) } });
     }
@@ -287,11 +321,15 @@ export function makeFetch(stats, opts = {}) {
     if (range) return new Response(jpg.subarray(0, 1), { status: 206, headers: { 'Content-Type': 'image/jpeg', 'Content-Range': `bytes 0-0/${jpg.length}` } });
     return new Response(jpg, { status: 200, headers: { 'Content-Type': 'image/jpeg', 'Content-Length': String(jpg.length) } });
   };
-  return { fetchFn, igPage };
+  const brPage = (code) => (o.brEmpty ? '<!DOCTYPE html><html><head><title>Instagram</title></head><body><div id="root"></div></body></html>' : igPage(code));
+  return { fetchFn, igPage, brPage };
 }
 
 // ---------------------------------------------------------------- the simulated deployment
 // One D1 / R2 / Workflows set shared by every isolate (like production); env = worker/wrangler.toml [vars] + vars.
+// Production's video settings (wrangler.toml, 2026-10-15): R2 copies off, Instagram videos played live (makeWorld turns the
+// copies on by default to keep exercising those paths)
+export const liveVars = Object.freeze({ FIKIR_IG_COPY: '0', FIKIR_IG_AUTO: 'off', FIKIR_COPY_ADAPTERS: '', FIKIR_COPY_VIEW: '0', FIKIR_IG_LIVE: '1' });
 export function makeWorld({ vars = {}, fetchOpts = {}, wfStatus = 'errored' } = {}) {
   const stats = makeStats();
   const { db, sq } = makeD1(stats);
@@ -378,7 +416,7 @@ export function runRequest(world, worker, method, pathname, { token = null, body
     await settle(ps);
     let json = null;
     try { json = JSON.parse(buf.toString('utf8')); } catch (e) {}
-    return { status: res.status, bytes: buf.length, json, headers: Object.fromEntries(res.headers), text: () => buf.toString('utf8'), waits: ps.length };
+    return { status: res.status, bytes: buf.length, body: buf, json, headers: Object.fromEntries(res.headers), text: () => buf.toString('utf8'), waits: ps.length };
   });
 }
 
@@ -522,6 +560,13 @@ const copyFacts = (w) => {
     media: sqlAll(w, 'SELECT id, media FROM inspire_posts WHERE media IS NOT NULL').map((r) => ({ id: r.id, ...JSON.parse(r.media) })),
   };
 };
+const liveFacts = (w, notPost = null) => ({
+  resolved: count(w, "SELECT COUNT(*) AS n FROM inspire_video_cache WHERE kind = 'ig' AND url IS NOT NULL"),
+  failed: count(w, "SELECT COUNT(*) AS n FROM inspire_video_cache WHERE kind = 'ig' AND error IS NOT NULL"),
+  deferred: notPost ? count(w, `SELECT COUNT(*) AS n FROM inspire_video_cache WHERE kind = 'ig' AND post_id = ${Number(notPost)} AND json_extract(extra, '$.deferred') = 'not_post'`) : 0,
+  mediaRows: count(w, 'SELECT COUNT(*) AS n FROM inspire_media'), r2Objects: w.r2.objs.size,
+  copied: count(w, 'SELECT COUNT(*) AS n FROM inspire_posts WHERE media IS NOT NULL'),
+});
 const igFacts = (w) => ({
   copied: count(w, "SELECT COUNT(*) AS n FROM inspire_posts WHERE json_extract(media, '$.source') = 'instagram'"),
   embedRows: count(w, "SELECT COUNT(*) AS n FROM inspire_video_cache WHERE kind = 'ig_embed'"),
@@ -621,6 +666,33 @@ export async function scenarios() {
     add('ig, plain copy worst (3-hop CDN, commit lost), warm', 'unit', await runScheduled(w, warm, CRON_IG), { cost: 'igCopyPlain', fixed: 2, facts: igFacts(w) });
   }
 
+  // "7-59/15" with production's settings (R2 copies off, live playback on): the live backlog resolves Instagram posts so
+  // GET /posts knows video vs photo; 11 reels + one /p/ link that is no post (deferred), two resolves per run
+  {
+    const { w, warm } = await readyWorld({ vars: liveVars, fetchOpts: { oeAhead: 2 * 86400 } });
+    seedIgPosts(w, Array.from({ length: 11 }, (_, i) => `Lback${String(i).padStart(6, '0')}`));
+    const g = guestRow(w);
+    const notPost = Number(sqlRun(w, "INSERT INTO inspire_posts (user_id, type, url, description, url_key, client_id) VALUES (?, 'instagram', ?, '', ?, 'harness-cid-0001')",
+      g, 'https://www.instagram.com/p/ab/', 'instagram:p-ab').lastInsertRowid);
+    add('ig, live backlog (copies off), cold', 'cron', await runScheduled(w, await loadIsolate(), CRON_IG), { facts: liveFacts(w, notPost) });
+    advanceClock(900);
+    add('ig, live backlog (2nd run), warm', 'cron', await runScheduled(w, warm, CRON_IG), { facts: liveFacts(w, notPost) });
+  }
+  {
+    // worst live resolve: Browser Run after a slot wait, and still no post data (failure record); unit = run - fixed (warm:
+    // cleanup 1 + queue select 1)
+    const { w, warm } = await readyWorld({ vars: { ...liveVars, FIKIR_IG_LIVE_CRON: '1' }, fetchOpts: { ig: 'login', brEmpty: true } });
+    seedIgPosts(w, ['Lworst00001']);
+    takeBrSlot(w);
+    add('ig, live resolve worst (slot wait, Browser Run, failure), warm', 'unit', await runScheduled(w, warm, CRON_IG), { cost: 'igLive', fixed: 2, facts: liveFacts(w) });
+  }
+  {
+    // a live resolve without Browser Run (the second of a run): plain fetch refused, failure record
+    const { w, warm } = await readyWorld({ vars: { ...liveVars, FIKIR_IG_LIVE_CRON: '1', FIKIR_BR: '0' }, fetchOpts: { ig: 'login' } });
+    seedIgPosts(w, ['Lplain00001']);
+    add('ig, live resolve plain worst (failure), warm', 'unit', await runScheduled(w, warm, CRON_IG), { cost: 'igLivePlain', fixed: 2, facts: liveFacts(w) });
+  }
+
   // "7-59/15": copies of the other platforms (adapters), one per run as a unit (unit = run - fixed: cleanup 1 + select 1)
   {
     // cost: the platform's own worst case (CRON_COSTS.adCopyBy.<platform>); every one is also within CRON_COSTS.adCopy
@@ -695,6 +767,22 @@ export async function scenarios() {
     add('GET /posts (current board: copy_view hints), cold', 'request', await runRequest(w, await loadIsolate(), 'GET', '/api/inspire/posts', { token: tok }), { status: 200 });
     add('DELETE copy (post owner: TikTok copy), cold', 'request', await runRequest(w, await loadIsolate(), 'DELETE', `/api/inspire/posts/${p.tiktok}/copy`, { token: await guestToken(w, warm) }), { status: 200 });
     await view('POST copy (on view: removed copy -> never), cold', p.tiktok, 200);
+  }
+  {
+    // live playback (production settings): a play request whose cached link died (Browser Run re-resolve, 3-hop CDN links),
+    // a cached play, the board's ask for an unknown reel, GET /posts with live objects; each on a cold isolate
+    const { w, warm } = await readyWorld({ vars: liveVars, fetchOpts: { ig: 'login', deadCached: true, redirects: 3, cdnRange: 'exact', oeAhead: 2 * 86400 } });
+    const tok = await guestToken(w, warm, 'harness-cid-0004');
+    const [a, b] = seedIgPosts(w, ['Pplay00001', 'Plive00001']);
+    seedIgCache(w, [a]);
+    const url = (await runRequest(w, warm, 'GET', '/api/inspire/posts', { token: tok })).result.json.find((p) => p.id === a).live.url;
+    add('GET play (live: cached link dead, Browser Run re-resolve, 3-hop CDN), cold', 'request',
+      await runRequest(w, await loadIsolate(), 'GET', url, { legacy: true, headers: { Range: 'bytes=0-' } }), { status: 206 });
+    add('GET play (live: cached, a Range in the middle), cold', 'request',
+      await runRequest(w, await loadIsolate(), 'GET', url, { legacy: true, headers: { Range: 'bytes=1000-1999' } }), { status: 206 });
+    add('POST live (unknown reel, login wall: plain resolve only), cold', 'request',
+      await runRequest(w, await loadIsolate(), 'POST', `/api/inspire/posts/${b}/live`, { token: tok }), { status: 200 });
+    add('GET /posts (live objects), cold', 'request', await runRequest(w, await loadIsolate(), 'GET', '/api/inspire/posts', { token: tok }), { status: 200 });
   }
   {
     const { w, warm } = await readyWorld({ fetchOpts: { redirects: 3 } });

@@ -2,7 +2,8 @@
 # usage: tests/gate-e2e/run-smoke.sh
 # Board password gate end to end: a local worker (wrangler dev --local with worker/wrangler.toml, fresh state) on
 # 127.0.0.1:8799, then gate-smoke.mjs. Test-only values are passed with --var (nothing is edited): a 127.0.0.1
-# ALLOWED_ORIGIN, Browser Run and storyboards off, and the TEST board password (FIKIR_E2E_BOARD_PASSWORD, default
+# ALLOWED_ORIGIN, Browser Run and storyboards off, admin uploads on (FIKIR_MEDIA_UPLOADS=admin: the smoke seeds its R2 file
+# with an admin upload; wrangler.toml keeps uploads off), and the TEST board password (FIKIR_E2E_BOARD_PASSWORD, default
 # test-board-pass; worker/.dev.vars holds the TEST JWT_SECRET / ADMIN_PASSWORD). State + logs in $GATE_E2E_OUT (default
 # $TMPDIR/fikir-gate-e2e), never in the repo. Port: GATE_E2E_PORT (default 8799). Never 8765.
 R="${0:A:h:h:h}"
@@ -16,7 +17,7 @@ STATE="$OUT/state"; rm -rf "$STATE"; mkdir -p "$STATE" "$OUT/logs"
 cd "$R/worker"
 npx -y wrangler@4 dev -c wrangler.toml --local --ip 127.0.0.1 --port $PORT --persist-to "$STATE" \
   --show-interactive-dev-session=false \
-  --var ALLOWED_ORIGIN:http://127.0.0.1:4719 --var FIKIR_BR:0 --var SB_ENABLED:0 --var FIKIR_IG_AUTO:off \
+  --var ALLOWED_ORIGIN:http://127.0.0.1:4719 --var FIKIR_BR:0 --var SB_ENABLED:0 --var FIKIR_IG_AUTO:off --var FIKIR_MEDIA_UPLOADS:admin \
   --var FIKIR_BOARD_PASSWORD:$FIKIR_E2E_BOARD_PASSWORD \
   > "$OUT/logs/worker.log" 2>&1 &
 WPID=$!

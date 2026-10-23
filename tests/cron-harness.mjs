@@ -205,7 +205,9 @@ export function makeAI(stats) {
 // Facebook reel page.
 //   ig: 'ok' (plain fetch finds the post) | 'login' (redirect to the login page: Browser Run needed) | 'photo' (every code is
 //       a photo post: tests/fixtures/video/ig-photo.html)
-//   embed(code): 'blocked' | 'ok' | 'photo' | 'fail' (HTTP 500)
+//   embed(code): 'blocked' | 'ok' | 'photo' | 'fail' (HTTP 500): the embed pages the embed check classifies (their codes
+//       are the fixtures' own, so igResolve's embed fallback finds no data for the post in them); 'video': the captioned
+//       embed of this code with its video (ig-embed-captioned.html: the fallback serves it); 'gone': 404
 //   deadCached: Instagram CDN links seeded by seedIgCache answer 404 (cached links that died; fresh ones work)
 //   cdnStatus: every Instagram / Facebook CDN request answers this HTTP status (e.g. 403 / 429: the CDN refuses our egress,
 //              fresh links too)
@@ -236,6 +238,7 @@ export function makeFetch(stats, opts = {}) {
   const oe = (html) => (o.oeAhead ? html.replace(/oe=6AC(94349|D0906)/g, () => 'oe=' + (nowS() + o.oeAhead).toString(16).toUpperCase()) : html);
   const igPage = (code) => oe(o.ig === 'photo' ? photo.replaceAll('DTestPhoto1', code) : reel.replaceAll('DTestReel01', code)).replace('</body>', pad + '</body>');
   const embeds = { blocked: FX('video/ig-embed-blocked.html').toString('utf8'), ok: FX('video/ig-embed-ok.html').toString('utf8'), photo: FX('video/ig-embed-photo.html').toString('utf8') };
+  const captioned = FX('video/ig-embed-captioned.html').toString('utf8');
   const hops = new Map();
   let pinHeads = 0;
   const html = (body, status = 200, extra = {}) => new Response(body, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', ...extra } });
@@ -265,9 +268,13 @@ export function makeFetch(stats, opts = {}) {
       hops.delete(key);
     }
     if (u.hostname === 'www.instagram.com') {
-      const m = /^\/(reel|p|tv)\/([^/]+)\/(embed\/)?$/.exec(u.pathname);
+      const m = /^\/(reel|p|tv)\/([^/]+)\/(embed\/(?:captioned\/)?)?$/.exec(u.pathname);
       if (!m) return html('not found', 404);
-      if (m[3]) { const st = o.embed(m[2]); return st === 'fail' ? html('error', 500) : html(embeds[st] || embeds.ok); }
+      if (m[3]) {
+        const st = o.embed(m[2]);
+        if (st === 'video') return html(oe(captioned.replaceAll('DTestEmbV01', m[2]).replaceAll('EMBVIDEO', 'EMB-' + m[2])));
+        return st === 'fail' ? html('error', 500) : st === 'gone' ? html('not found', 404) : html(embeds[st] || embeds.ok);
+      }
       if (o.ig === 'login') return new Response(null, { status: 302, headers: { Location: 'https://www.instagram.com/accounts/login/?next=' + encodeURIComponent(u.pathname) } });
       return html(igPage(m[2]));
     }
@@ -659,11 +666,11 @@ export async function scenarios() {
   }
 
   {
-    // the second Instagram copy of a run never uses Browser Run: its worst case (plain resolve, 3-hop CDN, the commit lost)
-    // measured as a unit (Browser Run off; unit = run - fixed: cleanup 1 + queue select 1)
-    const { w, warm } = await igWorld({ ig: 'ok', redirects: 3 }, { FIKIR_IG_CRON_CHECKS: '0', FIKIR_IG_CRON_COPIES: '1', FIKIR_BR: '0' });
+    // the second Instagram copy of a run never uses Browser Run: its worst case (page refused, resolved through its embed
+    // page, 3-hop CDN, the commit lost) measured as a unit (Browser Run off; unit = run - fixed: cleanup 1 + queue select 1)
+    const { w, warm } = await igWorld({ ig: 'login', embed: () => 'video', redirects: 3 }, { FIKIR_IG_CRON_CHECKS: '0', FIKIR_IG_CRON_COPIES: '1', FIKIR_BR: '0' });
     loseCommitOnPut(w);
-    add('ig, plain copy worst (3-hop CDN, commit lost), warm', 'unit', await runScheduled(w, warm, CRON_IG), { cost: 'igCopyPlain', fixed: 2, facts: igFacts(w) });
+    add('ig, plain copy worst (embed fallback, 3-hop CDN, commit lost), warm', 'unit', await runScheduled(w, warm, CRON_IG), { cost: 'igCopyPlain', fixed: 2, facts: igFacts(w) });
   }
 
   // "7-59/15" with production's settings (R2 copies off, live playback on): the live backlog resolves Instagram posts so

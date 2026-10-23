@@ -15,6 +15,12 @@
 //   D  a post with an R2 copy (post.media /files/fikir/...) plays from R2
 //   E  /play failing (the fixture CDN refuses the reel's video): poster + "Video şu anda oynatılamıyor" + "Tekrar dene" +
 //      "Instagram'da aç" in the player's place; "Tekrar dene" tries again (fresh token) and ends in the same box
+//   I  a reel whose post page redirects to the login wall (302 /accounts/login/, what Instagram shows some Cloudflare
+//      egress IPs) but whose captioned embed page has the video: resolved through the embed (via 'embed'), plays in our
+//      player, İndir-able; never an iframe
+//   J  a reel whose page redirects AND whose video the CDN refuses, but whose embed is known to play (live.embed 'ok'): after
+//      the player's retries the board mounts Instagram's embed (iframe /reel/<code>/embed/; blocked offline here, so only
+//      its src is checked), never "Video şu anda oynatılamıyor"
 //   F  İndir on the live post saves the video file (same bytes as the fixture CDN's file)
 //   G  FIKIR_IG_LIVE="0" (a second worker on VIDEO_E2E_OFFPORT, fresh state): the old behaviour, the embed iframe
 //   H  390 px wide (mobile emulation): the live card fits, no horizontal scroll
@@ -228,6 +234,10 @@ try {
 
   // not resolved yet when the board opens (live_ask): its card asks POST /live; the fixture answers 404 (removed post)
   ids.gone = seedPost('gone', 'https://www.instagram.com/reel/DLiveGone1/');
+  // ... and two whose post page redirects to the login wall (the fixture's "Redir" codes): the embed page has the video;
+  // the second one's video file is refused by the CDN ("Dead")
+  ids.redir = seedPost('redir', 'https://www.instagram.com/reel/DLiveRedir1/');
+  ids.rdead = seedPost('rdead', 'https://www.instagram.com/reel/DRedirDead1/');
 
   // ── browser ──
   browser = await puppeteer.launch({ executablePath: CHROME, headless: true,
@@ -424,6 +434,51 @@ try {
     assert.ok(net.play.filter((x) => x.id === ids.dead && x.part === 'video').length > p0, 'the retry tried /play again');
     await shot(page, ids.dead, 'E2-live-dead-after-retry.png');
     return `box ${f1.w}x${f1.h}, /play video statuses ${plays.map((x) => x.status).join(',')}, live asks ${lives.length} -> ${net.live.filter((x) => x.id === ids.dead).length}`;
+  });
+
+  await check('I', 'page redirects to the login wall, the embed page has the video: our player plays it (via embed), no iframe', async () => {
+    const vsel = `${card(ids.redir)} .media-igcopy video`;
+    await page.$eval(card(ids.redir), (el) => el.scrollIntoView({ block: 'center' }));
+    await page.waitForSelector(vsel, { timeout: 30000 });
+    const p = await playing(page, vsel);
+    assert.ok(p.src.startsWith(`${BASE}/api/inspire/posts/${ids.redir}/play?part=video&t=`), p.src);
+    const row = d1(`SELECT error, extra FROM inspire_video_cache WHERE post_id=${ids.redir} AND kind='ig'`)[0];
+    assert.ok(row && !row.error, JSON.stringify(row));
+    const x = JSON.parse(row.extra);
+    assert.deepEqual([x.via, x.em, x.user], ['embed', 'ok', 'ornek.kahve']);
+    const calls = (await igCalls()).filter((c) => c.host === 'www.instagram.com' && c.path.includes('DLiveRedir1'));
+    assert.ok(calls.some((c) => c.path === '/reel/DLiveRedir1/' && c.status === 302), 'the page redirected: ' + JSON.stringify(calls));
+    assert.ok(calls.some((c) => c.path === '/reel/DLiveRedir1/embed/captioned/' && c.status === 200), 'the embed page served it');
+    const f = await liveCardFacts(page, ids.redir);
+    assert.equal(f.user, '@ornek.kahve'); assert.match(f.cap, /Kahve molası/);
+    assert.ok((await iframes(page)).every((x) => x.card !== String(ids.redir)), 'no iframe ever inserted into the card');
+    // İndir: the same resolver chain (the cached embed resolution), the file streams
+    const info = await call(BASE, 'GET', `/api/inspire/posts/${ids.redir}/download-info`, null, g.token);
+    assert.equal(info.data.video, true);
+    const dl = await fetchOnce(BASE + info.data.url + '&part=video');
+    assert.equal(dl.status, 200);
+    assert.ok(Buffer.from(await dl.arrayBuffer()).equals(IGFILE), 'the video file');
+    await shot(page, ids.redir, 'I-redirect-embed-fallback-playing.png');
+    return `rs ${p.rs}, t ${p.t1.toFixed(2)}->${p.t2.toFixed(2)}, fixture: ${calls.map((c) => `${c.path} ${c.status}`).join(', ')}`;
+  });
+
+  await check('J', 'page redirects + CDN refuses the video, embed known to play: the board mounts the Instagram embed (iframe src), not the dead box', async () => {
+    const c = card(ids.rdead);
+    await page.$eval(c, (el) => el.scrollIntoView({ block: 'center' }));
+    await page.waitForFunction((s) => !!document.querySelector(s), { timeout: 60000 }, `${c} iframe`);
+    const fr = (await iframes(page)).filter((x) => x.card === String(ids.rdead));
+    assert.ok(fr.length >= 1 && /^https:\/\/www\.instagram\.com\/reel\/DRedirDead1\/embed/.test(fr[0].src), JSON.stringify(fr));
+    const plays = net.play.filter((x) => x.id === ids.rdead && x.part === 'video');
+    assert.ok(plays.length >= 1 && plays.every((x) => x.status === 502), 'our player tried first and failed: ' + JSON.stringify(plays.map((x) => x.status)));
+    assert.ok(fr[0].t >= plays[0].t, 'the embed came after the player failed');
+    assert.equal(await page.$(`${c} .live-dead-msg`), null, 'no "Video şu anda oynatılamıyor"');
+    assert.equal(await page.$(`${c} .media-igcopy`), null);
+    const b = (await call(BASE, 'GET', '/api/inspire/posts', null, g.token)).data.find((p) => p.id === ids.rdead);
+    assert.equal(b.live && b.live.embed, 'ok', 'post.live.embed');
+    // the reel whose embed is not known to play (E) keeps its box
+    assert.ok(await page.$(`${card(ids.dead)} .live-dead-msg`));
+    await shot(page, ids.rdead, 'J-dead-live-embed-fallback.png');
+    return `${fr[0].src}, /play ${plays.map((x) => x.status).join(',')}`;
   });
 
   await check('F', 'İndir on the live post saves the video (same bytes as the fixture CDN file)', async () => {

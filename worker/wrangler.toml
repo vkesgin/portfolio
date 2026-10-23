@@ -75,15 +75,18 @@ FIKIR_COPY_VIEW = "0"          # "1": a card in view asks for its post's copy (P
 FIKIR_COPY_VIEW_DAILY = "100"  # on-view copies per UTC day, whole site (inside FIKIR_IG_COPY_DAILY; admin exempt)
 FIKIR_COPY_VIEW_PER_SESSION = "20"   # ... per guest cid / user per UTC day (plus 60 requests / hour in code)
 FIKIR_COPY_VIEW_PER_IP = "40"  # ... per IP per UTC day (plus 120 requests / hour in code)
-FIKIR_IG_FETCH_DAILY = "300"   # Instagram page + embed fetches by the worker per UTC day (plus 20 per 10 min in code)
+FIKIR_IG_FETCH_DAILY = "300"   # Instagram page + embed fetches by the worker per UTC day, one unit each (plus 20 per 10 min in code;
+                               # the cron's at most 60% of it, the rest kept for viewers' plays / asks / downloads)
 FIKIR_IG_CRON_COPIES = "2"     # copies per "7-59/15" cron run (every 15 min, any platform; each also gated by the run's D1/subrequest
                                # budget: a second copy never uses Browser Run and starts only when its worst case still fits)
 FIKIR_IG_CRON_CHECKS = "2"     # Instagram embed checks per cron run (same gate)
 FIKIR_IG_LIVE = "1"            # "1": Instagram video posts play in the board's own player, streamed live from Instagram through
                                # GET /api/inspire/posts/:id/play (nothing stored; R2 copies stay off). "0": the embed, as before
-FIKIR_IG_LIVE_CRON = "2"       # Instagram posts resolved per "7-59/15" cron run so the board knows video vs photo, then live videos
-                               # whose CDN links expire within 12 h refreshed (only while R2 copies of Instagram are off; each also
-                               # gated by the run's D1/subrequest budget)
+FIKIR_IG_LIVE_CRON = "3"       # Instagram posts resolved per "7-59/15" cron run: live videos whose links died / a resolve failed
+                               # first, then posts not known yet (video vs photo), then live videos whose CDN links expire within 12 h
+                               # (oldest first); only while R2 copies of Instagram are off; each also gated by the run's D1/subrequest budget
+FIKIR_IG_EMBED = "1"           # "1": a post page Instagram refuses (login-wall redirect, 429, ...) is resolved through its embed page
+                               # (/embed/captioned/) before Browser Run; "0" off
 FIKIR_DL_ADAPTERS = "x,pinterest,tiktok,facebook,reddit"   # platforms whose videos downloads resolve (drop one to turn it off; YouTube/Vimeo posts: the post owner adds the video file to the card)
 FIKIR_DL_AD_DAILY = "400"      # platform page/API fetches for downloads + copies per UTC day (plus 20 per platform / 10 min in code)
 # Board password gate (worker/fikir-gate.js): every /api/inspire/* route but GET /config, POST /guest and POST /login needs

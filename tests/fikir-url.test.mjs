@@ -412,9 +412,11 @@ describe('live Instagram playback: liveMediaOf / liveKey (post.live -> the board
     const m = liveMediaOf(good(), 42, API);
     assert.deepEqual(m, {
       kind: 'video', source: 'instagram', url: `${API}/api/inspire/posts/42/play?part=video&t=${T}`, poster: `${API}/api/inspire/posts/42/play?part=image&t=${T}`,
-      w: 720, h: 1280, by: 'ornek.studio', caption: 'Şehir ışıkları', audio: true, autoplay: true, live: true,
+      w: 720, h: 1280, by: 'ornek.studio', caption: 'Şehir ışıkları', audio: true, embed: null, autoplay: true, live: true,
     });
     assert.ok(liveMediaOf(good(), '42', API + '/'), 'string id, trailing slash');
+    // embed: whether Instagram's own embed plays the post (the board's fallback when our player cannot); only ok / blocked
+    assert.deepEqual(['ok', 'blocked', 'photo', 'OK', 1, null].map((e) => liveMediaOf(good(42, { embed: e }), 42, API).embed), ['ok', 'blocked', null, null, null, null]);
     assert.ok(PLAY_PATH_RE.test(good().url) && PLAY_PATH_RE.test(good().poster));
   });
   test('refused: another post, absolute / foreign / /files URLs, a missing token, part=image as the video, another source', () => {

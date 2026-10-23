@@ -1074,10 +1074,11 @@ const liveDim = (v) => { const n = Number(v); return Number.isInteger(n) && n >=
 
 /**
  * post.live (GET /api/inspire/posts, POST /api/inspire/posts/:id/live) -> media object for the board's own player:
- *   {kind: 'video', source: 'instagram', url, poster|null, w, h, by, caption, audio, autoplay: true, live: true} | null
+ *   {kind: 'video', source: 'instagram', url, poster|null, w, h, by, caption, audio, embed, autoplay: true, live: true} | null
  * url / poster are absolute on apiBase and only this post's play paths (part=video / part=image); never another URL.
  * w / h both valid (1..10000) or both null; by '' unless an Instagram user name; caption <= 2000 code points (plain text);
- * audio true | false | null.
+ * audio true | false | null; embed 'ok' (Instagram's own embed is known to play the post: the board mounts it when our
+ * player cannot play it here) | 'blocked' | null (unknown).
  */
 export function liveMediaOf(x, postId, apiBase) {
   if (!x || typeof x !== 'object' || Array.isArray(x) || x.kind !== 'video' || x.source !== 'instagram') return null;
@@ -1096,7 +1097,8 @@ export function liveMediaOf(x, postId, apiBase) {
     kind: 'video', source: 'instagram', url, poster: path(x.poster, 'image'), w, h,
     by: typeof x.by === 'string' && LIVE_BY_RE.test(x.by) ? x.by : '',
     caption: typeof x.caption === 'string' ? Array.from(x.caption.trim()).slice(0, 2000).join('') : '',
-    audio: typeof x.audio === 'boolean' ? x.audio : null, autoplay: true, live: true,
+    audio: typeof x.audio === 'boolean' ? x.audio : null, embed: x.embed === 'ok' || x.embed === 'blocked' ? x.embed : null,
+    autoplay: true, live: true,
   };
 }
 

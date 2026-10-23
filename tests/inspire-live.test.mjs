@@ -31,7 +31,11 @@ const list = async (w, worker, token, opts = {}) => (await H.runRequest(w, worke
 const byId = (arr, id) => arr.find((p) => p.id === id);
 // GET of a play path as a <video> / <img> sends it: no session header, no X-Fikir-Client
 const play = (w, worker, path, opts = {}) => H.runRequest(w, worker, 'GET', path, { legacy: true, ...opts });
-const igPageFetches = (m) => m.urls.filter((u) => u.startsWith('https://www.instagram.com/')).length;
+// post page fetches (not the embed page the resolver falls back to: igEmbedFetches)
+const igPageFetches = (m) => m.urls.filter((u) => u.startsWith('https://www.instagram.com/') && !u.includes('/embed/')).length;
+const igEmbedFetches = (m) => m.urls.filter((u) => /^https:\/\/www\.instagram\.com\/[a-z]+\/[^/]+\/embed\/captioned\/$/.test(u)).length;
+// moves the harness clock to 01:00 UTC of the next day (a test whose daily budgets / deferrals must not cross midnight)
+const toOneAm = () => H.advanceClock(86400 - (H.nowS() % 86400) + 3600);
 const nonCdn = (m) => m.urls.filter((u) => !/^https:\/\/(www\.instagram\.com|[a-z0-9.-]+\.(cdninstagram\.com|fbcdn\.net))\//.test(u));
 
 describe('live Instagram playback (worker, Node harness)', { skip: !H.HARNESS_SUPPORTED && 'needs node:module registerHooks (Node >= 22.15)' }, () => {
@@ -339,7 +343,7 @@ describe('live Instagram playback (worker, Node harness)', { skip: !H.HARNESS_SU
         fetches.push(igPageFetches(r));
       }
       assert.deepEqual(fetches, [1, 0, 0, 0, 0, 0], 'only the first request fetches Instagram');
-      assert.equal(igFetchAll(w), 1, 'one unit of the site-wide window');
+      assert.equal(igFetchAll(w), 2, 'the page and its embed page: one unit of the site-wide window each');
       const row = H.sqlAll(w, "SELECT error, fail_count FROM inspire_video_cache WHERE post_id=? AND kind='ig'", a)[0];
       assert.equal(row.fail_count, 1, 'one failure recorded, the backoff honoured');
       // the backoff over: the next request may resolve once more (resolve(false) after the backoff, not a re-resolve)
@@ -398,11 +402,11 @@ describe('live Instagram playback (worker, Node harness)', { skip: !H.HARNESS_SU
     assert.equal(legacy.result.status, 201); assert.ok(!('live_ask' in legacy.result.json), 'the old board page never sees the field');
   });
 
-  test('cron: links that expire within 12 h are refreshed (new posts first); a Browser Run refusal defers that post, the run goes on', async () => {
+  test('cron: links that expire within 12 h are refreshed (after new posts); a Browser Run refusal defers that post, the run goes on', async () => {
     const { w, warm } = await live();
     const [soon, later, fresh] = H.seedIgPosts(w, ['Lref000001', 'Lref000002', 'Lref000003']);
     H.seedIgCache(w, [soon, later]);
-    H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at=? WHERE post_id=? AND kind='ig'", H.nowS() + 3600, soon);
+    H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at=? WHERE post_id=? AND kind='ig'", H.nowS() + 10 * 3600, soon);
     H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at=? WHERE post_id=? AND kind='ig'", H.nowS() + 2 * 86400, later);
     const run = await H.runScheduled(w, warm, H.CRON_IG);
     assert.ok(run.lines.some((l) => /inspire live cron/.test(l[1]) && / new ok/.test(l[1])), 'the unresolved post first');
@@ -431,6 +435,197 @@ describe('live Instagram playback (worker, Node harness)', { skip: !H.HARNESS_SU
     assert.equal(igPageFetches(r2), 1, 'the other one again once its 10-minute backoff is over');
   });
 
+  test('embed fallback: a post page that redirects to the login wall is resolved through its embed page; ask, play and İndir work', async () => {
+    const { w, warm } = await live({ vars: { FIKIR_BR: '0' }, fetchOpts: { ig: 'login', embed: () => 'video' } });
+    const tok = await H.guestToken(w, warm);
+    const [a, b] = H.seedIgPosts(w, ['Lemb000001', 'Lemb000002']);
+    // the board's ask (POST /live): page (302) + embed page, the video found; the row remembers how and that the embed plays
+    const ask = await H.runRequest(w, warm, 'POST', `/api/inspire/posts/${a}/live`, { token: tok });
+    assert.equal(ask.result.json.state, 'video', JSON.stringify(ask.result.json));
+    assert.deepEqual([igPageFetches(ask), igEmbedFetches(ask), ask.br], [1, 1, 0]);
+    assert.equal(ask.result.json.live.by, 'ornek.kahve'); assert.equal(ask.result.json.live.embed, 'ok');
+    const row = H.sqlAll(w, "SELECT error, url, extra FROM inspire_video_cache WHERE post_id=? AND kind='ig'", a)[0];
+    assert.equal(row.error, null); assert.match(row.url, /EMB-Lemb000001\.mp4/);
+    assert.deepEqual([JSON.parse(row.extra).via, JSON.parse(row.extra).em], ['embed', 'ok']);
+    // GET /posts: post.live with embed 'ok'
+    const p = byId((await list(w, warm, tok)).result.json, a);
+    assert.equal(p.live.embed, 'ok'); assert.ok(!/cdninstagram|fbcdn/.test(JSON.stringify(p)));
+    // play: from the cache
+    const pl = await play(w, warm, p.live.url, { headers: { Range: 'bytes=0-99' } });
+    assert.equal(pl.result.status, 206); assert.equal(igPageFetches(pl) + igEmbedFetches(pl), 0);
+    // İndir of a post nobody resolved yet: the same chain (page refused -> embed page), the file streams
+    const link = (await H.runRequest(w, warm, 'GET', `/api/inspire/posts/${b}/download-info`, { token: tok })).result.json.url;
+    const dl = await H.runRequest(w, await H.loadIsolate(), 'GET', `${link}&part=video`);
+    assert.equal(dl.result.status, 200, JSON.stringify(dl.result.json)); assert.equal(dl.result.bytes, N);
+    assert.deepEqual([igPageFetches(dl), igEmbedFetches(dl), dl.br], [1, 1, 0]);
+    assert.ok(dl.urls.some((u) => /EMB-Lemb000002\.mp4/.test(u)), 'the embed\'s CDN file');
+    // FIKIR_IG_EMBED="0": no embed fetch, the failure recorded (soft backoff)
+    const off = await live({ vars: { FIKIR_BR: '0', FIKIR_IG_EMBED: '0' }, fetchOpts: { ig: 'login', embed: () => 'video' } });
+    const t2 = await H.guestToken(off.w, off.warm);
+    const [c] = H.seedIgPosts(off.w, ['Lemb000003']);
+    const r = await H.runRequest(off.w, off.warm, 'POST', `/api/inspire/posts/${c}/live`, { token: t2 });
+    assert.equal(r.result.json.state, 'later'); assert.equal(igEmbedFetches(r), 0);
+    const fr = H.sqlAll(off.w, "SELECT error, fail_count, retry_at, resolved_at, extra FROM inspire_video_cache WHERE post_id=? AND kind='ig'", c)[0];
+    assert.deepEqual([fr.error, fr.fail_count, fr.retry_at - fr.resolved_at], ['redirect', 1, 600]);
+    assert.deepEqual(JSON.parse(fr.extra).why, { page: 'redirect', loc: 'login' });
+  });
+
+  test('embed blocked: remembered (live.embed blocked), Browser Run after it; a failure keeps the links and backs off <= 1 h', async () => {
+    const { w, warm } = await live({ fetchOpts: { ig: 'login', embed: () => 'blocked', brEmpty: true } });
+    const tok = await H.guestToken(w, warm);
+    const [a] = H.seedIgPosts(w, ['Lblk000001']);
+    H.seedIgCache(w, [a]);
+    H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at=? WHERE post_id=? AND kind='ig'", H.nowS() + 2 * 3600, a);   // due for a refresh
+    const run = await H.runScheduled(w, warm, H.CRON_IG);
+    assert.deepEqual([igPageFetches(run), igEmbedFetches(run), run.br], [1, 1, 1], 'page, embed page, Browser Run');
+    const row = H.sqlAll(w, "SELECT error, url, fail_count, retry_at, resolved_at, extra FROM inspire_video_cache WHERE post_id=? AND kind='ig'", a)[0];
+    assert.equal(row.error, 'redirect'); assert.ok(row.url.includes('/CACHED-'), 'the links of the last resolve stay');
+    assert.equal(row.retry_at - row.resolved_at, 600, 'soft backoff');
+    const x = JSON.parse(row.extra);
+    assert.deepEqual([x.em, x.why, x.user], ['blocked', { page: 'redirect', loc: 'login', embed: 'blocked', br: 'no_data' }, 'ornek.studio']);
+    const p = byId((await list(w, warm, tok)).result.json, a);
+    assert.equal(p.live.embed, 'blocked'); assert.equal(p.live.by, 'ornek.studio', 'still our player');
+    // the links have 2 h left: play and İndir still use them while the post backs off (no Instagram fetch)
+    const pl = await play(w, warm, p.live.url, { headers: { Range: 'bytes=0-99' } });
+    assert.equal(pl.result.status, 206); assert.equal(igPageFetches(pl), 0);
+    const link = (await H.runRequest(w, warm, 'GET', `/api/inspire/posts/${a}/download-info`, { token: tok })).result.json;
+    assert.equal(link.video, true, 'download-info: still a video'); assert.equal(link.embed, 'blocked');
+    const dl = await H.runRequest(w, warm, 'GET', `${link.url}&part=video`);
+    assert.equal(dl.result.status, 200); assert.equal(igPageFetches(dl), 0); assert.ok(dl.urls.some((u) => u.includes('/CACHED-')));
+    // the embed check's state counts when the resolver never saw the embed
+    const ok = await live();
+    const t2 = await H.guestToken(ok.w, ok.warm);
+    const [b, c] = H.seedIgPosts(ok.w, ['Lchk000001', 'Lchk000002']);
+    H.seedIgCache(ok.w, [b, c]);
+    H.seedEmbedState(ok.w, [b], 'ok');
+    const posts = (await list(ok.w, ok.warm, t2)).result.json;
+    assert.deepEqual([byId(posts, b).live.embed, byId(posts, c).live.embed], ['ok', null]);
+  });
+
+  test('legacy rows backed off up to 24 h heal: asked again, and the cron resolves dead posts first (page refused -> embed)', async () => {
+    const { w, warm } = await live({ vars: { FIKIR_BR: '0' }, fetchOpts: { ig: 'login', embed: () => 'video' } });
+    const tok = await H.guestToken(w, warm);
+    const codes = ['Lleg000001', 'Lleg000002', 'Lleg000003', 'Lleg000004'];
+    const [d1, d2, fresh, unknown] = H.seedIgPosts(w, codes);
+    H.seedIgCache(w, [d1, d2, fresh]);
+    const now = H.nowS();
+    // two dead posts as production had them: links expired, error 'redirect', 5 failures, retry_at 20 h ahead, last failure 2 h ago
+    for (const [id, exp] of [[d1, now - 3 * 3600], [d2, now - 6 * 3600]]) {
+      H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at=?, error='redirect', fail_count=5, retry_at=?, resolved_at=? WHERE post_id=? AND kind='ig'", exp, now + 20 * 3600, now - 7200, id);
+    }
+    H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at=? WHERE post_id=? AND kind='ig'", now + 30 * 3600, fresh);   // outside 12 h
+    // the cron, one run: the two dead ones first (oldest expiry first), then the unknown post; never the fresh one
+    const run = await H.runScheduled(w, warm, H.CRON_IG);
+    const order = run.lines.filter((l) => /inspire live cron/.test(l[1])).map((l) => l[1]);
+    assert.equal(order.length, 3, JSON.stringify(order));
+    assert.match(order[0], new RegExp(`inspire live cron ${d2} broken ok via embed`)); assert.match(order[1], new RegExp(`${d1} broken ok via embed`));
+    assert.match(order[2], new RegExp(`${unknown} new ok via embed`));
+    const rows = Object.fromEntries(H.sqlAll(w, "SELECT post_id, error, fail_count, expires_at, url FROM inspire_video_cache WHERE kind='ig'").map((r) => [r.post_id, r]));
+    for (const id of [d1, d2]) {
+      assert.deepEqual([rows[id].error, rows[id].fail_count], [null, 0]);
+      assert.ok(rows[id].expires_at > H.nowS() + 86400, 'new links');
+    }
+    assert.ok(rows[fresh].url.includes('/CACHED-'), 'links with 30 h left are not touched');
+    assert.ok(!run.urls.some((u) => /cdninstagram|fbcdn/.test(u)), 'resolve only');
+    // the board asks a legacy failure again once its capped backoff is over (live_ask), not after 24 h
+    const [q] = H.seedIgPosts(w, ['Lleg000005']);
+    H.sqlRun(w, "INSERT INTO inspire_video_cache (post_id, kind, error, fail_count, retry_at, resolved_at) VALUES (?, 'ig', 'redirect', 5, ?, ?)", q, now + 20 * 3600, now - 3700);
+    assert.equal(byId((await list(w, warm, tok)).result.json, q).live_ask, true);
+    H.sqlRun(w, "UPDATE inspire_video_cache SET error='gone' WHERE post_id=? AND kind='ig'", q);
+    assert.equal(byId((await list(w, warm, tok)).result.json, q).live_ask, false, 'a removed post keeps its long backoff');
+    // refresh window: 12 h, oldest expiry first
+    const r2 = await live();
+    const [x1, x2, x3] = H.seedIgPosts(r2.w, ['Lwin000001', 'Lwin000002', 'Lwin000003']);
+    H.seedIgCache(r2.w, [x1, x2, x3]);
+    for (const [id, h] of [[x1, 11], [x2, 5], [x3, 13]]) H.sqlRun(r2.w, "UPDATE inspire_video_cache SET expires_at=? WHERE post_id=? AND kind='ig'", H.nowS() + h * 3600, id);
+    const rr = await H.runScheduled(r2.w, r2.warm, H.CRON_IG);
+    const got = rr.lines.filter((l) => /inspire live cron/.test(l[1])).map((l) => Number(/cron (\d+)/.exec(l[1])[1]));
+    assert.deepEqual(got, [x2, x1], 'within 12 h only, the sooner expiry first');
+  });
+
+  test('cron: a soft failure deferred by a Browser Run refusal stays deferred (the next dead post gets Browser Run); 6 h after 8 failures', async () => {
+    toOneAm();   // the deferral lasts until UTC midnight: ~23 h
+    const { w, warm } = await live({ fetchOpts: { ig: 'login', embed: () => 'blocked', brEmpty: true } });
+    const [a, b, c, d] = H.seedIgPosts(w, ['Ldef000001', 'Ldef000002', 'Ldef000003', 'Ldef000004']);
+    H.seedIgCache(w, [a, b, c, d]);
+    const now = H.nowS();
+    // a: dead, soft error 2 h ago, 1 failure (first in the queue), its own Browser Run spent for today; b, c, d: dead, 5 failures
+    H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at=?, error='redirect', fail_count=1, retry_at=?, resolved_at=? WHERE post_id=? AND kind='ig'", now - 3600, now - 3600, now - 7200, a);
+    for (const id of [b, c, d]) H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at=?, error='redirect', fail_count=5, retry_at=?, resolved_at=? WHERE post_id=? AND kind='ig'", now - 3600, now + 20 * 3600, now - 7200, id);
+    const day = new Date(H.nowS() * 1000).toISOString().slice(0, 10);
+    H.sqlRun(w, "INSERT OR REPLACE INTO inspire_quota (day, scope, subject, n, lim) VALUES (?, 'br_post', ?, 3, 3)", day, String(a));
+    const cronLines = (r) => r.lines.filter((l) => /inspire live cron/.test(l[1])).map((l) => l[1]);
+    const r1 = await H.runScheduled(w, warm, H.CRON_IG);
+    assert.match(cronLines(r1)[0], new RegExp(`cron ${a} broken busy`)); assert.equal(r1.br, 0);
+    const ra = H.sqlAll(w, "SELECT error, fail_count, retry_at, extra FROM inspire_video_cache WHERE post_id=? AND kind='ig'", a)[0];
+    assert.deepEqual([ra.error, ra.fail_count, JSON.parse(ra.extra).deferred, JSON.parse(ra.extra).du], ['redirect', 1, 'br_post', ra.retry_at], 'deferred, no failure counted');
+    for (let i = 0; i < 3; i++) {
+      H.advanceClock(900);
+      const r = await H.runScheduled(w, warm, H.CRON_IG);
+      assert.ok(!r.urls.some((u) => u.includes('Ldef000001')), `run ${i + 2}: the deferred post waits (${cronLines(r)})`);
+      if (i === 0) assert.equal(r.br, 1, 'another dead post gets the run\'s Browser Run turn');
+    }
+    // GET /posts (live_ask) and POST /live honour it too: a deferred post without links is not asked until du is over
+    const tok = await H.guestToken(w, warm);
+    H.sqlRun(w, "UPDATE inspire_video_cache SET url=NULL, poster=NULL WHERE post_id=? AND kind='ig'", a);
+    assert.equal(byId((await list(w, warm, tok)).result.json, a).live_ask, false);
+    const live1 = await H.runRequest(w, warm, 'POST', `/api/inspire/posts/${a}/live`, { token: tok });
+    assert.deepEqual([live1.result.json.state, igPageFetches(live1)], ['later', 0]);
+    assert.ok(live1.result.json.retry_s > 3600, 'until the deferral is over');
+    H.sqlRun(w, "UPDATE inspire_video_cache SET extra=json_set(extra, '$.du', ?) WHERE post_id=? AND kind='ig'", H.nowS() - 1, a);
+    assert.equal(byId((await list(w, warm, tok)).result.json, a).live_ask, true, 'a deferral that is over: the soft cap again');
+    H.sqlRun(w, "UPDATE inspire_video_cache SET retry_at=? WHERE post_id=? AND kind='ig'", H.nowS() + 86400, a);   // out of the way
+    // a post that keeps failing softly: 6 h between tries after 8 in a row
+    H.sqlRun(w, "UPDATE inspire_video_cache SET fail_count=8, retry_at=?, resolved_at=?, extra=NULL WHERE post_id=? AND kind='ig'", H.nowS() - 1, H.nowS() - 7200, b);
+    H.advanceClock(4 * 3600);
+    H.sqlRun(w, "UPDATE inspire_video_cache SET retry_at=?, resolved_at=? WHERE post_id IN (?, ?) AND kind='ig'", H.nowS() + 86400, H.nowS(), c, d);
+    const rb = await H.runScheduled(w, warm, H.CRON_IG);
+    assert.ok(rb.urls.some((u) => u.includes('Ldef000002')), 'b tried');
+    const row = H.sqlAll(w, "SELECT fail_count, retry_at, resolved_at FROM inspire_video_cache WHERE post_id=? AND kind='ig'", b)[0];
+    assert.deepEqual([row.fail_count, row.retry_at - row.resolved_at], [9, 6 * 3600]);
+  });
+
+  test('cron: at most 60% of FIKIR_IG_FETCH_DAILY (page and embed page one unit each), the rest is the viewers\'', async () => {
+    toOneAm();   // one UTC day's quota
+    const { w, warm } = await live({ vars: { FIKIR_BR: '0', FIKIR_IG_FETCH_DAILY: '20' }, fetchOpts: { ig: 'login', embed: () => 'blocked' } });
+    H.seedIgPosts(w, Array.from({ length: 8 }, (_, i) => 'Lshr00000' + i));
+    const quota = () => Object.fromEntries(H.sqlAll(w, "SELECT subject, n FROM inspire_quota WHERE scope='ig_fetch'").map((r) => [r.subject, r.n]));
+    const fetched = [];
+    for (let i = 0; i < 4; i++) {
+      const r = await H.runScheduled(w, warm, H.CRON_IG);
+      fetched.push(igPageFetches(r) + igEmbedFetches(r));
+      H.advanceClock(900);
+    }
+    assert.deepEqual(fetched, [6, 6, 0, 0], 'two runs of 3 resolves (page + embed), then the cron\'s 12 units are spent');
+    assert.deepEqual(quota(), { '': 12, cron: 12 });
+    // a viewer still resolves (POST /live: page + embed page)
+    const tok = await H.guestToken(w, warm);
+    const [v] = H.seedIgPosts(w, ['Lshrview01']);
+    const ask = await H.runRequest(w, warm, 'POST', `/api/inspire/posts/${v}/live`, { token: tok });
+    assert.deepEqual([igPageFetches(ask), igEmbedFetches(ask), !!ask.result.json.busy], [1, 1, false], JSON.stringify(ask.result.json));
+    assert.deepEqual(quota(), { '': 14, cron: 12 });
+    // the embed's own unit: refused at the daily limit, the page's failure is recorded without the embed fetch
+    H.sqlRun(w, "UPDATE inspire_quota SET n = 19 WHERE scope='ig_fetch' AND subject=''");
+    const [v2] = H.seedIgPosts(w, ['Lshrview02']);
+    const ask2 = await H.runRequest(w, warm, 'POST', `/api/inspire/posts/${v2}/live`, { token: tok });
+    assert.deepEqual([igPageFetches(ask2), igEmbedFetches(ask2)], [1, 0]);
+    const why = JSON.parse(H.sqlAll(w, "SELECT extra FROM inspire_video_cache WHERE post_id=? AND kind='ig'", v2)[0].extra).why;
+    assert.deepEqual(why, { page: 'redirect', loc: 'login', embed: 'busy' });
+  });
+
+  test('cron: steady state of healthy live videos (33 h links): one refresh per video every ~21 h', async () => {
+    const { w, warm } = await live();
+    const ids = H.seedIgPosts(w, ['Lst0000001', 'Lst0000002', 'Lst0000003']);
+    const per = new Map(ids.map((id) => [id, 0]));
+    for (let i = 0; i < 2 * 96; i++) {
+      const r = await H.runScheduled(w, warm, H.CRON_IG);
+      for (const l of r.lines) { const m = /inspire live cron (\d+) refresh ok/.exec(l[1]); if (m) per.set(Number(m[1]), per.get(Number(m[1])) + 1); }
+      H.sqlRun(w, "UPDATE inspire_video_cache SET expires_at = resolved_at + ? WHERE kind='ig' AND error IS NULL AND url IS NOT NULL", 33 * 3600);
+      H.advanceClock(900);
+    }
+    assert.deepEqual([...per.values()], [2, 2, 2], '2 days: refreshed at ~21 h and ~42 h (the old 24 h window: 5)');
+  });
+
   test('GET /config: media.live with a session; off with FIKIR_IG_LIVE="0"', async () => {
     const { w, warm } = await live();
     const tok = await H.guestToken(w, warm);
@@ -453,7 +648,9 @@ describe('live Instagram playback (worker, Node harness)', { skip: !H.HARNESS_SU
     // without INSPIRE_TEST_FETCH_ALLOW, or another value than "1": ignored too
     assert.deepEqual(await urlsOf({ INSPIRE_TEST_IG: '1', ALLOWED_ORIGIN: 'http://127.0.0.1:4741' }), ['https://www.instagram.com/reel/Lhook00001/']);
     assert.deepEqual(await urlsOf({ ...hook, INSPIRE_TEST_IG: 'true', ALLOWED_ORIGIN: 'http://127.0.0.1:4741' }), ['https://www.instagram.com/reel/Lhook00001/']);
-    // a local test worker: the page fetch goes to the fixture server's /igfx/<host><path>
-    assert.deepEqual(await urlsOf({ ...hook, ALLOWED_ORIGIN: 'http://127.0.0.1:4741' }), ['http://127.0.0.1:4741/igfx/www.instagram.com/reel/Lhook00001/']);
+    // a local test worker: the page fetch (and, the harness answering no page there, the embed page) goes to the fixture
+    // server's /igfx/<host><path>
+    assert.deepEqual(await urlsOf({ ...hook, ALLOWED_ORIGIN: 'http://127.0.0.1:4741' }), ['http://127.0.0.1:4741/igfx/www.instagram.com/reel/Lhook00001/',
+      'http://127.0.0.1:4741/igfx/www.instagram.com/reel/Lhook00001/embed/captioned/']);
   });
 });

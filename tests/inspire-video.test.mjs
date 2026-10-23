@@ -7,7 +7,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   igRef, igPageUrl, igEmbedUrl, igShortcodeToPk, decodeOe, igCdnUrl, cleanCaption, igExtract, igPageProblem, igEmbedStatus,
-  igNavHeaders, igEmbedHeaders, igResolve, igCheckEmbed, openMedia, cappedStream, asciiFilePart, unicodeFilePart, dlFilename,
+  igNavHeaders, igEmbedHeaders, igResolve, igCheckEmbed, igEmbedExtract, igEmbedCaptionedUrl, igRedirectKind, igSoftError, igRetryAt,
+  igBackingOff, igRetrySql, igEmbedKnown, IG_SOFT_MAX_S, IG_SOFT_LONG_N, IG_SOFT_LONG_S, openMedia, cappedStream, asciiFilePart, unicodeFilePart, dlFilename,
   contentDisposition, titleSlug, dlHint, registerDlAdapter, DL_ADAPTERS, backoffS, vcItemFresh, vcBackingOff, itemToCache,
   cacheToItem, igCacheCaptionCut, VIDEO_CACHE_DDL, vcGet, vcFail, vcDefer, vcExtra, vcExtraJson, vcPut, copyTargetOf, copyKind, imageDims,
   COPY_PLATFORMS, COPY_PLATFORM_TR, adToCache, adFromCache, xParse, ttParse, ttExtract, pinParse, redditRss, igLiveVideo, IG_PLAY_MIMES,
@@ -151,6 +152,127 @@ describe('igEmbedStatus (embed page)', () => {
   });
 });
 
+describe('igEmbedExtract (captioned embed page: the fallback of a refused post page)', () => {
+  test('escaped contextJSON (the 2026-10 page): video, poster, size, credit, caption, expiry; another code -> null', () => {
+    const it = igEmbedExtract(FX('ig-embed-captioned.html'), 'DTestEmbV01');
+    assert.deepEqual({ user: it.user, w: it.w, h: it.h, duration: it.duration, media_type: it.media_type, product_type: it.product_type, lead: it.lead_video, audio: it.has_audio },
+      { user: 'ornek.kahve', w: 1080, h: 1920, duration: 12.3, media_type: 2, product_type: 'clips', lead: true, audio: null });
+    assert.equal(it.video.url, 'https://scontent.cdninstagram.com/o1/v/t2/f2/m86/EMBVIDEO.mp4?_nc_cat=104&_nc_oc=fake&oe=6AC94349&oh=00_AQfakevideo');
+    assert.deepEqual([it.video.w, it.video.h], [1080, 1920]);
+    assert.deepEqual(it.videos, [it.video]);
+    assert.match(it.image.url, /embposter_1080\.jpg/, 'the largest display_resources entry'); assert.deepEqual([it.image.w, it.image.h], [1080, 1920]);
+    assert.equal(it.caption, 'Kahve molası ☕ Sabah ışığı test\nİkinci satır #ornek', '\\u escapes decoded');
+    assert.equal(it.expires_at, OE_V, 'the earlier of video / poster expiry');
+    assert.equal(igEmbedExtract(FX('ig-embed-captioned.html'), 'DOtherPost1'), null);
+    // the same shape as the page parser's item (itemToCache / cacheToItem / the live facts read it)
+    const page = igExtract(FX('ig-reel.html'), 'DTestReel01');
+    assert.deepEqual(Object.keys(it).sort(), Object.keys(page).sort());
+    const c = itemToCache(it);
+    assert.equal(c.url, it.video.url); assert.equal(c.extra.lv, 1); assert.equal(c.extra.user, 'ornek.kahve');
+  });
+  test('the unescaped variant (window.__additionalDataLoaded): the post by its code, not the decoy before it', () => {
+    const it = igEmbedExtract(FX('ig-embed-plain.html'), 'DTestEmbU01');
+    assert.match(it.video.url, /EMBPLAIN\.mp4/); assert.equal(it.has_audio, true);
+    assert.equal(igEmbedExtract(FX('ig-embed-plain.html'), 'DOtherPost1').video.url, 'https://scontent.cdninstagram.com/o1/v/DECOY.mp4?oe=6AC94349', 'each object by its own code');
+  });
+  test('photo -> image only; blocked (WatchOnInstagram / is_video without video_url / copyright_blocked) -> null', () => {
+    const ph = igEmbedExtract(FX('ig-embed-captioned-photo.html'), 'DTestEmbP01');
+    assert.deepEqual([ph.video, ph.media_type, ph.lead_video, ph.user, ph.w, ph.h], [null, 1, false, 'ornek.foto', 1080, 1350]);
+    assert.equal(igEmbedExtract(FX('ig-embed-captioned-blocked.html'), 'DTestEmbB01'), null);
+    assert.equal(igEmbedStatus(FX('ig-embed-captioned-blocked.html')), 'blocked');
+    const noUi = FX('ig-embed-captioned-blocked.html').replace(/<div class="WatchOnInstagramContainer">.*?<\/div>/, '');
+    assert.ok(!noUi.includes('WatchOnInstagram'));
+    assert.equal(igEmbedExtract(noUi, 'DTestEmbB01'), null, 'is_video without video_url');
+    const cr = FX('ig-embed-captioned.html').replace('copyright_blocked\\":false', 'copyright_blocked\\":true');
+    assert.notEqual(cr, FX('ig-embed-captioned.html'));
+    assert.equal(igEmbedExtract(cr, 'DTestEmbV01'), null);
+    assert.equal(igEmbedExtract(FX('ig-embed-ok.html'), 'DTestReel02').video.url, 'https://scontent.cdninstagram.com/o1/v/clip.mp4?oe=6AC94349', 'the 2026-10-08 layout (gql_data inside context)');
+  });
+  test('carousel: the first video child; a foreign CDN link is never taken', () => {
+    const media = { __typename: 'GraphSidecar', shortcode: 'DTestSide01', is_video: false, owner: { username: 'ornek.kahve' },
+      display_url: 'https://scontent.cdninstagram.com/v/side.jpg?oe=6ACD0906', dimensions: { width: 1080, height: 1350 },
+      edge_sidecar_to_children: { edges: [
+        { node: { __typename: 'GraphImage', is_video: false, display_url: 'https://scontent.cdninstagram.com/v/k1.jpg?oe=6ACD0906' } },
+        { node: { __typename: 'GraphVideo', is_video: true, video_url: 'https://evil.example/x.mp4', display_url: 'https://scontent.cdninstagram.com/v/k2.jpg' } },
+        { node: { __typename: 'GraphVideo', is_video: true, video_url: 'https://scontent.cdninstagram.com/o1/v/k3.mp4?oe=6AC94349', dimensions: { width: 720, height: 1280 } } }] } };
+    const html = `<script>s.handle({"contextJSON":${JSON.stringify(JSON.stringify({ context: {}, gql_data: { shortcode_media: media } }))}})</script>`;
+    const it = igEmbedExtract(html, 'DTestSide01');
+    assert.match(it.video.url, /k3\.mp4/); assert.equal(it.media_type, 8); assert.equal(it.lead_video, false, 'a carousel that starts with a photo');
+    assert.deepEqual([it.w, it.h], [720, 1280]);
+  });
+  test('garbage in, null out; size and scan bounds', () => {
+    for (const x of [null, '', 'x', '<script>"shortcode_media":{</script>', '"shortcode_media":{"shortcode":"DTestEmbV01"', '\\"shortcode_media\\":{"x":1}',
+      '"shortcode_media":' + '{'.repeat(5000)]) assert.equal(igEmbedExtract(x, 'DTestEmbV01'), null, String(x).slice(0, 40));
+    assert.equal(igEmbedExtract(FX('ig-embed-captioned.html'), 'bad code!'), null);
+    assert.equal(igEmbedExtract('x'.repeat(3 * 1024 * 1024) + FX('ig-embed-captioned.html'), 'DTestEmbV01'), null, 'over the size cap');
+    // a long run of quotes / backslashes stays linear
+    const t0 = performance.now();
+    igEmbedExtract('\\"shortcode_media\\"' + '\\'.repeat(200000) + '"'.repeat(200000), 'DTestEmbV01');
+    assert.ok(performance.now() - t0 < 500);
+  });
+});
+
+describe('soft backoff (Instagram-side failures heal within the hour)', () => {
+  test('schedule: soft 10, 20, 40, 60 min then 60 min, 6 h after 8 in a row; the others unchanged', () => {
+    assert.deepEqual([1, 2, 3, 4, 5, 8, 9, 12].map((n) => backoffS(n, 'soft')), [600, 1200, 2400, 3600, 3600, 3600, 21600, 21600]);
+    assert.deepEqual([IG_SOFT_MAX_S, IG_SOFT_LONG_N, IG_SOFT_LONG_S], [3600, 8, 21600]);
+    assert.deepEqual([1, 5].map((n) => backoffS(n, 'later')), [600, 86400]);
+    assert.equal(backoffS(1, 'gone'), 7 * 86400);
+  });
+  test('igSoftError: redirect / login / challenge / 403 / 429 / 5xx / timeout ... yes; gone, gated, embed_gone no', () => {
+    for (const e of ['redirect', 'login', 'challenge', 'no_data', 'empty', 'timeout', 'fetch_error', 'http_403', 'http_429', 'http_500', 'http_503', 'br_no_data', 'br_login'])
+      assert.equal(igSoftError(e), true, e);
+    for (const e of ['gone', 'gated', 'br_gated', 'embed_gone', 'bad_ref', 'http_404', 'http_5000', null, undefined]) assert.equal(igSoftError(e), false, String(e));
+  });
+  test('legacy rows backed off for 24 h count as capped (computed on read, JS and SQL agree)', async () => {
+    const now = 1_800_000_000;
+    const legacy = { error: 'redirect', fail_count: 5, retry_at: now + 20 * 3600, resolved_at: now - 4 * 3600 };
+    assert.equal(igRetryAt(legacy), now - 3 * 3600); assert.equal(igBackingOff(legacy, now), false, 'healed: due again');
+    const recent = { error: 'redirect', retry_at: now + 86400, resolved_at: now - 600 };
+    assert.equal(igRetryAt(recent), now + 3000); assert.equal(igBackingOff(recent, now), true);
+    const gone = { error: 'gone', retry_at: now + 5 * 86400, resolved_at: now - 86400 };
+    assert.equal(igRetryAt(gone), now + 5 * 86400, 'a removed post keeps its week');
+    assert.equal(igRetryAt({ error: null, retry_at: now + 500 }), now + 500, 'a deferral without an error is kept');
+    assert.equal(igRetryAt(null), 0);
+    const { DatabaseSync } = await import('node:sqlite');
+    const db = new DatabaseSync(':memory:');
+    db.exec(VIDEO_CACHE_DDL);
+    // past IG_SOFT_LONG_N failures in a row the cap is 6 h
+    const many = { error: 'redirect', fail_count: 9, retry_at: now + 20 * 3600, resolved_at: now - 4 * 3600 };
+    assert.equal(igRetryAt(many), now + 2 * 3600); assert.equal(igBackingOff(many, now), true);
+    // a vcDefer deferral since the failure (Browser Run refused: until UTC midnight) is kept whole, an expired one is not
+    const deferred = { error: 'redirect', fail_count: 1, retry_at: now + 10 * 3600, resolved_at: now - 7200, extra: JSON.stringify({ deferred: 'br_post', du: now + 10 * 3600 }) };
+    assert.equal(igRetryAt(deferred), now + 10 * 3600); assert.equal(igBackingOff(deferred, now), true, 'deferred: not picked again');
+    assert.equal(igRetryAt({ ...deferred, extra: undefined, du: now + 10 * 3600 }), now + 10 * 3600, 'du as a column (GET /posts)');
+    const oldDefer = { error: 'redirect', fail_count: 5, retry_at: now + 20 * 3600, resolved_at: now - 7200, extra: JSON.stringify({ deferred: 'br', du: now - 3600 }) };
+    assert.equal(igRetryAt(oldDefer), now - 3600, 'a deferral that is over: the soft cap again');
+    const legacyNote = { ...legacy, extra: JSON.stringify({ deferred: 'br_post' }) };
+    assert.equal(igRetryAt(legacyNote), now - 3 * 3600, 'a note without du (before 2026-10-23) does not keep 24 h');
+    const rows = [[1, legacy], [2, recent], [3, gone], [4, { error: 'http_502', retry_at: now + 86400, resolved_at: now - 7200 }], [5, { error: null, retry_at: now + 500, resolved_at: now }],
+      [6, many], [7, deferred], [8, oldDefer], [9, legacyNote], [10, { ...deferred, extra: '{bad' }]];
+    for (const [id, r] of rows) db.prepare("INSERT INTO inspire_video_cache (post_id, kind, error, fail_count, retry_at, resolved_at, extra) VALUES (?, 'ig', ?, ?, ?, ?, ?)")
+      .run(id, r.error, r.fail_count || 0, r.retry_at, r.resolved_at, r.extra || null);
+    const sql = db.prepare(`SELECT post_id, ${igRetrySql('c')} AS ra FROM inspire_video_cache c ORDER BY post_id`).all();
+    assert.deepEqual(sql.map((x) => x.ra), rows.map(([, r]) => igRetryAt(r)));
+  });
+  test('igEmbedKnown: the resolver\'s embed state before the embed check\'s; only ok / blocked', () => {
+    assert.equal(igEmbedKnown('ok', 'blocked'), 'ok'); assert.equal(igEmbedKnown('blocked', 'ok'), 'blocked');
+    assert.equal(igEmbedKnown(null, 'ok'), 'ok'); assert.equal(igEmbedKnown(undefined, 'photo'), null); assert.equal(igEmbedKnown('x', null), null);
+  });
+  test('vcFail merge keeps the row\'s credit / links, records why, drops a deferral note and its du (node:sqlite stand-in for D1)', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const raw = new DatabaseSync(':memory:');
+    raw.exec(VIDEO_CACHE_DDL);
+    const d1 = { prepare: (q) => { const st = raw.prepare(q); let args = []; const o = { bind: (...a) => { args = a; return o; }, first: async () => st.get(...args) || null, run: async () => st.run(...args) }; return o; } };
+    await vcPut(d1, 7, 'ig', { url: 'https://scontent.cdninstagram.com/o1/v/a.mp4?oe=1', expires_at: 2e9, extra: { cv: 3, user: 'ornek.kahve', lv: 1, deferred: 'br', du: 2e9 } });
+    await vcFail(d1, 7, 'ig', 'redirect', { retry: 'soft', merge: { em: 'ok', why: { page: 'redirect', loc: 'login', embed: 'http_429' } } });
+    const row = await vcGet(d1, 7, 'ig');
+    assert.equal(row.error, 'redirect'); assert.equal(row.fail_count, 1); assert.ok(row.url, 'the links stay');
+    assert.ok(Number(row.retry_at) - Number(row.resolved_at) === 600);
+    assert.deepEqual(vcExtra(row), { cv: 3, user: 'ornek.kahve', lv: 1, em: 'ok', why: { page: 'redirect', loc: 'login', embed: 'http_429' } });
+  });
+});
+
 // fetch stub: routes[url] = Response | (init) => Response; records calls
 function stubFetch(routes) {
   const calls = [];
@@ -179,17 +301,24 @@ describe('igResolve / igCheckEmbed (stubbed network)', () => {
     assert.ok(!/Mobile|iPhone/.test(h['User-Agent']));
     assert.equal(f.calls.length, 1);
   });
-  test('an empty shell falls back to Browser Run once; without it the error is reported', async () => {
-    const f = stubFetch({ 'https://www.instagram.com/reel/DTestReel01/': html200('<title>Instagram</title><div id="root"></div>') });
+  test('an empty shell falls back to Browser Run once (after the embed page); without it the error is reported', async () => {
+    const shell = html200('<title>Instagram</title><div id="root"></div>');
+    const f = stubFetch({ 'https://www.instagram.com/reel/DTestReel01/': shell, 'https://www.instagram.com/reel/DTestReel01/embed/captioned/': shell });
     let brCalls = 0;
     const r = await igResolve(ref, { fetchImpl: f, brContent: async (u) => { brCalls++; assert.equal(u, 'https://www.instagram.com/reel/DTestReel01/'); return FX('ig-reel.html'); } });
     assert.equal(r.ok, true); assert.equal(r.via, 'br'); assert.equal(brCalls, 1);
+    assert.deepEqual(r.why, { page: 'no_data', embed: 'no_data' });
     const r2 = await igResolve(ref, { fetchImpl: f });
-    assert.equal(r2.ok, false); assert.equal(r2.error, 'no_data'); assert.equal(r2.retry, 'soon');
+    assert.equal(r2.ok, false); assert.equal(r2.error, 'no_data'); assert.equal(r2.retry, 'soft');
     const r3 = await igResolve(ref, { fetchImpl: f, brContent: async () => { throw new Error('boom'); } });
-    assert.equal(r3.ok, false);
+    assert.equal(r3.ok, false); assert.equal(r3.why.br, 'failed');
     const r4 = await igResolve(ref, { fetchImpl: f, brContent: async () => '<title>Instagram</title>' });
-    assert.equal(r4.error, 'br_no_data');
+    assert.equal(r4.error, 'no_data', 'the page\'s error stays the row\'s'); assert.equal(r4.why.br, 'no_data');
+    const r5 = await igResolve(ref, { fetchImpl: f, brContent: async () => '<script>{"if_not_gated_logged_out":null}</script>' });
+    assert.deepEqual([r5.error, r5.retry], ['br_gated', 'later'], 'logged-out view refused: the long backoff');
+    const n = await igResolve(ref, { fetchImpl: f, embed: false });
+    assert.equal(f.calls.filter((c) => c.url.includes('/embed/')).length, 5, 'embed: false skips the embed page');
+    assert.equal(n.why.embed, undefined);
   });
   test('Browser Run refused (slot / budget) is "busy", not a failure of the post', async () => {
     const f = stubFetch({ 'https://www.instagram.com/reel/DTestReel01/': new Response(null, { status: 302, headers: { Location: 'https://www.instagram.com/accounts/login/' } }) });
@@ -200,17 +329,80 @@ describe('igResolve / igCheckEmbed (stubbed network)', () => {
     assert.equal(p.busy, true); assert.equal(p.site, false); assert.equal(p.scope, 'br_post', 'the refusing budget is passed on');
     assert.equal(r.scope, null);
     const n = await igResolve(ref, { fetchImpl: f, brContent: async () => null });
-    assert.equal(n.busy, undefined); assert.equal(n.error, 'redirect'); assert.equal(n.retry, 'soon');
+    assert.equal(n.busy, undefined); assert.equal(n.error, 'embed_gone', 'the stub answers the embed page 404'); assert.equal(n.retry, 'later');
   });
-  test('login redirect is never followed; 404 is "gone" (no Browser Run)', async () => {
-    const f = stubFetch({ 'https://www.instagram.com/reel/DTestReel01/': new Response(null, { status: 302, headers: { Location: 'https://www.instagram.com/accounts/login/' } }) });
+  test('login redirect is never followed (only its kind is kept); 404 is "gone" without the embed or Browser Run', async () => {
+    const login = new Response(null, { status: 302, headers: { Location: 'https://www.instagram.com/accounts/login/?next=%2Freel%2FDTestReel01%2F&tok=SECRET' } });
+    const f = stubFetch({ 'https://www.instagram.com/reel/DTestReel01/': login,
+      'https://www.instagram.com/reel/DTestReel01/embed/captioned/': new Response(null, { status: 302, headers: { Location: '/challenge/?x=1' } }) });
     const r = await igResolve(ref, { fetchImpl: f });
-    assert.equal(r.ok, false); assert.equal(r.error, 'redirect'); assert.equal(f.calls.length, 1);
+    assert.equal(r.ok, false); assert.equal(r.error, 'redirect'); assert.equal(r.retry, 'soft');
+    assert.deepEqual(r.why, { page: 'redirect', loc: 'login', embed: 'redirect:challenge' });
+    assert.ok(!JSON.stringify(r).includes('SECRET') && !JSON.stringify(r).includes('next='), 'never the Location itself');
+    assert.deepEqual(f.calls.map((c) => [c.url, c.init.redirect]), [['https://www.instagram.com/reel/DTestReel01/', 'manual'],
+      ['https://www.instagram.com/reel/DTestReel01/embed/captioned/', 'manual']]);
     let br = 0;
     const g = stubFetch({});
     const r2 = await igResolve(ref, { fetchImpl: g, brContent: async () => { br++; return null; } });
     assert.equal(r2.error, 'gone'); assert.equal(r2.retry, 'gone'); assert.equal(br, 0);
+    assert.equal(g.calls.length, 1, 'a removed post: no embed fetch');
     assert.equal((await igResolve({ code: 'x', kind: 'reel' }, { fetchImpl: g })).error, 'bad_ref');
+    assert.deepEqual(['/accounts/login/', 'https://www.instagram.com/accounts/login', '/privacy/checks/?x', '/consent/', '/challenge/1/', '/', null, 'http://[bad']
+      .map(igRedirectKind), ['login', 'login', 'consent', 'consent', 'challenge', 'other', 'other', 'other']);
+  });
+  test('fallback order: page redirect -> embed serves the video (via embed); embed blocked -> Browser Run; both remembered', async () => {
+    const R = 'https://www.instagram.com/reel/DTestEmbV01/', E = R + 'embed/captioned/';
+    const redirect = () => new Response(null, { status: 302, headers: { Location: 'https://www.instagram.com/accounts/login/' } });
+    const eref = { code: 'DTestEmbV01', kind: 'reel' };
+    let br = 0;
+    const f = stubFetch({ [R]: redirect, [E]: html200(FX('ig-embed-captioned.html')) });
+    const r = await igResolve(eref, { fetchImpl: f, referer: 'https://velikesgin.com', brContent: async () => { br++; return null; } });
+    assert.deepEqual({ ok: r.ok, via: r.via, embed: r.embed, why: r.why }, { ok: true, via: 'embed', embed: 'ok', why: { page: 'redirect', loc: 'login' } });
+    assert.equal(r.item.user, 'ornek.kahve'); assert.match(r.item.video.url, /EMBVIDEO\.mp4/); assert.equal(br, 0, 'no Browser Run');
+    const h = f.calls[1].init.headers;
+    assert.deepEqual([h['Sec-Fetch-Dest'], h['Sec-Fetch-Site'], h.Referer], ['iframe', 'cross-site', 'https://velikesgin.com/'], 'as the board\'s iframe');
+    // 429 / 5xx / timeout of the page: the embed too
+    for (const status of [429, 503]) {
+      const g = stubFetch({ [R]: new Response('x', { status }), [E]: html200(FX('ig-embed-captioned.html')) });
+      const x = await igResolve(eref, { fetchImpl: g });
+      assert.deepEqual([x.ok, x.via, x.why.page], [true, 'embed', 'http_' + status]);
+    }
+    // the embed shows "Instagram'da İzle": remembered as blocked, Browser Run resolves it
+    const B = 'https://www.instagram.com/reel/DTestEmbB01/';
+    const bl = stubFetch({ [B]: redirect, [B + 'embed/captioned/']: html200(FX('ig-embed-captioned-blocked.html')) });
+    const rb = await igResolve({ code: 'DTestEmbB01', kind: 'reel' }, { fetchImpl: bl, brContent: async () => { br++; return FX('ig-reel.html').replaceAll('DTestReel01', 'DTestEmbB01'); } });
+    assert.deepEqual({ ok: rb.ok, via: rb.via, embed: rb.embed, embedWhy: rb.why.embed }, { ok: true, via: 'br', embed: 'blocked', embedWhy: 'blocked' });
+    assert.equal(br, 1);
+    const rb2 = await igResolve({ code: 'DTestEmbB01', kind: 'reel' }, { fetchImpl: bl, brContent: async () => null });
+    assert.deepEqual({ ok: rb2.ok, error: rb2.error, retry: rb2.retry, embed: rb2.embed }, { ok: false, error: 'redirect', retry: 'soft', embed: 'blocked' });
+    // Browser Run refused after a blocked embed: busy, the embed state still reported
+    const busy = await igResolve({ code: 'DTestEmbB01', kind: 'reel' }, { fetchImpl: bl, brContent: async () => ({ refused: true, retry_s: 9 }) });
+    assert.deepEqual([busy.busy, busy.embed], [true, 'blocked']);
+    // a photo through the embed: resolved (no video)
+    const P = 'https://www.instagram.com/p/DTestEmbP01/';
+    const ph = await igResolve({ code: 'DTestEmbP01', kind: 'p' }, { fetchImpl: stubFetch({ [P]: redirect, [P + 'embed/captioned/']: html200(FX('ig-embed-captioned-photo.html')) }) });
+    assert.deepEqual([ph.ok, ph.via, ph.embed, ph.item.video, !!ph.item.image], [true, 'embed', 'photo', null, true]);
+    assert.equal(igEmbedCaptionedUrl({ code: 'DTestEmbP01', kind: 'p' }), P + 'embed/captioned/');
+  });
+  test('admitEmbed: the embed fetch is admitted on its own; refused (or throwing) -> no embed fetch, Browser Run still tried', async () => {
+    const R = 'https://www.instagram.com/reel/DTestEmbV01/', E = R + 'embed/captioned/';
+    const redirect = () => new Response(null, { status: 302, headers: { Location: 'https://www.instagram.com/accounts/login/' } });
+    const eref = { code: 'DTestEmbV01', kind: 'reel' };
+    let asked = 0, br = 0;
+    const f = stubFetch({ [R]: redirect, [E]: html200(FX('ig-embed-captioned.html')) });
+    const ok = await igResolve(eref, { fetchImpl: f, admitEmbed: async () => { asked++; return null; } });
+    assert.deepEqual([ok.ok, ok.via, asked, f.calls.length], [true, 'embed', 1, 2]);
+    for (const admitEmbed of [async () => 'daily_limit', async () => { throw new Error('d1 down'); }]) {
+      const g = stubFetch({ [R]: redirect, [E]: html200(FX('ig-embed-captioned.html')) });
+      const r = await igResolve(eref, { fetchImpl: g, admitEmbed, brContent: async () => { br++; return null; } });
+      assert.deepEqual([r.ok, r.error, r.retry, r.why.embed], [false, 'redirect', 'soft', 'busy']);
+      assert.deepEqual(g.calls.map((c) => c.url), [R], 'no embed fetch');
+    }
+    assert.equal(br, 2, 'Browser Run after a refused embed');
+    // a page that resolves never asks for the embed's unit
+    asked = 0;
+    const p = await igResolve(ref, { fetchImpl: stubFetch({ 'https://www.instagram.com/reel/DTestReel01/': html200(FX('ig-reel.html')) }), admitEmbed: async () => { asked++; return null; } });
+    assert.deepEqual([p.ok, p.via, asked], [true, 'plain', 0]);
   });
   test('igCheckEmbed fetches /embed/ as a cross-site iframe', async () => {
     const f = stubFetch({ 'https://www.instagram.com/reel/DTestReel01/embed/': html200(FX('ig-embed-blocked.html')) });
@@ -535,9 +727,15 @@ describe('Instagram copy media + cache helpers', () => {
     row = await vcGet(db, 6, 'ig_copy');
     assert.equal(row.retry_at, failed.retry_at, 'an earlier, longer backoff stays');
     assert.equal(row.fail_count, 1); assert.equal(row.error, 'redirect');
-    assert.deepEqual(vcExtra(row), { removed: 1, deferred: 'busy' }, 'other extra fields stay');
+    const du1 = vcExtra(row).du;
+    assert.ok(Math.abs(du1 - (now + 60)) <= 2, 'its until (du)');
+    assert.deepEqual(vcExtra(row), { removed: 1, deferred: 'busy', du: du1 }, 'other extra fields stay');
     await vcDefer(db, 6, 'ig_copy', 86400, 'busy');
-    assert.ok((await vcGet(db, 6, 'ig_copy')).retry_at > failed.retry_at, 'a later deferral extends it');
+    row = await vcGet(db, 6, 'ig_copy');
+    assert.ok(row.retry_at > failed.retry_at, 'a later deferral extends it'); assert.equal(vcExtra(row).du, row.retry_at);
+    await vcDefer(db, 6, 'ig_copy', 60, 'br');
+    assert.equal(vcExtra(await vcGet(db, 6, 'ig_copy')).du, row.retry_at, 'du: the latest deferral\'s until');
+    assert.ok(Math.abs(vcExtra(await vcGet(db, 5, 'ig_copy')).du - until) <= 0, 'a new row: du = its retry_at');
   });
 });
 

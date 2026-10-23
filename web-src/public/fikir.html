@@ -433,7 +433,7 @@
     @media (hover: hover) { .ig-help .text-btn:hover { color: var(--accent); } }
     /* An Instagram video played live (post.live, streamed through the API) that could not be played here: the player's place
        and size, its poster dimmed (or a dark box), "Video şu anda oynatılamıyor" + "Tekrar dene"; never the embed's
-       "Instagram'da İzle". */
+       "Instagram'da İzle" (a post whose embed is known to play gets that embed instead: classify). */
     .media-box.preview.live-dead { background: #111; }
     .media-box.preview.live-dead .facade-thumb { opacity: 0.4; }
     .live-dead-msg {
@@ -2279,11 +2279,14 @@
         }
       }
       // Instagram video without our R2 copy (or a copy that failed here): played live through the API worker (post.live).
-      // A live video that failed twice keeps this layout with its poster + "Tekrar dene" (never the embed's "Instagram'da İzle").
+      // A live video that failed twice: Instagram's own embed when it is known to play the post (live.embed 'ok': it plays
+      // from the viewer's own network, the server's link does not matter), else this layout with its poster + "Tekrar dene"
+      // (a reel known to be blocked, or not known, never gets the embed's "Instagram'da İzle").
       if (isIgPost({ platform, parsed })) {
         const live = liveOf(post);
         if (live) {
           const dead = !!(bad && bad.has(liveKey(live.url)));
+          if (dead && live.embed === 'ok' && parsed.embed && !parsed.needsResolve) return { kind: 'embed', platform, parsed };
           const plan = dead ? { type: 'image', url: live.poster, w: live.w, h: live.h, atSource: false } : previewPlan(live, null, true);
           // the fallback of a copy that failed here comes without credit / caption (the server leaves them out): the copy's
           const cp = copy && copy.source === 'instagram' ? copy : null;

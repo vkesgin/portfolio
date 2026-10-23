@@ -7,6 +7,12 @@ up, and only the keys the parser reads are kept, plus decoys (another post of th
 - ig-carousel.html: /p/ carousel whose second item is a video (no top-level video_versions)
 - ig-photo.html: /p/ photo post (media_type 1, image_versions2 only; live playback: a post that is no video)
 - ig-embed-blocked.html, ig-embed-ok.html, ig-embed-photo.html: the parts of /reel/{code}/embed/ the classifier reads
+- ig-embed-captioned.html, ig-embed-captioned-photo.html, ig-embed-captioned-blocked.html: /{kind}/{code}/embed/captioned/
+  as it was served on 2026-10-23 (igEmbedExtract, the fallback of a refused post page): the ServerJS handle() payload with
+  PolarisEmbedSimple init and its contextJSON string ({context, gql_data: {shortcode_media}}, '/' escaped at both levels,
+  non-ASCII as \u escapes), display_resources, dimensions, owner, caption, clips_music_attribution_info, video_url; the
+  blocked one has the WatchOnInstagram markup and no video_url. Generated from made-up values (nothing of a real page)
+- ig-embed-plain.html: the same post as unescaped JSON (window.__additionalDataLoaded('extra', ...)) after a decoy post
 
 Download adapters (tests/inspire-video-adapters.test.mjs), same rule: the structure copies what each platform served
 logged out on 2026-10-08 (phase-g captures), every id, user name, title, CDN path and token is made up, and only the keys

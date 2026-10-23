@@ -13,6 +13,7 @@ import {
   IG_UA, igRef, igResolve, igCheckEmbed, openMedia, openMuxed, contentDisposition, titleSlug, dlHint, dlAdapterFor,
   adToCache, adFromCache, VIDEO_CACHE_DDL, vcGet, vcPut, vcFail, vcDefer, vcExtra, vcItemFresh, vcBackingOff, itemToCache, cacheToItem,
   igCacheCaptionCut, copyTargetOf, copyKind, imageDims, COPY_PLATFORM_TR, redditRef, igCdnUrl, igLiveVideo, IG_PLAY_MIMES, cleanCaption,
+  igRetryAt, igBackingOff, igRetrySql, igEmbedKnown,
 } from './inspire-video.js';
 import { Budget, CRON_BUDGET, CRON_COSTS, CRON_IG, withBudget } from './budget.js';
 import {
@@ -1992,7 +1993,9 @@ function inspireVideoConfig(env) {
     copyViewPerIp: int(env.FIKIR_COPY_VIEW_PER_IP, 40),          // ... per IP
     // live Instagram playback (GET /posts/:id/play; post.live / live_ask); off when the var is missing
     igLive: env.FIKIR_IG_LIVE === '1',
-    igLiveCron: int(env.FIKIR_IG_LIVE_CRON, 2),   // Instagram posts resolved per "7-59/15" run while R2 copies of Instagram are off
+    igLiveCron: int(env.FIKIR_IG_LIVE_CRON, 3),   // Instagram posts resolved per "7-59/15" run while R2 copies of Instagram are off
+    // a refused post page (login-wall redirect, 429 ...) is resolved through the post's captioned embed page (igResolve)
+    igEmbed: env.FIKIR_IG_EMBED !== '0',
   };
 }
 // Platforms whose video posts are copied without anyone asking (cron, on view): Instagram while FIKIR_IG_AUTO is on (copies
@@ -2078,42 +2081,61 @@ async function inspireBrContent(env, db, url, { postId = null, ipKey = null, slo
     for (const it of items.filter((x) => x.units === 5000)) await inspireAdjust(db, day, it.scope, it.subject, Math.round(used) - 5000);
   }
 }
-// Instagram fetches by the worker (page or embed): site-wide 10-minute window + daily quota. -> null (ok) | error code
-async function inspireIgAdmit(env, db) {
+// One Instagram fetch by the worker (a page, an embed page): site-wide 10-minute window + daily quota. cron: the cron's
+// fetches also count under subject 'cron', capped at INSPIRE_IG_CRON_SHARE of the daily quota (same statement), so the
+// refresh / repair backlog never spends what viewers' plays, asks and downloads need. -> null (ok) | error code
+const INSPIRE_IG_CRON_SHARE = 0.6;
+async function inspireIgAdmit(env, db, { cron = false } = {}) {
   if (await inspireOverLimit(db, [['ig_fetch', 'all']])) return 'busy';
+  const daily = inspireVideoConfig(env).igFetchDaily;
   try {
-    const q = await inspireReserve(db, utcDay(), [{ scope: 'ig_fetch', subject: '', lim: inspireVideoConfig(env).igFetchDaily, units: 1 }]);
+    const q = await inspireReserve(db, utcDay(), [{ scope: 'ig_fetch', subject: '', lim: daily, units: 1 },
+      ...(cron ? [{ scope: 'ig_fetch', subject: 'cron', lim: Math.floor(daily * INSPIRE_IG_CRON_SHARE), units: 1 }] : [])]);
     return q.ok ? null : 'daily_limit';
   } catch (e) { return 'quota_unavailable'; }
 }
-// The post's Instagram media: cached links while they last (>= 15 min left), else one resolve (plain fetch, then Browser Run
-// when allowed; a taken Browser Run slot is waited for up to slotWaitMs). Failures back off (10 min .. 24 h; removed posts
-// 7 days) so repeated clicks never hammer Instagram. "Busy" (Instagram fetch window / daily budget, Browser Run slot or
-// budget) is no failure of the post: never recorded, the caller says "try again later".
-// fresh: ignore a cached item (its CDN link just failed). wantPost (R2 copies): a cached caption the old 300-code-point cap
-// cut is resolved again once (igCacheCaptionCut).
-// -> {ok: true, item, cached} | {ok: false, error, retry_at?} (retry_at: the backoff just recorded)
-//  | {ok: false, error: 'busy', busy: true, retry_s, site, scope?}
-async function inspireIgItem(env, db, postId, ref, { ipKey = null, allowBR = true, fresh = false, slotWaitMs = 12000, wantPost = false } = {}) {
+// The post's Instagram media: cached links while they last (>= 15 min left), else one resolve (post page, its embed page
+// when the page is refused and FIKIR_IG_EMBED is on, then Browser Run when allowed; a taken Browser Run slot is waited for
+// up to slotWaitMs; igResolve). Failures back off (Instagram-side hiccups 10 min .. 1 h, 6 h after 8 in a row, igSoftError /
+// igRetryAt; others 10 min .. 24 h; removed posts 7 days) so repeated clicks never hammer Instagram. "Busy" (Instagram fetch window / daily
+// budget, Browser Run slot or budget) is no failure of the post: never recorded, the caller says "try again later".
+// Links of the last resolve that a failed re-resolve left in the row (vcFail keeps url + extra) are served while >= 15 min
+// of them are left, with `stale` = why no fresh resolve happened (backing off, busy, failed): a download / play still works.
+// fresh: ignore a cached item (its CDN link just failed; never the stale fallback). wantPost (R2 copies): a cached caption
+// the old 300-code-point cap cut is resolved again once (igCacheCaptionCut).
+// The embed's state (r.embed: 'ok' = the embed served the video, 'blocked') is kept in the row's extra (em) so the board
+// knows whether Instagram's own embed would play the post; a resolve that did not reach the embed keeps the last one.
+// The embed fetch (only when the page was refused) is admitted on its own (inspireIgAdmit: one more ig_fetch unit and
+// window hit); refused, the resolve goes on without it (why.embed 'busy'). cron: the cron's share (inspireIgAdmit).
+// -> {ok: true, item, cached, via?, embed, stale?} | {ok: false, error, retry_at?, embed} (retry_at: the backoff just recorded)
+//  | {ok: false, error: 'busy', busy: true, retry_s, site, scope?, why}
+async function inspireIgItem(env, db, postId, ref, { ipKey = null, allowBR = true, fresh = false, slotWaitMs = 12000, wantPost = false, cron = false } = {}) {
   const row = await vcGet(db, postId, 'ig');
+  const prevX = vcExtra(row);
+  const known = prevX.em === 'ok' || prevX.em === 'blocked' ? prevX.em : null;
   if (!fresh && row && vcItemFresh(row) && !(wantPost && igCacheCaptionCut(row))) {
     const it = cacheToItem(row, ref.code);
-    if (it) return { ok: true, item: it, cached: true };
+    if (it) return { ok: true, item: it, cached: true, embed: known };
   }
-  if (!fresh && vcBackingOff(row)) return { ok: false, error: row.error || 'backoff', backoff: true };
-  const admit = await inspireIgAdmit(env, db);
-  if (admit) return { ok: false, error: 'busy', busy: true, retry_s: admit === 'busy' ? 600 : admit === 'daily_limit' ? inspireSecondsToMidnight() : 600, site: true, why: admit };
-  const r = await igResolve(ref, { brContent: allowBR ? (url) => inspireBrContent(env, db, url, { postId, ipKey, slotWaitMs }) : null });
-  console.log('inspire ig resolve', postId, r.ok ? 'ok via ' + r.via : r.busy ? `busy (Browser Run refused, retry in ${r.retry_s} s)` : 'failed ' + r.error);   // one Instagram page fetch (+ Browser Run)
-  if (r.busy) return { ok: false, error: 'busy', busy: true, retry_s: r.retry_s, site: r.site, scope: r.scope || null, why: 'br' };
+  const kept = !fresh && row && row.error && !(wantPost && igCacheCaptionCut(row)) && Number(row.expires_at) - inspireNowS() >= 900 ? cacheToItem(row, ref.code) : null;
+  const orKept = (r) => (kept ? { ok: true, item: kept, cached: true, embed: known, stale: r } : r);
+  if (!fresh && igBackingOff(row)) return orKept({ ok: false, error: row.error || 'backoff', backoff: true, embed: known });
+  const admit = await inspireIgAdmit(env, db, { cron });
+  if (admit) return orKept({ ok: false, error: 'busy', busy: true, retry_s: admit === 'busy' ? 600 : admit === 'daily_limit' ? inspireSecondsToMidnight() : 600, site: true, why: admit });
+  const r = await igResolve(ref, { brContent: allowBR ? (url) => inspireBrContent(env, db, url, { postId, ipKey, slotWaitMs }) : null,
+    embed: inspireVideoConfig(env).igEmbed, referer: inspireBoardOrigin(env), admitEmbed: () => inspireIgAdmit(env, db, { cron }) });
+  const em = r.embed === 'ok' || r.embed === 'blocked' ? r.embed : known;
+  console.log('inspire ig resolve', postId, r.ok ? 'ok via ' + r.via : r.busy ? `busy (Browser Run refused, retry in ${r.retry_s} s)` : 'failed ' + r.error,
+    r.why ? JSON.stringify(r.why) : '');   // one Instagram page fetch (+ its embed page: a unit of its own, + Browser Run)
+  if (r.busy) return orKept({ ok: false, error: 'busy', busy: true, retry_s: r.retry_s, site: r.site, scope: r.scope || null, why: 'br', embed: em });
   let retryAt = null;
   try {
     if (r.ok) {
       const c = itemToCache(r.item);
-      await vcPut(db, postId, 'ig', { ...c, extra: { ...c.extra, via: r.via } });
-    } else retryAt = await vcFail(db, postId, 'ig', r.error, { retry: r.retry });
+      await vcPut(db, postId, 'ig', { ...c, extra: { ...c.extra, via: r.via, ...(em ? { em } : {}) } });
+    } else retryAt = await vcFail(db, postId, 'ig', r.error, { retry: r.retry, merge: { ...(em ? { em } : {}), why: r.why || null } });
   } catch (e) { console.error('inspire ig cache', e && e.message); }
-  return r.ok ? { ok: true, item: r.item, cached: false, via: r.via } : { ok: false, error: r.error, retry_at: retryAt };
+  return r.ok ? { ok: true, item: r.item, cached: false, via: r.via, embed: em } : orKept({ ok: false, error: r.error, retry_at: retryAt, embed: em });
 }
 // Embed check of one post (cron, ig-blocked report): stores state blocked|ok|photo (re-checked after 30 days) or backs off.
 async function inspireIgEmbed(env, db, postId, ref) {
@@ -2356,8 +2378,10 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin, au
         : ownParts || titleParts;
       if (u && (res = await fromUrl(u, want, parts))) return res;
     }
-    // 2. Instagram post (resolved once; a cached CDN link that fails is resolved again once). Instagram busy for a moment:
-    //    say so (429) rather than serve the poster in place of the video.
+    // 2. Instagram post (inspireIgItem: cached links, else page -> embed page -> Browser Run; links a failed re-resolve left
+    //    are used while they last). A cached CDN link that fails is resolved again once (not one served while the post backs
+    //    off: that would skip the backoff). Instagram busy for a moment: say so (429) rather than serve the poster in place
+    //    of the video.
     if (ig && (igRes || (await takeDay()))) {
       if (!igRes) igRes = await inspireIgItem(env, db, id, ig, { ipKey });
       for (;;) {
@@ -2366,7 +2390,7 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin, au
         const u = want === 'video' ? (it.video && it.video.url) : (it.image && it.image.url);
         if (!u) break;
         if ((res = await fromUrl(u, want, igParts(it)))) return res;
-        if (igRetried || !igRes.cached || !/^(gone|upstream_4\d\d)$/.test(String(lastError))) break;
+        if (igRetried || !igRes.cached || igRes.stale || !/^(gone|upstream_4\d\d)$/.test(String(lastError))) break;
         igRetried = true;
         igRes = await inspireIgItem(env, db, id, ig, { ipKey, fresh: true });
       }
@@ -2806,18 +2830,19 @@ function inspireCopyView(cfg, parsed, media, recs, nowS) {
 // copy does not exclude it (it only keeps live_ask off and the post out of the cron's backlog).
 const inspireLiveRef = (parsed) => igRef(parsed);
 const inspireCopiedIg = (media) => !!(media && media.kind === 'video' && media.source === 'instagram');
-// Facts for the live object {v: plays live, w, h, by, caption, audio: bool|null}, from a GET /posts SQL row
-// {hv, width, height, usr, caption, audio (json_extract: 1 / 0 / null), mt, lv} or from an inspireIgItem() item.
+// Facts for the live object {v: plays live, w, h, by, caption, audio: bool|null, embed}, from a GET /posts SQL row
+// {hv, width, height, usr, caption, audio (json_extract: 1 / 0 / null), mt, lv, em (the 'ig' row's), est (the embed
+// check's state)} or from an inspireIgItem() item + its embed state.
 function inspireLiveFactsRow(r) {
   return {
     v: !!Number(r.hv) && igLiveVideo({ hasVideo: true, mediaType: r.mt, lv: r.lv }), w: r.width, h: r.height, by: r.usr,
-    caption: r.caption, audio: r.audio == null ? null : Number(r.audio) === 1,
+    caption: r.caption, audio: r.audio == null ? null : Number(r.audio) === 1, embed: igEmbedKnown(r.em, r.est),
   };
 }
-function inspireLiveFactsItem(it) {
+function inspireLiveFactsItem(it, embed = null) {
   return {
     v: igLiveVideo({ hasVideo: !!(it && it.video), mediaType: it && it.media_type, lv: it && it.lead_video ? 1 : 0 }),
-    w: it.w, h: it.h, by: it.user, caption: it.caption, audio: typeof it.has_audio === 'boolean' ? it.has_audio : null,
+    w: it.w, h: it.h, by: it.user, caption: it.caption, audio: typeof it.has_audio === 'boolean' ? it.has_audio : null, embed,
   };
 }
 // Play path of a post's part with its play token; the board's PLAY_PATH_RE (assets/js/fikir-url.mjs) must accept it, so the
@@ -2827,7 +2852,10 @@ const inspireLiveDim = (n) => (Number.isInteger(Number(n)) && Number(n) >= 1 && 
 // The `live` object a post carries (never a CDN URL): our play paths with the post's play token (memoized per 12-hour
 // window, worker/fikir-gate.js), the credit, the caption (cleaned when it was cached; memoized here like the meta outputs)
 // and the size. poster is always the part=image path (404 when the post has none: the board drops the <img>).
-// -> {kind: 'video', source: 'instagram', url, poster, w, h, by, caption, audio} | null (no live video, or no JWT_SECRET)
+// embed: 'ok' when Instagram's own embed is known to play the post (the resolver's embed fallback served its video, or the
+// embed check found it playable): the board mounts that embed when our player cannot play it here (it plays from the
+// viewer's own network); 'blocked' / null: the board keeps "Video şu anda oynatılamıyor" (never "Instagram'da İzle").
+// -> {kind: 'video', source: 'instagram', url, poster, w, h, by, caption, audio, embed} | null (no live video, or no JWT_SECRET)
 async function inspireLiveOut(env, id, f) {
   if (!f || !f.v) return null;
   const t = await playToken(env, id);
@@ -2839,7 +2867,7 @@ async function inspireLiveOut(env, id, f) {
     kind: 'video', source: 'instagram', url, poster, w, h,
     by: typeof f.by === 'string' && /^[A-Za-z0-9._]{1,30}$/.test(f.by) ? f.by : null,
     caption: typeof f.caption === 'string' && f.caption ? inspireOutMemo('c', f.caption, () => cleanCaption(f.caption, COPY_CAPTION_MAX)) : null,
-    audio: typeof f.audio === 'boolean' ? f.audio : null,
+    audio: typeof f.audio === 'boolean' ? f.audio : null, embed: f.embed === 'ok' || f.embed === 'blocked' ? f.embed : null,
   };
 }
 
@@ -2941,31 +2969,42 @@ async function inspireIgScheduled(env, budget = new Budget('ig cron', {})) {
   }
 }
 
-// Live playback backlog (CRON_IG while Instagram is not copied): Instagram posts never resolved (or whose failure backoff
-// is over) are resolved, <= igLiveCron per run (default 2), newest first, so GET /posts knows video vs photo before a card
-// asks (POST /live). Then, with what is left of the run, live videos whose CDN links expire within INSPIRE_LIVE_REFRESH_S
-// (links last ~33-107 h) are resolved again, newest first too, so a board opened days later still finds links that play
-// and its viewers do not queue resolves on the site-wide Instagram window (GET /play only resolves what the cron missed). Resolve only: no bytes, no R2. The first may use Browser Run (waiting for its slot), the others
-// never; each starts only when its worst case fits the run's budget (CRON_COSTS igLive / igLivePlain). Every row it passes
-// over is recorded (inspireIgItem's backoff, or vcDefer for a link that is no post / a post whose Browser Run is refused),
-// so the queue never stalls; a resolved row (links or a poster, no error) is done until its links near their end. A
-// Browser Run refusal after the plain fetch (this post's own budget, the site's daily one, the slot) defers that post and
-// the run goes on plain-only; only Instagram's fetch window / daily budget stops the run. Posts with our R2 copy are
-// skipped (they play the copy); photos (no video link) and carousels starting with a photo are never refreshed.
+// Live playback backlog (CRON_IG while Instagram is not copied): <= igLiveCron resolves per run (default 3), in this order:
+//   0  live videos that are broken now: links expired, or the last re-resolve failed (fewest failures, oldest expiry first),
+//      so a post Instagram refused for a while comes back without anyone opening it
+//   1  posts never resolved (or whose failure backoff is over and that have no video links), newest first, so GET /posts
+//      knows video vs photo before a card asks (POST /live)
+//   2  live videos whose CDN links expire within INSPIRE_LIVE_REFRESH_S (12 h; links last ~33-48 h, so one resolve every
+//      ~21-36 h), oldest expiry first, so a board opened days later still finds links that play and its viewers do not
+//      queue resolves on the site-wide Instagram window (GET /play only resolves what the cron missed)
+// A row backing off is skipped (igRetrySql: an Instagram-side hiccup waits at most 1 h (6 h after 8 in a row), rows backed
+// off up to 24 h before 2026-10-23 too; a vcDefer deferral is kept). The cron's Instagram fetches are capped at
+// INSPIRE_IG_CRON_SHARE of FIKIR_IG_FETCH_DAILY (inspireIgAdmit cron: the rest is the viewers'). Resolve only: no bytes, no R2. The first may use Browser Run (waiting for its slot), the others
+// never; each starts only when its worst case fits the run's budget (CRON_COSTS igLive / igLivePlain: page + embed page
+// (+ Browser Run)). Every row it passes over is recorded (inspireIgItem's backoff, or vcDefer for a link that is no post /
+// a post whose Browser Run is refused), so the queue never stalls; a resolved row (links or a poster, no error) is done
+// until its links near their end. A Browser Run refusal after the page and embed fetches (this post's own budget, the
+// site's daily one, the slot) defers that post and the run goes on plain-only; only Instagram's fetch window / daily
+// budget stops the run. Posts with our R2 copy are skipped (they play the copy); photos (no video link) and carousels
+// starting with a photo are never refreshed.
 const INSPIRE_LIVE_REFRESH_S = 12 * 3600;
 async function inspireLiveBacklog(env, db, cfg, budget, nowS, pace) {
   if (cfg.igLiveCron <= 0 || !budget.fits({ d1: 1 + CRON_COSTS.igLivePlain.d1, sub: CRON_COSTS.igLivePlain.sub })) return;
-  // rf = 1: a resolved live video whose links expire soon (refresh: resolved afresh, its cached links ignored)
-  const { results } = await db.prepare(`SELECT p.id, p.url, (c.post_id IS NOT NULL AND c.error IS NULL AND c.url IS NOT NULL) AS rf
+  // rf = 1: a resolved live video whose links expire soon or expired (refresh: resolved afresh, its cached links ignored)
+  const exp = 'COALESCE(c.expires_at, c.resolved_at + 3600)';
+  const vid = `(c.url IS NOT NULL AND json_valid(c.extra) AND (COALESCE(json_extract(c.extra, '$.media_type'), 0) != 8 OR json_extract(c.extra, '$.lv') = 1))`;
+  const { results } = await db.prepare(`SELECT p.id, p.url, (c.post_id IS NOT NULL AND c.error IS NULL AND c.url IS NOT NULL) AS rf,
+      CASE WHEN c.post_id IS NOT NULL AND ${vid} AND (c.error IS NOT NULL OR ${exp} <= ?1) THEN 0
+        WHEN c.post_id IS NULL OR c.error IS NOT NULL OR (c.url IS NULL AND c.poster IS NULL) THEN 1 ELSE 2 END AS pri
     FROM inspire_posts p LEFT JOIN inspire_video_cache c ON c.post_id = p.id AND c.kind = 'ig'
     WHERE ${INSPIRE_IG_SQL} AND ${INSPIRE_IG_POST_SQL}
     AND NOT (p.media IS NOT NULL AND json_valid(p.media) AND json_extract(p.media, '$.source') = 'instagram')
+    AND ${igRetrySql('c')} <= ?1
     AND (c.post_id IS NULL
-      OR (COALESCE(c.retry_at, 0) <= ?1 AND NOT (c.error IS NULL AND (c.url IS NOT NULL OR c.poster IS NOT NULL)))
-      OR (c.error IS NULL AND c.url IS NOT NULL AND COALESCE(c.retry_at, 0) <= ?1
-        AND COALESCE(c.expires_at, c.resolved_at + 3600) < ?1 + ?2
-        AND json_valid(c.extra) AND (COALESCE(json_extract(c.extra, '$.media_type'), 0) != 8 OR json_extract(c.extra, '$.lv') = 1)))
-    ORDER BY rf ASC, p.id DESC LIMIT 10`).bind(nowS, INSPIRE_LIVE_REFRESH_S).all();
+      OR NOT (c.error IS NULL AND (c.url IS NOT NULL OR c.poster IS NOT NULL))
+      OR (c.error IS NULL AND ${vid} AND ${exp} < ?1 + ?2))
+    ORDER BY pri ASC, CASE WHEN pri = 0 THEN COALESCE(c.fail_count, 0) ELSE 0 END ASC,
+      CASE WHEN pri = 1 THEN -p.id ELSE ${exp} END ASC, p.id DESC LIMIT 10`).bind(nowS, INSPIRE_LIVE_REFRESH_S).all();
   let done = 0, brOff = false;
   for (const r of results || []) {
     if (done >= cfg.igLiveCron) break;
@@ -2979,17 +3018,20 @@ async function inspireLiveBacklog(env, db, cfg, budget, nowS, pace) {
     if (!budget.fits(br ? CRON_COSTS.igLive : CRON_COSTS.igLivePlain)) break;
     await pace();
     done++;
-    const res = await inspireIgItem(env, db, r.id, ref, { allowBR: br, slotWaitMs: br ? 12000 : 0, fresh: !!Number(r.rf) });
-    console.log('inspire live cron', r.id, Number(r.rf) ? 'refresh' : 'new', res.ok ? 'ok via ' + (res.via || 'cache') : res.busy ? `busy (retry in ${res.retry_s} s)` : 'failed ' + res.error);
-    // Browser Run refused after the plain fetch (this post's own budget, the site's daily one, the slot): this post waits,
-    // the queue goes on without Browser Run
-    if (res.busy && res.why === 'br') {
+    const res = await inspireIgItem(env, db, r.id, ref, { allowBR: br, slotWaitMs: br ? 12000 : 0, fresh: !!Number(r.rf), cron: true });
+    // a failed resolve may still hand back the links it left (stale): the run treats it as the failure it is
+    const st = res.stale || res;
+    const kind = Number(r.pri) === 0 ? 'broken' : Number(r.rf) ? 'refresh' : 'new';
+    console.log('inspire live cron', r.id, kind, st.ok ? 'ok via ' + (st.via || 'cache') : st.busy ? `busy (retry in ${st.retry_s} s)` : 'failed ' + st.error);
+    // Browser Run refused after the page + embed fetches (this post's own budget, the site's daily one, the slot): this
+    // post waits, the queue goes on without Browser Run
+    if (st.busy && st.why === 'br') {
       brOff = true;
       if (!budget.fits({ d1: 1 })) break;
-      try { await vcDefer(db, r.id, 'ig', res.retry_s, res.scope || 'br'); } catch (e) {}
+      try { await vcDefer(db, r.id, 'ig', st.retry_s, st.scope || 'br'); } catch (e) {}
       continue;
     }
-    if (res.busy) break;   // Instagram's fetch window / daily budget: every post waits for the next run
+    if (st.busy) break;   // Instagram's fetch window / daily budget (or the cron's share of it): every post waits for the next run
   }
 }
 
@@ -3249,7 +3291,8 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       const cfgV = inspireVideoConfig(env);
       const hints = sbClient && cfgV.copyView;
       // live Instagram playback: the facts of the page's resolved Instagram posts (one more statement, ~200 small rows; the
-      // json_valid guard keeps one bad extra from failing the batch; never the CDN links themselves)
+      // json_valid guard keeps one bad extra from failing the batch; never the CDN links themselves) + their embed state
+      // (em of the row, else the embed check's: post.live.embed)
       const liveOn = sbClient && cfgV.igLive;
       const batchRes = await db.batch([
         db.prepare(`${INSPIRE_POST_SELECT} WHERE (?3 IS NULL OR p.id < ?3) ORDER BY p.id DESC LIMIT ?4`).bind(cid, uid, before, limit + 1),
@@ -3257,7 +3300,11 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
           (SELECT id FROM inspire_posts WHERE (?3 IS NULL OR id < ?3) ORDER BY id DESC LIMIT ?4) ORDER BY n.id ASC`).bind(cid, uid, before, limit),
         ...(hints ? [db.prepare(`SELECT post_id, kind, retry_at, extra FROM inspire_video_cache WHERE kind IN ('ig_copy', 'ad_copy', 'ig_embed')
           AND post_id IN (SELECT id FROM inspire_posts WHERE (?1 IS NULL OR id < ?1) ORDER BY id DESC LIMIT ?2)`).bind(before, limit)] : []),
-        ...(liveOn ? [db.prepare(`SELECT post_id, error, retry_at, url IS NOT NULL AS hv, poster IS NOT NULL AS hp, width, height,
+        ...(liveOn ? [db.prepare(`SELECT post_id, error, fail_count, retry_at, resolved_at, url IS NOT NULL AS hv, poster IS NOT NULL AS hp, width, height,
+          CASE WHEN json_valid(extra) THEN json_extract(extra, '$.em') END AS em,
+          CASE WHEN json_valid(extra) THEN json_extract(extra, '$.du') END AS du,
+          (SELECT CASE WHEN json_valid(e.extra) THEN json_extract(e.extra, '$.state') END FROM inspire_video_cache e
+            WHERE e.post_id = inspire_video_cache.post_id AND e.kind = 'ig_embed') AS est,
           CASE WHEN json_valid(extra) THEN json_extract(extra, '$.user') END AS usr,
           CASE WHEN json_valid(extra) THEN json_extract(extra, '$.caption') END AS caption,
           CASE WHEN json_valid(extra) THEN json_extract(extra, '$.has_audio') END AS audio,
@@ -3303,7 +3350,7 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
             live = await inspireLiveOut(env, rows[i].id, inspireCopiedIg(out[i].media) ? { ...f, by: null, caption: null } : f);
           }
           else if (x && !x.error && Number(x.hp)) { /* a photo */ }
-          else if (x) ask = Number(x.retry_at || 0) <= nowS;   // a failure / deferral: asked again once it is over
+          else if (x) ask = igRetryAt(x) <= nowS;   // a failure / deferral: asked again once it is over (a soft one: <= 1 h, du kept)
           else ask = !inspireCopiedIg(out[i].media);
           out[i].live = live;
           out[i].live_ask = ask;
@@ -3605,8 +3652,10 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       let embed = null;
       if (ig) {
         const [igRow, emRow] = await Promise.all([vcGet(db, id, 'ig'), vcGet(db, id, 'ig_embed')]);
-        if (igRow && !igRow.error && igRow.resolved_at) { if (!(media && media.kind === 'video')) video = !!igRow.url; image = true; }
-        const st = emRow ? vcExtra(emRow).state : null;
+        // a row whose last re-resolve failed keeps the links of the one before (vcFail): still a video post
+        if (igRow && igRow.resolved_at && (!igRow.error || igRow.url)) { if (!(media && media.kind === 'video')) video = !!igRow.url; image = true; }
+        const checked = emRow ? vcExtra(emRow).state : null;
+        const st = igEmbedKnown(vcExtra(igRow).em, checked) || checked;
         embed = ['blocked', 'ok', 'photo'].includes(st) ? st : null;
         if (embed === 'photo' && video === null) video = false;
         if (!from) from = 'instagram';
@@ -3646,8 +3695,8 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       return res;
     }
 
-    // The board asks once a card of an Instagram post (live_ask) comes near: resolve-only (no bytes, no R2), plain fetch
-    // (no Browser Run), so the card knows video vs photo and shows our player. Also the token refresh of a live video that
+    // The board asks once a card of an Instagram post (live_ask) comes near: resolve-only (no bytes, no R2), the post page
+    // then its embed page (no Browser Run), so the card knows video vs photo and shows our player. Also the token refresh of a live video that
     // failed to load ({refresh: true}: answered from the cache when the post is known, no Instagram fetch).
     // -> {state: 'video', live} | {state: 'photo'} | {state: 'later', retry_s, busy?} | {state: 'never', reason}
     // (never a CDN URL; no-store). Limits: per session / IP per hour (live, live_ip); the resolve itself spends the
@@ -3666,7 +3715,9 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       if (await inspireOverLimit(db, [['live', inspireActorKey(actor)], ['live_ip', ipKey]])) return limited();
       const id = Number(m[1]);
       const row = await db.prepare(`SELECT p.url, p.media, c.url IS NOT NULL AS hv, c.poster IS NOT NULL AS hp, c.width, c.height, c.error,
-        c.retry_at, c.extra FROM inspire_posts p LEFT JOIN inspire_video_cache c ON c.post_id = p.id AND c.kind = 'ig' WHERE p.id = ?1`).bind(id).first();
+        c.fail_count, c.retry_at, c.resolved_at, c.extra, (SELECT CASE WHEN json_valid(e.extra) THEN json_extract(e.extra, '$.state') END
+          FROM inspire_video_cache e WHERE e.post_id = p.id AND e.kind = 'ig_embed') AS est
+        FROM inspire_posts p LEFT JOIN inspire_video_cache c ON c.post_id = p.id AND c.kind = 'ig' WHERE p.id = ?1`).bind(id).first();
       if (!row) return fail(404, 'not_found', 'Fikir bulunamadı');
       const ref = inspireLiveRef(inspireParsedOut(row.url));
       if (!ref) return answer('never', { reason: 'not_instagram' });
@@ -3681,12 +3732,12 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       if (Number(row.hv)) {
         const x = vcExtra(row);
         return facts(inspireLiveFactsRow({ hv: 1, width: row.width, height: row.height, usr: x.user, caption: x.caption,
-          audio: typeof x.has_audio === 'boolean' ? (x.has_audio ? 1 : 0) : null, mt: x.media_type, lv: x.lv }));
+          audio: typeof x.has_audio === 'boolean' ? (x.has_audio ? 1 : 0) : null, mt: x.media_type, lv: x.lv, em: x.em, est: row.est }));
       }
       if (Number(row.hp) && !row.error) return answer('photo');
-      if (row.error && Number(row.retry_at) > nowS) return later(row.retry_at);
+      if (row.error && igRetryAt(row) > nowS) return later(igRetryAt(row));
       const r = await inspireIgItem(env, db, id, ref, { ipKey, allowBR: false, slotWaitMs: 0 });
-      if (r.ok) return facts(inspireLiveFactsItem(r.item));
+      if (r.ok) return facts(inspireLiveFactsItem(r.item, igEmbedKnown(r.embed, row.est)));
       if (r.busy) return answer('later', { retry_s: Math.max(1, Math.round(Number(r.retry_s) || 600)), busy: true });
       if (r.error === 'gone') return answer('never', { reason: 'gone' });
       return later(r.retry_at);

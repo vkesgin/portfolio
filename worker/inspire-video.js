@@ -16,6 +16,10 @@
 // Embed check: /{kind}/{code}/embed/ of a reel whose owner disabled embedded playback renders a poster with
 // class="WatchOnInstagram" ("Instagram'da İzle") and its gql_data has is_video:true without video_url; playable embeds
 // carry video_url. The embed iframe's postMessages (LOADING / MEASURE / MOUNTED) are identical in both cases.
+// Embed fallback (2026-10-23, production): from some Cloudflare egress IPs the post page intermittently answers a 3xx to
+// the login wall while /{kind}/{code}/embed/captioned/ (fetched as the board's iframe, Referer = the board) still answers
+// 200 (~230 KB) with the post as escaped JSON (PolarisEmbedSimple contextJSON -> gql_data.shortcode_media: video_url,
+// display_resources, dimensions, owner, caption). igResolve: page -> embed -> Browser Run; igEmbedExtract parses it.
 import { sniffMagic, COPY_CAPTION_MAX } from './inspire-media.js';
 import { muxCmafStream, muxedLength } from './cmaf-mux.js';
 
@@ -63,6 +67,7 @@ export function igRef(parsed) {
 }
 export const igPageUrl = (ref) => `https://www.instagram.com/${ref.kind}/${ref.code}/`;
 export const igEmbedUrl = (ref) => `https://www.instagram.com/${ref.kind}/${ref.code}/embed/`;
+export const igEmbedCaptionedUrl = (ref) => `https://www.instagram.com/${ref.kind}/${ref.code}/embed/captioned/`;
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 // Media pk of a shortcode (private-post codes are longer: their first 11 characters are the pk)
@@ -216,17 +221,174 @@ export function igPageProblem(html) {
   if (/id="loginForm"|name="username"/.test(html)) return 'login';
   return 'no_data';
 }
+// Value after a JSON key in escaped or plain JSON (\"key\": / "key":) -> the index where the value starts, for the first
+// `max` occurrences of the key that have one; -1 when none. indexOf + short bounded skips: linear on any input (a
+// /\\*"key\\*"/ regex is quadratic on a long run of backslashes).
+function jsonValueAt(s, key, from = 0, max = 20) {
+  const needle = '"' + key;
+  let i = s.indexOf(needle, from), n = 0;
+  while (i !== -1 && n++ < max) {
+    let j = i + needle.length, k = 0;
+    while (k++ < 4 && s.charCodeAt(j) === 92) j++;
+    if (s.charCodeAt(j) === 34) {
+      j++;
+      k = 0;
+      while (k++ < 8 && /\s/.test(s[j] || '')) j++;
+      if (s.charCodeAt(j) === 58) {
+        j++;
+        k = 0;
+        while (k++ < 8 && /\s/.test(s[j] || '')) j++;
+        return j;
+      }
+    }
+    i = s.indexOf(needle, i + needle.length);
+  }
+  return -1;
+}
+// The boolean after a key (first occurrence that has one) -> true | false | null
+function jsonFlag(s, key) {
+  const j = jsonValueAt(s, key);
+  return j === -1 ? null : s.startsWith('true', j) ? true : s.startsWith('false', j) ? false : null;
+}
 // Embed page HTML -> 'blocked' (poster + "Instagram'da İzle": owner disabled embedded playback) | 'ok' (plays in the
 // embed) | 'photo' (not a video) | 'unknown'. gql_data sits in an escaped JS string (\"is_video\":true).
 export function igEmbedStatus(html) {
   if (typeof html !== 'string' || !html) return 'unknown';
   const ui = /class="WatchOnInstagram(?:Container)?"/.test(html);
-  const isVideo = /\\*"is_video\\*"\s*:\s*(true|false)/.exec(html);
-  const hasUrl = /\\*"video_url\\*"\s*:\s*\\*"https?:/.test(html);
+  const isVideo = jsonFlag(html, 'is_video');
+  let hasUrl = false;
+  for (let j = jsonValueAt(html, 'video_url'), n = 0; j !== -1 && n < 20 && !hasUrl; n++) {
+    let k = j, b = 0;
+    while (b++ < 4 && html.charCodeAt(k) === 92) k++;
+    hasUrl = html.charCodeAt(k) === 34 && /^https?:/.test(html.slice(k + 1, k + 7));
+    if (!hasUrl) j = jsonValueAt(html, 'video_url', j);
+  }
   if (ui) return 'blocked';
-  if (isVideo && isVideo[1] === 'true') return hasUrl ? 'ok' : 'blocked';
-  if (isVideo && isVideo[1] === 'false') return 'photo';
+  if (isVideo === true) return hasUrl ? 'ok' : 'blocked';
+  if (isVideo === false) return 'photo';
   return 'unknown';
+}
+
+// The JSON string literal around index i of s (its opening quote = the nearest '"' before i that follows an even number of
+// backslashes; inside a literal every quote is escaped) -> [open, close] | null. Linear, at most `max` characters each way.
+function jsonLiteralAround(s, i, max) {
+  const lo = Math.max(0, i - max);
+  let a = i - 1;
+  for (; a >= lo; a--) {
+    if (s.charCodeAt(a) !== 34) continue;
+    let b = 0;
+    while (a - 1 - b >= lo && s.charCodeAt(a - 1 - b) === 92) b++;
+    if (b % 2 === 0) break;
+  }
+  if (a < lo) return null;
+  const hi = Math.min(s.length, a + 1 + max);
+  for (let j = a + 1; j < hi; j++) {
+    const c = s.charCodeAt(j);
+    if (c === 92) j++;
+    else if (c === 34) return j > i ? [a, j] : null;
+  }
+  return null;
+}
+// The JSON object that starts at s[start] ('{'), string-aware brace matching -> its text | null (unbalanced / > max)
+function jsonObjectAt(s, start, max) {
+  if (s.charCodeAt(start) !== 123) return null;
+  const hi = Math.min(s.length, start + max);
+  let depth = 0, inStr = false;
+  for (let j = start; j < hi; j++) {
+    const c = s.charCodeAt(j);
+    if (inStr) { if (c === 92) j++; else if (c === 34) inStr = false; continue; }
+    if (c === 34) inStr = true;
+    else if (c === 123 || c === 91) depth++;
+    else if ((c === 125 || c === 93) && --depth === 0) return s.slice(start, j + 1);
+  }
+  return null;
+}
+// shortcode_media of `code` in s: the object after "shortcode_media": as plain JSON, or inside a JSON string (\"...\":
+// the literal is decoded once and searched again; at most `depth` levels, a few occurrences each).
+function igGqlMedia(s, code, depth, max) {
+  let i = s.indexOf('shortcode_media'), seen = 0;
+  while (i !== -1 && seen++ < 6) {
+    if (s.charCodeAt(i - 1) === 34 && s.charCodeAt(i - 2) !== 92) {
+      const colon = s.indexOf(':', i + 16);
+      let k = colon === -1 || colon > i + 24 ? -1 : colon + 1;
+      while (k !== -1 && k < s.length && (s.charCodeAt(k) === 32 || s.charCodeAt(k) === 10)) k++;
+      const text = k === -1 ? null : jsonObjectAt(s, k, max);
+      let o = null;
+      try { o = text ? JSON.parse(text) : null; } catch { o = null; }
+      if (o && typeof o === 'object' && (o.shortcode === code || o.code === code)) return o;
+    } else if (depth > 0 && s.charCodeAt(i - 1) === 34 && s.charCodeAt(i - 2) === 92) {
+      const lit = jsonLiteralAround(s, i, max);
+      if (lit) {
+        let inner = null;
+        try { inner = JSON.parse(s.slice(lit[0], lit[1] + 1)); } catch { inner = null; }
+        const o = typeof inner === 'string' ? igGqlMedia(inner, code, depth - 1, max) : null;
+        if (o) return o;
+        i = s.indexOf('shortcode_media', lit[1]);
+        continue;
+      }
+    }
+    i = s.indexOf('shortcode_media', i + 15);
+  }
+  return null;
+}
+const gqlVideoUrl = (o) => (o && o.is_video === true ? igCdnUrl(o.video_url) : null);
+function gqlDims(o) {
+  const d = o && o.dimensions && typeof o.dimensions === 'object' ? o.dimensions : null;
+  const w = d ? int(d.width) : null, h = d ? int(d.height) : null;
+  return w && h ? { w, h } : { w: null, h: null };
+}
+// largest of display_resources ({src, config_width, config_height}), else display_url with the post's dimensions
+function gqlImage(o) {
+  if (!o || typeof o !== 'object') return null;
+  let best = null;
+  for (const x of Array.isArray(o.display_resources) ? o.display_resources.slice(0, 40) : []) {
+    const url = x && igCdnUrl(x.src);
+    if (!url) continue;
+    const w = int(x.config_width), h = int(x.config_height);
+    if (!best || (w || 0) > (best.w || 0)) best = { url, w, h };
+  }
+  if (best) return best;
+  const url = igCdnUrl(o.display_url);
+  return url ? { url, ...gqlDims(o) } : null;
+}
+const GQL_TYPES = { GraphImage: 1, GraphVideo: 2, GraphSidecar: 8 };
+// Captioned embed page HTML (/{kind}/{code}/embed/captioned/) -> the same item as igExtract ({code, user, caption, has_audio,
+// w, h, duration, media_type, product_type, video, videos, image, expires_at, lead_video}) or null: no post data for this
+// code, a video the embed does not play (WatchOnInstagram, is_video without video_url, copyright_blocked), garbage. The
+// post sits in gql_data.shortcode_media inside the escaped contextJSON string (older pages: plain JSON); only the
+// literal around it is decoded, objects are matched with a bounded string-aware scan (no regex over the page).
+export function igEmbedExtract(html, code, { maxBytes = IG_EMBED_MAX_BYTES * 2, maxObject = 1024 * 1024 } = {}) {
+  if (typeof html !== 'string' || !html || html.length > maxBytes || typeof code !== 'string' || !IG_CODE_RE.test(code)) return null;
+  if (/class="WatchOnInstagram(?:Container)?"/.test(html) || jsonFlag(html, 'copyright_blocked') === true) return null;
+  const m = igGqlMedia(html, code, 2, maxObject);
+  if (!m) return null;
+  const kids = m.edge_sidecar_to_children && Array.isArray(m.edge_sidecar_to_children.edges)
+    ? m.edge_sidecar_to_children.edges.slice(0, 20).map((e) => e && e.node).filter((n) => n && typeof n === 'object') : [];
+  const vsrc = gqlVideoUrl(m) ? m : kids.find(gqlVideoUrl) || null;
+  if (m.is_video === true && !vsrc) return null;   // the embed shows a poster only: embedded playback is off (blocked)
+  const video = vsrc ? { url: gqlVideoUrl(vsrc), ...gqlDims(vsrc), type: null } : null;
+  const image = gqlImage(vsrc || m) || gqlImage(m) || kids.map(gqlImage).find(Boolean) || null;
+  if (!video && !image) return null;
+  const dims = gqlDims(vsrc || m);
+  const w = dims.w || (video && video.w) || (image && image.w) || null, h = dims.h || (video && video.h) || (image && image.h) || null;
+  const owner = m.owner && typeof m.owner === 'object' ? m.owner.username : null;
+  const capEdges = m.edge_media_to_caption && Array.isArray(m.edge_media_to_caption.edges) ? m.edge_media_to_caption.edges : [];
+  const cap = capEdges[0] && capEdges[0].node && typeof capEdges[0].node.text === 'string' ? capEdges[0].node.text : null;
+  const exps = [video && decodeOe(video.url), image && decodeOe(image.url)].filter(Boolean);
+  const src = vsrc || m;
+  const dur = Number(src.video_duration);
+  return {
+    code, user: typeof owner === 'string' && /^[A-Za-z0-9._]{1,30}$/.test(owner) ? owner : null,
+    caption: cleanCaption(cap, COPY_CAPTION_MAX),
+    has_audio: src.has_audio === true ? true : src.has_audio === false ? false : null,
+    w: w && h ? w : null, h: w && h ? h : null,
+    duration: Number.isFinite(dur) && dur > 0 ? Math.round(dur * 10) / 10 : null,
+    media_type: GQL_TYPES[m.__typename] || (m.is_video === true ? 2 : m.is_video === false ? 1 : null),
+    product_type: typeof m.product_type === 'string' ? m.product_type.slice(0, 40) : null,
+    video, videos: video ? [video] : [], image,
+    expires_at: exps.length ? Math.min(...exps) : null,
+    lead_video: !!vsrc && (vsrc === m || kids[0] === vsrc),
+  };
 }
 
 /* ------------------------------------------------------------------ Instagram: network */
@@ -254,14 +416,27 @@ async function readCapped(res, maxBytes) {
   }
   return new TextDecoder('utf-8').decode(buf);
 }
+// Where a 3xx of www.instagram.com points, as a kind only (the Location itself carries tokens / the post path: never kept)
+export function igRedirectKind(loc) {
+  let p = '';
+  try { p = new URL(String(loc || ''), 'https://www.instagram.com/').pathname.toLowerCase(); } catch (e) { return 'other'; }
+  if (/^\/accounts\/login(\/|$)/.test(p)) return 'login';
+  if (/consent|privacy\/checks/.test(p)) return 'consent';
+  if (/^\/challenge(\/|$)|checkpoint/.test(p)) return 'challenge';
+  return 'other';
+}
 // One GET of a fixed www.instagram.com URL (redirect manual: any 3xx is a login/consent redirect, never followed).
-// -> {ok: true, html, status} | {ok: false, error: 'http_<n>'|'redirect'|'not_html'|'timeout'|'fetch_error', status?}
+// -> {ok: true, html, status} | {ok: false, error: 'http_<n>'|'redirect'|'not_html'|'timeout'|'fetch_error', status?,
+//    loc? (a redirect: igRedirectKind of its Location)}
 export async function igFetchHtml(url, headers, { fetchImpl = fetch, timeoutMs = IG_FETCH_TIMEOUT_MS, maxBytes = IG_PAGE_MAX_BYTES } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetchImpl(url, { method: 'GET', redirect: 'manual', signal: ctrl.signal, headers });
-    if (res.status >= 300 && res.status < 400) { try { res.body && res.body.cancel(); } catch (e) {} return { ok: false, error: 'redirect', status: res.status }; }
+    if (res.status >= 300 && res.status < 400) {
+      try { res.body && res.body.cancel(); } catch (e) {}
+      return { ok: false, error: 'redirect', status: res.status, loc: igRedirectKind(res.headers.get('Location')) };
+    }
     if (res.status !== 200) { try { res.body && res.body.cancel(); } catch (e) {} return { ok: false, error: 'http_' + res.status, status: res.status }; }
     const ct = (res.headers.get('Content-Type') || '').toLowerCase();
     if (!ct.includes('html')) { try { res.body && res.body.cancel(); } catch (e) {} return { ok: false, error: 'not_html', status: 200 }; }
@@ -272,38 +447,72 @@ export async function igFetchHtml(url, headers, { fetchImpl = fetch, timeoutMs =
     clearTimeout(timer);
   }
 }
-// Resolve an Instagram post to its media. Plain fetch first; Browser Run (Quick Action `content`) only through
-// opts.brContent(url) -> html | null (failed / unavailable) | {refused: true, retry_s, site, scope?} (not admitted right
-// now: the Browser Run slot or a budget), which index.js passes when FIKIR_BR is on and admits it under the Browser Run quotas.
-// Never loops: at most one plain fetch + one Browser Run call.
-// -> {ok: true, item, via: 'plain'|'br'} | {ok: false, error, status?, retry: 'soon'|'later'|'gone'}
-//    | {ok: false, error: 'busy', busy: true, retry_s, site, scope, status?}: Browser Run was needed but refused. Not a
-//      failure of the post: callers must not record it (no backoff); `site` = refused for every post, not just this one;
-//      `scope` = the budget that refused, when brContent named it (br_post: this post's own), else null.
-export async function igResolve(ref, { fetchImpl = fetch, brContent = null, timeoutMs = IG_FETCH_TIMEOUT_MS } = {}) {
+// Resolve an Instagram post to its media: the post page (plain fetch), then, when it failed for any reason but a removed
+// post (404 / 410: redirect to the login wall, login / gated / challenge / empty page, 429 / 5xx, timeout), the captioned
+// embed page as the board's iframe loads it (opts.embed, Referer opts.referer; igEmbedExtract), then Browser Run (Quick
+// Action `content`) only through opts.brContent(url) -> html | null (failed / unavailable) | {refused: true, retry_s,
+// site, scope?} (not admitted right now: the Browser Run slot or a budget), which index.js passes when FIKIR_BR is on and
+// admits it under the Browser Run quotas. Never loops: at most one page fetch + one embed fetch + one Browser Run call.
+// opts.admitEmbed() -> null (go) | a refusal code: the embed fetch's own admission (index.js: one more Instagram fetch unit,
+// so page + embed count as two); refused (or throwing) -> no embed fetch, why.embed 'busy', Browser Run is still tried.
+// embed: what the embed showed for this post ('ok': it served the video, so it plays in a viewer's browser too; 'blocked':
+// poster + "Instagram'da İzle"; 'photo'; null: not fetched / no answer). why: how each path failed, for the cache row
+// ({page, loc?: the redirect's kind, embed?, br?}; never a URL).
+// -> {ok: true, item, via: 'plain'|'embed'|'br', embed, why?}
+//  | {ok: false, error, status?, retry: 'soft'|'soon'|'later'|'gone', embed, why}
+//    error: the page's ('redirect', 'login', 'http_429', ...), else 'embed_gone' (the page failed softly, the embed answered
+//    404 / 410) or 'br_gated'; retry 'soft' = an Instagram-side hiccup (igSoftError: backoff <= 1 h; 6 h after 8 in a row), 'later' = gated /
+//    embed gone (the long backoff), 'gone' = removed (7 days)
+//  | {ok: false, error: 'busy', busy: true, retry_s, site, scope, status?, embed, why}: Browser Run was needed but refused.
+//    Not a failure of the post: callers must not record it (no backoff); `site` = refused for every post, not just this one;
+//    `scope` = the budget that refused, when brContent named it (br_post: this post's own), else null.
+export async function igResolve(ref, { fetchImpl = fetch, brContent = null, timeoutMs = IG_FETCH_TIMEOUT_MS, embed = true, referer = null, admitEmbed = null } = {}) {
   if (!ref || !IG_CODE_RE.test(ref.code || '') || !IG_KINDS.has(ref.kind)) return { ok: false, error: 'bad_ref', retry: 'gone' };
   const url = igPageUrl(ref);
   const page = await igFetchHtml(url, igNavHeaders(), { fetchImpl, timeoutMs });
   if (page.ok) {
     const item = igExtract(page.html, ref.code);
-    if (item) return { ok: true, item, via: 'plain' };
+    if (item) return { ok: true, item, via: 'plain', embed: null };
   }
   let error = page.ok ? igPageProblem(page.html) : page.error;
-  if (page.status === 404 || page.status === 410) return { ok: false, error: 'gone', status: page.status, retry: 'gone' };
+  if (page.status === 404 || page.status === 410) return { ok: false, error: 'gone', status: page.status, retry: 'gone', embed: null, why: { page: error } };
+  const why = { page: error, ...(page.loc ? { loc: page.loc } : {}) };
+  let em = null, embedGone = false, go = !!embed;
+  if (go && typeof admitEmbed === 'function') {
+    let no = 'busy';
+    try { no = await admitEmbed(); } catch (e) { no = 'busy'; }
+    if (no) { go = false; why.embed = 'busy'; }
+  }
+  if (go) {
+    const e = await igFetchHtml(igEmbedCaptionedUrl(ref), igEmbedHeaders(referer), { fetchImpl, timeoutMs, maxBytes: IG_EMBED_MAX_BYTES });
+    if (e.ok) {
+      const item = igEmbedExtract(e.html, ref.code);
+      if (item) return { ok: true, item, via: 'embed', embed: item.video ? 'ok' : 'photo', why };
+      const st = igEmbedStatus(e.html);
+      if (st === 'blocked') em = 'blocked';
+      why.embed = st === 'blocked' ? 'blocked' : 'no_data';
+    } else {
+      why.embed = e.error + (e.loc ? ':' + e.loc : '');
+      embedGone = e.status === 404 || e.status === 410;
+    }
+  }
   if (typeof brContent === 'function') {
     let html = null;
     try { html = await brContent(url); } catch (e) { html = null; }
     if (html && typeof html === 'object' && html.refused) {
       return { ok: false, error: 'busy', busy: true, retry_s: Math.max(1, Number(html.retry_s) || 60), site: html.site !== false,
-        scope: typeof html.scope === 'string' ? html.scope : null, status: page.status };
+        scope: typeof html.scope === 'string' ? html.scope : null, status: page.status, embed: em, why };
     }
     if (typeof html === 'string' && html) {
       const item = igExtract(html, ref.code);
-      if (item) return { ok: true, item, via: 'br' };
-      error = 'br_' + igPageProblem(html);
-    }
+      if (item) return { ok: true, item, via: 'br', embed: em, why };
+      why.br = igPageProblem(html);
+    } else why.br = 'failed';
   }
-  return { ok: false, error, status: page.status, retry: error === 'gated' ? 'later' : 'soon' };
+  if (why.br === 'gated') error = 'br_gated';
+  else if (embedGone && igSoftError(error)) error = 'embed_gone';
+  const retry = error === 'gated' || error === 'br_gated' || error === 'embed_gone' ? 'later' : igSoftError(error) ? 'soft' : 'soon';
+  return { ok: false, error, status: page.status, retry, embed: em, why };
 }
 // Embed status of one post (one ~250 KB GET of the embed page). -> {status: 'blocked'|'ok'|'photo'|'unknown', error?}
 export async function igCheckEmbed(ref, { fetchImpl = fetch, referer = null, timeoutMs = IG_FETCH_TIMEOUT_MS } = {}) {
@@ -1230,12 +1439,49 @@ export const VIDEO_CACHE_DDL = `CREATE TABLE IF NOT EXISTS inspire_video_cache (
 )`;
 const nowS = () => Math.floor(Date.now() / 1000);
 // Backoff after the n-th consecutive failure: 10 min, 30 min, 2 h, 6 h, then 24 h; a removed post 7 days; 'never' (a copy
-// that can never happen: no video in the post, a file over the copy cap) 30 days.
+// that can never happen: no video in the post, a file over the copy cap) 30 days; 'soft' (an Instagram-side hiccup of a
+// resolve, igSoftError: login-wall redirect, 429 / 5xx, timeout ...) 10, 20, 40 min, then at most IG_SOFT_MAX_S (1 h), so a
+// post heals by itself well within its links' lifetime (33-48 h); after IG_SOFT_LONG_N failures in a row (~6 h of them: a
+// post that keeps failing, e.g. removed behind a redirect) IG_SOFT_LONG_S (6 h), so it stops costing 24 fetches a day.
+export const IG_SOFT_MAX_S = 3600;
+export const IG_SOFT_LONG_N = 8;
+export const IG_SOFT_LONG_S = 6 * 3600;
+const igSoftCapS = (n) => ((Number(n) || 0) > IG_SOFT_LONG_N ? IG_SOFT_LONG_S : IG_SOFT_MAX_S);
 export function backoffS(n, retry) {
   if (retry === 'never') return 30 * 86400;
   if (retry === 'gone') return 7 * 86400;
+  if (retry === 'soft') return n > IG_SOFT_LONG_N ? IG_SOFT_LONG_S : [600, 1200, 2400][Math.max(0, n - 1)] || IG_SOFT_MAX_S;
   return [600, 1800, 7200, 21600][Math.max(0, n - 1)] || 86400;
 }
+// Errors of an 'ig' row that are Instagram-side and transient (igResolve: the page's, or Browser Run's problem of rows
+// written before 2026-10-23). Not soft: gone, gated / br_gated (logged-out view refused), embed_gone, bad_ref.
+export const IG_SOFT_ERRORS = Object.freeze(['redirect', 'login', 'challenge', 'no_data', 'empty', 'not_html', 'timeout', 'fetch_error',
+  'http_403', 'http_429', 'br_login', 'br_challenge', 'br_no_data', 'br_empty']);
+const IG_SOFT_SET = new Set(IG_SOFT_ERRORS);
+export const igSoftError = (e) => typeof e === 'string' && (IG_SOFT_SET.has(e) || /^http_5\d\d$/.test(e));
+// retry_at of an 'ig' row as it counts now: a soft error never waits more than its cap (IG_SOFT_MAX_S, IG_SOFT_LONG_S past
+// IG_SOFT_LONG_N failures) after the failure that set it (resolved_at), whatever retry_at says (rows backed off up to 24 h
+// before 2026-10-23 heal without a migration), except a vcDefer deferral since (extra.du, its until: Browser Run refused
+// for this post / the site, no post): kept whole, so the cron does not pick the same refused post every run. The row may
+// carry du as a column (a SELECT of json_extract) instead of its extra; fail_count missing counts as 0.
+export function igRetryAt(row) {
+  if (!row) return 0;
+  const r = Number(row.retry_at) || 0;
+  if (!row.error || !igSoftError(row.error)) return r;
+  const du = Number(row.du !== undefined ? row.du : vcExtra(row).du) || 0;
+  return Math.min(r, Math.max((Number(row.resolved_at) || 0) + igSoftCapS(row.fail_count), du));
+}
+export const igBackingOff = (row, now = nowS()) => !!(row && row.error && igRetryAt(row) > now);
+// igRetryAt in SQL for the row alias `c` (the cron's queue); the same list, so the two cannot drift
+export function igRetrySql(c) {
+  const soft = `(${c}.error IN (${IG_SOFT_ERRORS.map((e) => `'${e}'`).join(', ')}) OR ${c}.error GLOB 'http_5[0-9][0-9]')`;
+  const cap = `CASE WHEN COALESCE(${c}.fail_count, 0) > ${IG_SOFT_LONG_N} THEN ${IG_SOFT_LONG_S} ELSE ${IG_SOFT_MAX_S} END`;
+  const du = `COALESCE(CASE WHEN json_valid(${c}.extra) THEN json_extract(${c}.extra, '$.du') END, 0)`;
+  return `(CASE WHEN ${soft} THEN MIN(COALESCE(${c}.retry_at, 0), MAX(COALESCE(${c}.resolved_at, 0) + ${cap}, ${du})) ELSE COALESCE(${c}.retry_at, 0) END)`;
+}
+// Embed state of a post for the board: the 'ig' row's em (what the resolver's embed fallback saw) before the embed check's
+// state ('ig_embed' row); only 'ok' / 'blocked' count.
+export const igEmbedKnown = (em, checked) => (em === 'ok' || em === 'blocked' ? em : checked === 'ok' || checked === 'blocked' ? checked : null);
 export async function vcGet(db, postId, kind) {
   try { return await db.prepare('SELECT * FROM inspire_video_cache WHERE post_id=?1 AND kind=?2').bind(postId, kind).first(); }
   catch (e) { return null; }
@@ -1267,12 +1513,18 @@ export async function vcPut(db, postId, kind, rec = {}) {
     .bind(postId, kind, rec.url || null, rec.poster || null, rec.width || null, rec.height || null, rec.bytes || null,
       rec.expires_at || null, rec.resolved_at || nowS(), rec.retry_at || null, extra).run();
 }
-// Records a failure; returns the new retry_at.
-export async function vcFail(db, postId, kind, error, { retry = 'soon', extra = undefined } = {}) {
+// Records a failure; returns the new retry_at. extra: the row's new extra; merge: fields merged into the old one instead
+// (an 'ig' row keeps credit / caption / size of its last resolve; a deferral note and its until (du) are dropped: the row
+// failed since, its own backoff counts again).
+export async function vcFail(db, postId, kind, error, { retry = 'soon', extra = undefined, merge = undefined } = {}) {
   const prev = await vcGet(db, postId, kind);
   const n = (prev ? Number(prev.fail_count) || 0 : 0) + 1;
   const retryAt = nowS() + backoffS(n, retry);
-  const ex = extra !== undefined ? vcExtraJson(extra) : prev ? prev.extra : null;
+  let ex = extra !== undefined ? vcExtraJson(extra) : prev ? prev.extra : null;
+  if (extra === undefined && merge && typeof merge === 'object') {
+    const { deferred, du, ...old } = vcExtra(prev);
+    ex = vcExtraJson({ ...old, ...merge });
+  }
   await db.prepare(`INSERT INTO inspire_video_cache (post_id, kind, error, fail_count, retry_at, resolved_at, extra) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
     ON CONFLICT(post_id, kind) DO UPDATE SET error=excluded.error, fail_count=excluded.fail_count, retry_at=excluded.retry_at,
       resolved_at=excluded.resolved_at, extra=excluded.extra`)
@@ -1281,13 +1533,15 @@ export async function vcFail(db, postId, kind, error, { retry = 'soon', extra = 
 }
 // Keeps a post out of the cron's queue for `kind` until now + seconds without counting a failure (one statement; an
 // existing error / fail_count / later retry_at stays): a link that is not an Instagram post, a post whose own Browser Run
-// budget is spent for today. Returns the new retry_at.
+// budget is spent for today. extra gets the note (deferred) and its until (du, the latest of the deferrals), which igRetryAt
+// keeps over the soft cap. Returns the new retry_at.
 export async function vcDefer(db, postId, kind, seconds, note) {
   const until = nowS() + Math.max(60, Math.round(Number(seconds) || 0));
   const why = String(note || 'deferred').slice(0, 40);
-  await db.prepare(`INSERT INTO inspire_video_cache (post_id, kind, resolved_at, retry_at, extra) VALUES (?1, ?2, ?3, ?4, json_object('deferred', ?5))
+  const x = `CASE WHEN json_valid(extra) THEN extra ELSE '{}' END`;
+  await db.prepare(`INSERT INTO inspire_video_cache (post_id, kind, resolved_at, retry_at, extra) VALUES (?1, ?2, ?3, ?4, json_object('deferred', ?5, 'du', ?4))
     ON CONFLICT(post_id, kind) DO UPDATE SET retry_at = MAX(COALESCE(retry_at, 0), excluded.retry_at),
-      extra = json_set(CASE WHEN json_valid(extra) THEN extra ELSE '{}' END, '$.deferred', ?5)`)
+      extra = json_set(${x}, '$.deferred', ?5, '$.du', MAX(COALESCE(json_extract(${x}, '$.du'), 0), ?4))`)
     .bind(postId, kind, nowS(), until, why).run();
   return until;
 }

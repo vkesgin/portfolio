@@ -14,8 +14,13 @@
 //                                           synthetic tests/fixtures/video/ig-*.html with the asked shortcode and links that
 //                                           expire in 48 h:
 //        www.instagram.com/{reel|p|tv}/<code>/        post page: a reel (video + poster + caption); codes starting with
-//                                                     "DPho": a photo post; codes containing "Gone": 404 (removed)
-//        www.instagram.com/{reel|p|tv}/<code>/embed/  embed page: blocked ("Instagram'da İzle"), "DPho*": a photo
+//                                                     "DPho": a photo post; codes containing "Gone": 404 (removed);
+//                                                     codes containing "Redir": 302 to /accounts/login/ (the login wall
+//                                                     Instagram shows some Cloudflare egress IPs)
+//        www.instagram.com/{reel|p|tv}/<code>/embed/  embed page (also .../embed/captioned/): blocked ("Instagram'da
+//                                                     İzle"), "DPho*": a photo, "*Redir*": the captioned embed that plays,
+//                                                     with the reel's video (ig-embed-captioned.html; its file is
+//                                                     <code>.mp4, so "Dead" in the code makes the CDN refuse it too)
 //        <*.cdninstagram.com|*.fbcdn.net>/.../<code>.mp4   the reel's video (Range-capable; $FIXTURE_IG_LONG if that file
 //                                                     exists, else clip.mp4), sent at ~1.3 MB/s so a <video> seeks with
 //                                                     Range requests; codes containing "Dead": 403 (CDN refuses the video)
@@ -102,6 +107,11 @@ function igPage(kind, code) {
 }
 function igEmbed(code) {
   if (code.startsWith('DPho')) return readV('ig-embed-photo.html').replaceAll('DTestPhoto1', code);
+  if (code.includes('Redir')) {
+    const oe = oeHex();
+    return readV('ig-embed-captioned.html').replaceAll('DTestEmbV01', code).replaceAll('EMBVIDEO', code)
+      .replaceAll('oe=6AC94349', 'oe=' + oe).replaceAll('oe=6ACD0906', 'oe=' + oe);
+  }
   return readV('ig-embed-blocked.html').replaceAll('DTestReel01', code);
 }
 // Range-capable like sendMedia, but the body goes out in 64 KB slices every 50 ms (~1.3 MB/s) and stops when the client goes
@@ -137,6 +147,11 @@ function igfx(req, res, p) {
   if (host === 'www.instagram.com') {
     const pm = /^\/(reel|p|tv)\/([A-Za-z0-9_-]+)\/(embed\/(?:captioned\/)?)?$/.exec(rest);
     if (!pm || !IG_CODE.test(pm[2]) || pm[2].includes('Gone')) { res.writeHead(404, { 'Content-Type': 'text/html' }); res.end('<!doctype html><title>Sayfa bulunamadı</title>'); return done(404); }
+    if (!pm[3] && pm[2].includes('Redir')) {
+      res.writeHead(302, { Location: `https://www.instagram.com/accounts/login/?next=${encodeURIComponent(`/${pm[1]}/${pm[2]}/`)}` });
+      res.end();
+      return done(302);
+    }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end(pm[3] ? igEmbed(pm[2]) : igPage(pm[1], pm[2]));
     return done(200);

@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="assets/css/variables.css">
   <link rel="stylesheet" href="assets/css/global.css">
   <link rel="stylesheet" href="assets/css/admin.css">
+  <link rel="stylesheet" href="assets/css/admin-video.css">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
 </head>
 <body>
@@ -38,6 +39,7 @@
     <div class="admin-nav-links">
       <button class="admin-tab active" data-tab="projects">Tüm İşler</button>
       <button class="admin-tab" data-tab="upload">Yeni İş Ekle</button>
+      <button class="admin-tab" data-tab="video">Video İndir ↙</button>
       <button class="admin-tab" data-tab="featured">Seçilmiş İşler</button>
       <button class="admin-tab" data-tab="threed">3D Vitrin</button>
       <button class="admin-tab" data-tab="cube">Küp Vitrin</button>
@@ -48,6 +50,32 @@
     </div>
     <button class="btn btn-outline" id="logoutBtn" style="font-size:10px;padding:8px 16px">Çıkış</button>
   </nav>
+
+
+  <!-- TAB: VIDEO DOWNLOADER — no persistent history -->
+  <div class="admin-panel" id="tab-video">
+    <section class="vkd" aria-labelledby="vkd-title">
+      <p class="vkd-kicker">// KİŞİSEL ARAÇLAR</p>
+      <h2 id="vkd-title">BAĞLANTIYI BIRAK.<br><span>VİDEOYU AL.</span></h2>
+      <p class="vkd-intro">Bir bağlantı, bir dosya. Videonu bul, kaliteni seç ve kullandığın cihaza indir.</p>
+      <form class="vkd-form" id="vkd-form">
+        <label class="vkd-label" for="vkd-url">VİDEO BAĞLANTISI</label>
+        <div class="vkd-url"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l4-4a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-4 4a5 5 0 0 0 7 7l2-2"/></svg><input id="vkd-url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://… video bağlantısı"><button type="button" class="vkd-paste" id="vkd-paste">Yapıştır</button></div>
+        <div class="vkd-controls"><select id="vkd-quality" aria-label="Video kalitesi"><option value="best">En iyi kalite</option><option value="2160">4K’ya kadar</option><option value="1080">1080p’ye kadar</option><option value="720">720p’ye kadar</option><option value="480">480p’ye kadar</option><option value="audio">Yalnızca ses · MP3</option></select><button class="btn btn-primary" id="vkd-submit" type="submit">Videoyu indir <span>↗</span></button></div>
+      </form>
+      <div class="vkd-meta"><span>MP4 / WEBM / HLS / DASH</span><span>KALICI GEÇMİŞ YOK · EK ÜYELİK YOK</span></div>
+      <details class="vkd-advanced"><summary>Video bulunamadığında</summary><div><p>Dinamik oynatıcılar için sayfayı geçici bir tarayıcıda incele.</p><button type="button" class="vkd-outline" id="vkd-scan">Tarayıcıyla bul ↗</button></div></details>
+      <section id="vkd-result" class="vkd-result" hidden aria-live="polite" aria-label="Video işlemi">
+        <div class="vkd-status-head"><h3 id="vkd-result-title">Video aranıyor</h3><button type="button" class="vkd-outline" id="vkd-cancel">Temizle</button></div>
+        <p class="vkd-status" id="vkd-status"></p><div class="vkd-progress" id="vkd-progress"><div></div></div>
+        <div id="vkd-choices"></div><div class="vkd-save" id="vkd-save" hidden><button type="button" class="btn btn-primary" id="vkd-file">Cihaza kaydet ↙</button></div>
+        <p class="vkd-caption" id="vkd-caption"></p>
+      </section>
+      <p class="vkd-empty" id="vkd-empty">Hazır olduğunda bir bağlantı yapıştır.</p>
+      <div class="vkd-footer"><svg width="15" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 2 3 6v6c0 5 9 10 9 10s9-5 9-10V6L12 2Z"/><path d="m8 12 3 3 5-6"/></svg><p><strong>Sadece bu işlem için.</strong> Kalıcı indirme geçmişi veya site oturumu saklanmaz. Geçici dosya aktarımdan sonra, kullanılmazsa en geç 10 dakika içinde silinir. Barındırma sağlayıcısının erişim günlükleri bu özelliğin dışındadır. DRM, hesap girişi ve sunucuya erişim engelleri bazı kaynakların indirilmesini engelleyebilir.</p></div>
+      <iframe class="vkd-transfer" name="vkd-transfer" title="Dosya aktarımı"></iframe>
+    </section>
+  </div>
 
   <!-- TAB: TÜM İŞLER -->
   <div class="admin-panel active" id="tab-projects">
@@ -550,6 +578,7 @@
     </div>
   </div>
 
+<script src="assets/js/admin-video.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script>
 // --- INSPIRE ---
@@ -2356,10 +2385,7 @@ document.getElementById('ui-save-btn')?.addEventListener('click', async () => {
 </script>
 
 
-<!-- GTranslate: https://gtranslate.io/ -->
-<div class="gtranslate_wrapper" style="position: fixed; bottom: 20px; left: 20px; z-index: 999999;"></div>
-<script>window.gtranslateSettings = {"default_language":"tr","languages":["tr","en"],"wrapper_selector":".gtranslate_wrapper","flag_size":32}</script>
-<script src="https://cdn.gtranslate.net/widgets/latest/flags.js" defer></script>
+<!-- Admin content stays outside third-party translation widgets. -->
 
 </body>
 </html>

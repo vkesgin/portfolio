@@ -12,3 +12,8 @@ scratch2/
 
 # worker local dev secrets (test values only)
 worker/.dev.vars
+
+# Downloader runtime files
+__pycache__/
+*.pyc
+.railway/

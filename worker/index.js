@@ -1,3 +1,4 @@
+import { handleVideoDownloader } from './video-downloader.js';
 import { parseLink, MAX_URL_LENGTH, mediaKindOf, PLAY_PATH_RE } from '../assets/js/fikir-url.mjs';
 import {
   handleStoryboard, sbConfigPayload, sbAttachSummaries, sbStartForNewPost, sbDeleteForPost, sbScheduled, ensureStoryboardSchema,
@@ -4081,6 +4082,11 @@ export default {
           'Access-Control-Max-Age': '86400',
         }
       });
+    }
+
+    // Admin downloader has its own no-store responses and never touches D1/R2.
+    if (path === '/api/admin/video' || path.startsWith('/api/admin/video/')) {
+      return handleVideoDownloader(request, env, { authenticate: authMiddleware, sign: signJWT, verify: verifyJWT });
     }
 
     // === AUTH ===

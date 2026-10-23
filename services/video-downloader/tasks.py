@@ -140,7 +140,14 @@ def execute(queue,mode,payload,proxy,directory):
                 choices.append({'public':public(info,ident),'info':info,'cookies':cookies})
             queue.put({'result':'choices','choices':choices})
             return
-        info=filtered(payload['info'])
+        info=payload['info']
+        if info.get('_browser_source'):
+            with yt_dlp.YoutubeDL({**opts,'http_headers':info.get('http_headers',{})}) as ydl:
+                cookiejar(ydl,payload.get('cookies',[]))
+                resolved=ydl.extract_info(info['url'],download=False)
+                resolved['title']=info['title']
+                info=ydl.sanitize_info(resolved)
+        info=filtered(info)
         quality=payload['quality']
         fmt='bestaudio/best' if quality=='audio' else 'bv*+ba/b' if quality=='best' else f'bv*[height<=?{int(quality)}]+ba/b[height<=?{int(quality)}]'
         paths=[]

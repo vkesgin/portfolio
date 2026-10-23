@@ -64,7 +64,15 @@
         <div class="vkd-controls"><select id="vkd-quality" aria-label="Video kalitesi"><option value="best">En iyi kalite</option><option value="2160">4K’ya kadar</option><option value="1080">1080p’ye kadar</option><option value="720">720p’ye kadar</option><option value="480">480p’ye kadar</option><option value="audio">Yalnızca ses · MP3</option></select><button class="btn btn-primary" id="vkd-submit" type="submit">Videoyu indir <span>↗</span></button></div>
       </form>
       <div class="vkd-meta"><span>MP4 / WEBM / HLS / DASH</span><span>KALICI GEÇMİŞ YOK · EK ÜYELİK YOK</span></div>
-      <details class="vkd-advanced"><summary>Video bulunamadığında</summary><div><p>Dinamik oynatıcılar için sayfayı geçici bir tarayıcıda incele.</p><button type="button" class="vkd-outline" id="vkd-scan">Tarayıcıyla bul ↗</button></div></details>
+      <details class="vkd-advanced"><summary>Video bulunamadığında</summary><div><p>Sayfayı burada aç, videoyu oynat ve bulunan akışı seç.</p><button type="button" class="vkd-outline" id="vkd-scan">Tarayıcıyı aç ↗</button></div></details>
+      <section id="vkd-browser" class="vkd-browser" hidden aria-label="Geçici tarayıcı">
+        <div class="vkd-browser-toolbar"><button type="button" class="vkd-outline" id="vkd-back" aria-label="Önceki sayfa">←</button><button type="button" class="vkd-outline" id="vkd-reload" aria-label="Sayfayı yenile">↻</button><span id="vkd-address">Sayfa açılıyor…</span><button type="button" class="vkd-outline" id="vkd-close-browser">Kapat</button></div>
+        <p id="vkd-browser-help">Aşağıdaki sayfada videoyu oynat. Bulunan videolar hemen altında görünecek.</p>
+        <div class="vkd-browser-screen"><img id="vkd-screen" alt="Uzaktaki tarayıcının canlı görüntüsü; tıklayarak kontrol edebilirsin" tabindex="0" draggable="false" hidden><p id="vkd-browser-loading">Tarayıcı açılıyor…</p></div>
+        <div class="vkd-browser-controls"><button type="button" class="vkd-outline" id="vkd-up">↑ Kaydır</button><button type="button" class="vkd-outline" id="vkd-down">↓ Kaydır</button><button type="button" class="vkd-outline" id="vkd-play-key">▶ / ❚❚</button><input id="vkd-browser-text" type="text" autocomplete="off" placeholder="Seçili alana yaz…" aria-label="Uzaktaki sayfaya yazılacak metin"><button type="button" class="vkd-outline" id="vkd-type">Yaz</button><button type="button" class="vkd-outline" id="vkd-enter">↵</button></div>
+        <p class="vkd-browser-note">Görüntü kısa aralıklarla yenilenir; ses aktarılmaz. Bu geçici tarayıcı 10 dakika sonra kapanır.</p>
+        <div id="vkd-browser-choices"></div>
+      </section>
       <section id="vkd-result" class="vkd-result" hidden aria-live="polite" aria-label="Video işlemi">
         <div class="vkd-status-head"><h3 id="vkd-result-title">Video aranıyor</h3><button type="button" class="vkd-outline" id="vkd-cancel">Temizle</button></div>
         <p class="vkd-status" id="vkd-status"></p><div class="vkd-progress" id="vkd-progress"><div></div></div>

@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from egress import ProxyServer, Proxy, public_addresses
 from tasks import execute, MAX_BYTES
+from interactive import browser_process, KEYS, WIDTH, HEIGHT
 
 TOKEN=os.environ.get('VIDEO_BACKEND_TOKEN','')
 RETENTION=600
@@ -32,6 +33,10 @@ CTX=mp.get_context('spawn')
 def terminate(job):
     process=job.get('_process')
     if process:
+        if process.is_alive() and job.get('_commands'):
+            try:job['_commands'].put_nowait({'action':'close'})
+            except queue.Full:pass
+            process.join(timeout=3)
         if process.is_alive():
             try:os.killpg(process.pid,signal.SIGKILL)
             except ProcessLookupError:pass
@@ -158,7 +163,7 @@ def monitor(ident,events,mode):
 def start(mode,payload,title):
     sweep()
     with LOCK:
-        if sum(j['status']=='running' for j in JOBS.values())>=2:raise HTTPException(429,'İki işlem sürüyor. Birinin bitmesini bekle.')
+        if sum(j['status'] in ('running','browser') for j in JOBS.values())>=2:raise HTTPException(429,'İki işlem sürüyor. Birinin bitmesini bekle.')
         if len(JOBS)>=50 or len(SOURCES)>=100:raise HTTPException(429,'Geçici işlem alanı dolu. Birkaç dakika sonra tekrar dene.')
         ident=uuid.uuid4().hex
         directory=ROOT/ident;directory.mkdir(mode=0o700)
@@ -188,6 +193,56 @@ def download(data:Download):
         if source['public']['ad']:raise ValueError('Reklam işareti taşıyan akış indirilmez.')
         payload={'info':source['info'],'cookies':source['cookies'],'quality':data.quality}
     return start('download',payload,source['public']['title'])
+
+class BrowserAction(BaseModel):
+    action:str='frame'
+    x:float=Field(default=0,ge=0,lt=WIDTH)
+    y:float=Field(default=0,ge=0,lt=HEIGHT)
+    delta:int=Field(default=0,ge=-1500,le=1500)
+    text:str=Field(default='',max_length=2000)
+    key:str='Enter'
+
+@app.post('/v1/browser')
+def open_browser(data:Analyze):
+    url=valid_url(data.url)
+    sweep()
+    with LOCK:
+        if sum(j['status'] in ('running','browser') for j in JOBS.values())>=2:
+            raise HTTPException(429,'İki işlem sürüyor. Önce açık işlemi kapat.')
+        if len(JOBS)>=50:raise HTTPException(429,'Geçici işlem alanı dolu.')
+        ident=uuid.uuid4().hex
+        commands,replies=CTX.Queue(maxsize=2),CTX.Queue(maxsize=2)
+        proxy=f'http://127.0.0.1:{PROXY.server_address[1]}'
+        directory=ROOT/ident;directory.mkdir(mode=0o700)
+        process=CTX.Process(target=browser_process,args=(commands,replies,url,proxy,str(directory)))
+        JOBS[ident]=dict(id=ident,status='browser',expires=time.monotonic()+600,
+            _dir=str(directory),_process=process,_commands=commands,_replies=replies,_action_lock=threading.Lock())
+        process.start()
+    return {'id':ident}
+
+@app.post('/v1/browser/{ident}/action')
+def browser_action(ident:str,data:BrowserAction):
+    if data.action not in ('frame','click','scroll','text','key','back','reload') or data.key not in KEYS:
+        raise ValueError('Geçersiz tarayıcı kontrolü.')
+    sweep()
+    with LOCK:job=JOBS.get(ident)
+    if not job or job['status']!='browser':raise HTTPException(410,'Tarayıcı oturumu sona erdi. Yeniden aç.')
+    if not job['_action_lock'].acquire(blocking=False):raise HTTPException(409,'Tarayıcı önceki işlemi tamamlıyor.')
+    try:
+        job['_commands'].put(data.model_dump(),timeout=1)
+        try:result=job['_replies'].get(timeout=18)
+        except queue.Empty:
+            erase(ident)
+            raise HTTPException(410,'Tarayıcı yanıt vermedi. Yeniden aç.')
+        if 'error' in result:raise HTTPException(502,result['error'])
+        public=[]
+        with LOCK:
+            if ident not in JOBS:raise HTTPException(410,'Tarayıcı kapatıldı.')
+            for choice in result.pop('choices',[]):
+                SOURCES[choice['public']['id']]={**choice,'owner':ident,'expires':job['expires']}
+                public.append(choice['public'])
+        return {**result,'choices':public}
+    finally:job['_action_lock'].release()
 
 @app.get('/v1/jobs/{ident}')
 def state(ident:str):

@@ -53,3 +53,12 @@ test('downloader UI does not persist links; private service is excluded from sit
  assert.match(fs.readFileSync(new URL('../.assetsignore',import.meta.url),'utf8'),/^\/services\//m);
  for(const p of ['../admin.html','../web-src/public/admin.html'])assert.match(fs.readFileSync(new URL(p,import.meta.url),'utf8'),/data-tab="video"/);
 });
+test('interactive browser controls require admin and use the fixed upstream path',async()=>{
+ const route='/browser/'+id+'/action';
+ assert.equal((await handle(req(route,{action:'frame'}),env,{...deps,authenticate:async()=>null})).status,401);
+ assert.equal((await handle(req(route,{action:'evaluate',code:'unsafe'}),env,deps)).status,400);
+ let call;
+ const response=await handle(req(route,{action:'click',x:30,y:20}),env,{...deps,fetchImpl:async(u,init)=>{call={u,init};return Response.json({image:'jpeg',choices:[]});}});
+ assert.equal(response.status,200);assert.equal(call.u,'https://engine.example/v1/browser/'+id+'/action');
+ assert.deepEqual(JSON.parse(call.init.body),{action:'click',x:30,y:20});assert.match(response.headers.get('Cache-Control'),/no-store/);
+});

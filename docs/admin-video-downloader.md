@@ -52,3 +52,11 @@ The `.assetsignore` excludes `/services/`, `/worker/`, `/tests/`, and `/docs/` s
 - `tests/admin-video-ui.py` is the manual integration harness for a local worker with test-only admin credentials + the real engine. It exercises desktop/mobile UI, actual preparation, a browser download, and FFprobe validation. It never uses production admin credentials. Its preview ports/configuration are development fixtures, not public setup instructions.
 
 Production smoke testing should use the regular admin login in a browser and an allowed public video, then verify the downloaded file. Endpoint availability does not prove every site is supported.
+
+## Interactive browser fallback
+
+Failed extraction opens an ephemeral remote Chromium viewport directly in the admin panel. The user can click a player, scroll, type, follow links, return, or reload. JPEG frames are relayed through the authenticated gateway; this is a remote control view, not an iframe of the target site. Frames update roughly once per second depending on network speed; audio is not relayed. Detected media appear as explicit choices. The browser's scoped cookies and headers are copied into the download process before the browser is closed.
+
+`POST /api/admin/video/browser` opens a session; `/browser/:id/action` accepts only frame, click, scroll, text, key, back and reload. No arbitrary JavaScript evaluation is exposed. Coordinates, text length and keys are constrained server-side. Both the browser and downloads use the existing public-only egress proxy. Sessions share the two-operation limit, expire after ten minutes, and are deleted on close, clear, logout or best-effort page exit. Browser profiles live in the job's temporary directory and are removed on shutdown; images and captured credentials are never added to app logs or persistent storage. As with other temporary data, abrupt container termination is not a secure-erasure guarantee.
+
+Validation: install `httpx2` in the development environment, then run `python -m unittest discover -s services/video-downloader -p 'test_*.py'`. The interactive integration test launches real Chromium through a test-only proxy, clicks a delayed player, verifies cookie/referrer dependent media capture and download, rejects invalid controls, and verifies browser profile/source/file cleanup.

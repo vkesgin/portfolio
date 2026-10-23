@@ -78,13 +78,18 @@ export async function handleVideoDownloader(request, env, deps) {
       if (raw.length > 16384) return json({error:'İstek çok uzun.'},413);
       let data;
       try {data=JSON.parse(raw);} catch {return json({error:'Geçersiz istek.'},400);}
-      if (route === '/analyze') {
+      if (route === '/analyze' || route === '/browser') {
         if (typeof data.url !== 'string' || data.url.length > 8192) return json({error:'Geçerli bir video bağlantısı gir.'},400);
         let parsed;
         try {parsed=new URL(data.url.trim());} catch {return json({error:'Geçerli bir video bağlantısı gir.'},400);}
         if (!['http:','https:'].includes(parsed.protocol) || parsed.username || parsed.password) return json({error:'Geçerli bir http(s) bağlantısı gir.'},400);
         if (!['analyze','scan'].includes(data.mode || 'analyze')) return json({error:'Geçersiz tespit yöntemi.'},400);
-        return await relay('/v1/analyze',{method:'POST',data:{url:parsed.href,mode:data.mode || 'analyze'}});
+        return await relay(route === '/browser' ? '/v1/browser' : '/v1/analyze',{method:'POST',data:{url:parsed.href,mode:data.mode || 'analyze'}});
+      }
+      const browserAction = route.match(/^\/browser\/([a-f0-9]{32})\/action$/);
+      if (browserAction) {
+        if (!['frame','click','scroll','text','key','back','reload'].includes(data.action)) return json({error:'Geçersiz tarayıcı kontrolü.'},400);
+        return await relay('/v1/browser/'+browserAction[1]+'/action',{method:'POST',data});
       }
       if (route === '/download') {
         if (!ID.test(data.source_id || '') || !QUALITY.has(data.quality || 'best')) return json({error:'Geçersiz video veya kalite.'},400);

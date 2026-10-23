@@ -7,13 +7,15 @@
   const jobs = new Set();
   let browserId=null, browserTimer=null, browserBusy=false, browserEpoch=0, browserChoices='';
   let browserWidth=1024, browserHeight=640, browserPending=[];
-  const endpoint = () => API + '/api/admin/video';
+  const settings=window.videoDownloaderConfig;
+  const endpoint = () => settings ? settings.endpoint() : API + '/api/admin/video';
+  const accessToken = () => settings ? settings.token() : TOKEN;
   const size = n => n ? (n / 1024 / 1024).toFixed(1)+' MB' : '';
   const duration = n => n ? Math.floor(n / 60)+':'+String(Math.floor(n % 60)).padStart(2,'0') : '';
   async function api(path, data, method) {
     const response = await fetch(endpoint()+path, {
       method:method || (data === undefined ? 'GET':'POST'), cache:'no-store',
-      headers:{Authorization:'Bearer '+TOKEN,...(data === undefined ? {}:{'Content-Type':'application/json'})},
+      headers:{Authorization:'Bearer '+accessToken(),...(data === undefined ? {}:{'Content-Type':'application/json'})},
       body:data === undefined ? undefined:JSON.stringify(data),
     });
     const value = await response.json();
@@ -186,6 +188,7 @@
   $('play-key').addEventListener('click',()=>controlBrowser({action:'key',key:'Space'}));
   $('enter').addEventListener('click',()=>controlBrowser({action:'key',key:'Enter'}));
   $('type').addEventListener('click',()=>{const text=$('browser-text').value.slice(0,2000);controlBrowser({action:'text',text});$('browser-text').value='';});
+  window.videoDownloader={clear,open:async(url='')=>{await clear();$('url').value=url;if(url)await analyze('analyze');else $('url').focus();}};
   $('form').addEventListener('submit',event=>{event.preventDefault();analyze('analyze');});
   $('scan').addEventListener('click',()=>openBrowser());
   $('cancel').addEventListener('click',()=>clear({blank:true}));
@@ -217,7 +220,7 @@
   });
   document.getElementById('logoutBtn')?.addEventListener('click',()=>clear({blank:true}),true);
   window.addEventListener('pagehide',()=>{
-    const authorization='Bearer '+TOKEN;
+    const authorization='Bearer '+accessToken();
     for(const id of jobs)fetch(endpoint()+'/jobs/'+id,{method:'DELETE',headers:{Authorization:authorization},keepalive:true}).catch(()=>{});
   });
 })();

@@ -67,7 +67,7 @@ def browser_process(commands, replies, url, proxy, directory):
                     screenshot=base64.b64encode(page.screenshot(type='jpeg',quality=55,timeout=5000)).decode()
                     title=page.title()[:250] or 'Bulunan video'
                     cookies=context.cookies()
-                    choices=[{'public':{'id':c['id'],'title':title+' · '+str(i+1),'provider':urlsplit(c['url']).hostname or 'Tarayıcı','ad':False,'heights':[]},'info':{'_browser_source':True,'url':c['url'],'http_headers':c['headers'],'title':title},'cookies':cookies} for i,c in enumerate(found.values())]
+                    choices=[{'public':{'id':c['id'],'title':title+' · '+str(i+1),'provider':urlsplit(c['url']).hostname or 'Tarayıcı','ad':False,'heights':[]},'info':{'_browser_source':True,'url':page.url if (urlsplit(page.url).hostname or '').endswith('.youtube.com') or urlsplit(page.url).hostname in ('youtube.com','youtu.be') else c['url'],'http_headers':c['headers'],'title':title},'cookies':cookies} for i,c in enumerate(found.values())]
                     replies.put({'image':screenshot,'url':page.url,'width':WIDTH,'height':HEIGHT,'choices':choices},timeout=2)
                 except Exception:
                     replies.put({'error':'Sayfa yanıt vermedi. Yenile düğmesini deneyebilirsin.'},timeout=2)

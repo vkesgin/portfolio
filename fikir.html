@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0a0a0a">
   <title>Fikir Havuzu — Veli Kesgin</title>
   <link rel="icon" type="image/svg+xml" href="/assets/images/favicon.svg">
+  <link rel="stylesheet" href="/assets/css/admin-video.css">
   <style>
     :root {
       --bg: #0a0a0a;
@@ -781,6 +782,13 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
+
+    #video-modal .modal-content{max-width:820px;width:min(820px,96vw)}
+    #video-modal .vkd{--bg-primary:var(--bg);--bg-surface:var(--card-bg);--border-hover:var(--border-strong);--text-primary:var(--text);--text-secondary:var(--muted);--text-muted:var(--dim);--font-body:Arial,sans-serif;--font-mono:monospace;--font-display:Arial,sans-serif;--radius-md:8px;margin:0}
+    #video-modal .vkd h2{font-size:32px;font-weight:700;line-height:1.2;margin:20px 0 10px}
+    #video-modal .vkd-kicker,#video-modal .vkd-footer{display:none}
+    #video-modal .vkd-form{margin-top:20px}#video-modal .vkd-intro{max-width:none}
+    #video-modal .vkd button{cursor:pointer}#video-modal .vkd-browser-screen img{pointer-events:auto}
   </style>
 </head>
 <body>
@@ -846,6 +854,7 @@
         <div class="greeting"><span>Hoş geldin, </span><span class="who" id="user-name" translate="no">Anonim</span><span id="admin-badge" class="admin-badge" hidden>Yönetici</span></div>
       </div>
       <div class="header-actions">
+        <button type="button" class="btn btn-outline" id="btn-video-tool">Video indir</button>
         <button type="button" class="btn btn-primary" id="btn-add">+ Yeni Fikir Ekle</button>
         <button type="button" class="btn btn-outline" id="btn-rename" hidden>İsmi değiştir</button>
         <button type="button" class="btn btn-outline" id="btn-logout">Çıkış</button>
@@ -855,6 +864,39 @@
     <div id="board" class="board"></div>
     <button type="button" id="new-posts" class="new-posts" hidden></button>
   </div>
+
+<div class="modal-overlay" id="video-modal" hidden><div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="vkd-title"><button type="button" class="btn btn-outline" id="video-modal-close" aria-label="Video indirmeyi kapat">Kapat ×</button>
+    <section class="vkd" aria-labelledby="vkd-title">
+      <p class="vkd-kicker">// KİŞİSEL ARAÇLAR</p>
+      <h2 id="vkd-title">Videoyu indir</h2>
+      <p class="vkd-intro">YouTube, Facebook veya başka bir video bağlantısını yapıştır. Bu işlem panoya fikir eklemez.</p>
+      <form class="vkd-form" id="vkd-form">
+        <label class="vkd-label" for="vkd-url">VİDEO BAĞLANTISI</label>
+        <div class="vkd-url"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l4-4a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-4 4a5 5 0 0 0 7 7l2-2"/></svg><input id="vkd-url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://… video bağlantısı"><button type="button" class="vkd-paste" id="vkd-paste">Yapıştır</button></div>
+        <div class="vkd-controls"><select id="vkd-quality" aria-label="Video kalitesi"><option value="best">En iyi kalite</option><option value="2160">4K’ya kadar</option><option value="1080">1080p’ye kadar</option><option value="720">720p’ye kadar</option><option value="480">480p’ye kadar</option><option value="audio">Yalnızca ses · MP3</option></select><button class="btn btn-primary" id="vkd-submit" type="submit">Videoyu indir <span>↗</span></button></div>
+      </form>
+      <div class="vkd-meta"><span>MP4 / WEBM / HLS / DASH</span><span>İNDİRME GEÇMİŞİ TUTULMAZ</span></div>
+      <details class="vkd-advanced"><summary>Video bulunamadığında</summary><div><p>Sayfayı burada aç, videoyu oynat ve bulunan akışı seç.</p><button type="button" class="vkd-outline" id="vkd-scan">Tarayıcıyı aç ↗</button></div></details>
+      <section id="vkd-browser" class="vkd-browser" hidden aria-label="Geçici tarayıcı">
+        <div class="vkd-browser-toolbar"><button type="button" class="vkd-outline" id="vkd-back" aria-label="Önceki sayfa">←</button><button type="button" class="vkd-outline" id="vkd-reload" aria-label="Sayfayı yenile">↻</button><span id="vkd-address">Sayfa açılıyor…</span><button type="button" class="vkd-outline" id="vkd-close-browser">Kapat</button></div>
+        <p id="vkd-browser-help">Aşağıdaki sayfada videoyu oynat. Bulunan videolar hemen altında görünecek.</p>
+        <div class="vkd-browser-screen"><img id="vkd-screen" alt="Uzaktaki tarayıcının canlı görüntüsü; tıklayarak kontrol edebilirsin" tabindex="0" draggable="false" hidden><p id="vkd-browser-loading">Tarayıcı açılıyor…</p></div>
+        <div class="vkd-browser-controls"><button type="button" class="vkd-outline" id="vkd-up">↑ Kaydır</button><button type="button" class="vkd-outline" id="vkd-down">↓ Kaydır</button><button type="button" class="vkd-outline" id="vkd-play-key">▶ / ❚❚</button><input id="vkd-browser-text" type="text" autocomplete="off" placeholder="Seçili alana yaz…" aria-label="Uzaktaki sayfaya yazılacak metin"><button type="button" class="vkd-outline" id="vkd-type">Yaz</button><button type="button" class="vkd-outline" id="vkd-enter">↵</button></div>
+        <p class="vkd-browser-note">Görüntü kısa aralıklarla yenilenir; ses aktarılmaz. Bu geçici tarayıcı 10 dakika sonra kapanır.</p>
+        <div id="vkd-browser-choices"></div>
+      </section>
+      <section id="vkd-result" class="vkd-result" hidden aria-live="polite" aria-label="Video işlemi">
+        <div class="vkd-status-head"><h3 id="vkd-result-title">Video aranıyor</h3><button type="button" class="vkd-outline" id="vkd-cancel">Temizle</button></div>
+        <p class="vkd-status" id="vkd-status"></p><div class="vkd-progress" id="vkd-progress"><div></div></div>
+        <div id="vkd-choices"></div><div class="vkd-save" id="vkd-save" hidden><button type="button" class="btn btn-primary" id="vkd-file">Cihaza kaydet ↙</button></div>
+        <p class="vkd-caption" id="vkd-caption"></p>
+      </section>
+      <p class="vkd-caption">Bu araç indirme geçmişi tutmaz. Kaynak siteler, tarayıcın ve altyapı sağlayıcıları kendi bağlantı kayıtlarını tutabilir.</p>
+      <p class="vkd-empty" id="vkd-empty">Hazır olduğunda bir bağlantı yapıştır.</p>
+      <div class="vkd-footer"><svg width="15" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 2 3 6v6c0 5 9 10 9 10s9-5 9-10V6L12 2Z"/><path d="m8 12 3 3 5-6"/></svg><p><strong>Sadece bu işlem için.</strong> Kalıcı indirme geçmişi veya site oturumu saklanmaz. Geçici dosya aktarımdan sonra, kullanılmazsa en geç 10 dakika içinde silinir. Barındırma sağlayıcısının erişim günlükleri bu özelliğin dışındadır. DRM, hesap girişi ve sunucuya erişim engelleri bazı kaynakların indirilmesini engelleyebilir.</p></div>
+      <iframe class="vkd-transfer" name="vkd-transfer" title="Dosya aktarımı"></iframe>
+    </section>
+</div></div>
 
   <!-- Add idea modal -->
   <div class="modal-overlay" id="add-modal" hidden>
@@ -1072,6 +1114,29 @@
     window.fikirConfig = config;
 
     const session = { token: null, user: null, cid: null };
+    window.videoDownloaderConfig={endpoint:()=>API_BASE+'/api/inspire/video',token:()=>session.token || ''};
+    let downloaderModule;
+    async function openVideoTool(url='') {
+      if(!session.token)return;
+      openModal($('video-modal'),$('vkd-url'));
+      try {
+        downloaderModule ||= import('/assets/js/admin-video.js?v=20261023-fikir');
+        await downloaderModule;
+        if(!$('video-modal').hidden)await window.videoDownloader.open(url);
+      } catch {toast('Video aracı yüklenemedi. Sayfayı yenileyip tekrar dene.','error');}
+    }
+    function closeVideoTool() {
+      window.videoDownloader?.clear({blank:true});
+      closeModal($('video-modal'));
+    }
+    function remoteVideoLink(entry) {
+      const existing=ownVideoOf(entry.post)||copyOf(entry.post);
+      if(existing)return existing.url;
+      const url=mediaUrl(entry.post.url);
+      if(!url || entry.post.type==='text' || /\.(?:jpe?g|png|gif|webp|avif)(?:[?#]|$)/i.test(url))return null;
+      return url;
+    }
+
 
     /* ------------------------------------------------------------- utilities */
     function resolveApiBase() {
@@ -1378,7 +1443,8 @@
       if (restore && restore.isConnected && typeof restore.focus === 'function') restore.focus({ preventScroll: true });
     }
     function dismissModal(el) {
-      if (el === $('add-modal')) closeAddModal();
+      if (el === $('video-modal')) closeVideoTool();
+      else if (el === $('add-modal')) closeAddModal();
       else if (el === $('media-modal')) closeMediaModal();
       else if (el === $('confirm-modal')) settleConfirm(false);
       else if (typeof el.sbDismiss === 'function') el.sbDismiss();   // storyboard viewer
@@ -1796,6 +1862,7 @@
     }
 
     function logout(message) {
+      closeVideoTool();
       clearSession();
       config.storyboard = false;   // per-user flags; the next login reloads them (showBoard -> loadConfig)
       config.sb = null;
@@ -2966,6 +3033,7 @@
     // A YouTube / Vimeo post without its video file (dl.reason: the platform's video is never fetched): no "İndir" (the
     // post owner / admin gets "Video ekle" there instead)
     function dlShown(entry) {
+      if(config.video.download!==false && remoteVideoLink(entry))return true;
       const dl = entry.post.dl;
       return config.video.download !== false && !!dl && typeof dl === 'object' && (dl.video !== false || dl.image === true) &&
         !(dl.video === false && dl.reason);
@@ -4956,6 +5024,8 @@
     // indir" under a video that cannot be downloaded). The download link of download-info carries a short-lived ticket
     // (the file request has no Authorization header); a refused ticket (401) gets one fresh download-info + retry.
     async function downloadPost(entry, want = null) {
+      const remote=want!=='image' && remoteVideoLink(entry);
+      if(remote){await openVideoTool(remote);return;}
       const btn = entry.refs.dlBtn;
       if (!btn || btn.hidden || dlRunning.has(entry.id)) return;
       dlRunning.add(entry.id);
@@ -5589,6 +5659,8 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
       });
       $('admin-form').addEventListener('submit', (e) => { e.preventDefault(); adminLogin(); });
 
+      $('btn-video-tool').addEventListener('click',()=>openVideoTool());
+      $('video-modal-close').addEventListener('click',closeVideoTool);
       $('btn-add').addEventListener('click', openAddModal);
       $('btn-logout').addEventListener('click', () => logout());
       $('btn-rename').addEventListener('click', () => {
@@ -5685,11 +5757,6 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
 
     boot();
   </script>
-
-<!-- GTranslate: https://gtranslate.io/ -->
-<div class="gtranslate_wrapper" style="position: fixed; bottom: 20px; left: 20px; z-index: 999999;"></div>
-<script>window.gtranslateSettings = {"default_language":"tr","languages":["tr","en"],"wrapper_selector":".gtranslate_wrapper","flag_size":32}</script>
-<script src="https://cdn.gtranslate.net/widgets/latest/flags.js" defer></script>
 
 </body>
 </html>

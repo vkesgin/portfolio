@@ -2439,11 +2439,11 @@ async function inspireDownload(request, env, ctx, db, id, { selfHost, origin, au
       if (want === 'video' && ((igRes && igRes.busy) || adReason === 'busy')) break;   // 429 below, not the poster
     }
   } catch (e) {
-    console.error('inspire download', id, e && e.stack || e);
+    // Download failures deliberately omit source, post, session and timestamps from application logs.
     lastError = 'error';
   }
   if (dayState === 'taken') await inspireRefund(db, day, dayItem);
-  console.log('inspire download failed', id, part, lastError || '-', adReason || '-', dayState || '-');
+
   if (dayState === 'exceeded') return fail(429, 'quota_exceeded', 'Bugünkü indirme sınırı doldu. Yarın tekrar dene ya da kaynağında aç.', { reset_at: nextResetIso() });
   if (dayState === 'error') return fail(503, 'download_unavailable', 'İndirme şu anda yapılamıyor, biraz sonra tekrar dene.');
   const what = part === 'video' ? 'videosu' : part === 'image' ? 'görseli' : 'videosu ya da görseli';
@@ -4081,6 +4081,15 @@ export default {
           'Access-Control-Allow-Headers': path.startsWith('/api/inspire/') ? 'Content-Type,Authorization,X-Fikir-Client' : 'Content-Type,Authorization',
           'Access-Control-Max-Age': '86400',
         }
+      });
+    }
+
+    // The Fikir tool shares ephemeral processing; it never creates a board post or download history.
+    if (path === '/api/inspire/video' || path.startsWith('/api/inspire/video/')) {
+      return handleVideoDownloader(request, env, {
+        prefix: '/api/inspire/video', scope: 'fikir-video-download',
+        authenticate: async (req, bindings) => (await inspireActor(req, bindings)) ? {role:'admin'} : null,
+        sign: signJWT, verify: verifyJWT,
       });
     }
 

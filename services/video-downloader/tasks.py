@@ -91,6 +91,7 @@ def scan_browser(url,proxy,directory):
 def error_message(exc):
     text=str(exc).lower()
     if 'drm' in text:return 'Video DRM korumalı; desteklenmiyor.'
+    if 'confirm you' in text or 'not a bot' in text:return 'YouTube bu sunucudan gelen istekte doğrulama istiyor. Açılan tarayıcıda videoyu oynatmayı dene; erişim engeli sürerse bu sunucudan indirilemez.'
     if '403' in text or 'sign in' in text or 'login' in text or 'cookies' in text:return 'Kaynak site erişimi reddetti veya oturum istiyor. Sunucunun bağlantısı bu kaynağa erişemiyor.'
     if 'format' in text:return 'Seçilen kalite bu kaynakta yok. En iyi kalite seçeneğini dene.'
     if 'size' in text or 'boyut' in text:return 'Dosya indirme boyutu sınırını aşıyor.'
@@ -127,7 +128,13 @@ def execute(queue,mode,payload,proxy,directory):
             else:
                 queue.put({'message':'Video ve kalite seçenekleri bulunuyor…'})
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    info=ydl.extract_info(payload['url'],download=False)
+                    try:info=ydl.extract_info(payload['url'],download=False)
+                    except Exception:
+                        host=urlsplit(payload['url']).hostname or ''
+                        if host not in ('youtu.be','youtube.com','www.youtube.com','m.youtube.com'):raise
+                        fallback={**opts,'extractor_args':{'youtube':{'player_client':['android_vr','web_embedded','web_safari']}}}
+                        with yt_dlp.YoutubeDL(fallback) as alternate:
+                            info=alternate.extract_info(payload['url'],download=False)
                     items=list(info.get('entries') or []) if info.get('_type') in ('playlist','multi_video') else [info]
                     for item in items[:12]:
                         if not item:continue

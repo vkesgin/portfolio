@@ -41,7 +41,7 @@ test('file transfer uses POST body ticket; rejects expired, foreign, or malforme
  }
 });
 test('file streams without persistence; failed transfers do not reveal credentials',async()=>{
- const ticket=JSON.stringify({scope:'video-download',job:id,exp:Date.now()+10000});
+ const ticket=JSON.stringify({scope:'video-download',owner:'a'.repeat(64),job:id,exp:Date.now()+10000});
  const request=new Request('https://api.example/api/admin/video/file',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({ticket})});
  const response=await handle(request,env,{...deps,fetchImpl:async(u,init)=>{assert.equal(init.method,'POST');assert.equal(new URL(u).pathname,'/v1/files/'+id);return new Response('video-data',{headers:{'Content-Disposition':'attachment; filename=test.mp4'}});}});
  assert.equal(await response.text(),'video-data');assert.match(response.headers.get('Content-Disposition'),/attachment/);
@@ -61,4 +61,14 @@ test('interactive browser controls require admin and use the fixed upstream path
  const response=await handle(req(route,{action:'click',x:30,y:20}),env,{...deps,fetchImpl:async(u,init)=>{call={u,init};return Response.json({image:'jpeg',choices:[]});}});
  assert.equal(response.status,200);assert.equal(call.u,'https://engine.example/v1/browser/'+id+'/action');
  assert.deepEqual(JSON.parse(call.init.body),{action:'click',x:30,y:20});assert.match(response.headers.get('Cache-Control'),/no-store/);
+});
+test('Fikir uses its own session namespace and file tickets cannot cross into admin',async()=>{
+ const fdeps={...deps,prefix:'/api/inspire/video',scope:'fikir-video-download'};
+ const request=new Request('https://api.example/api/inspire/video/analyze',{method:'POST',headers:{Origin:origin,Authorization:'Bearer guest-session','Content-Type':'application/json'},body:JSON.stringify({url:'https://www.youtube.com/watch?v=jNQXAC9IVRw'})});
+ let owner;
+ const response=await handle(request,env,{...fdeps,fetchImpl:async(u,init)=>{owner=init.headers['X-Video-Owner'];return Response.json({id});}});
+ assert.equal(response.status,200);assert.match(owner,/^[a-f0-9]{64}$/);
+ const ticket=JSON.stringify({scope:'fikir-video-download',owner,job:id,exp:Date.now()+10000});
+ const file=new Request('https://api.example/api/admin/video/file',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({ticket})});
+ assert.equal((await handle(file,env,deps)).status,401);
 });

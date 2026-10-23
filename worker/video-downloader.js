@@ -4,6 +4,9 @@ const ID = /^[a-f0-9]{32}$/;
 const QUALITY = new Set(['best', '2160', '1080', '720', '480', 'audio']);
 
 export async function handleVideoDownloader(request, env, deps) {
+  const PREFIX = deps.prefix || '/api/admin/video';
+  const scope = deps.scope || 'video-download';
+  let owner = '';
   const url = new URL(request.url);
   if (url.pathname !== PREFIX && !url.pathname.startsWith(PREFIX + '/')) return null;
   const route = url.pathname.slice(PREFIX.length) || '/';
@@ -34,7 +37,7 @@ export async function handleVideoDownloader(request, env, deps) {
     try {
       const fetcher = deps.fetchImpl || ((...args) => fetch(...args));
       return await fetcher(new URL(path, env.VIDEO_BACKEND_URL).href, {
-        method, headers:{Authorization:'Bearer '+env.VIDEO_BACKEND_TOKEN,...(data ? {'Content-Type':'application/json'} : {})},
+        method, headers:{Authorization:'Bearer '+env.VIDEO_BACKEND_TOKEN,'X-Video-Owner':owner,...(data ? {'Content-Type':'application/json'} : {})},
         body:data ? JSON.stringify(data) : undefined, signal:controller.signal, redirect:'manual',
       });
     } finally {clearTimeout(timer);}
@@ -57,7 +60,9 @@ export async function handleVideoDownloader(request, env, deps) {
       if (raw.length > 8192) return json({error:'İstek çok uzun.'},413);
       const ticket = new URLSearchParams(raw).get('ticket');
       const p = ticket ? await deps.verify(ticket,env.JWT_SECRET) : null;
-      if (!p || p.scope !== 'video-download' || !ID.test(p.job || '') || !Number.isFinite(p.exp) || p.exp < Date.now() || p.exp > Date.now()+90000) return json({error:'İndirme bağlantısının süresi doldu. Tekrar “Cihaza kaydet”e bas.'},401);
+      if (!p || p.scope !== scope || !ID.test(p.job || '') || !Number.isFinite(p.exp) || p.exp < Date.now() || p.exp > Date.now()+90000) return json({error:'İndirme bağlantısının süresi doldu. Tekrar “Cihaza kaydet”e bas.'},401);
+      if (!/^[a-f0-9]{64}$/.test(p.owner || '')) return json({error:'İndirme yetkisi geçersiz.'},401);
+      owner=p.owner;
       const res = await backend('/v1/files/'+p.job,{method:'POST'});
       if (!res.ok) {
         const error = await res.json().catch(()=>({}));
@@ -70,6 +75,7 @@ export async function handleVideoDownloader(request, env, deps) {
     }
     const admin = await deps.authenticate(request,env);
     if (!admin || admin.role !== 'admin') return json({error:'Admin oturumu gerekli.'},401);
+    owner=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(scope+':'+request.headers.get('Authorization')))),b=>b.toString(16).padStart(2,'0')).join('');
     if (route === '/config' && request.method === 'GET') return json({configured:configured(),retention_seconds:600,max_mb:1024});
     if (!configured()) return json({error:'İndirme motoru henüz bağlı değil. Sunucu bağlantısı tamamlandığında burada kullanabileceksin.'},503);
     if (request.method === 'POST') {
@@ -100,7 +106,7 @@ export async function handleVideoDownloader(request, env, deps) {
         const ready = await backend('/v1/jobs/'+data.job_id);
         const job = await ready.json();
         if (!ready.ok || job.status !== 'ready') return json({error:'Dosya henüz hazır değil veya temizlendi.'},410);
-        return json({ticket:await deps.sign({scope:'video-download',job:data.job_id,exp:Date.now()+90000},env.JWT_SECRET)});
+        return json({ticket:await deps.sign({scope,owner,job:data.job_id,exp:Date.now()+90000},env.JWT_SECRET)});
       }
     }
     const match = route.match(/^\/jobs\/([a-f0-9]{32})$/);

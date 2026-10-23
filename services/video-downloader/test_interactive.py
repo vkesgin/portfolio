@@ -37,6 +37,11 @@ class InteractiveTests(unittest.TestCase):
                 response=client.post('/v1/browser',json={'url':'http://fixture.example/'})
                 self.assertEqual(response.status_code,200,response.text)
                 ident=response.json()['id'];folder=Path(server.JOBS[ident]['_dir'])
+                client.headers['X-Video-Owner']='another-session'
+                self.assertEqual(client.get('/v1/jobs/'+ident).status_code,404)
+                self.assertEqual(client.delete('/v1/jobs/'+ident).status_code,404)
+                self.assertEqual(client.post(f'/v1/browser/{ident}/action',json={'action':'frame'}).status_code,410)
+                client.headers.pop('X-Video-Owner')
                 self.assertEqual(client.post(f'/v1/browser/{ident}/action',json={'action':'evaluate'}).status_code,400)
                 self.assertEqual(client.post(f'/v1/browser/{ident}/action',json={'action':'click','x':2000}).status_code,422)
                 first=client.post(f'/v1/browser/{ident}/action',json={'action':'frame'})

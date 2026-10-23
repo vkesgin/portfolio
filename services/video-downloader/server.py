@@ -1,4 +1,5 @@
 import asyncio
+from contextvars import ContextVar
 from contextlib import asynccontextmanager
 import hmac
 import multiprocessing as mp
@@ -20,6 +21,7 @@ from egress import ProxyServer, Proxy, public_addresses
 from tasks import execute, MAX_BYTES
 from interactive import browser_process, KEYS, WIDTH, HEIGHT
 
+OWNER=ContextVar('video_owner',default='legacy-admin')
 TOKEN=os.environ.get('VIDEO_BACKEND_TOKEN','')
 RETENTION=600
 LOCK=threading.RLock()
@@ -86,7 +88,9 @@ async def access(request,call_next):
         if len(TOKEN)<32:return JSONResponse({'error':'İndirme motorunun bağlantısı henüz yapılandırılmadı.'},status_code=503)
         provided=request.headers.get('authorization','')
         if not hmac.compare_digest(provided,'Bearer '+TOKEN):return JSONResponse({'error':'Yetkisiz'},status_code=401)
-    response=await call_next(request)
+    owner_token=OWNER.set(request.headers.get('x-video-owner') or 'legacy-admin')
+    try:response=await call_next(request)
+    finally:OWNER.reset(owner_token)
     response.headers['Cache-Control']='no-store, private'
     response.headers['X-Content-Type-Options']='nosniff'
     return response
@@ -170,7 +174,7 @@ def start(mode,payload,title):
         events=CTX.Queue(maxsize=200)
         proxy=f'http://127.0.0.1:{PROXY.server_address[1]}'
         process=CTX.Process(target=execute,args=(events,mode,payload,proxy,str(directory)),daemon=False)
-        JOBS[ident]=dict(id=ident,status='running',title=title,progress=0,message='Hazırlanıyor…',expires=time.monotonic()+1200,_dir=str(directory),_process=process)
+        JOBS[ident]=dict(id=ident,status='running',title=title,progress=0,message='Hazırlanıyor…',expires=time.monotonic()+1200,_owner=OWNER.get(),_dir=str(directory),_process=process)
         process.start()
     threading.Thread(target=monitor,args=(ident,events,mode),daemon=True).start()
     return {'id':ident}
@@ -189,7 +193,7 @@ def download(data:Download):
     sweep()
     with LOCK:
         source=SOURCES.get(data.source_id)
-        if not source:raise HTTPException(410,'Video bağlantısının süresi doldu. Yeniden bul.')
+        if not source or JOBS.get(source.get('owner'),{}).get('_owner','legacy-admin')!=OWNER.get():raise HTTPException(410,'Video bağlantısının süresi doldu. Yeniden bul.')
         if source['public']['ad']:raise ValueError('Reklam işareti taşıyan akış indirilmez.')
         payload={'info':source['info'],'cookies':source['cookies'],'quality':data.quality}
     return start('download',payload,source['public']['title'])
@@ -216,7 +220,7 @@ def open_browser(data:Analyze):
         directory=ROOT/ident;directory.mkdir(mode=0o700)
         process=CTX.Process(target=browser_process,args=(commands,replies,url,proxy,str(directory)))
         JOBS[ident]=dict(id=ident,status='browser',expires=time.monotonic()+600,
-            _dir=str(directory),_process=process,_commands=commands,_replies=replies,_action_lock=threading.Lock())
+            _owner=OWNER.get(),_dir=str(directory),_process=process,_commands=commands,_replies=replies,_action_lock=threading.Lock())
         process.start()
     return {'id':ident}
 
@@ -226,7 +230,7 @@ def browser_action(ident:str,data:BrowserAction):
         raise ValueError('Geçersiz tarayıcı kontrolü.')
     sweep()
     with LOCK:job=JOBS.get(ident)
-    if not job or job['status']!='browser':raise HTTPException(410,'Tarayıcı oturumu sona erdi. Yeniden aç.')
+    if not job or job.get('_owner','legacy-admin')!=OWNER.get() or job['status']!='browser':raise HTTPException(410,'Tarayıcı oturumu sona erdi. Yeniden aç.')
     if not job['_action_lock'].acquire(blocking=False):raise HTTPException(409,'Tarayıcı önceki işlemi tamamlıyor.')
     try:
         job['_commands'].put(data.model_dump(),timeout=1)
@@ -249,11 +253,14 @@ def state(ident:str):
     sweep()
     with LOCK:
         job=JOBS.get(ident)
-        if not job:raise HTTPException(404,'İşlem bulunamadı veya temizlendi.')
+        if not job or job.get('_owner','legacy-admin')!=OWNER.get():raise HTTPException(404,'İşlem bulunamadı veya temizlendi.')
         return {k:v for k,v in job.items() if not k.startswith('_') and k!='expires'}
 
 @app.delete('/v1/jobs/{ident}')
 def cancel(ident:str):
+    with LOCK:
+        job=JOBS.get(ident)
+        if job and job.get('_owner','legacy-admin')!=OWNER.get():raise HTTPException(404,'İşlem bulunamadı.')
     erase(ident)
     return {'ok':True}
 
@@ -261,7 +268,7 @@ def cancel(ident:str):
 def file(ident:str):
     with LOCK:
         job=JOBS.get(ident)
-        if not job or job['status']!='ready':raise HTTPException(410,'Dosya hazır değil veya temizlendi.')
+        if not job or job.get('_owner','legacy-admin')!=OWNER.get() or job['status']!='ready':raise HTTPException(410,'Dosya hazır değil veya temizlendi.')
         job['status']='transferring'
         job['expires']=time.monotonic()+1800
         path=Path(job['_path'])

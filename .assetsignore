@@ -35,3 +35,7 @@ ui-src
 *.bak
 /microlink_test.json
 /projects_all.json
+
+# Private downloader service and operating documentation
+/services/
+/docs/

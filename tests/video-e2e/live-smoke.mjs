@@ -481,19 +481,23 @@ try {
     return `${fr[0].src}, /play ${plays.map((x) => x.status).join(',')}`;
   });
 
-  await check('F', 'İndir on the live post saves the video (same bytes as the fixture CDN file)', async () => {
-    for (const f of fs.readdirSync(DL)) fs.rmSync(path.join(DL, f), { force: true, recursive: true });
-    const cdp = await browser.target().createCDPSession();
-    await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: DL, eventsEnabled: true });
+  await check('F', 'İndir on the live post: the owner\'s video tool opens (#video-modal) and closes again; the post\'s own download streams the fixture file', async () => {
+    // Since the owner's admin/Fikir video downloader (2026-10-23), İndir on a video link opens #video-modal instead of
+    // saving the file at once; that tool is the owner's and is not exercised here (it needs its remote service).
     await page.$eval(card(ids.blk), (el) => el.scrollIntoView({ block: 'center' }));
     await page.waitForSelector(`${card(ids.blk)} .dl-btn:not([hidden])`, { timeout: 10000 });
     await page.click(`${card(ids.blk)} .dl-btn`);
-    const got = await waitFor(() => fs.readdirSync(DL).find((f) => /\.mp4$/.test(f)), 60000, 'download saved');
-    await waitFor(() => fs.statSync(path.join(DL, got)).size === IGFILE.length, 30000, 'download complete');
-    assert.ok(fs.readFileSync(path.join(DL, got)).equals(IGFILE), 'same bytes');
-    assert.match(got, /DLiveBlk01\.mp4$/);
-    await cdp.detach();
-    return `${got} ${IGFILE.length} bytes`;
+    await page.waitForSelector('#video-modal:not([hidden])', { timeout: 10000 });
+    await page.click('#video-modal-close');
+    await page.waitForSelector('#video-modal[hidden]', { timeout: 10000 });
+    // the board's own download of the live post (GET /posts/:id/download, ticket from download-info) still serves the video
+    const info = await call(BASE, 'GET', `/api/inspire/posts/${ids.blk}/download-info`, null, g.token);
+    assert.equal(info.data.video, true);
+    const dl = await fetchOnce(BASE + info.data.url + '&part=video');
+    assert.equal(dl.status, 200);
+    assert.ok(Buffer.from(await dl.arrayBuffer()).equals(IGFILE), 'same bytes');
+    assert.match(dl.headers.get('Content-Disposition') || '', /DLiveBlk01\.mp4/);
+    return `video tool opened + closed; download ${IGFILE.length} bytes`;
   });
 
   await check('B', 'a reel added through "Yeni Fikir Ekle" becomes our player without a reload (POST /live), no iframe in its card', async () => {

@@ -11,8 +11,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// Placeholders in example paths: {post} (a post id), {note} (a note id), {sb} (a storyboard id), digits otherwise '1'.
-const PH = { post: '{post}', note: '{note}', sb: '{sb}' };
+// Placeholders in example paths: {post} (a post id), {note} (a note id), {sb} (a storyboard id), {tag} (a company tag id),
+// digits otherwise '1'.
+const PH = { post: '{post}', note: '{note}', sb: '{sb}', tag: '{tag}' };
 
 // Example strings of the regex subset the router uses: ^ $ literals \/ \d [class] {n,m} + ( ) (?: ) |
 function expand(src) {
@@ -62,10 +63,10 @@ function expand(src) {
   if (i !== src.length) throw new Error('gate-routes: cannot expand ' + src);
   return out;
 }
-// /api/inspire/posts/1/... -> {post}; /notes/1 -> {note}; sb_000... -> {sb}
+// /api/inspire/posts/1/... -> {post}; /notes/1 -> {note}; /tags/1 -> {tag}; sb_000... -> {sb}
 function template(p) {
   return p.replace(/\/posts\/1+(?=\/|$)/, '/posts/' + PH.post).replace(/\/notes\/1+(?=\/|$)/, '/notes/' + PH.note)
-    .replace(/sb_0{32}/, PH.sb);
+    .replace(/\/tags\/1+(?=\/|$)/, '/tags/' + PH.tag).replace(/sb_0{32}/, PH.sb);
 }
 
 function bodyOf(src, start) {
@@ -103,4 +104,5 @@ export function inspireRoutes() {
 export const OPEN_ROUTES = ['GET /api/inspire/config', 'POST /api/inspire/guest', 'POST /api/inspire/login'];
 export const isOpen = (r) => OPEN_ROUTES.includes(r.method + ' ' + r.path);
 export const isDownload = (r) => r.method === 'GET' && /^\/api\/inspire\/posts\/\{post\}\/download$/.test(r.path);
-export const fill = (p, ids) => p.replace('{post}', String(ids.post)).replace('{note}', String(ids.note)).replace('{sb}', String(ids.sb));
+export const fill = (p, ids) => p.replace('{post}', String(ids.post)).replace('{note}', String(ids.note)).replace('{sb}', String(ids.sb))
+  .replace('{tag}', String(ids.tag));

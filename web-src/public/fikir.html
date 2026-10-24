@@ -750,6 +750,150 @@
     .device-code .modal-input { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; letter-spacing: 0.02em; }
     .field-label { display: block; font-size: 12px; color: #aaa; margin: 4px 0 6px; text-align: left; }
 
+    /* ---------- Company tags ("Firma"): filter bar, card chips, picker, management (assets/js/fikir-tags.mjs) ---------- */
+    /* Palette: --tc = an RGB triple; every color is >= 4.5:1 on #0a0a0a. Colors only ever come from data-c, never raw CSS. */
+    :where(.tag-chip, .firm-chip, .swatch, .picker-list .dot) { --tc: 190, 190, 190; }   /* no specificity: [data-c] always wins */
+    [data-c="cyan"] { --tc: 0, 229, 255; }
+    [data-c="blue"] { --tc: 96, 165, 250; }
+    [data-c="violet"] { --tc: 167, 139, 250; }
+    [data-c="pink"] { --tc: 244, 114, 182; }
+    [data-c="red"] { --tc: 255, 107, 107; }
+    [data-c="orange"] { --tc: 251, 146, 60; }
+    [data-c="amber"] { --tc: 251, 191, 36; }
+    [data-c="lime"] { --tc: 163, 230, 53; }
+    [data-c="green"] { --tc: 46, 229, 157; }
+    [data-c="teal"] { --tc: 45, 212, 191; }
+    .tag-chip {
+      display: inline-flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%;
+      color: rgb(var(--tc)); background: rgba(var(--tc), 0.12); border: 1px solid rgba(var(--tc), 0.35);
+      border-radius: 999px; font: inherit; font-size: 12px; font-weight: 600; line-height: 18px; padding: 2px 9px;
+      white-space: nowrap;
+    }
+    .tag-chip .tc-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    button.tag-chip { cursor: pointer; }
+    .tag-chip.more { --tc: 170, 170, 170; }
+    .tag-chip .x {
+      background: none; border: 0; color: inherit; font: inherit; font-size: 15px; line-height: 1; width: 18px; height: 18px;
+      border-radius: 50%; cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center; opacity: 0.75; flex: none;
+    }
+    @media (hover: hover) {
+      button.tag-chip:hover { background: rgba(var(--tc), 0.22); }
+      .tag-chip .x:hover { opacity: 1; background: rgba(var(--tc), 0.22); }
+    }
+    .post-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; min-width: 0; }
+    .post-tags .tag-edit { font-size: 12px; padding: 2px 4px; color: var(--muted); }
+    @media (hover: hover) { .post-tags .tag-edit:hover { color: var(--accent); } }
+    .post-card { scroll-margin-top: 76px; }   /* showPost: not under the sticky filter bar */
+
+    /* Filter bar: sticky under the header; chips scroll sideways, one tab stop (roving tabindex) */
+    .firm-bar {
+      position: sticky; top: 0; z-index: 20; margin: -12px 0 20px; padding: 10px 0;
+      background: rgba(10, 10, 10, 0.92); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border);
+    }
+    .firm-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .firm-chips {
+      display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: none; min-width: 0; flex: 1 1 auto;
+      padding: 3px 2px; overscroll-behavior-x: contain;
+      -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    }
+    .firm-chips.at-end { -webkit-mask-image: none; mask-image: none; }
+    .firm-chips.scrolled {
+      -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent);
+      mask-image: linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 28px), transparent);
+    }
+    .firm-chips.scrolled.at-end {
+      -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 16px);
+      mask-image: linear-gradient(90deg, transparent 0, #000 16px);
+    }
+    .firm-chips::-webkit-scrollbar { display: none; }
+    .firm-chip {
+      flex: none; scroll-snap-align: start; display: inline-flex; align-items: center; gap: 7px; max-width: 240px;
+      padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(var(--tc), 0.28); background: rgba(var(--tc), 0.05);
+      color: #d8d8d8; font: inherit; font-size: 13px; font-weight: 500; line-height: 18px; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .firm-chip .dot { width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--tc)); flex: none; }
+    .firm-chip .tc-name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .firm-chip .n { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .firm-chip[aria-pressed="true"] { background: rgba(var(--tc), 0.2); border-color: rgb(var(--tc)); color: #fff; }
+    .firm-chip[aria-pressed="true"] .n { color: rgba(255, 255, 255, 0.75); }
+    /* ✓ on every pressed chip but "Tümü" (an active "Firmasız" next to a company must read as selected too) */
+    .firm-chip[aria-pressed="true"]:not([data-tag="all"])::before { content: '✓'; color: rgb(var(--tc)); font-weight: 700; margin-right: -2px; }
+    .firm-chip.neutral { --tc: 200, 200, 200; }
+    .firm-chip.neutral[aria-pressed="true"] { background: rgba(255, 255, 255, 0.12); border-color: var(--border-strong); border-color: rgba(255, 255, 255, 0.4); }
+    @media (hover: hover) { .firm-chip:hover { background: rgba(var(--tc), 0.14); color: #fff; } }
+    .firm-tools { display: flex; align-items: center; gap: 12px; flex: none; }
+    .seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 999px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border-strong); flex: none; }
+    .seg button {
+      background: none; border: 0; color: #aaa; font: inherit; font-size: 12px; font-weight: 600; line-height: 16px;
+      padding: 5px 11px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+    }
+    .seg button[aria-checked="true"] { background: var(--accent); color: #000; }
+    .firm-summary { margin-top: 8px; font-size: 13px; color: #aaa; display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; min-width: 0; }
+    .firm-summary .fs-text { min-width: 0; overflow-wrap: anywhere; }
+    .firm-summary b { color: #fff; font-weight: 600; }
+    /* phones: the match toggle, "Firmaları yönet" and the summary live here, under the sticky bar, and scroll away with the
+       page (placeFirmTools), so only the chip row stays over the cards */
+    .firm-sub { display: flex; flex-direction: column; gap: 8px; margin: -8px 0 16px; min-width: 0; }
+    .firm-sub .firm-summary { margin-top: 0; }
+    .board-status .status-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+    /* Company picker (add dialog, a card's "Firmalar" dialog): chips + a combobox with an in-flow option list (it closes only
+       after a press elsewhere is released, so the dialog's buttons never move under the pointer). The active option follows
+       the pointer and the arrow keys alike. */
+    .firm-field { margin: 0 0 12px; position: relative; }
+    .firm-field .field-label .opt { color: var(--dim); }
+    .picker {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; min-height: 44px;
+      background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-strong); border-radius: 8px; cursor: text;
+    }
+    .picker:focus-within { border-color: var(--accent); }
+    .picker .tag-chip { padding: 2px 3px 2px 9px; }
+    .picker input {
+      flex: 1 1 140px; min-width: 120px; background: none; border: 0; outline: none; color: #fff; font-size: 14px; padding: 5px 2px;
+    }
+    .picker input:disabled { cursor: not-allowed; }
+    .picker input::placeholder { color: #777; }
+    .picker-list {
+      list-style: none; margin: 6px 0 0; padding: 4px; max-height: 240px; overflow: auto; overscroll-behavior: contain;
+      background: #101010; border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
+    }
+    .picker-list li {
+      display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 14px; color: #ddd;
+      min-width: 0;
+    }
+    .picker-list li .dot { width: 8px; height: 8px; border-radius: 50%; background: rgb(var(--tc)); flex: none; }
+    .picker-list li .tc-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .picker-list li .n { margin-left: auto; color: var(--dim); font-size: 12px; flex: none; }
+    .picker-list li[aria-selected="true"] { background: rgba(0, 229, 255, 0.12); color: #fff; }
+    .picker-list li.opt-new { color: var(--accent); font-weight: 600; }
+    .picker-list li.opt-new[aria-disabled="true"] { cursor: progress; }
+    .picker-list li.empty { cursor: default; color: var(--dim); }
+    .picker-note { font-size: 12px; color: #888; margin: 6px 0 0; }
+    .picker-note.bad { color: #ff8a8a; }
+    .picker-note.ok { color: #8fe9c4; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+    #tag-modal .tag-for { margin: -6px 0 14px; color: #999; font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+
+    /* Admin: "Firmaları yönet" */
+    .firms-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .firms-row {
+      display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 6px 10px; align-items: center;
+      padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; background: rgba(255, 255, 255, 0.02);
+    }
+    .swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.18); background: rgb(var(--tc)); cursor: pointer; padding: 0; flex: none; }
+    .swatch[aria-checked="true"] { outline: 2px solid #fff; outline-offset: 2px; }
+    .swatches { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; padding: 6px 2px 2px; }
+    .firm-name-input {
+      width: 100%; min-width: 0; background: transparent; border: 1px solid transparent; border-radius: 6px; color: #fff; font-size: 14px; padding: 6px 8px;
+    }
+    .firm-name-input:hover { border-color: var(--border-strong); }
+    .firm-name-input:focus { outline: none; border-color: var(--accent); background: rgba(0, 0, 0, 0.2); }
+    .firm-count { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .firms-empty { color: var(--dim); font-size: 14px; text-align: center; padding: 16px 0; }
+
     /* ---------- Small screens ---------- */
     @media (max-width: 600px) {
       :root { --gap: 16px; }
@@ -762,6 +906,13 @@
       .auth-box { padding: 30px 20px; }
       .modal-content { padding: 20px; }
       #toasts { left: 16px; right: 16px; bottom: 72px; max-width: none; }
+      .firm-bar { margin: -6px 0 16px; padding: 8px 0; }
+      .firm-row { flex-wrap: wrap; gap: 8px; }
+      .firm-chips { flex-basis: 100%; }
+      .firm-tools { width: 100%; justify-content: space-between; }
+      .firms-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+      .firms-row .firm-count { grid-column: 2; grid-row: 2; padding-left: 9px; }
+      .firms-row [data-firm-act="delete"] { grid-column: 3; grid-row: 1; }
     }
     @media (pointer: coarse) {
       input, textarea { font-size: 16px !important; }
@@ -777,6 +928,14 @@
       .src-link { padding: 11px 0; margin: -11px 0; }   /* overflow: hidden (ellipsis) would clip a pseudo hit area */
       .note-input { min-height: 40px; }
       .note-public { min-height: 40px; }   /* the label is the checkbox's tap target */
+      .firm-chip { min-height: 40px; }
+      .seg button { min-height: 34px; }
+      button.tag-chip { position: relative; }
+      button.tag-chip::after { content: ''; position: absolute; inset: -9px -3px; }
+      .tag-chip .x { width: 30px; height: 30px; margin: -6px -2px -6px 0; }
+      .picker-list li { min-height: 44px; }
+      .swatch { width: 34px; height: 34px; }
+      .post-tags .tag-edit { min-height: 32px; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
@@ -851,6 +1010,21 @@
         <button type="button" class="btn btn-outline" id="btn-logout">Çıkış</button>
       </div>
     </header>
+    <!-- Company filter (Firma): built by the script once the catalog (GET /api/inspire/tags) is there -->
+    <section id="firm-bar" class="firm-bar" aria-label="Firmaya göre filtrele" hidden>
+      <div class="firm-row">
+        <div id="firm-chips" class="firm-chips" role="toolbar" aria-label="Firmalar" aria-orientation="horizontal"></div>
+        <div class="firm-tools" id="firm-tools" hidden>
+          <div id="firm-match" class="seg" role="radiogroup" aria-label="Eşleşme" hidden>
+            <button type="button" role="radio" data-match="any" aria-checked="true" title="Seçili firmalardan herhangi birine ait fikirler">Herhangi biri</button>
+            <button type="button" role="radio" data-match="all" aria-checked="false" tabindex="-1" title="Seçili firmaların hepsine ait fikirler">Hepsi</button>
+          </div>
+          <button type="button" class="text-btn" id="firm-manage" hidden>Firmaları yönet</button>
+        </div>
+      </div>
+      <div id="firm-summary" class="firm-summary" aria-live="polite" hidden></div>
+    </section>
+    <div id="firm-sub" class="firm-sub" hidden></div>
     <div id="board-status" class="board-status" aria-live="polite" hidden></div>
     <div id="board" class="board"></div>
     <button type="button" id="new-posts" class="new-posts" hidden></button>
@@ -889,6 +1063,7 @@
           <p class="modal-note" data-uploads>MP4, WebM, MOV (en fazla 25 MB) · JPG, PNG, WebP, GIF (en fazla 10 MB). MOV bazı tarayıcılarda oynatılamayabilir; mümkünse MP4 yükle.</p>
           <div id="link-media-preview" class="add-preview" aria-live="polite" hidden></div>
         </details>
+        <div class="firm-slot"><div id="add-firms" class="firm-field" hidden></div></div>
         <textarea id="link-desc" class="modal-input" maxlength="2000" placeholder="Bu fikir hakkında ne düşünüyorsun? (İsteğe bağlı)" aria-label="Açıklama"></textarea>
         <div id="link-progress" class="upload-progress" role="status" hidden></div>
         <div id="link-error" class="form-error" role="alert" hidden></div>
@@ -898,6 +1073,7 @@
       <form id="text-form" role="tabpanel" aria-labelledby="tab-text" novalidate hidden>
         <textarea id="text-body" class="modal-input text-body" maxlength="2000" rows="6" placeholder="Fikrini yaz… Bir sahne, bir başlık, bir video konsepti…" aria-label="Metin fikir"></textarea>
         <div class="counter" id="text-counter"><span id="text-count">0</span> / <span id="text-max">2000</span></div>
+        <div class="firm-slot"></div>
         <div id="text-error" class="form-error" role="alert" hidden></div>
         <button type="submit" class="btn btn-primary btn-block" id="text-submit" disabled>Paylaş</button>
       </form>
@@ -975,6 +1151,39 @@
     </div>
   </div>
 
+  <!-- A card's companies (post owner / admin): PUT /api/inspire/posts/:id/tags -->
+  <div class="modal-overlay" id="tag-modal" hidden>
+    <div class="modal-content modal-sm" role="dialog" aria-modal="true" aria-labelledby="tag-title">
+      <div class="modal-header">
+        <h2 id="tag-title">Firmalar</h2>
+        <button type="button" class="close-modal" data-close aria-label="Kapat">×</button>
+      </div>
+      <p id="tag-for" class="tag-for" hidden></p>
+      <div id="tag-picker" class="firm-field"></div>
+      <div id="tag-error" class="form-error" role="alert" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" id="tag-cancel">Vazgeç</button>
+        <button type="button" class="btn btn-primary" id="tag-save">Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin: the company catalog (rename, color, merge, delete): PUT / DELETE /api/inspire/tags/:id -->
+  <div class="modal-overlay" id="firms-modal" hidden>
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="firms-title">
+      <div class="modal-header">
+        <h2 id="firms-title">Firmaları yönet</h2>
+        <button type="button" class="close-modal" data-close aria-label="Kapat">×</button>
+      </div>
+      <p class="modal-note">Adı değiştirip Enter'a bas. Başka bir firmanın adını verirsen ikisi birleştirilir. Silmek fikirleri silmez, yalnızca etiketi kaldırır.</p>
+      <div id="firms-error" class="form-error" role="alert" hidden></div>
+      <ul id="firms-list" class="firms-list"></ul>
+      <div class="modal-actions" id="firms-prune-row" hidden>
+        <button type="button" class="btn btn-outline btn-sm" id="firms-prune">Kullanılmayanları sil</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Confirm dialog -->
   <div class="modal-overlay" id="confirm-modal" hidden>
     <div class="modal-content modal-sm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-text">
@@ -998,9 +1207,11 @@
      * ===================================================================== */
     // Loaded together: the link parser is required; the Markdown module (idea texts / descriptions) is optional - without
     // it texts are shown as plain text.
-    const [urlRes, mdRes] = await Promise.allSettled([
+    // The company tag rules (assets/js/fikir-tags.mjs) are optional too: without them the company UI stays hidden.
+    const [urlRes, mdRes, tagsRes] = await Promise.allSettled([
       import('/assets/js/fikir-url.mjs?v=20261015'),
       import('/assets/js/fikir-md.mjs?v=20261008'),
+      import('/assets/js/fikir-tags.mjs?v=20261024'),
     ]);
     if (urlRes.status !== 'fulfilled') {
       document.getElementById('boot-error').hidden = false;
@@ -1008,6 +1219,8 @@
     }
     const urlLib = urlRes.value;
     const mdLib = mdRes.status === 'fulfilled' ? mdRes.value : null;
+    const tagLib = tagsRes.status === 'fulfilled' && typeof tagsRes.value.tagMatches === 'function' && typeof tagsRes.value.parseFilterQuery === 'function'
+      ? tagsRes.value : null;
     const { parseLink, parseEmbedMessage } = urlLib;
     // 'video' | 'image' | 'hls' | null from a media file URL's extension (shared module; local copy while an
     // older cached module without the export is still around).
@@ -1028,7 +1241,7 @@
     const PROD_API = 'https://vk-portfolio-api.vkesgin38.workers.dev';
     const API_BASE = resolveApiBase();
     const ADMIN_USERNAME = 'vkesgin38';
-    const LS = { token: 'fikir_token', user: 'fikir_user', cid: 'fikir_cid', name: 'fikir_name', aspect: 'fikir_ar', embedH: 'fikir_eh' };
+    const LS = { token: 'fikir_token', user: 'fikir_user', cid: 'fikir_cid', name: 'fikir_name', aspect: 'fikir_ar', embedH: 'fikir_eh', firma: 'fikir_firma' };
     const LEGACY = { token: 'inspire_token', user: 'inspire_user' };
     const CID_RE = /^[A-Za-z0-9_-]{16,64}$/;
     const NAME_MAX = 40;
@@ -1380,6 +1593,7 @@
     function dismissModal(el) {
       if (el === $('add-modal')) closeAddModal();
       else if (el === $('media-modal')) closeMediaModal();
+      else if (el === $('tag-modal')) closeTagModal();
       else if (el === $('confirm-modal')) settleConfirm(false);
       else if (typeof el.sbDismiss === 'function') el.sbDismiss();   // storyboard viewer
       else closeModal(el);
@@ -1850,6 +2064,7 @@
       renderHeader();
       loadConfig();   // per-user storyboard flag + quota need the session
       initBoard();
+      loadFirms();   // the company catalog; a filter from the URL / localStorage is applied once it is there
       loadPosts({ initial: true });
       startRefresh();
       applyPrefill();   // bookmarklet: #add?… opened the board
@@ -1867,7 +2082,7 @@
     const posts = new Map();             // postId -> entry
     const cardOwner = new WeakMap();     // card element -> entry (for observers)
     const board = { el: null, cols: [], n: 0, ready: false, loaded: false };
-    const load = { seq: 0, ctrl: null, lastAt: 0, aborted: false };
+    const load = { seq: 0, ctrl: null, lastAt: 0, aborted: false, complete: null };   // complete: the last list reached its end (MAX_PAGES)
     const mut = { epoch: 0, inflight: 0 };
     // Structural changes that arrive by refresh while the user is scrolled down would
     // shift a column under the reader; they wait here until the user is back at the top
@@ -1971,6 +2186,10 @@
 
     function setStatus(kind, msg) {
       const el = $('board-status');
+      // the filtered state is set again on every count change: rebuilt only when it says something else (focus stays)
+      const key = kind === 'filtered' ? 'filtered:' + filterKey() + ':' + ((firms.byId.get([...filt.ids][0]) || {}).name || '') : '';
+      if (key && el.dataset.k === key && !el.hidden) return;
+      el.dataset.k = key;
       el.textContent = '';
       if (kind === 'none') { el.hidden = true; return; }
       el.hidden = false;
@@ -1978,6 +2197,14 @@
         el.append(h('div', { class: 'spinner', 'aria-hidden': 'true' }), h('div', { class: 'status-text' }, 'Fikirler yükleniyor…'));
       } else if (kind === 'empty') {
         el.append(h('div', { class: 'status-text' }, 'Henüz fikir eklenmemiş. İlk fikri sen ekle!'));
+      } else if (kind === 'filtered') {
+        // the company filter matches nothing: clear it, or add an idea for that company (preselected in the dialog)
+        const one = filt.ids.size === 1 && !filt.untagged ? firms.byId.get([...filt.ids][0]) : null;
+        el.append(h('div', { class: 'status-text' }, 'Bu filtreyle eşleşen fikir yok.'),
+          h('div', { class: 'status-actions' },
+            h('button', { type: 'button', class: 'btn btn-outline', 'data-status-act': 'clear' }, 'Filtreyi temizle'),
+            one ? h('button', { type: 'button', class: 'btn btn-primary', 'data-status-act': 'add' },
+              h('span', null, '«', h('span', { translate: 'no' }, one.name), '» için fikir ekle')) : null));
       } else if (kind === 'error') {
         const retry = h('button', { type: 'button', class: 'btn btn-outline' }, 'Tekrar dene');
         retry.addEventListener('click', () => loadPosts({ initial: true }));
@@ -1985,8 +2212,10 @@
       }
     }
     function updateEmptyState() {
-      if (posts.size) setStatus('none');
+      if (posts.size && board.loaded && filterOn() && !visibleCount()) setStatus('filtered');
+      else if (posts.size) setStatus('none');
       else if (board.loaded) setStatus('empty');
+      renderFirmBar();
     }
 
     // Mutations (add / delete / notes) cancel an in-flight list request and make
@@ -2011,11 +2240,14 @@
     }
 
     // All pages, newest first. complete=false when MAX_PAGES was reached before the end.
-    async function fetchPosts(signal) {
+    // query: the company filter of the overflow fetch (tags=…&match=…&untagged=…); the cursor pages within it.
+    // from: start below this id (the overflow fetch: older than the board's own list)
+    async function fetchPosts(signal, query = '', from = null) {
       let list = [];
-      let before = null;
+      let before = from;
       for (let i = 0; i < MAX_PAGES; i++) {
-        const path = '/api/inspire/posts' + (before ? '?before=' + encodeURIComponent(before) : '');
+        const qs = [query, before ? 'before=' + encodeURIComponent(before) : ''].filter(Boolean).join('&');
+        const path = '/api/inspire/posts' + (qs ? '?' + qs : '');
         const { data, res } = await api('GET', path, null, { signal, raw: true });
         if (!Array.isArray(data)) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
         list = list.concat(data);
@@ -2037,11 +2269,20 @@
       try {
         const { list, complete } = await fetchPosts(ctrl.signal);
         if (seq !== load.seq || epoch !== mut.epoch || !session.token) return; // out of order / stale
+        // a company filter from the URL / localStorage: the first fill waits (<= 4 s) for the catalog, so the whole board never flashes
+        if (!board.loaded && filterPending() && firms.ready) {
+          await Promise.race([firms.ready, new Promise((r) => setTimeout(r, 4000))]);
+          if (seq !== load.seq || epoch !== mut.epoch || !session.token) return;
+        }
         load.lastAt = Date.now();
         const firstFill = !board.loaded;
         board.loaded = true;
+        const wasComplete = load.complete;
+        load.complete = complete;
         reconcile(list, complete, firstFill);
+        mergePostTags(list);
         updateEmptyState();
+        if (!complete && filterOn() && (firstFill || wasComplete !== false)) fetchOverflow();
         if (!sbUI && list.some((p) => p && p.storyboard)) ensureStoryboardUI();
       } catch (e) {
         if ((e && e.name === 'AbortError') || seq !== load.seq || !session.token) return;
@@ -2077,7 +2318,7 @@
       for (const [id, e] of posts) {
         if (seen.has(id) || (!complete && Number(id) < oldest)) continue;
         // a card wholly below the viewport can go now: only cards under it (also off screen) move
-        if (top || e.el.getBoundingClientRect().top >= window.innerHeight) { removeEntry(e); pending.remove.delete(id); }
+        if (top || e.el.hidden || e.el.getBoundingClientRect().top >= window.innerHeight) { removeEntry(e); pending.remove.delete(id); }
         else pending.remove.add(id);
       }
       if (!fresh.length) { updatePendingUI(); return; }
@@ -2113,7 +2354,8 @@
     }
 
     function updatePendingUI() {
-      const n = pending.add.size;
+      let n = 0;
+      for (const p of pending.add.values()) if (matchesFilter(p)) n++;   // arrivals outside the company filter are not announced
       const pill = $('new-posts');
       pill.textContent = n ? `↑ ${n} yeni fikir` : '';
       pill.hidden = !n;
@@ -2124,18 +2366,19 @@
       const adds = [...pending.add.values()].sort((a, b) => Number(a.id) - Number(b.id)); // newest ends on top
       pending.add.clear();
       for (const p of adds) insertTop(p);
+      flushFilterToggles();
       updatePendingUI();
       updateEmptyState();
     }
     function onScrollPending() {
       if (window.scrollY > AT_TOP_PX) return;
-      if (pending.add.size || pending.remove.size) flushPending();
+      if (pending.add.size || pending.remove.size || filt.pendingToggle.size) flushPending();
       if (deferredEntries.size) for (const e of [...deferredEntries]) flushDeferred(e);
     }
 
     // Size-changing update of a card: applied now, or kept until the card is in view when
     // the card is wholly above the viewport (nothing the user is looking at may move).
-    const isAbove = (e) => e.el.isConnected && e.el.getBoundingClientRect().bottom <= 0;
+    const isAbove = (e) => e.el.isConnected && !e.el.hidden && e.el.getBoundingClientRect().bottom <= 0;   // a hidden card moves nothing
     function applyOrDefer(e, key, fn, above = isAbove(e)) {
       if (viewIO && above) {
         if (!e.deferred) e.deferred = new Map();
@@ -2212,6 +2455,18 @@
       clearTimeout(liveAsk.timer);
       liveAsk.asked = 0;
       board.loaded = false;
+      load.complete = null;
+      // companies: the next session loads its own catalog (the filter itself stays in the URL / localStorage)
+      firms.seq++;
+      overflow.seq++;
+      if (overflow.ctrl) { overflow.ctrl.abort(); overflow.ctrl = null; }
+      clearTimeout(firms.refetchTimer);
+      Object.assign(firms, { list: [], loaded: false, restored: false, canManage: false, ready: null, barSig: '' });
+      firms.byId.clear();
+      firms.bySlug.clear();
+      filt.pendingToggle.clear();
+      $('firm-bar').hidden = true;
+      placeFirmTools();
       if (board.el) { board.el.textContent = ''; board.cols = []; board.n = 0; }
       setStatus('none');
     }
@@ -2219,7 +2474,7 @@
     function startRefresh() {
       stopRefresh();
       refreshTimer = setInterval(() => {
-        if (document.visibilityState === 'visible') loadPosts();
+        if (document.visibilityState === 'visible') { loadPosts(); loadFirms(); }
       }, REFRESH_MS);
     }
     function stopRefresh() {
@@ -2229,11 +2484,17 @@
 
     function showPost(id) {
       if (!posts.has(String(id)) && pending.add.has(String(id))) flushPending(); // e.g. "Göster" on a duplicate that arrived by refresh
-      const e = posts.get(String(id));
+      let e = posts.get(String(id));
       if (!e) {
         toast('Bu fikir şu an listede görünmüyor.', 'error');
         loadPosts();
         return;
+      }
+      if (e.el.hidden) {   // outside the company filter: the filter goes, then the card is shown
+        clearFilter();
+        toast('Filtre temizlendi.');
+        e = posts.get(String(id));
+        if (!e || e.el.hidden) return;
       }
       const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
       e.el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' });
@@ -2395,6 +2656,7 @@
         shown: {},       // last rendered values (compared instead of the DOM, which GTranslate may rewrite)
       };
       entry.el = buildCard(entry);
+      entry.el.hidden = !matchesFilter(post);   // outside the company filter: kept, not shown (relayoutFilter)
       return entry;
     }
 
@@ -2910,6 +3172,9 @@
       const { post, view } = entry;
       const r = entry.refs;
       const info = h('div', { class: 'post-info' });
+      // companies: chips (a click filters the board by that company), ✎ for the post owner / admin
+      r.tags = h('div', { class: 'post-tags', hidden: true });
+      info.append(r.tags);
       if (view.kind !== 'text') {
         entry.shown.desc = post.description || '';
         r.descClamp = buildClamp(entry, 'desc', 'post-desc', entry.shown.desc);
@@ -2936,9 +3201,11 @@
         svgIcon(['M12 20V9', 'M7 13.5l5-5 5 5', 'M5 4h14']), h('span', null, 'Video ekle'));
       r.ownDel = h('button', { type: 'button', class: 'text-btn', 'data-action': 'own-video-del', hidden: true }, 'Videoyu kaldır');
       r.del = h('button', { type: 'button', class: 'text-btn danger', 'data-action': 'delete-post', hidden: !post.can_delete }, 'Sil');
+      // post owner / admin of a card without companies: "Firma ekle" (#tag-modal)
+      r.tagAdd = h('button', { type: 'button', class: 'text-btn', 'data-action': 'tags-edit', hidden: true }, 'Firma ekle');
       r.dlBtn = buildDlButton();
       right.prepend(r.addBtn, r.dlBtn);
-      right.append(r.mediaBtn, r.copyDel, r.ownDel, r.del);
+      right.append(r.mediaBtn, r.copyDel, r.ownDel, r.tagAdd, r.del);
       // Post owner / admin of a YouTube / Vimeo card whose own file this browser cannot play (ownFileUnplayable)
       r.ownNote = view.kind !== 'text'
         ? h('p', { class: 'own-note', hidden: true }, 'Bu tarayıcı karta eklenen video dosyasını oynatamıyor; mümkünse MP4 ekle.')
@@ -2958,6 +3225,7 @@
       reconcileNotes(entry, post.notes);
       updateMediaControls(entry);
       updateCardActions(entry);
+      renderCardTags(entry);
       return info;
     }
 
@@ -3086,7 +3354,9 @@
       const old = entry.post;
       // single-post answers (PATCH, media, copy routes) carry no live fields: the list's stay
       if (post.live === undefined && old.live !== undefined) post = { ...post, live: old.live, live_ask: old.live_ask };
+      if (post.tags === undefined && old.tags !== undefined) post = { ...post, tags: old.tags, can_tag: old.can_tag };
       entry.post = post;
+      if (tagSig(old) !== tagSig(post)) syncCardFilter(entry);   // someone (re)tagged it: in / out of the company filter
       applyOrDefer(entry, 'text', () => renderPatch(entry), above);
       if (mediaSig(old) !== mediaSig(post)) patchMeta(entry, above);
       if (post.copy_view === true && old.copy_view !== true) observeCopy(entry);
@@ -3117,6 +3387,7 @@
       reconcileNotes(entry, post.notes);
       updateMediaControls(entry);
       updateCardActions(entry);
+      if (s.tags !== cardTagsSig(entry)) renderCardTags(entry);
       if (entry.view.kind === 'text') {
         if (sbUI) sbUI.patch(entry, post);
         else { reserveSbMedia(entry); if (post.storyboard) ensureStoryboardUI(); }
@@ -3381,6 +3652,9 @@
       if (action === 'mount') { ev.preventDefault(); if (entry.media && !(entry.liveHoldUntil > performance.now())) forceMount(entry.media); return; }
       if (action === 'clamp') { toggleClamp(entry, t.dataset.field); return; }
       if (action === 'delete-post') { deletePost(entry); return; }
+      if (action === 'tag-filter') { filterByCardChip(Number(t.dataset.tag), ev.shiftKey || ev.ctrlKey || ev.metaKey); return; }
+      if (action === 'tags-edit') { openTagModal(entry); return; }
+      if (action === 'tags-more') { entry.tagsExpanded = true; renderCardTags(entry); return; }
       if (action === 'media-edit') { openMediaModal(entry); return; }
       if (action === 'download') { downloadPost(entry); return; }
       if (action === 'ig-blocked') { igNotPlaying(entry); return; }
@@ -3856,6 +4130,993 @@
       }
     }
 
+    /* ========================================================= COMPANY TAGS
+     * "Firma" tags (assets/js/fikir-tags.mjs, worker/inspire-tags.js). The board loads the whole list, so it filters on the
+     * client: cards outside the filter stay in `posts` with `hidden`, and the columns are laid out again once per filter
+     * change (relayoutFilter). The filter lives in the URL (?firma=sayin,gayrimenkul&eslesme=hepsi; slugs) and in
+     * localStorage (ids: a rename changes the slug). A list that stopped at MAX_PAGES gets the older matches of the filter
+     * from the server (fetchOverflow). Names are only ever rendered as text (h() / textContent), colors only via data-c.
+     * ================================================================== */
+    // catalog: GET /api/inspire/tags (server counts are used only while the board's list is incomplete)
+    const firms = {
+      list: [], byId: new Map(), bySlug: new Map(), loaded: false, restored: false, canManage: false, seq: 0, ready: null,
+      server: { counts: new Map(), untagged: 0, total: 0 }, perPost: 10, nameMax: 40, colors: [], refetchTimer: 0, barSig: '',
+      inflight: 0,   // seq of the GET /tags on its way (0: none)
+    };
+    // active filter; pendingToggle: cards whose match changed by refresh while the reader is scrolled down (shown / hidden at the top)
+    const filt = { ids: new Set(), all: false, untagged: false, pendingToggle: new Set() };
+    const overflow = { seq: 0, ctrl: null };
+    let addFirms = null;     // picker of the add dialog
+    let tagPicker = null;    // picker of #tag-modal
+    const TAG_COLOR_TR = {
+      cyan: 'Camgöbeği', blue: 'Mavi', violet: 'Mor', pink: 'Pembe', red: 'Kırmızı', orange: 'Turuncu', amber: 'Kehribar',
+      lime: 'Fıstık yeşili', green: 'Yeşil', teal: 'Turkuaz',
+    };
+    const trCollator = new Intl.Collator('tr', { sensitivity: 'base', numeric: true });
+    const filterOn = () => filt.ids.size > 0 || filt.untagged;
+    const matchesFilter = (post) => !tagLib || tagLib.tagMatches(post, filt);
+    const postTags = (post) => (post && Array.isArray(post.tags) ? post.tags.filter((t) => t && Number.isInteger(t.id) && typeof t.name === 'string') : []);
+    const tagSig = (post) => postTags(post).map((t) => t.id).sort((a, b) => a - b).join(',');
+    const tagViewSig = (post) => postTags(post).map((t) => `${t.id}:${t.name}:${t.color}`).join('|') + (post && post.can_tag ? '|+' : '');
+    const tagColor = (c) => (typeof c === 'string' && TAG_COLOR_TR[c] ? c : 'cyan');
+    const emptyFilter = () => ({ ids: [], all: false, untagged: false });
+
+    function setCatalog(list) {
+      firms.list = [];
+      firms.byId.clear();
+      firms.bySlug.clear();
+      for (const t of Array.isArray(list) ? list : []) upsertFirm(t, false);
+      sortFirms();
+    }
+    function upsertFirm(t, sort = true) {
+      if (!t || !Number.isInteger(t.id) || typeof t.name !== 'string' || typeof t.slug !== 'string') return null;
+      let x = firms.byId.get(t.id);
+      if (!x) { x = { id: t.id }; firms.byId.set(t.id, x); firms.list.push(x); }
+      else if (x.slug !== t.slug) firms.bySlug.delete(x.slug);
+      x.name = t.name; x.slug = t.slug; x.color = tagColor(t.color);
+      firms.bySlug.set(x.slug, x);
+      if (sort) sortFirms();
+      return x;
+    }
+    function dropFirm(id) {
+      const x = firms.byId.get(id);
+      if (!x) return;
+      firms.byId.delete(id);
+      firms.bySlug.delete(x.slug);
+      firms.list = firms.list.filter((t) => t.id !== id);
+      firms.server.counts.delete(id);
+    }
+    function sortFirms() { firms.list.sort((a, b) => trCollator.compare(a.name, b.name) || a.id - b.id); }
+
+    // Card data may be newer than the catalog (the admin renamed meanwhile; someone created a company): names / colors are
+    // taken over, an unknown id asks the catalog again (once, debounced).
+    function mergePostTags(list) {
+      if (!tagLib || !firms.loaded) return;
+      let unknown = false, changed = false;
+      for (const p of list) {
+        for (const t of postTags(p)) {
+          const x = firms.byId.get(t.id);
+          if (!x) { unknown = true; upsertFirm(t, false); changed = true; continue; }
+          if (x.name !== t.name || x.color !== tagColor(t.color) || x.slug !== t.slug) { upsertFirm(t, false); changed = true; }
+        }
+      }
+      if (changed) { sortFirms(); writeFilterUrl(); refreshPickers(); }
+      if (unknown) {
+        clearTimeout(firms.refetchTimer);
+        firms.refetchTimer = setTimeout(loadFirms, 400);
+      }
+    }
+
+    function loadFirms() {
+      if (!tagLib || !session.token) return Promise.resolve();
+      const seq = ++firms.seq;
+      firms.inflight = seq;
+      const p = api('GET', '/api/inspire/tags').then((d) => {
+        if (seq !== firms.seq || !session.token || !d || !Array.isArray(d.tags)) return;
+        setCatalog(d.tags);
+        firms.canManage = d.can_manage === true;
+        firms.server.counts = new Map(d.tags.filter((t) => Number.isInteger(t.id)).map((t) => [t.id, Number(t.count) || 0]));
+        firms.server.untagged = Number(d.untagged) || 0;
+        firms.server.total = Number(d.total) || 0;
+        if (d.limits && Number.isInteger(d.limits.per_post)) firms.perPost = d.limits.per_post;
+        if (d.limits && Number.isInteger(d.limits.name_max)) firms.nameMax = d.limits.name_max;
+        firms.colors = Array.isArray(d.colors) ? d.colors.filter((c) => TAG_COLOR_TR[c]) : Object.keys(TAG_COLOR_TR);
+        firms.loaded = true;
+        if (!firms.restored) { firms.restored = true; restoreFilter(); }
+        else pruneFilter();
+        refreshPickers();
+        // ✎ / "Firma ekle" need the catalog: cards built before it get them now (a card above the viewport when it scrolls in)
+        for (const e of posts.values()) if (e.shown.tags !== cardTagsSig(e)) applyOrDefer(e, 'tags', () => renderCardTags(e));
+        if (firmsModalOpen()) renderFirmsModal();
+        renderFirmBar(true);
+      }).catch(() => { /* the bar stays as it was; the board works without it */ })
+        .finally(() => { if (firms.inflight === seq) firms.inflight = 0; });
+      if (!firms.loaded) firms.ready = p;
+      return p;
+    }
+    // This tab changed the catalog (a company created, renamed, recolored, merged, deleted): a GET /tags already on its way
+    // may predate the change and would undo it (setCatalog drops ids it does not know: a new company left the picker's
+    // selection). It is dropped (seq) and asked again.
+    function catalogChanged() { if (firms.inflight) loadFirms(); }
+
+    /* ----- filter state: URL + localStorage ----- */
+    const filterInUrl = () => { const q = new URLSearchParams(location.search); return q.has('firma') || q.has('eslesme'); };
+    function savedFilter() {
+      try {
+        const v = JSON.parse(store.get(LS.firma) || 'null');
+        if (!v || typeof v !== 'object') return null;
+        return { ids: (Array.isArray(v.ids) ? v.ids : []).filter(Number.isInteger), all: v.all === true, untagged: v.untagged === true,
+          q: typeof v.q === 'string' ? v.q : '' };
+      } catch (_) { return null; }
+    }
+    // a filter will be applied once the catalog is there: the first fill waits for it (no flash of the whole board)
+    const filterPending = () => !!tagLib && !firms.restored && (filterInUrl() || !!(savedFilter() && (savedFilter().ids.length || savedFilter().untagged)));
+    function restoreFilter() {
+      let next = null, rewrite = false;
+      if (filterInUrl()) {
+        const f = tagLib.parseFilterQuery(location.search, firms.bySlug);
+        next = { ids: [...f.ids], all: f.all, untagged: f.untagged };
+        rewrite = f.dropped;
+        // a URL this browser wrote itself whose slugs a rename changed since (a reload, a bookmark): the ids saved with it
+        // still name the companies
+        const s = f.dropped ? savedFilter() : null;
+        if (s && s.q && sameFilterQuery(s.q, location.search)) next = { ids: s.ids.filter((id) => firms.byId.has(id)), all: s.all, untagged: s.untagged };
+      } else {
+        const s = savedFilter();
+        if (s) { next = { ids: s.ids.filter((id) => firms.byId.has(id)), all: s.all, untagged: s.untagged }; rewrite = true; }
+      }
+      if (!next) return;
+      const was = filterKey();
+      applyFilterState(next);
+      if (rewrite || filterKey() !== was) writeFilterUrl();
+      if (filterKey() !== was) { relayoutFilter({ scroll: false }); fetchOverflow(); }   // a catalog after the first fill
+    }
+    const sameFilterQuery = (a, b) => {
+      const x = new URLSearchParams(a), y = new URLSearchParams(b);
+      return (x.get('firma') || '') === (y.get('firma') || '') && (x.get('eslesme') || '') === (y.get('eslesme') || '');
+    };
+    // ids the catalog no longer has (deleted / merged by the admin) leave the filter
+    function pruneFilter() {
+      const was = filterKey();
+      for (const id of [...filt.ids]) if (!firms.byId.has(id)) filt.ids.delete(id);
+      if (filt.ids.size < 2) filt.all = false;
+      writeFilterUrl();
+      if (filterKey() !== was) { relayoutFilter({ scroll: false }); fetchOverflow(); }
+    }
+    const filterKey = () => [...filt.ids].sort((a, b) => a - b).join(',') + (filt.all ? '&all' : '') + (filt.untagged ? '&none' : '');
+    function applyFilterState(next) {
+      filt.ids = new Set((next.ids || []).filter((id) => Number.isInteger(id)).slice(0, tagLib ? tagLib.TAG_FILTER_MAX : 20));
+      // "Hepsi" only means something (and its control is only shown) with two or more companies: never a hidden mode
+      filt.all = !!next.all && filt.ids.size >= 2;
+      filt.untagged = !!next.untagged;
+    }
+    // URL: other parameters (?api= for local work) and the #add?… hash stay; localStorage keeps ids (renames change slugs)
+    function writeFilterUrl() {
+      if (!tagLib) return;
+      const q = new URLSearchParams(location.search);
+      q.delete('firma');
+      q.delete('eslesme');
+      const rest = q.toString();
+      const mine = filterOn() ? tagLib.filterQueryString(filt, firms.byId) : '';
+      const search = [rest, mine].filter(Boolean).join('&');
+      const url = location.pathname + (search ? '?' + search : '') + location.hash;
+      if (url !== location.pathname + location.search + location.hash) {
+        try { history.replaceState(history.state, '', url); } catch (_) { /* sandboxed */ }
+      }
+      // q: the URL part written for these ids (restoreFilter recognises it after a rename)
+      store.set(LS.firma, JSON.stringify({ ids: [...filt.ids], all: filt.all, untagged: filt.untagged, q: mine }));
+    }
+
+    // Chips, match mode, "Tümü", the summary's clear button, card chips. In "Hepsi" mode "Firmasız" and companies exclude
+    // each other (no post is both); in "Herhangi biri" they OR (like the server).
+    function setFilter(next, { scroll = true } = {}) {
+      const was = filterKey();
+      applyFilterState(next);
+      if (filt.all && filt.untagged && filt.ids.size) filt.untagged = false;
+      writeFilterUrl();
+      if (filterKey() === was) { renderFirmBar(true); return; }
+      relayoutFilter({ scroll });
+      fetchOverflow();
+    }
+    const clearFilter = () => setFilter(emptyFilter());
+    function toggleFirm(id, additive = true) {
+      const ids = additive ? new Set(filt.ids) : new Set();
+      if (additive && ids.has(id)) ids.delete(id); else ids.add(id);
+      setFilter({ ids: [...ids], all: filt.all, untagged: filt.all ? false : (additive && filt.untagged) });
+    }
+    function toggleUntagged() {
+      const on = !filt.untagged;
+      setFilter({ ids: on && filt.all ? [] : [...filt.ids], all: filt.all, untagged: on });
+    }
+
+    /* ----- cards in and out of the filter ----- */
+    // Every card again, newest first, into fresh columns (like redistribute(); iframes come back through the observers)
+    function relayoutFilter({ scroll = true } = {}) {
+      if (!board.el || !board.n || $('dashboard').hidden) { renderFirmBar(true); return; }
+      for (const m of [...mounted]) unmount(m);
+      const ordered = [...posts.values()].sort(byNewest);
+      setupColumns(board.n);
+      for (const e of ordered) { e.el.hidden = !matchesFilter(e.post); placeAppend(e); }
+      filt.pendingToggle.clear();
+      schedulePump();
+      updatePendingUI();
+      updateEmptyState();
+      renderFirmBar(true);
+      if (scroll && window.scrollY > 0) window.scrollTo({ top: 0 });
+    }
+    // A card's companies changed. by refresh (someone else): shown / hidden now only at the top, or (hiding) while the card is
+    // wholly below the viewport; otherwise at the top (flushPending / onScrollPending). own: now.
+    function syncCardFilter(entry, own = false) {
+      const hide = !matchesFilter(entry.post);
+      if (entry.el.hidden === hide) { filt.pendingToggle.delete(entry.id); return false; }
+      const now = own || window.scrollY <= AT_TOP_PX || (hide && entry.el.getBoundingClientRect().top >= window.innerHeight);
+      if (!now) { filt.pendingToggle.add(entry.id); return false; }
+      filt.pendingToggle.delete(entry.id);
+      entry.el.hidden = hide;
+      if (hide && entry.media) unmount(entry.media);
+      updateEmptyState();
+      return true;
+    }
+    function flushFilterToggles() {
+      if (!filt.pendingToggle.size) return;
+      for (const id of [...filt.pendingToggle]) {
+        const e = posts.get(id);
+        filt.pendingToggle.delete(id);
+        if (e) { e.el.hidden = !matchesFilter(e.post); if (e.el.hidden && e.media) unmount(e.media); }
+      }
+      schedulePump();
+      updateEmptyState();
+    }
+    // The user's own post / tag edit left the filter: say so, with a way to see it
+    function toastOutsideFilter(message, id) {
+      toast(message, 'ok', 7000, { label: 'Filtreyi temizle', run: () => { clearFilter(); showPost(id); } });
+    }
+    const visibleCount = () => { let n = 0; for (const e of posts.values()) if (!e.el.hidden) n++; return n; };
+    const visibleSig = () => { let v = ''; for (const e of posts.values()) if (!e.el.hidden) v += e.id + ','; return v; };
+
+    /* ----- more than the board loads (MAX_PAGES): the filter's older matches come from the server ----- */
+    async function fetchOverflow() {
+      if (overflow.ctrl) { overflow.ctrl.abort(); overflow.ctrl = null; }
+      const seq = ++overflow.seq;
+      const extras = [...posts.values()].filter((e) => e.extra);
+      const drop = (keep) => { let n = 0; for (const e of extras) if (!keep.has(e.id)) { removeEntry(e); n++; } if (n) updateEmptyState(); };
+      if (!tagLib || load.complete !== false || !filterOn()) { drop(new Set()); return; }
+      // the filter's matches older than the board's own list (the newer ones are already there)
+      let from = Infinity;
+      for (const e of posts.values()) if (!e.extra && Number(e.id) < from) from = Number(e.id);
+      if (!Number.isFinite(from)) { drop(new Set()); return; }
+      const ctrl = new AbortController();
+      overflow.ctrl = ctrl;
+      try {
+        const { list } = await fetchPosts(ctrl.signal, tagLib.tagFilterApiQuery(filt), String(from));
+        if (seq !== overflow.seq || !session.token) return;
+        let oldest = Infinity;
+        for (const e of posts.values()) if (!e.extra && Number(e.id) < oldest) oldest = Number(e.id);
+        const keep = new Set();
+        let added = 0;
+        for (const p of list) {
+          if (!p || p.id == null || !(Number(p.id) < oldest)) continue;
+          const id = String(p.id);
+          keep.add(id);
+          const have = posts.get(id);
+          if (have) { patchCard(have, p); continue; }
+          const e = createEntry(p);
+          e.extra = true;
+          posts.set(e.id, e);
+          placeAppend(e);
+          observeEntry(e);
+          added++;
+        }
+        drop(keep);
+        if (added) { updateEmptyState(); schedulePump(); }
+      } catch (e) {
+        if (!(e && e.name === 'AbortError') && e.status !== 401) toast('Filtrenin eski fikirleri yüklenemedi.', 'error');
+      } finally {
+        if (overflow.ctrl === ctrl) overflow.ctrl = null;
+      }
+    }
+
+    /* ----- filter bar ----- */
+    // counts: the board's own list (+ refresh arrivals) while it is complete; the server's otherwise
+    function firmCounts() {
+      if (load.complete === false) return { counts: firms.server.counts, untagged: firms.server.untagged, total: firms.server.total };
+      const counts = new Map();
+      let untagged = 0, total = 0;
+      const count = (p) => {
+        total++;
+        const ts = postTags(p);
+        if (!ts.length) untagged++;
+        for (const t of ts) counts.set(t.id, (counts.get(t.id) || 0) + 1);
+      };
+      for (const e of posts.values()) if (!pending.remove.has(e.id)) count(e.post);
+      for (const p of pending.add.values()) if (!posts.has(String(p.id))) count(p);
+      return { counts, untagged, total };
+    }
+    function renderFirmBar(force = false) {
+      const bar = $('firm-bar');
+      if (!bar) return;
+      const show = !!tagLib && firms.loaded && !!session.token && (firms.list.length > 0 || filterOn());
+      if (bar.hidden === show) bar.hidden = !show;
+      if (!show) { firms.barSig = ''; placeFirmTools(); return; }
+      const { counts, untagged, total } = firmCounts();
+      const items = firms.list
+        .map((t) => ({ t, n: counts.get(t.id) || 0, on: filt.ids.has(t.id) }))
+        .filter((x) => x.n > 0 || x.on)
+        .sort((a, b) => b.n - a.n || trCollator.compare(a.t.name, b.t.name));
+      const sig = JSON.stringify([items.map((x) => [x.t.id, x.t.name, x.t.color, x.n, x.on]), untagged, total, filt.untagged, filt.all, firms.canManage,
+        filterOn() ? visibleCount() : -1]);
+      if (!force && sig === firms.barSig) return;
+      firms.barSig = sig;
+      const wrap = $('firm-chips');
+      const focused = wrap.contains(document.activeElement) ? document.activeElement.dataset.tag : null;
+      const chip = (tag, label, n, on, color, neutral) => {
+        const b = h('button', { type: 'button', class: 'firm-chip' + (neutral ? ' neutral' : ''), 'data-tag': tag, 'data-c': color || null,
+          'aria-pressed': String(on), tabindex: '-1', translate: neutral ? null : 'no', title: neutral ? null : label },
+        neutral ? null : h('span', { class: 'dot', 'aria-hidden': 'true' }), h('span', { class: 'tc-name' }, label),
+        n == null ? null : h('span', { class: 'n' }, String(n)));
+        if (n != null) b.setAttribute('aria-label', `${label}, ${n} fikir`);
+        return b;
+      };
+      const chips = [chip('all', 'Tümü', total, !filterOn(), null, true)];
+      for (const x of items) chips.push(chip(String(x.t.id), x.t.name, x.n, x.on, x.t.color, false));
+      if (untagged > 0 || filt.untagged) chips.push(chip('none', 'Firmasız', untagged, filt.untagged, null, true));
+      wrap.replaceChildren(...chips);
+      const stop = chips.find((b) => b.dataset.tag === focused) || chips.find((b) => b.getAttribute('aria-pressed') === 'true') || chips[0];
+      stop.tabIndex = 0;
+      if (focused && stop.dataset.tag === focused) stop.focus({ preventScroll: true });
+      updateChipsFade();
+      // match mode: only with two or more companies
+      const seg = $('firm-match');
+      seg.hidden = filt.ids.size < 2;
+      for (const b of seg.querySelectorAll('[data-match]')) {
+        const on = (b.dataset.match === 'all') === filt.all;
+        b.setAttribute('aria-checked', String(on));
+        b.tabIndex = on ? 0 : -1;
+      }
+      $('firm-manage').hidden = !firms.canManage;
+      $('firm-tools').hidden = seg.hidden && $('firm-manage').hidden;
+      renderFirmSummary();
+      placeFirmTools();
+    }
+    // Phones (<= 600 px): only the chip row is sticky; the match toggle, "Firmaları yönet" and the summary move to #firm-sub
+    // under it and scroll away with the page (three sticky rows covered a sixth of the screen). Wider: all in the bar.
+    const narrowMQ = matchMedia('(max-width: 600px)');
+    function placeFirmTools() {
+      const bar = $('firm-bar'), sub = $('firm-sub'), tools = $('firm-tools'), sum = $('firm-summary');
+      if (!bar || !sub) return;
+      const narrow = narrowMQ.matches;
+      if (narrow && tools.parentElement !== sub) sub.append(tools, sum);
+      else if (!narrow && tools.parentElement === sub) { bar.querySelector('.firm-row').append(tools); bar.append(sum); }
+      const want = !(narrow && !bar.hidden && !(tools.hidden && sum.hidden));
+      if (sub.hidden !== want) sub.hidden = want;
+    }
+    function renderFirmSummary() {
+      const el = $('firm-summary');
+      if (!filterOn()) { el.hidden = true; el.textContent = ''; return; }
+      const names = [...filt.ids].map((id) => firms.byId.get(id)).filter(Boolean).map((t) => t.name);
+      if (filt.untagged) names.push('Firmasız');
+      const joiner = filt.all && filt.ids.size > 1 ? ' + ' : ' veya ';
+      const n = visibleCount();
+      const text = h('span', { class: 'fs-text' }, h('b', null, `${n} fikir`), ' · ',
+        h('span', { translate: 'no' }, names.join(joiner)), filt.all && filt.ids.size > 1 ? ' (hepsi)' : '');
+      const clear = h('button', { type: 'button', class: 'text-btn', 'data-firm-clear': '' }, 'Filtreyi temizle');
+      const focused = el.contains(document.activeElement);   // a rebuild (catalog / count update) keeps the keyboard's place
+      el.replaceChildren(text, clear);
+      el.hidden = false;
+      if (focused) clear.focus({ preventScroll: true });
+    }
+    function updateChipsFade() {
+      const w = $('firm-chips');
+      w.classList.toggle('scrolled', w.scrollLeft > 2);
+      w.classList.toggle('at-end', w.scrollLeft + w.clientWidth >= w.scrollWidth - 2);
+    }
+    function onFirmBarClick(ev) {
+      if (ev.target.closest('[data-firm-clear]')) { clearFilter(); return; }
+      const m = ev.target.closest('[data-match]');
+      if (m) { setFilter({ ids: [...filt.ids], all: m.dataset.match === 'all', untagged: filt.untagged }); return; }
+      const c = ev.target.closest('.firm-chip');
+      if (!c) return;
+      const tag = c.dataset.tag;
+      if (tag === 'all') clearFilter();
+      else if (tag === 'none') toggleUntagged();
+      else toggleFirm(Number(tag), true);
+    }
+    // one tab stop in the chip row: arrows / Home / End move it; the radio group checks on focus
+    function onFirmBarKey(ev) {
+      const chip = ev.target.closest('.firm-chip');
+      const radio = ev.target.closest('[data-match]');
+      if (!chip && !radio) return;
+      const list = chip ? [...$('firm-chips').querySelectorAll('.firm-chip')] : [...$('firm-match').querySelectorAll('[data-match]')];
+      const i = list.indexOf(chip || radio);
+      let j = -1;
+      if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') j = Math.min(list.length - 1, i + 1);
+      else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') j = Math.max(0, i - 1);
+      else if (ev.key === 'Home') j = 0;
+      else if (ev.key === 'End') j = list.length - 1;
+      if (j < 0) return;
+      ev.preventDefault();
+      for (const x of list) x.tabIndex = -1;
+      list[j].tabIndex = 0;
+      list[j].focus();
+      list[j].scrollIntoView({ inline: 'nearest', block: 'nearest' });
+      if (radio && list[j] !== radio) setFilter({ ids: [...filt.ids], all: list[j].dataset.match === 'all', untagged: filt.untagged });
+    }
+
+    /* ----- card chips ----- */
+    const CARD_CHIPS = 4;
+    const cardCanTag = (entry) => !!tagLib && entry.post.can_tag === true && !!firms.loaded;
+    const cardTagsSig = (entry) => tagViewSig(entry.post) + (cardCanTag(entry) ? '|e' : '') + (entry.tagsExpanded ? '|x' : '');
+    // a card's company chip: the board shows only that company; Shift / Ctrl / ⌘ adds it to the filter
+    function filterByCardChip(id, additive) {
+      if (!Number.isInteger(id)) return;
+      if (additive) { if (!filt.ids.has(id)) toggleFirm(id, true); return; }
+      if (filt.ids.size === 1 && filt.ids.has(id) && !filt.untagged) return;
+      setFilter({ ids: [id], all: filt.all, untagged: false });
+    }
+    function renderCardTags(entry) {
+      const r = entry.refs;
+      if (!r.tags) return;
+      const post = entry.post;
+      const ts = tagLib ? postTags(post) : [];
+      const canTag = cardCanTag(entry);
+      entry.shown.tags = cardTagsSig(entry);
+      const all = !!entry.tagsExpanded || ts.length <= CARD_CHIPS + 1;
+      const shown = all ? ts : ts.slice(0, CARD_CHIPS);
+      const kids = shown.map((t) => h('button', { type: 'button', class: 'tag-chip', 'data-action': 'tag-filter', 'data-tag': String(t.id),
+        'data-c': tagColor(t.color), translate: 'no', title: `Yalnızca «${t.name}» fikirlerini göster (Shift: filtreye ekle)` }, h('span', { class: 'tc-name' }, t.name)));
+      if (!all) kids.push(h('button', { type: 'button', class: 'tag-chip more', 'data-action': 'tags-more', 'aria-label': `${ts.length - CARD_CHIPS} firma daha göster` }, `+${ts.length - CARD_CHIPS}`));
+      if (canTag && ts.length) kids.push(h('button', { type: 'button', class: 'text-btn tag-edit', 'data-action': 'tags-edit', 'aria-label': 'Firmaları düzenle', title: 'Firmaları düzenle' }, '✎'));
+      const hadEditFocus = !!(document.activeElement && document.activeElement.closest && r.tags.contains(document.activeElement)
+        && document.activeElement.dataset.action === 'tags-edit');
+      r.tags.replaceChildren(...kids);
+      r.tags.hidden = !ts.length;
+      // no company yet: "Firma ekle" in the card's action row (no extra row on untagged cards)
+      if (r.tagAdd) r.tagAdd.hidden = !(canTag && !ts.length);
+      if (hadEditFocus) {   // a re-render under the keyboard: focus stays on the card's edit control
+        const next = r.tags.querySelector('[data-action="tags-edit"]') || (r.tagAdd && !r.tagAdd.hidden ? r.tagAdd : null);
+        if (next) next.focus({ preventScroll: true });
+      }
+    }
+
+    /* ----- picker: chips + combobox (add dialog and #tag-modal) ----- */
+    let pickerSeq = 0;
+    // A press outside a picker closes its list only once it is released (pickerAfterRelease): closing at focusout (mousedown)
+    // shrank the dialog, its "Kaydet" / "Paylaş" moved up under the pointer and the click was lost.
+    const pickerPointer = { down: false, after: new Set() };
+    document.addEventListener('pointerdown', () => { pickerPointer.down = true; }, true);
+    const pickerRelease = () => {
+      pickerPointer.down = false;
+      if (!pickerPointer.after.size) return;
+      const fns = [...pickerPointer.after];
+      pickerPointer.after.clear();
+      setTimeout(() => { for (const f of fns) f(); }, 0);   // after the click of this press
+    };
+    document.addEventListener('pointerup', pickerRelease, true);
+    document.addEventListener('pointercancel', pickerRelease, true);
+    function makeFirmPicker(root, { label = 'Firma', optional = true, onChange = () => {} } = {}) {
+      const n = ++pickerSeq;
+      const ids = { input: `fp-${n}-input`, list: `fp-${n}-list`, label: `fp-${n}-label`, note: `fp-${n}-note` };
+      const st = { sel: [], open: false, active: -1, opts: [], busy: false, pending: null, note: '', noteKind: '' };
+      const input = h('input', { type: 'text', id: ids.input, role: 'combobox', 'aria-expanded': 'false', 'aria-controls': ids.list,
+        'aria-autocomplete': 'list', 'aria-describedby': ids.note, autocomplete: 'off', autocapitalize: 'words', spellcheck: 'false',
+        enterkeyhint: 'done', maxlength: '80', placeholder: 'Firma ara ya da ekle…' });
+      const chipsBox = h('span', { class: 'picker-chips', style: 'display: contents' });
+      const box = h('div', { class: 'picker' }, chipsBox, input);
+      const listEl = h('ul', { id: ids.list, class: 'picker-list', role: 'listbox', 'aria-label': 'Firmalar', hidden: true });
+      const noteEl = h('p', { id: ids.note, class: 'picker-note', 'aria-live': 'polite', hidden: true });
+      root.replaceChildren(h('label', { class: 'field-label', id: ids.label, for: ids.input }, label, optional ? h('span', { class: 'opt' }, ' (isteğe bağlı)') : null),
+        box, listEl, noteEl);
+      const full = () => st.sel.length >= firms.perPost;
+      const setNote = (text, kind = '') => {
+        st.note = text; st.noteKind = kind;
+        if (!text && full()) { text = `En fazla ${firms.perPost} firma seçilebilir.`; kind = ''; }
+        noteEl.textContent = text || '';
+        noteEl.className = 'picker-note' + (kind ? ' ' + kind : '');
+        noteEl.hidden = !text;
+      };
+      const renderChips = () => {
+        st.sel = st.sel.filter((id) => firms.byId.has(id));
+        chipsBox.replaceChildren(...st.sel.map((id) => {
+          const t = firms.byId.get(id);
+          return h('span', { class: 'tag-chip', 'data-c': t.color, translate: 'no' }, h('span', { class: 'tc-name' }, t.name),
+            h('button', { type: 'button', class: 'x', 'data-remove': String(id), 'aria-label': `${t.name} kaldır`, title: 'Kaldır' }, '×'));
+        }));
+        input.disabled = full();
+        input.readOnly = st.busy;
+        input.placeholder = st.sel.length ? 'Başka firma…' : 'Firma ara ya da ekle…';
+        if (!st.note || full()) setNote(st.note, st.noteKind);
+      };
+      const counts = () => (load.complete === false ? firms.server.counts : firmCounts().counts);
+      const computeOpts = () => {
+        const q = input.value;
+        const fold = tagLib.tagFold(q);
+        const sel = new Set(st.sel);
+        const c = counts();
+        let out;
+        if (!fold) {
+          out = firms.list.filter((t) => !sel.has(t.id)).map((t) => ({ t, n: c.get(t.id) || 0 }))
+            .sort((a, b) => b.n - a.n || trCollator.compare(a.t.name, b.t.name)).slice(0, 8).map((x) => ({ kind: 'tag', t: x.t, n: x.n }));
+        } else {
+          const pre = [], sub = [];
+          for (const t of firms.list) {
+            if (sel.has(t.id)) continue;
+            const m = foldMatch(tagLib.tagFold(t.name), fold);
+            if (m === 2) pre.push(t);
+            else if (m === 1) sub.push(t);
+          }
+          out = [...pre, ...sub].slice(0, 8).map((t) => ({ kind: 'tag', t, n: c.get(t.id) || 0 }));
+          const chk = tagLib.checkTagName(q);
+          const exists = firms.list.some((t) => tagLib.tagFold(t.name) === fold);
+          if (!chk.error && !exists) out.push({ kind: 'new', name: chk.name });
+          else if (chk.error && chk.error !== 'empty_name' && !exists && !out.length) out.push({ kind: 'hint', text: chk.message });
+          else if (exists && !out.length) out.push({ kind: 'hint', text: 'Bu firma zaten seçili.' });
+        }
+        return out;
+      };
+      // the highlighted option (keyboard and pointer alike): attributes only, the rows stay
+      const setActive = (i, scroll = true) => {
+        st.active = i;
+        for (const li of listEl.children) if (li.dataset.i != null) li.setAttribute('aria-selected', String(Number(li.dataset.i) === i));
+        const act = st.opts[i];
+        const el = act && act.kind !== 'hint' ? listEl.querySelector(`li[data-i="${i}"]`) : null;
+        if (el) {
+          input.setAttribute('aria-activedescendant', el.id);
+          if (scroll) el.scrollIntoView({ block: 'nearest' });
+        } else input.removeAttribute('aria-activedescendant');
+      };
+      const renderList = () => {
+        const show = st.open && !input.disabled && st.opts.length > 0;
+        listEl.hidden = !show;
+        input.setAttribute('aria-expanded', String(show));
+        if (!show) { input.removeAttribute('aria-activedescendant'); listEl.replaceChildren(); return; }
+        listEl.replaceChildren(...st.opts.map((o, i) => {
+          const id = `fp-${n}-${o.kind === 'tag' ? o.t.id : o.kind}`;
+          const active = i === st.active;
+          if (o.kind === 'tag') {
+            return h('li', { id, role: 'option', 'aria-selected': String(active), 'data-i': String(i), translate: 'no' },
+              h('span', { class: 'dot', 'data-c': o.t.color, 'aria-hidden': 'true' }), h('span', { class: 'tc-name' }, o.t.name),
+              h('span', { class: 'n' }, o.n ? `${o.n} fikir` : ''));
+          }
+          if (o.kind === 'new') {
+            return h('li', { id, role: 'option', class: 'opt-new', 'aria-selected': String(active), 'aria-disabled': st.busy ? 'true' : null, 'data-i': String(i) },
+              st.busy ? h('span', { class: 'spinner spinner-sm', 'aria-hidden': 'true' }) : null,
+              h('span', { class: 'tc-name' }, '+ Yeni firma: «', h('span', { translate: 'no' }, o.name), '»'));
+          }
+          return h('li', { id, role: 'option', class: 'empty', 'aria-disabled': 'true', 'aria-selected': 'false' }, o.text);
+        }));
+        setActive(st.active);
+      };
+      // the first option is highlighted whenever the list opens or changes: Enter takes what the user sees highlighted
+      const refreshOpts = (keepActive = false) => {
+        st.opts = computeOpts();
+        const firstPick = st.opts.findIndex((o) => o.kind !== 'hint');
+        if (!keepActive || st.active >= st.opts.length || st.active < 0 || (st.opts[st.active] && st.opts[st.active].kind === 'hint')) st.active = firstPick;
+        renderList();
+      };
+      const open = () => { st.open = true; refreshOpts(); };
+      const close = () => { st.open = false; st.active = -1; renderList(); };
+      const changed = () => { renderChips(); onChange(st.sel.slice()); };
+      const add = (id) => {
+        if (st.sel.includes(id) || full()) return;
+        st.sel.push(id);
+        input.value = '';
+        setNote('');
+        changed();
+        refreshOpts();
+      };
+      // POST /tags; an existing name (another case / spelling) answers 200 with that company. One at a time: a second call
+      // (the form sent while the first is on its way) gets the same promise.
+      const create = (name) => {
+        if (st.pending) return st.pending;
+        st.pending = createNow(name).finally(() => { st.pending = null; });
+        return st.pending;
+      };
+      const createNow = async (name) => {
+        st.busy = true;
+        renderChips();
+        renderList();
+        try {
+          const d = await api('POST', '/api/inspire/tags', { name });
+          if (!d || !d.tag) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+          const t = upsertFirm(d.tag);
+          st.busy = false;
+          if (!t) return false;
+          catalogChanged();
+          add(t.id);
+          setNote(d.created ? `«${t.name}» eklendi.` : `«${t.name}» zaten vardı, seçildi.`, 'ok');
+          refreshPickers();
+          renderFirmBar();
+          return true;
+        } catch (e) {
+          st.busy = false;
+          if (e.status !== 401) setNote(e.message || 'Firma eklenemedi.', 'bad');
+          renderChips();
+          refreshOpts();
+          return false;
+        } finally {
+          if (st.busy) { st.busy = false; renderChips(); }
+          if (document.activeElement === document.body && root.isConnected) input.focus({ preventScroll: true });
+        }
+      };
+      const pick = (i) => {
+        const o = st.opts[i];
+        if (!o || st.busy) return;
+        if (o.kind === 'tag') add(o.t.id);
+        else if (o.kind === 'new') create(o.name);
+      };
+      input.addEventListener('input', () => { if (st.noteKind) setNote(''); open(); });
+      input.addEventListener('focus', open);
+      input.addEventListener('keydown', (e) => {
+        if (e.isComposing) return;
+        if (st.busy) { if (e.key === 'Enter') e.preventDefault(); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (!st.open) { open(); return; }
+          const pickable = st.opts.map((o, i) => (o.kind === 'hint' ? -1 : i)).filter((i) => i >= 0);
+          if (!pickable.length) return;
+          const at = pickable.indexOf(st.active);
+          st.active = e.key === 'ArrowDown' ? pickable[(at + 1) % pickable.length] : pickable[at <= 0 ? pickable.length - 1 : at - 1];
+          renderList();
+        } else if (e.key === 'Enter') {
+          // never submits the form while the list is showing (the user is choosing a company) or with a half-typed one
+          const shown = st.open && !listEl.hidden;
+          if (shown || input.value.trim()) e.preventDefault();
+          if (shown && st.active >= 0) pick(st.active);
+        } else if (e.key === 'Escape') {
+          if (st.open && !listEl.hidden) { e.preventDefault(); e.stopPropagation(); close(); }
+        } else if (e.key === 'Backspace' && !input.value && st.sel.length) {
+          e.preventDefault();
+          st.sel.pop();
+          changed();
+          refreshOpts();
+        } else if (e.key === 'Tab') close();
+      });
+      listEl.addEventListener('pointerdown', (e) => e.preventDefault());   // the input keeps focus
+      listEl.addEventListener('pointermove', (e) => {
+        const li = e.target.closest('li[data-i]');
+        if (li && Number(li.dataset.i) !== st.active) setActive(Number(li.dataset.i), false);
+      });
+      listEl.addEventListener('click', (e) => {
+        const li = e.target.closest('li[data-i]');
+        if (li) pick(Number(li.dataset.i));
+      });
+      box.addEventListener('click', (e) => {
+        const x = e.target.closest('[data-remove]');
+        if (x) {
+          st.sel = st.sel.filter((id) => id !== Number(x.dataset.remove));
+          setNote('');
+          changed();
+          input.focus({ preventScroll: true });
+          refreshOpts();
+          return;
+        }
+        if (e.target === box) input.focus();
+      });
+      const closeIfLeft = () => { if (!root.contains(document.activeElement)) close(); };
+      root.addEventListener('focusout', () => setTimeout(() => {
+        if (root.contains(document.activeElement)) return;
+        if (pickerPointer.down) pickerPointer.after.add(closeIfLeft);   // a press elsewhere: close once it is released
+        else close();
+      }, 0));
+      renderChips();
+      return {
+        value: () => st.sel.slice(),
+        reset(list = []) {
+          st.sel = [...new Set(list)].filter((id) => firms.byId.has(id)).slice(0, firms.perPost);
+          input.value = '';
+          st.busy = false;
+          setNote('');
+          close();
+          renderChips();
+        },
+        refresh() { renderChips(); if (st.open) refreshOpts(true); },
+        focus() { input.focus({ preventScroll: true }); },
+        busy: () => st.busy,
+        // A company typed but not picked when the form is sent: the same name (any case / spelling) is selected; a new name
+        // that no company in the list matches is created first; a half-typed one ("say" while "Sayın" is listed) is not
+        // guessed: the list stays open with a note. A company still being created is waited for.
+        // -> false when the form must not be sent (the note says why).
+        async commit() {
+          if (st.pending && !(await st.pending)) return false;   // its error is in the note
+          const q = input.value.trim();
+          if (!q || !tagLib) return true;
+          const fold = tagLib.tagFold(q);
+          const t = firms.list.find((x) => tagLib.tagFold(x.name) === fold);
+          if (t) { if (!st.sel.includes(t.id)) add(t.id); else input.value = ''; close(); return true; }
+          const chk = tagLib.checkTagName(q);
+          const stay = (text) => { setNote(text, 'bad'); input.focus({ preventScroll: true }); open(); return false; };
+          if (chk.error) return stay(chk.message);
+          if (full()) return stay(`En fazla ${firms.perPost} firma seçilebilir.`);
+          const near = fold ? firms.list.filter((x) => foldMatch(tagLib.tagFold(x.name), fold)) : [];
+          if (near.some((x) => !st.sel.includes(x.id))) return stay('Listeden bir firma seç ya da «+ Yeni firma» ile ekle.');
+          if (near.length) return stay(`«${near[0].name}» zaten seçili. Yazdığını sil ya da yeni bir firma için «+ Yeni firma»yı seç.`);
+          const ok = await create(chk.name);
+          close();
+          return ok;
+        },
+      };
+    }
+    // a catalog fold against a typed one: 2 = it (or one of its words) starts with it, 1 = it contains it, 0 = no match
+    const foldMatch = (f, q) => (f.startsWith(q) || f.split(' ').some((w) => w.startsWith(q)) ? 2 : f.includes(q) ? 1 : 0);
+    function refreshPickers() {
+      if (addFirms) addFirms.refresh();
+      if (tagPicker) tagPicker.refresh();
+      $('add-firms').hidden = !(tagLib && firms.loaded);
+    }
+    // the add dialog starts with the companies of the active filter (none for "Firmasız")
+    const presetFromFilter = () => [...filt.ids].filter((id) => firms.byId.has(id));
+
+    /* ----- #tag-modal: a card's companies (post owner / admin) ----- */
+    const tm = { entry: null, session: 0 };
+    const tagModalOpen = () => modalStack.some((m) => m.el === $('tag-modal'));
+    function openTagModal(entry) {
+      if (!tagLib || !posts.has(entry.id) || entry.post.can_tag !== true) return;
+      tm.entry = entry;
+      tm.session++;
+      setBusy($('tag-save'), false);
+      const p = entry.post;
+      const what = p.type === 'text' ? (p.description || '') : (normMeta(p.meta) && normMeta(p.meta).title) || p.description || hostOf(p.url || '') || '';
+      $('tag-for').textContent = what ? what.slice(0, 160) : '';
+      $('tag-for').hidden = !what;
+      $('tag-error').hidden = true;
+      for (const t of postTags(p)) if (!firms.byId.has(t.id)) upsertFirm(t);   // the card may be newer than the catalog
+      tagPicker.reset(postTags(p).map((t) => t.id));
+      openModal($('tag-modal'), $('tag-picker').querySelector('input'));
+    }
+    function closeTagModal() {
+      tm.entry = null;
+      tm.session++;
+      closeModal($('tag-modal'));
+    }
+    async function saveTagModal() {
+      const entry = tm.entry;
+      const btn = $('tag-save');
+      if (!entry || btn.dataset.busy) return;   // a company still being created: commit() waits for it
+      const s = tm.session;
+      setBusy(btn, true);
+      $('tag-error').hidden = true;
+      try {
+        if (!(await tagPicker.commit())) return;
+        const res = await mutate(() => api('PUT', `/api/inspire/posts/${encodeURIComponent(entry.id)}/tags`, { tag_ids: tagPicker.value() }));
+        if (!res || !res.post) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        const wasHidden = entry.el.hidden;
+        applyServerPost(res.post);
+        const live = s === tm.session;
+        if (live) closeTagModal();
+        const e = posts.get(String(res.post.id));
+        if (e) {
+          // the user's own change: a card that left (or joined) the filter re-flows the columns at once (no gap)
+          syncCardFilter(e, true);
+          if (e.el.hidden !== wasHidden) relayoutFilter({ scroll: false });
+          if (e.el.hidden) toastOutsideFilter('Firmalar kaydedildi; fikir seçili filtrede artık görünmüyor.', e.id);
+          else toast('Firmalar kaydedildi.', 'ok');
+        }
+        renderFirmBar();
+        // the ✎ that opened the dialog was replaced by the re-render: focus goes to the card's new one (or "Firma ekle"), or
+        // to the filter summary when the card left the filter
+        const toFocus = !e ? null : !e.el.hidden
+          ? (e.refs.tags && e.refs.tags.querySelector('[data-action="tags-edit"]')) || (e.refs.tagAdd && !e.refs.tagAdd.hidden ? e.refs.tagAdd : null)
+          : document.querySelector('#firm-summary [data-firm-clear]');
+        if (live && toFocus && toFocus.isConnected && !modalStack.length) toFocus.focus({ preventScroll: true });
+        loadFirms();
+      } catch (e) {
+        if (e.status === 401) return;
+        if (e.status === 404 && posts.has(entry.id)) { removeEntry(entry); updateEmptyState(); if (s === tm.session) closeTagModal(); toast('Bu fikir silinmiş.', 'error'); return; }
+        if (s === tm.session && tagModalOpen()) { $('tag-error').textContent = e.message || 'Kaydedilemedi.'; $('tag-error').hidden = false; }
+        else toast(e.message || 'Kaydedilemedi.', 'error');
+      } finally {
+        if (s === tm.session) setBusy(btn, false);
+      }
+    }
+
+    /* ----- #firms-modal: the admin's catalog (rename, color, merge, delete) ----- */
+    const firmsModalOpen = () => modalStack.some((m) => m.el === $('firms-modal'));
+    function openFirmsModal() {
+      if (!firms.canManage) return;
+      $('firms-error').hidden = true;
+      renderFirmsModal();
+      openModal($('firms-modal'), $('firms-list').querySelector('input') || $('firms-modal').querySelector('[data-close]'));
+      loadFirms();
+    }
+    function renderFirmsModal() {
+      const ul = $('firms-list');
+      // the focused name field (and what the admin is typing there) survives the rebuild
+      const act = document.activeElement;
+      const keep = ul.contains(act) && act.matches('[data-firm-name]')
+        ? { id: act.closest('[data-firm]').dataset.firm, value: act.value, start: act.selectionStart, end: act.selectionEnd } : null;
+      const counts = firmCounts().counts;
+      const c = (t) => (load.complete === false ? firms.server.counts.get(t.id) : counts.get(t.id)) || 0;
+      $('firms-prune-row').hidden = !firms.list.some((t) => !c(t));   // "Kullanılmayanları sil": only with an unused one
+      if (!firms.list.length) { ul.replaceChildren(h('li', { class: 'firms-empty' }, 'Henüz firma yok. Fikir eklerken «Firma» alanından ekleyebilirsin.')); return; }
+      ul.replaceChildren(...firms.list.map((t) => {
+        const n = c(t);
+        const sw = h('button', { type: 'button', class: 'swatch', 'data-c': t.color, 'data-firm-act': 'colors', 'aria-expanded': 'false',
+          'aria-label': `Renk: ${TAG_COLOR_TR[t.color] || t.color}. Değiştir`, title: 'Rengi değiştir' });
+        const name = h('input', { type: 'text', class: 'firm-name-input', value: t.name, maxlength: String(firms.nameMax + 10), 'aria-label': `${t.name} adı`,
+          translate: 'no', autocomplete: 'off', spellcheck: 'false', enterkeyhint: 'done', 'data-firm-name': '' });
+        const del = h('button', { type: 'button', class: 'text-btn danger', 'data-firm-act': 'delete' }, 'Sil');
+        const swatches = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Renk', hidden: true },
+          (firms.colors.length ? firms.colors : Object.keys(TAG_COLOR_TR)).map((col) => h('button', { type: 'button', class: 'swatch', role: 'radio',
+            'data-c': col, 'data-firm-color': col, 'aria-checked': String(col === t.color), 'aria-label': TAG_COLOR_TR[col] || col, title: TAG_COLOR_TR[col] || col,
+            tabindex: col === t.color ? '0' : '-1' })));
+        return h('li', { class: 'firms-row', 'data-firm': String(t.id) }, sw, name, h('span', { class: 'firm-count' }, `${n} fikir`), del, swatches);
+      }));
+      const back = keep && ul.querySelector(`[data-firm="${keep.id}"] [data-firm-name]`);
+      if (back) {
+        const t = firms.byId.get(Number(keep.id));
+        if (t && keep.value !== t.name && !back.dataset.busy) back.value = keep.value;
+        back.focus({ preventScroll: true });
+        try { back.setSelectionRange(keep.start, keep.end); } catch (_) { /* ignore */ }
+      }
+    }
+    // After any catalog change: cards, the filter (its URL: a rename changes the slug) and the bar follow at once
+    function applyCatalogChange({ tag = null, removed = null, into = null }) {
+      const vis0 = visibleSig();
+      if (tag) upsertFirm(tag);
+      if (removed != null) dropFirm(removed);
+      catalogChanged();
+      const target = into != null ? firms.byId.get(into) : null;
+      for (const e of posts.values()) {
+        const ts = postTags(e.post);
+        if (!ts.some((t) => (tag && t.id === tag.id) || t.id === removed)) continue;
+        let next = ts.filter((t) => t.id !== removed).map((t) => (tag && t.id === tag.id ? { ...t, name: tag.name, slug: tag.slug, color: tag.color } : t));
+        if (target && !next.some((t) => t.id === target.id)) next.push({ id: target.id, name: target.name, slug: target.slug, color: target.color });
+        next = next.sort((a, b) => trCollator.compare(a.name, b.name));
+        patchCard(e, { ...e.post, tags: next });
+      }
+      const was = filterKey();
+      if (removed != null && filt.ids.has(removed)) {
+        filt.ids.delete(removed);
+        if (target) filt.ids.add(target.id);
+      }
+      if (filt.ids.size < 2) filt.all = false;
+      writeFilterUrl();
+      // the admin's own change: cards that left / joined the filter re-flow the columns at once
+      flushFilterToggles();
+      if (filterKey() !== was || visibleSig() !== vis0) relayoutFilter({ scroll: false });
+      refreshPickers();
+      renderFirmBar(true);
+      if (firmsModalOpen()) renderFirmsModal();
+    }
+    async function firmsAction(id, body, method = 'PUT') {
+      $('firms-error').hidden = true;
+      try {
+        return await mutate(() => api(method, `/api/inspire/tags/${encodeURIComponent(id)}`, body));
+      } catch (e) {
+        if (e.status === 404) { applyCatalogChange({ removed: id }); loadFirms(); return null; }
+        if (e.status !== 401 && e.code !== 'tag_exists') { $('firms-error').textContent = e.message || 'Kaydedilemedi.'; $('firms-error').hidden = false; }
+        if (e.code === 'tag_exists') throw e;
+        return null;
+      }
+    }
+    async function renameFirm(input) {
+      const row = input.closest('[data-firm]');
+      const id = Number(row && row.dataset.firm);
+      const t = firms.byId.get(id);
+      if (!t || input.dataset.busy) return;
+      const name = tagLib.cleanTagName(input.value);
+      if (name === t.name) { input.value = t.name; return; }
+      const chk = tagLib.checkTagName(name);
+      if (chk.error) { $('firms-error').textContent = chk.message; $('firms-error').hidden = false; input.value = t.name; return; }
+      input.dataset.busy = '1';
+      try {
+        const d = await firmsAction(id, { name: chk.name });
+        if (d && d.tag) { applyCatalogChange({ tag: d.tag }); toast(`Firma adı «${d.tag.name}» oldu.`, 'ok'); }
+        else input.value = t.name;
+      } catch (e) {
+        // the name of another company: merge the two (this one's ideas move there)
+        const other = e.data && e.data.existing;
+        input.value = t.name;
+        if (other && (await confirmDialog(`«${other.name}» zaten var. «${t.name}» onunla birleştirilsin mi? Fikirleri «${other.name}» firmasına geçer.`, 'Birleştir'))) {
+          const m = await firmsAction(id, { merge_into: other.id }).catch(() => null);
+          if (m && m.tag) { applyCatalogChange({ tag: m.tag, removed: id, into: m.tag.id }); toast(`«${t.name}», «${m.tag.name}» ile birleştirildi.`, 'ok'); }
+        }
+      } finally {
+        delete input.dataset.busy;
+        loadFirms();
+      }
+    }
+    async function onFirmsClick(ev) {
+      const row = ev.target.closest('[data-firm]');
+      if (!row) return;
+      const id = Number(row.dataset.firm);
+      const t = firms.byId.get(id);
+      if (!t) return;
+      const act = ev.target.closest('[data-firm-act]');
+      const col = ev.target.closest('[data-firm-color]');
+      if (act && act.dataset.firmAct === 'colors') {
+        const sw = row.querySelector('.swatches');
+        sw.hidden = !sw.hidden;
+        act.setAttribute('aria-expanded', String(!sw.hidden));
+        if (!sw.hidden) (sw.querySelector('[aria-checked="true"]') || sw.firstElementChild).focus();
+        return;
+      }
+      if (col) {
+        if (col.dataset.firmColor === t.color) { row.querySelector('.swatches').hidden = true; return; }
+        const d = await firmsAction(id, { color: col.dataset.firmColor });
+        if (d && d.tag) applyCatalogChange({ tag: d.tag });
+        const again = $('firms-list').querySelector(`[data-firm="${id}"] [data-firm-act="colors"]`);
+        if (again) again.focus();
+        return;
+      }
+      if (act && act.dataset.firmAct === 'delete') {
+        const n = firmCounts().counts.get(id) || 0;
+        const msg = `«${t.name}» firması silinsin mi? ${n ? `${n} fikirden bu etiket kaldırılır; fikirler silinmez.` : 'Hiçbir fikirde kullanılmıyor.'}`;
+        if (!(await confirmDialog(msg, 'Sil'))) return;
+        const d = await firmsAction(id, null, 'DELETE');
+        if (d && d.ok) { applyCatalogChange({ removed: id }); toast(`«${t.name}» silindi.`, 'ok'); loadFirms(); }
+      }
+    }
+    // Every company no idea uses, in one step (the server keeps the ones created in the last 10 minutes: someone may be
+    // about to post with it)
+    async function pruneUnusedFirms() {
+      const btn = $('firms-prune');
+      if (btn.dataset.busy) return;
+      const counts = firmCounts().counts;
+      const n = firms.list.filter((t) => !((load.complete === false ? firms.server.counts.get(t.id) : counts.get(t.id)) || 0)).length;
+      if (!n || !(await confirmDialog(`Hiçbir fikirde kullanılmayan ${n} firma silinsin mi? Son 10 dakikada eklenenler kalır; fikirler etkilenmez.`, 'Sil'))) return;
+      setBusy(btn, true);
+      $('firms-error').hidden = true;
+      try {
+        const d = await mutate(() => api('DELETE', '/api/inspire/tags/unused'));
+        toast(d && d.removed ? `${d.removed} kullanılmayan firma silindi.` : 'Silinecek kullanılmayan firma yok.', 'ok');
+        await loadFirms();
+      } catch (e) {
+        if (e.status !== 401) { $('firms-error').textContent = e.message || 'Silinemedi.'; $('firms-error').hidden = false; }
+      } finally {
+        setBusy(btn, false);
+      }
+    }
+    function onFirmsKey(ev) {
+      const input = ev.target.closest('[data-firm-name]');
+      if (input) {
+        if (ev.key === 'Enter' && !ev.isComposing) { ev.preventDefault(); renameFirm(input); }
+        else if (ev.key === 'Escape') {
+          const t = firms.byId.get(Number(input.closest('[data-firm]').dataset.firm));
+          if (t && input.value !== t.name) { ev.preventDefault(); ev.stopPropagation(); input.value = t.name; }
+        }
+        return;
+      }
+      const radio = ev.target.closest('[data-firm-color]');
+      if (radio && ['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(ev.key)) {
+        ev.preventDefault();
+        const list = [...radio.parentElement.children];
+        const i = list.indexOf(radio);
+        const j = (i + (ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? 1 : -1) + list.length) % list.length;
+        for (const x of list) x.tabIndex = -1;
+        list[j].tabIndex = 0;
+        list[j].focus();
+      }
+    }
+
+    function bindTagUI() {
+      for (const el of [$('firm-bar'), $('firm-sub')]) {   // the tools / summary live in #firm-sub on phones
+        el.addEventListener('click', onFirmBarClick);
+        el.addEventListener('keydown', onFirmBarKey);
+      }
+      narrowMQ.addEventListener('change', placeFirmTools);
+      $('firms-prune').addEventListener('click', pruneUnusedFirms);
+      $('firm-chips').addEventListener('scroll', updateChipsFade, { passive: true });
+      $('firm-manage').addEventListener('click', openFirmsModal);
+      $('board-status').addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-status-act]');
+        if (!b) return;
+        if (b.dataset.statusAct === 'clear') clearFilter();
+        else if (b.dataset.statusAct === 'add') openAddModal();
+      });
+      if (!tagLib) return;
+      addFirms = makeFirmPicker($('add-firms'));
+      tagPicker = makeFirmPicker($('tag-picker'), { label: 'Bu fikrin firmaları', optional: false, onChange: () => { $('tag-error').hidden = true; } });
+      $('tag-save').addEventListener('click', saveTagModal);
+      $('tag-cancel').addEventListener('click', () => closeTagModal());
+      $('firms-list').addEventListener('click', onFirmsClick);
+      $('firms-list').addEventListener('keydown', onFirmsKey);
+      $('firms-list').addEventListener('focusout', (ev) => {
+        const input = ev.target.closest('[data-firm-name]');
+        if (input && !(ev.relatedTarget && ev.relatedTarget.closest && ev.relatedTarget.closest('#confirm-modal'))) renameFirm(input);
+      });
+    }
+
     /* =============================================================== ADD MODAL */
     // session: incremented on every open; a submit only closes / resets the dialog it came from.
     const add = {
@@ -3916,6 +5177,8 @@
       updateMediaBox(null);
       updateTextCounter();
       updateLinkSubmit();
+      if (addFirms) addFirms.reset(presetFromFilter());   // the companies of the active filter
+      $('add-firms').hidden = !(tagLib && firms.loaded);
       if (sbUI) sbUI.resetAddForm();
     }
 
@@ -3928,6 +5191,9 @@
       $('tab-text').tabIndex = isLink ? -1 : 0;
       $('link-form').hidden = !isLink;
       $('text-form').hidden = isLink;
+      // one company picker, moved into the visible form
+      const slot = (isLink ? $('link-form') : $('text-form')).querySelector('.firm-slot');
+      if (slot && $('add-firms').parentElement !== slot) slot.append($('add-firms'));
       (isLink ? $('link-url') : $('text-body')).focus({ preventScroll: true });
     }
 
@@ -4212,8 +5478,10 @@
       setBusy(btn, true);
       let created = false;
       try {
+        if (addFirms && firms.loaded && !(await addFirms.commit())) return;   // a typed company could not be added
         const description = $('link-desc').value.trim();
         const body = { url: p.canonical, description };
+        if (addFirms && firms.loaded) body.tag_ids = addFirms.value();
         if (pick && pick.url) body.media = mediaBody(pick);
         const pre = add.prefill;
         if (pre && pre.title && v === pre.url) body.title = pre.title;   // the bookmarked page's title (client meta)
@@ -4224,21 +5492,24 @@
         flushPending();
         const e = insertTop(post);
         if (post.media_error) toast('Önizleme eklenemedi: ' + (post.media_error.message || 'geçersiz medya linki'), 'error', 7000);
-        let note = 'Fikir eklendi.';
+        let upError = '';
         if (pick && pick.file && e) {
           // the dialog stays open with the progress until the file is on the server
           if (add.session === addSession) { add.uploading = true; updateLinkSubmit(); }
           const up = await uploadPicked({ id: e.id }, pick, (f) => { if (add.session === addSession) setProgress($('link-progress'), f); });
-          if (!up.ok) {
-            const why = String(up.message || 'Yükleme başarısız').trim().replace(/[.!\s]+$/, '');
-            toast(`Fikir eklendi ama dosya yüklenemedi: ${why}. Karttaki «Önizleme ekle» ile tekrar deneyebilirsin.`, 'error', 9000);
-            note = '';
-          }
+          if (!up.ok) upError = String(up.message || 'Yükleme başarısız').trim().replace(/[.!\s]+$/, '');
         }
         const live = sameDialog();
         if (live) closeAddModal();
-        if (note) toast(note, 'ok');
-        if (e && live) showPost(e.id);
+        const outside = !!(e && e.el.hidden);   // not in the active company filter
+        if (upError) {
+          // the retry button is on the card: a card outside the filter gets the way to it with the error
+          toast(`Fikir eklendi ama dosya yüklenemedi: ${upError}. Karttaki «Önizleme ekle» ile tekrar deneyebilirsin.`
+            + (outside ? ' Kart seçili filtrede görünmüyor.' : ''), 'error', 9000,
+          outside ? { label: 'Filtreyi temizle', run: () => { clearFilter(); showPost(e.id); } } : null);
+        } else if (outside) toastOutsideFilter('Fikir eklendi; seçili filtrede görünmüyor.', e.id);
+        else toast('Fikir eklendi.', 'ok');
+        if (e && live && !outside) showPost(e.id);
       } catch (e) {
         if (created || e.status === 401) { /* posted (upload errors are reported above) / handled by api() */ }
         else if (!sameDialog()) { // the dialog was closed (or reopened for something else) meanwhile
@@ -4319,16 +5590,20 @@
       const sameDialog = () => add.session === addSession && addModalOpen();
       setBusy(btn, true);
       try {
+        if (addFirms && firms.loaded && !(await addFirms.commit())) return;   // a typed company could not be added
         const sbSpec = sbUI ? sbUI.formSpec() : null;   // null = no storyboard requested
-        const post = await mutate(() => api('POST', '/api/inspire/posts', { type: 'text', text, ...(sbSpec ? { storyboard: sbSpec } : {}) }));
+        const tagIds = addFirms && firms.loaded ? { tag_ids: addFirms.value() } : {};
+        const post = await mutate(() => api('POST', '/api/inspire/posts', { type: 'text', text, ...tagIds, ...(sbSpec ? { storyboard: sbSpec } : {}) }));
         if (!post || post.id == null) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
         const live = sameDialog();
         if (live) closeAddModal();
         flushPending();
         const e = insertTop(post);
-        toast(post.storyboard ? 'Fikir eklendi, storyboard hazırlanıyor.' : 'Fikir eklendi.', 'ok');
+        const outside = !!(e && e.el.hidden);   // not in the active company filter
+        if (outside) toastOutsideFilter(post.storyboard ? 'Fikir eklendi, storyboard hazırlanıyor; seçili filtrede görünmüyor.' : 'Fikir eklendi; seçili filtrede görünmüyor.', e.id);
+        else toast(post.storyboard ? 'Fikir eklendi, storyboard hazırlanıyor.' : 'Fikir eklendi.', 'ok');
         if (sbUI) sbUI.afterTextPost(e, post);
-        if (e && live) showPost(e.id);
+        if (e && live && !outside) showPost(e.id);
       } catch (e) {
         if (e.status === 401) { /* handled by api() */ }
         else if (!sameDialog()) toast(e.message || 'Paylaşılamadı.', 'error');
@@ -5625,6 +6900,7 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
         if (id != null) showPost(id);
       });
       $('link-dup-attach').addEventListener('click', attachToDuplicate);
+      bindTagUI();   // company picker, filter bar, #tag-modal, #firms-modal
 
       // Media previews: "Önizleme ekle" in the add dialog and #media-modal
       addPicker = createMediaPicker({
@@ -5668,7 +6944,7 @@ const u=T+'#add?'+p.toString();if(!window.open(u,'fikir'))location.href=u;
       document.addEventListener('visibilitychange', () => {
         onVisibilityVideos();
         if (document.visibilityState === 'visible' && session.token && !$('dashboard').hidden &&
-            Date.now() - load.lastAt > REFRESH_ON_FOCUS_MS) loadPosts();
+            Date.now() - load.lastAt > REFRESH_ON_FOCUS_MS) { loadPosts(); loadFirms(); }
       });
     }
 

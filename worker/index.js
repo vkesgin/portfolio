@@ -17,6 +17,11 @@ import {
 } from './inspire-video.js';
 import { Budget, CRON_BUDGET, CRON_COSTS, CRON_IG, withBudget } from './budget.js';
 import {
+  TAGS_TABLES, TAGS_INDEX_NAME, TAGS_DDL, TAGS_INDEX, TAGS_POST_COLUMN, POST_TAGS_INSERT, POST_TAGS_DELETE, tagsOut, parseTagIds,
+  parseTagFilter, tagFilterSql, tagsList, tagCreate, tagEdit, tagsPruneUnused, postTagsSet,
+} from './inspire-tags.js';
+import { TAG_PER_POST_MAX } from '../assets/js/fikir-tags.mjs';
+import {
   boardPv, boardLocked, checkBoardPassword, guestPvOk, dlTicket, dlTicketRole, filesGateOn, filesToken, filesTokenTtl,
   signFilesJson, FILES_GATED_RE, playToken, playTokenTtl,
 } from './fikir-gate.js';
@@ -247,6 +252,11 @@ const INSPIRE_LIMITS = {
                           // per post / 10 min however many viewers / Range requests hit the dead link, in any isolate)
   live:     [120, 3600],  // POST /posts/:id/live per cid or user / hour (on view + token refresh after a video error)
   live_ip:  [240, 3600],
+  // Company tags (worker/inspire-tags.js)
+  tag:      [20, 3600],   // POST /tags (new companies) per cid or user / hour (an existing name answers 200 and counts too)
+  tag_ip:   [40, 3600],
+  tagset:   [120, 3600],  // PUT /posts/:id/tags per cid or user / hour
+  tagset_ip: [240, 3600],
 };
 // Guest display names that would pass for the owner (compared after inspireFoldName()).
 const INSPIRE_RESERVED_NAMES = ['yonetici', 'admin', 'administrator', 'moderator', 'moderatör', 'site sahibi'];
@@ -450,8 +460,9 @@ const INSPIRE_ADDED_COLUMNS = {
   inspire_posts: [['author_name', 'TEXT'], ['client_id', 'TEXT'], ['url_key', 'TEXT'], ['meta', 'TEXT'], ['media', 'TEXT']],
   inspire_notes: [['author_name', 'TEXT'], ['client_id', 'TEXT']],
 };
-const INSPIRE_TABLES = ['inspire_users', 'inspire_posts', 'inspire_notes', 'inspire_rate', 'inspire_media', 'inspire_quota', 'inspire_video_cache'];
-const INSPIRE_INDEXES = ['idx_inspire_posts_url_key', 'idx_inspire_notes_post', 'idx_inspire_media_post'];
+const INSPIRE_TABLES = ['inspire_users', 'inspire_posts', 'inspire_notes', 'inspire_rate', 'inspire_media', 'inspire_quota', 'inspire_video_cache',
+  ...TAGS_TABLES];
+const INSPIRE_INDEXES = ['idx_inspire_posts_url_key', 'idx_inspire_notes_post', 'idx_inspire_media_post', TAGS_INDEX_NAME];
 // Compiles only when every table and added column exists; LIMIT 0 reads no rows. ?1 = guest username, ?2 = owner username.
 const INSPIRE_SCHEMA_PROBE = `SELECT
   (SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN (${INSPIRE_INDEXES.map((n) => `'${n}'`).join(', ')})) AS idx,
@@ -547,6 +558,8 @@ async function migrateInspireSchema(env) {
     // Downloads / R2 copies: resolved media links (kind 'ig' Instagram, 'ad' the other platforms), embed checks
     // ('ig_embed'), copy records ('ig_copy' Instagram, 'ad_copy' the others: failures + backoff, the "removed" marker)
     db.prepare(VIDEO_CACHE_DDL),
+    // Company tags and their links to posts (worker/inspire-tags.js)
+    ...TAGS_DDL.map((sql) => db.prepare(sql)),
   ]);
   for (const [table, cols] of Object.entries(INSPIRE_ADDED_COLUMNS)) {
     let have = null;
@@ -563,6 +576,7 @@ async function migrateInspireSchema(env) {
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_posts_url_key ON inspire_posts(url_key)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_notes_post ON inspire_notes(post_id)'),
     db.prepare('CREATE INDEX IF NOT EXISTS idx_inspire_media_post ON inspire_media(post_id)'),
+    db.prepare(TAGS_INDEX),
   ]);
   // Reserved owner row for guest content (user_id is NOT NULL + FK). Its password can never be used:
   // /api/inspire/login rejects this username.
@@ -602,6 +616,7 @@ const INSPIRE_ROLE_SQL = (t) => `CASE WHEN ${t}.client_id IS NOT NULL OR u.usern
       WHEN u.username = '${INSPIRE_ADMIN_USERNAME}' THEN 'admin' ELSE 'user' END AS author_role`;
 const INSPIRE_POST_SELECT = `
   SELECT p.id, p.type, p.url, p.description, p.created_at, p.meta, p.media, p.url_key,
+    ${TAGS_POST_COLUMN},
     COALESCE(p.author_name,
       CASE WHEN u.username = '__guest__' THEN '' ELSE COALESCE(NULLIF(u.full_name, ''), u.username) END, '') AS author,
     ${INSPIRE_ROLE_SQL('p')},
@@ -695,6 +710,8 @@ function inspirePostOut(r, isAdmin, notes) {
     can_edit_media: (!!r.is_mine || !!isAdmin) && inspireUploadable(r.type),
     // download hint (no network): {video: true|false|null (maybe), image: bool} or null; link = /api/inspire/posts/:id/download
     dl: dlHint({ type: r.type, parsed: inspireParsedOut(r.url), media, meta }),
+    // companies (inspire_post_tags), sorted by name; can_tag: the post owner / admin may change them (PUT /posts/:id/tags)
+    tags: tagsOut(r.tags_json), can_tag: !!r.is_mine || !!isAdmin,
     notes: notes || [],
   };
 }
@@ -739,6 +756,7 @@ function inspireLegacyPost(post, actor) {
   };
   // media previews and downloads are current-board only
   delete out.media; delete out.meta_stale; delete out.meta_pending; delete out.can_edit_media; delete out.dl;
+  delete out.tags; delete out.can_tag;
   if (post.is_mine && ownId) out.user_id = ownId;
   return out;
 }
@@ -3281,12 +3299,19 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
 
     // Board: newest first, INSPIRE_PAGE_SIZE per request (?before=<id>; X-Fikir-Next = next cursor).
     // Private notes only reach their author (filtered in SQL).
+    // Company filter (worker/inspire-tags.js): ?tags=1,2&match=any|all&untagged=1; the cursor pages within the filter, and the
+    // notes / hints / live facts cover exactly the filtered page. Same statement count with or without a filter.
     if (cleanPath === '/api/inspire/posts' && method === 'GET') {
       const actor = await inspireActor(request, env);   // the session gate already required one
       const [cid, uid] = inspireOwnerParams(actor);
       const q = new URL(request.url).searchParams;
       const limit = Math.min(INSPIRE_PAGE_SIZE, Math.max(1, parseInt(q.get('limit'), 10) || INSPIRE_PAGE_SIZE));
       const before = /^\d{1,15}$/.test(q.get('before') || '') ? Number(q.get('before')) : null;
+      const tf = parseTagFilter(q);
+      if (tf === 'bad') return fail(400, 'bad_filter', 'Geçersiz filtre');
+      const fb = tf ? [tf.json, tf.all, tf.untagged] : [];
+      // the page's post ids (?b = before, ?b+1 = limit, the filter's ?b+2..?b+4); unfiltered: the same SQL as before
+      const pageIds = (b) => `SELECT q.id FROM inspire_posts q WHERE (?${b} IS NULL OR q.id < ?${b})${tf ? ' AND ' + tagFilterSql('q', b + 2) : ''} ORDER BY q.id DESC LIMIT ?${b + 1}`;
       // current board: the copy records of the page's posts too (copy_view hints, inspireCopyView); one more statement
       const cfgV = inspireVideoConfig(env);
       const hints = sbClient && cfgV.copyView;
@@ -3295,11 +3320,12 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       // (em of the row, else the embed check's: post.live.embed)
       const liveOn = sbClient && cfgV.igLive;
       const batchRes = await db.batch([
-        db.prepare(`${INSPIRE_POST_SELECT} WHERE (?3 IS NULL OR p.id < ?3) ORDER BY p.id DESC LIMIT ?4`).bind(cid, uid, before, limit + 1),
+        db.prepare(`${INSPIRE_POST_SELECT} WHERE (?3 IS NULL OR p.id < ?3)${tf ? ' AND ' + tagFilterSql('p', 5) : ''} ORDER BY p.id DESC LIMIT ?4`)
+          .bind(cid, uid, before, limit + 1, ...fb),
         db.prepare(`${INSPIRE_NOTE_SELECT} WHERE ${INSPIRE_NOTE_VISIBLE} AND n.post_id IN
-          (SELECT id FROM inspire_posts WHERE (?3 IS NULL OR id < ?3) ORDER BY id DESC LIMIT ?4) ORDER BY n.id ASC`).bind(cid, uid, before, limit),
+          (${pageIds(3)}) ORDER BY n.id ASC`).bind(cid, uid, before, limit, ...fb),
         ...(hints ? [db.prepare(`SELECT post_id, kind, retry_at, extra FROM inspire_video_cache WHERE kind IN ('ig_copy', 'ad_copy', 'ig_embed')
-          AND post_id IN (SELECT id FROM inspire_posts WHERE (?1 IS NULL OR id < ?1) ORDER BY id DESC LIMIT ?2)`).bind(before, limit)] : []),
+          AND post_id IN (${pageIds(1)})`).bind(before, limit, ...fb)] : []),
         ...(liveOn ? [db.prepare(`SELECT post_id, error, fail_count, retry_at, resolved_at, url IS NOT NULL AS hv, poster IS NOT NULL AS hp, width, height,
           CASE WHEN json_valid(extra) THEN json_extract(extra, '$.em') END AS em,
           CASE WHEN json_valid(extra) THEN json_extract(extra, '$.du') END AS du,
@@ -3311,7 +3337,7 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
           CASE WHEN json_valid(extra) THEN json_extract(extra, '$.media_type') END AS mt,
           CASE WHEN json_valid(extra) THEN json_extract(extra, '$.lv') END AS lv
           FROM inspire_video_cache WHERE kind = 'ig'
-          AND post_id IN (SELECT id FROM inspire_posts WHERE (?1 IS NULL OR id < ?1) ORDER BY id DESC LIMIT ?2)`).bind(before, limit)] : []),
+          AND post_id IN (${pageIds(1)})`).bind(before, limit, ...fb)] : []),
       ]);
       const [postsRes, notesRes] = batchRes;
       const recsRes = hints ? batchRes[2] : null;
@@ -3392,6 +3418,9 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
       const d = await inspireBody(request);
       if (!d) return fail(400, 'bad_request', 'Geçersiz istek');
+      // companies (tag_ids: <= 10 ids of inspire_tags; unknown ones are dropped, the answer's `tags` says what was saved)
+      const tagIds = parseTagIds(d.tag_ids);
+      if (!tagIds) return fail(400, 'invalid_tags', `En fazla ${TAG_PER_POST_MAX} firma seçilebilir`);
       const author = await inspireAuthorName(db, actor);
       if (author === null) return fail(401, 'unauthorized', 'Oturum geçersiz, tekrar giriş yapın');
       const [cid, uid] = inspireOwnerParams(actor);
@@ -3460,6 +3489,7 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
         return fail(409, 'duplicate', 'Bu link zaten eklenmiş', { existing: dup ? inspireDupOut(dup) : null });
       }
       const id = ins.meta.last_row_id;
+      if (tagIds.length) await db.prepare(POST_TAGS_INSERT).bind(id, JSON.stringify(tagIds), inspireNowS()).run();
       if (metaLater && ctx && typeof ctx.waitUntil === 'function') {
         ctx.waitUntil(inspireL1(parsed, selfHost)
           .then((r) => inspireWriteMeta(db, id, r.meta || { failed: 1, at: inspireNowS(), v: META_V })).catch(() => {}));
@@ -3963,6 +3993,7 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       await db.batch([
         ...(sbDel ? sbDel.stmts : []),
         db.prepare('DELETE FROM inspire_notes WHERE post_id=?').bind(id),
+        db.prepare(POST_TAGS_DELETE).bind(id),   // its company links (D1's FK cascades too; node:sqlite has FKs off)
         // uploaded previews (R2 below). An upload still streaming keeps its 'pending' row: its commit finds no post and
         // removes the object itself; the cron sweeps the row if that request died.
         db.prepare("UPDATE inspire_media SET state='orphan' WHERE post_id=? AND state='live'").bind(id),
@@ -3995,6 +4026,37 @@ async function handleInspireRoutes(request, env, ctx, cleanPath, method, origin,
       await db.prepare('UPDATE inspire_notes SET content=?, is_public=COALESCE(?, is_public) WHERE id=?').bind(content, isPublic, id).run();
       const updated = await db.prepare(`${INSPIRE_NOTE_SELECT} WHERE n.id = ?3`).bind(cid, uid, id).first();
       return json(inspireNoteOut(updated, actor.isAdmin), 200, origin);
+    }
+
+    // Company tags (worker/inspire-tags.js): the catalog (any session), a new company (any session), rename / recolor / merge /
+    // delete and "delete the unused ones" (admin), a post's companies (its owner or the admin)
+    const tagDeps = async (actor) => ({
+      db, fail, ok: (data, status = 200) => json(data, status, origin), actor, readBody: () => inspireBody(request),
+      overLimit: (pairs) => inspireOverLimit(db, pairs), limited, actorKey: actor ? inspireActorKey(actor) : null, ipKey: await inspireIpKey(request),
+      postSelect: INSPIRE_POST_SELECT, ownerParams: inspireOwnerParams, postOut: inspirePostOut,
+    });
+    if (cleanPath === '/api/inspire/tags' && method === 'GET') {
+      return await tagsList(await tagDeps(await inspireActor(request, env)));
+    }
+    if (cleanPath === '/api/inspire/tags' && method === 'POST') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      return await tagCreate(await tagDeps(actor));
+    }
+    if (cleanPath === '/api/inspire/tags/unused' && method === 'DELETE') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      return await tagsPruneUnused(await tagDeps(actor));
+    }
+    if ((m = cleanPath.match(/^\/api\/inspire\/tags\/(\d{1,15})$/)) && (method === 'PUT' || method === 'DELETE')) {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      return await tagEdit(await tagDeps(actor), Number(m[1]), method);
+    }
+    if ((m = cleanPath.match(/^\/api\/inspire\/posts\/(\d{1,15})\/tags$/)) && method === 'PUT') {
+      const actor = await inspireActor(request, env);
+      if (!actor) return fail(401, 'unauthorized', 'Önce giriş yapın');
+      return await postTagsSet(await tagDeps(actor), Number(m[1]));
     }
 
     // AI storyboards (worker/storyboard/routes.js): /posts/:id/storyboards, /storyboards/:sbId[/…], /sb-admin/usage

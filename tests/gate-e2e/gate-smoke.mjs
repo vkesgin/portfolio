@@ -109,7 +109,11 @@ d1(`CREATE TABLE IF NOT EXISTS projects (id TEXT PRIMARY KEY, title TEXT NOT NUL
   image_url TEXT DEFAULT '', video_url TEXT DEFAULT '', thumbnail_url TEXT DEFAULT '', is_featured INTEGER DEFAULT 0, featured_order INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))`);
 d1(`CREATE TABLE IF NOT EXISTS kpss_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, full_name TEXT DEFAULT '',
   exam_name TEXT DEFAULT 'KPSS', exam_date TEXT NOT NULL, xp INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))`);
-const ids = { post: link, note, sb: sbId };
+// a company tag (POST /tags as the admin) on the link post
+r = await call('POST', '/api/inspire/tags', { name: 'Kapı Firma' }, ADM);
+assert.ok(r.status === 201 || r.status === 200, JSON.stringify(r.data));
+const tag = r.data.tag.id;
+const ids = { post: link, note, sb: sbId, tag };
 ok(`seeded posts ${JSON.stringify({ link, text, yt, note, sb: sbId })}`);
 
 // ── every route: no session / bad tokens -> 401; valid sessions pass ──
@@ -137,7 +141,8 @@ for (const rt of routes) {
   gated++;
 }
 ok(`${gated} gated routes: 401 without a session and with stale / wrong-pv / expired / foreign tokens; ${routes.length - gated} open`);
-const reads = ['GET /api/inspire/init', 'GET /api/inspire/posts', 'GET /api/inspire/posts/{post}/download-info', 'GET /api/inspire/storyboards/{sb}', 'GET /api/inspire/posts/{post}/download'];
+const reads = ['GET /api/inspire/init', 'GET /api/inspire/posts', 'GET /api/inspire/posts/{post}/download-info', 'GET /api/inspire/storyboards/{sb}', 'GET /api/inspire/posts/{post}/download',
+  'GET /api/inspire/tags'];
 for (const rt of routes) {
   if (isOpen(rt)) continue;
   const x = await call(rt.method, fill(rt.path, ids), null, G);   // guest: not the owner of the seeds

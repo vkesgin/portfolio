@@ -420,6 +420,7 @@ describe('live Instagram playback (worker, Node harness)', { skip: !H.HARNESS_SU
     H.advanceClock(900);
     assert.equal(igPageFetches(await H.runScheduled(w, warm, H.CRON_IG)), 0);
     // Browser Run refused for the newest post (the site's daily budget is spent): it is deferred and the next post still resolves
+    toOneAm();   // the deferral lasts until UTC midnight: the 15 minutes below must not cross it
     const br = await live({ fetchOpts: { ig: 'login' } });
     const [old, newest] = H.seedIgPosts(br.w, ['Lbrq000001', 'Lbrq000002']);
     const day = new Date(H.nowS() * 1000).toISOString().slice(0, 10);

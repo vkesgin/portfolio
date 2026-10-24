@@ -218,7 +218,9 @@ describe('board password gate (worker, Node harness)', { skip: !H.HARNESS_SUPPOR
     const ytLive = ins('youtube', 'https://www.youtube.com/live/jfKfPfyJRdk', { key: 'youtube:jfKfPfyJRdk' });
     const vimeo = ins('vimeo', 'https://vimeo.com/76979871', { key: 'vimeo:76979871', meta: JSON.stringify({ v: 2, via: 'plain', title: 'V', image: 'https://i.vimeocdn.com/video/1-d.jpg', provider: 'vimeo.com', checked: H.nowS() }) });
     w.r2.objs.set('images/0123456789abcdef.jpg', { b: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 7]) });   // a portfolio upload
-    ids = { post: link, note, sb: sbId, text, yt, ytLive, vimeo };
+    const tag = Number(H.sqlRun(w, "INSERT INTO inspire_tags (name, fold, slug, color, created_by, created_at) VALUES ('Kapı', 'kapi', 'kapi', 'cyan', NULL, 1)").lastInsertRowid);
+    H.sqlRun(w, 'INSERT INTO inspire_post_tags (post_id, tag_id, created_at) VALUES (?, ?, 1)', link, tag);
+    ids = { post: link, note, sb: sbId, text, yt, ytLive, vimeo, tag };
     files = { vKey, pKey, frameKey };
     routes = inspireRoutes();
   });
@@ -226,7 +228,9 @@ describe('board password gate (worker, Node harness)', { skip: !H.HARNESS_SUPPOR
   test('the route list comes from the router (every route, the open ones exactly as the worker lists them)', () => {
     assert.ok(routes.length >= 30, `${routes.length} routes`);
     for (const k of ['POST /api/inspire/guest/rename', 'GET /api/inspire/posts', 'GET /api/inspire/storyboards/{sb}', 'GET /api/inspire/posts/{post}/download',
-      'POST /api/inspire/posts/{post}/media/upload', 'POST /api/inspire/storyboards/{sb}/scenes/1/rewrite', 'GET /api/inspire/sb-admin/usage']) {
+      'POST /api/inspire/posts/{post}/media/upload', 'POST /api/inspire/storyboards/{sb}/scenes/1/rewrite', 'GET /api/inspire/sb-admin/usage',
+      'GET /api/inspire/tags', 'POST /api/inspire/tags', 'PUT /api/inspire/posts/{post}/tags', 'PUT /api/inspire/tags/{tag}', 'DELETE /api/inspire/tags/{tag}',
+      'DELETE /api/inspire/tags/unused']) {
       assert.ok(routes.some((r) => r.method + ' ' + r.path === k), k);
     }
     const src = fs.readFileSync(path.join(H.ROOT, 'worker/index.js'), 'utf8');
@@ -276,7 +280,8 @@ describe('board password gate (worker, Node harness)', { skip: !H.HARNESS_SUPPOR
   });
 
   test('valid sessions pass the gate on every route (reads 200); the admin is unaffected', async () => {
-    const reads = new Set(['GET /api/inspire/init', 'GET /api/inspire/posts', 'GET /api/inspire/posts/{post}/download-info', 'GET /api/inspire/storyboards/{sb}', 'GET /api/inspire/posts/{post}/download']);
+    const reads = new Set(['GET /api/inspire/init', 'GET /api/inspire/posts', 'GET /api/inspire/posts/{post}/download-info', 'GET /api/inspire/storyboards/{sb}', 'GET /api/inspire/posts/{post}/download',
+      'GET /api/inspire/tags']);
     // guest first (not the owner of the seeded posts: no destructive effect), then the admin without DELETE /posts/{post}
     for (const [who, t] of [['guest', tok], ['admin', adm]]) {
       for (const r of routes) {
@@ -287,6 +292,14 @@ describe('board password gate (worker, Node harness)', { skip: !H.HARNESS_SUPPOR
       }
     }
     assert.equal((await req('GET', '/api/inspire/sb-admin/usage', { token: tok })).status, 403);
+    // company tags: a guest passes the gate but may not edit the catalog (403, not 401); the admin's tag survives the walk
+    for (const meth of ['PUT', 'DELETE']) {
+      const x = await req(meth, `/api/inspire/tags/${ids.tag}`, { token: tok, body: meth === 'PUT' ? { name: 'Yeni ad' } : null });
+      assert.equal(x.status, 403, `guest ${meth} /tags/{tag}: ${x.status}`); assert.equal(x.json.error, 'forbidden');
+    }
+    assert.equal((await req('PUT', `/api/inspire/posts/${ids.post}/tags`, { token: tok, body: { tag_ids: [] } })).status, 403, 'guest: not the owner');
+    const prune = await req('DELETE', '/api/inspire/tags/unused', { token: tok });
+    assert.equal(prune.status, 403, 'guest: no bulk delete'); assert.equal(prune.json.error, 'forbidden');
     assert.equal((await req('GET', '/api/inspire/sb-admin/usage', { token: adm })).status, 200);
     const cfg = await req('GET', '/api/inspire/config', { token: tok });
     assert.equal(cfg.json.gate, true); assert.equal(cfg.json.locked, false); assert.equal(cfg.json.session, 'guest');

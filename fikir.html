@@ -1342,13 +1342,6 @@
       window.videoDownloader?.clear({blank:true});
       closeModal($('video-modal'));
     }
-    function remoteVideoLink(entry) {
-      const existing=ownVideoOf(entry.post)||copyOf(entry.post);
-      if(existing)return existing.url;
-      const url=mediaUrl(entry.post.url);
-      if(!url || entry.post.type==='text' || /\.(?:jpe?g|png|gif|webp|avif)(?:[?#]|$)/i.test(url))return null;
-      return url;
-    }
 
 
     /* ------------------------------------------------------------- utilities */
@@ -3301,7 +3294,6 @@
     // A YouTube / Vimeo post without its video file (dl.reason: the platform's video is never fetched): no "İndir" (the
     // post owner / admin gets "Video ekle" there instead)
     function dlShown(entry) {
-      if(config.video.download!==false && remoteVideoLink(entry))return true;
       const dl = entry.post.dl;
       return config.video.download !== false && !!dl && typeof dl === 'object' && (dl.video !== false || dl.image === true) &&
         !(dl.video === false && dl.reason);
@@ -6299,8 +6291,6 @@
     // indir" under a video that cannot be downloaded). The download link of download-info carries a short-lived ticket
     // (the file request has no Authorization header); a refused ticket (401) gets one fresh download-info + retry.
     async function downloadPost(entry, want = null) {
-      const remote=want!=='image' && remoteVideoLink(entry);
-      if(remote){await openVideoTool(remote);return;}
       const btn = entry.refs.dlBtn;
       if (!btn || btn.hidden || dlRunning.has(entry.id)) return;
       dlRunning.add(entry.id);

@@ -35,7 +35,9 @@ def enrich(meta, videos, url, candidate_count):
     match=exact[0] if len(exact)==1 else videos[0] if len(videos)==1 and candidate_count==1 else None
     if match:
         result['duration']=finite(match.get('duration')) or result.get('duration')
-        if finite(match.get('height')):result['heights']=[int(match['height'])]
+        # A master playlist already lists every downloadable height; the player only reports the
+        # variant it happens to be showing (often the lowest), so it must not replace that list.
+        if finite(match.get('height')) and not result.get('heights'):result['heights']=[int(match['height'])]
     if not result.get('size') and result.get('duration') and result.get('bitrate'):
         result['size']=int(result['duration']*result['bitrate']/8)
         result['size_estimated']=True

@@ -101,7 +101,23 @@ img {
 #nav.scrolled .nav-logo { font-size: 22px; }
 .nav-logo span { color: var(--accent); }
 
-.nav-links { display: flex; gap: 40px; }
+.nav-links { display: flex; gap: 40px; margin-left: auto; }
+
+/* Dil seçici — inject.js tarafından nav içine taşınır */
+#header-placeholder ~ .gtranslate_wrapper:not(.nav-lang) { visibility: hidden; }
+.nav-lang {
+  display: flex; align-items: center; gap: 8px;
+  margin-left: 32px;
+  position: relative; z-index: 2;
+}
+.nav-lang a {
+  display: block; line-height: 0;
+  opacity: .45;
+  transition: opacity var(--dur-fast);
+}
+.nav-lang a:hover,
+.nav-lang a.gt-current-lang { opacity: 1; }
+.nav-lang img { width: 22px; height: 22px; }
 .nav-links a {
   font-family: var(--font-mono);
   font-size: 12px; letter-spacing: .08em;
@@ -202,6 +218,7 @@ img {
   #nav.scrolled { padding: 14px 24px; }
   .nav-links   { display: none; }
   .hamburger   { display: flex; }
+  .nav-lang    { margin-left: auto; margin-right: 20px; }
 }
 
 /* === HERO === */
@@ -232,7 +249,7 @@ img {
 .hero-label span { color: var(--accent); }
 
 .hero-title { margin-bottom: 28px; }
-.line-wrap { display: block; overflow: hidden; }
+.line-wrap { display: block; overflow: hidden; padding-top: .12em; margin-top: -.12em; }
 .line {
   display: block;
   font-family: var(--font-display);
@@ -259,10 +276,11 @@ img {
 .hero-role {
   display: flex; align-items: center; gap: 10px;
   font-family: var(--font-mono); font-size: 15px;
+  min-height: 1.5em; /* yazı silinirken satır zıplamasın */
   margin-bottom: 18px; opacity: 0;
 }
 .role-dash { color: var(--accent); }
-#roleText { min-width: 200px; color: var(--text-primary); }
+#roleText { color: var(--text-primary); }
 .type-cursor {
   color: var(--accent);
   animation: blink .8s step-end infinite;
@@ -1774,6 +1792,7 @@ img {
   .about-inner { grid-template-columns: 1fr; }
 
   /* Footer */
+  .footer-inner { padding: var(--space-xl) 20px var(--space-lg); }
   .footer-top  { flex-direction: column; }
   .footer-nav  { gap: 32px; }
   .footer-big-text { display: none; }
@@ -1787,6 +1806,10 @@ img {
   /* İletişim formu */
   .contact-body-inner { grid-template-columns: 1fr; }
   .ct-form-row        { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .skills-grid { grid-template-columns: 1fr; }
 }
 
 /* === LOCOMOTIVE SCROLL === */
@@ -1892,12 +1915,21 @@ html.has-scroll-smooth { scrollbar-width: none; }
 }
 
 /* === TOOL PAGES SEO HERO & FAQ === */
-.tool-hero-text { padding: 40px 60px 0; max-width: 900px; margin: 0 auto; }
-.tool-hero-text h1 { font-family: var(--font-display); font-size: clamp(36px,6vw,72px); color: var(--text-primary); margin-bottom: 16px; }
+.tool-hero-text { position: relative; z-index: 2; padding: 40px 60px 0; max-width: 900px; margin: 0 auto; }
+.tool-hero-text h1, .tool-hero-text h2 { font-family: var(--font-display); font-size: clamp(30px,4vw,48px); line-height: 1.05; font-weight: 400; color: var(--text-primary); margin-bottom: 16px; }
 .tool-lead { font-size: 16px; color: var(--text-secondary); line-height: 1.8; max-width: 700px; }
-.tool-faq { padding: 40px 60px; max-width: 900px; margin: 0 auto; border-top: 0.5px solid var(--border); margin-top: 40px; }
-.tool-faq h2 { font-family: var(--font-display); font-size: 32px; color: var(--text-primary); margin-bottom: 24px; }
+.tool-faq { position: relative; z-index: 2; padding: 40px 60px; max-width: 900px; margin: 0 auto; border-top: 0.5px solid var(--border); margin-top: 40px; }
+.tool-faq h2 { font-family: var(--font-display); font-size: 32px; font-weight: 400; color: var(--text-primary); margin-bottom: 24px; }
 .tool-faq-item { margin-bottom: 20px; padding: 16px; background: var(--bg-surface); border-radius: var(--radius-md); border: 0.5px solid var(--border); }
 .tool-faq-item h3 { font-size: 14px; color: var(--accent); margin-bottom: 8px; font-family: var(--font-mono); letter-spacing: .06em; }
 .tool-faq-item p { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
-@media(max-width:768px){ .tool-hero-text, .tool-faq { padding: 24px 20px; } }
+@media(max-width:768px){ .tool-hero-text, .tool-faq { padding: 24px 20px; } }
+
+
+/* === FAILSAFE: JS gecikir/yüklenemezse nav + hero yine de görünsün === */
+@keyframes failsafeFade { to { opacity: 1; } }
+@keyframes failsafeLine { to { transform: none; } }
+#nav, .hero-label, .hero-role, .hero-desc, .hero-cta, .hero-photo-side {
+  animation: failsafeFade .6s ease 6s forwards;
+}
+.line { animation: failsafeLine .8s var(--ease-out) 6s forwards; }

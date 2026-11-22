@@ -14,11 +14,31 @@ async function injectComponent(selector, file) {
   }
 }
 
+// Dil bayrakları sayfanın sol altında sabit durup içeriğin üstüne biniyordu;
+// nav içine (hamburger'in soluna) taşınır.
+function dockLanguageSwitcher() {
+  const wrap = document.querySelector('.gtranslate_wrapper');
+  const nav  = document.getElementById('nav');
+  if (!nav) return;
+  if (!wrap) {
+    // Sayfa henüz sonuna kadar ayrıştırılmadıysa bir kez daha dene
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', dockLanguageSwitcher, { once: true });
+    }
+    return;
+  }
+  wrap.removeAttribute('style');
+  wrap.classList.add('nav-lang');
+  nav.insertBefore(wrap, nav.querySelector('.hamburger'));
+}
+
 async function initInject() {
   await Promise.all([
     injectComponent('#header-placeholder', 'header.html'),
     injectComponent('#footer-placeholder', 'footer.html'),
   ]);
+
+  dockLanguageSwitcher();
 
   // Inject tamamlandıktan sonra scripti tetikle
   const event = new Event('componentsLoaded');

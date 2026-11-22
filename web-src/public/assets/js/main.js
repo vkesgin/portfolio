@@ -418,6 +418,13 @@ function initWorks() {
 
     // Filtre butonları
     const filterBtns = document.querySelectorAll('#works .filter-btn');
+    // Hiç işi olmayan kategorinin butonunu gizle (boş sonuç ekranına düşmesin)
+    const allCats = Array.from(grid.querySelectorAll('.port-card'))
+      .map(c => (c.dataset.cat || '').toLowerCase().trim());
+    filterBtns.forEach(btn => {
+      const f = (btn.dataset.filter || 'all').toLowerCase().trim();
+      if (f !== 'all' && !allCats.some(cat => cat === f || cat.includes(f))) btn.hidden = true;
+    });
     filterBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         filterBtns.forEach(b => b.classList.remove('active'));

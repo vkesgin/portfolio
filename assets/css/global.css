@@ -196,6 +196,8 @@ img {
 #mobileMenu.open .mobile-link:nth-child(2) { transition-delay: .10s; }
 #mobileMenu.open .mobile-link:nth-child(3) { transition-delay: .15s; }
 #mobileMenu.open .mobile-link:nth-child(4) { transition-delay: .20s; }
+#mobileMenu.open .mobile-link:nth-child(5) { transition-delay: .25s; }
+#mobileMenu.open .mobile-link:nth-child(6) { transition-delay: .30s; }
 .mobile-link:hover { color: var(--accent); }
 
 .mobile-socials {
@@ -1933,3 +1935,22 @@ html.has-scroll-smooth { scrollbar-width: none; }
   animation: failsafeFade .6s ease 6s forwards;
 }
 .line { animation: failsafeLine .8s var(--ease-out) 6s forwards; }
+
+/* === METİN SEÇİMİ: okunacak/kopyalanacak içerik seçilebilsin (e-posta, SSS, form) === */
+p, li, h3, input, textarea, select,
+a[href^="mailto:"], .tool-faq-item, .footer-copy {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* === İŞLER YÜKLENİYOR === */
+.port-loading {
+  grid-column: 1 / -1;
+  padding: 80px 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 12px; letter-spacing: .1em;
+  color: var(--text-muted);
+  animation: portLoadingPulse 1.4s ease-in-out infinite;
+}
+@keyframes portLoadingPulse { 0%,100% { opacity: .35; } 50% { opacity: 1; } }

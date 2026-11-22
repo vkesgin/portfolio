@@ -45,6 +45,12 @@
       if (el) el.textContent = n;
     });
 
+    // Hiç işi olmayan kategorinin filtresini gizle
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      const f = btn.dataset.filter;
+      if (f && f !== 'all') btn.hidden = !counts[f];
+    });
+
     // Lightbox için kartları yeniden bağla
     if (typeof initPortfolioCards === 'function') initPortfolioCards();
   });

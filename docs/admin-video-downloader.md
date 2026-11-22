@@ -33,7 +33,7 @@ Engine:
 - `PORT` (provided by host; default `8080`).
 - `VIDEO_MAX_MB` (default `1024`). If changing this, update the frontend/config response limit text too.
 
-Two simultaneous operations, at most 50 transient jobs and 100 sources. Analysis has a 100-second ceiling; download preparation has 15 minutes. No active live recordings. Native HTTP/HLS/DASH downloads only; FFmpeg merges/converts local files. Public HTTP(S) hosts on ports 80/443 only. An egress proxy resolves and pins global IP addresses for each connection, including redirects; private/link-local/loopback addresses and DNS rebinding to them are rejected. Both yt-dlp and Chromium use that proxy. The child process drops hosting/API secret environment variables.
+Two simultaneous operations, at most 50 transient jobs and 100 sources. Analysis has a 100-second ceiling; download preparation has 15 minutes. No active live recordings. Native HTTP/HLS/DASH downloads only; FFmpeg merges/converts local files. Public HTTP(S) hosts on ports 80, 443 and unprivileged ports (1024–65535); low service ports stay closed. An egress proxy resolves and pins global IP addresses for each connection, including redirects; private/link-local/loopback addresses and DNS rebinding to them are rejected. Both yt-dlp and Chromium use that proxy. The child process drops hosting/API secret environment variables.
 
 ## Deployment
 
@@ -70,3 +70,12 @@ The Fikir gateway (`/api/inspire/video`) validates the existing board session. A
 YouTube uses the packaged EJS scripts and Node runtime. A failed normal extraction retries android_vr, web_embedded and web_safari clients. Interactive YouTube detection re-resolves the watch page using the temporary browser cookies, rather than treating a partial googlevideo chunk as a complete video. YouTube can still reject data-center connections or require verification; support is not a promise that every video or platform is downloadable.
 
 No application-history setting can guarantee that upstream sites, Cloudflare, Railway, the operating system or the user's browser retain no access/download metadata. Transient processing and downloaded files necessarily exist during use. This implementation does not claim universal zero retention.
+
+## Download behaviour
+
+- **Admin flow.** Pasting a link opens the remote browser and, in the background, asks the engine to resolve the page with yt-dlp. Automatically found videos are listed above the browser ("Otomatik bulundu"); videos played in the browser are listed below it. If the user starts a download while the background search is still running, the search is cancelled first so the two-operation limit is not hit. Fikir keeps the search-first flow with the browser as fallback.
+- **Quality and the size limit.** Formats are estimated (declared size, else bitrate × duration). The tallest height whose variants fit under `VIDEO_MAX_MB` is tried first; if a download still exceeds the limit, the next height down is tried (up to four). The status line says when the delivered quality is below the source's best.
+- **Codec preference.** At equal resolution and frame rate, H.264 + AAC are preferred; streams merged into Matroska are repackaged as MP4 without re-encoding. WebM stays WebM.
+- **Expired or session-bound links.** If the stored result of a search is refused (signed URLs expire; YouTube answers 403 to audio-only requests from another session), the page is resolved again and downloaded in the same session, once. Audio-only downloads start that way. Media URLs captured in the remote browser cannot be re-resolved.
+- **Remote browser capture.** Byte-range variants of one file (`bytestart`/`byteend`/`range`) collapse into a single whole-file entry; more container extensions are recognised; the browser reports a regular Chrome user agent, Turkish locale and Istanbul time zone instead of the headless default.
+- **Errors.** Only messages written in `tasks.py` (`Refused`) or mapped by `error_message` reach the client: size limit, live, DRM, private, age-restricted, region-blocked, removed, rate-limited, timeout, unsupported page. DRM remains unsupported and live streams cannot be recorded.

@@ -13,6 +13,8 @@
   const settings=window.videoDownloaderConfig;
   const browserFirst=!settings;
   let linkTimer=null,openedLink='';
+  // Browser-first pages also ask the engine to find the page's video on its own (yt-dlp), in the background.
+  let autoId=null,autoTimer=null,autoRunning=false;
   const endpoint = () => settings ? settings.endpoint() : API + '/api/admin/video';
   const accessToken = () => settings ? settings.token() : TOKEN;
   const size = n => n===0 ? '0 B' : n ? n<1048576 ? (n/1024).toFixed(1)+' KB' : (n/1048576).toFixed(1)+' MB' : '';
@@ -61,6 +63,7 @@
   }
   async function clear({blank=false}={}) {
     generation++;autoSave=false;pollFailures=0;details.textContent='';openedLink='';clearTimeout(linkTimer);
+    clearTimeout(autoTimer);autoId=null;autoRunning=false;
     const closing=closeBrowser();
     clearTimeout(timer);
     const existing=[...jobs];jobs.clear();current=null;
@@ -109,7 +112,7 @@
       }
       if(job.status==='error') {
         if(job.mode!=='download')await openBrowser(job.message || 'Video bulunamadı.');
-        else $('caption').textContent=browserFirst?'İndirme durdu. Ayrıntı yukarıda. Yeniden denemek için Tarayıcıda aç ile sayfayı açıp videoyu tekrar seç.':'İndirme durdu. Ayrıntı yukarıda. Yeniden denemek için Videoyu indir, sayfada oynatmak için Tarayıcıyı aç seçeneğini kullan.';
+        else $('caption').textContent=browserFirst?'İndirme durdu. Ayrıntı yukarıda. Yeniden denemek için Videoyu bul ile sayfayı açıp videoyu tekrar seç; başka bir kalite de deneyebilirsin.':'İndirme durdu. Ayrıntı yukarıda. Yeniden denemek için Videoyu indir, sayfada oynatmak için Tarayıcıyı aç seçeneğini kullan.';
         return;
       }
       if(job.status==='ready') {
@@ -144,11 +147,45 @@
     $('choices').replaceChildren();$('save').hidden=true;$('progress').hidden=false;
     status(title,'Video indirilmeye hazırlanıyor…');
     try {
+      await stopAuto();
       const job=await api('/download',{source_id,quality:$('quality').value});jobs.add(job.id);
       await closeBrowser();
       if(epoch!==generation){await api('/jobs/'+job.id,undefined,'DELETE');return;}
       current=job.id;await poll(job.id,epoch);
     }catch(error){if(epoch===generation){busy(false);$('progress').hidden=true;status('İndirme hazırlanamadı',error.message,true);}}
+  }
+  async function stopAuto() {
+    clearTimeout(autoTimer);
+    // A finished search owns the sources the user may be about to download; only cancel one still running.
+    if(autoId && autoRunning){const id=autoId;autoId=null;autoRunning=false;jobs.delete(id);await api('/jobs/'+id,undefined,'DELETE').catch(()=>{});}
+  }
+  async function autoFind(link) {
+    const epoch=generation;
+    try {
+      const job=await api('/analyze',{url:link,mode:'analyze'});
+      jobs.add(job.id);
+      if(epoch!==generation){await api('/jobs/'+job.id,undefined,'DELETE').catch(()=>{});return;}
+      autoId=job.id;autoRunning=true;pollAuto(job.id,epoch,0);
+    } catch {/* The remote browser below is already open; it is the fallback. */}
+  }
+  async function pollAuto(id,epoch,failures) {
+    if(epoch!==generation || autoId!==id)return;
+    try {
+      const job=await api('/jobs/'+id);
+      if(epoch!==generation || autoId!==id)return;
+      if(job.status==='running'){autoTimer=setTimeout(()=>pollAuto(id,epoch,0),1500);return;}
+      autoRunning=false;
+      const found=(job.choices||[]).filter(v=>!v.ad);
+      if(job.status==='choices' && found.length){
+        choices(found.map(v=>({...v,title:'Otomatik bulundu · '+v.title})));
+        status('Video bulundu','Sayfanın videosu otomatik bulundu; kaliteyi seçip aşağıdan indirebilirsin. Başka bir video istiyorsan tarayıcıda oynat.');
+        $('progress').hidden=true;
+      }
+    } catch(error) {
+      if(epoch!==generation || autoId!==id)return;
+      if((!error.status || error.status>=500) && failures<5)autoTimer=setTimeout(()=>pollAuto(id,epoch,failures+1),4000);
+      else autoRunning=false;
+    }
   }
   async function closeBrowser() {
     browserEpoch++;clearTimeout(browserTimer);browserBusy=false;browserPending=[];
@@ -240,9 +277,12 @@
     if($('url').value.trim()!==link)return;
     openedLink=link;
     await openBrowser();
+    if(openedLink===link)autoFind(link);
   }
   if(browserFirst){
-    $('submit').textContent='Tarayıcıda aç ↗';
+    $('submit').textContent='Videoyu bul ↗';
+    // Keep status and automatically found videos above the tall browser view.
+    $('browser').before($('result'));
     const schedule=()=>{clearTimeout(linkTimer);linkTimer=setTimeout(browseLink,900);};
     $('url').addEventListener('input',schedule);
     $('url').addEventListener('change',schedule);

@@ -24,8 +24,9 @@ with sync_playwright() as p:
  page.route('**youtube.com/embed/**',lambda r:r.abort())
  errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
  page.goto(f'http://127.0.0.1:{server.server_port}/fikir.html')
- page.locator('[data-action="download"]').first.wait_for(state='visible')
- page.locator('[data-action="download"]').first.click()
+ # Card "İndir" is the board's own one-click download again (9247539); the tool opens from the header.
+ page.locator('#btn-video-tool').click();page.wait_for_timeout(400)  # opening clears the field asynchronously
+ page.locator('#vkd-url').fill('https://www.youtube.com/watch?v=jNQXAC9IVRw');page.locator('#vkd-submit').click()
  page.locator('#vkd-choices button').wait_for()
  assert page.locator('#vkd-url').input_value().startswith('https://www.youtube.com/')
  assert any(p=='inspire/video/analyze' for m,p,d in calls)
@@ -42,4 +43,4 @@ with sync_playwright() as p:
  assert not errors,errors
  browser.close()
 server.shutdown();server.server_close()
-print('Fikir: YouTube card, paste tool, no board write, mobile layout, cleanup passed')
+print('Fikir: header tool, pasted YouTube link, no board write, mobile layout, cleanup passed')

@@ -5,23 +5,49 @@
   if (!$('form')) return;
   let current = null, generation = 0, timer = null, autoSave = false;
   const jobs = new Set();
+  const details=document.createElement('p');details.className='vkd-caption';details.id='vkd-details';details.setAttribute('aria-live','polite');$('status').after(details);
+  let pollFailures=0;
+  const seconds=n=>Math.floor(n/60)+' dk '+Math.floor(n%60)+' sn';
   let browserId=null, browserTimer=null, browserBusy=false, browserEpoch=0, browserChoices='';
   let browserWidth=1024, browserHeight=640, browserPending=[];
   const settings=window.videoDownloaderConfig;
+  const browserFirst=!settings;
+  let linkTimer=null,openedLink='';
   const endpoint = () => settings ? settings.endpoint() : API + '/api/admin/video';
   const accessToken = () => settings ? settings.token() : TOKEN;
-  const size = n => n ? (n / 1024 / 1024).toFixed(1)+' MB' : '';
+  const size = n => n===0 ? '0 B' : n ? n<1048576 ? (n/1024).toFixed(1)+' KB' : (n/1048576).toFixed(1)+' MB' : '';
   const duration = n => n ? Math.floor(n / 60)+':'+String(Math.floor(n % 60)).padStart(2,'0') : '';
   async function api(path, data, method) {
-    const response = await fetch(endpoint()+path, {
-      method:method || (data === undefined ? 'GET':'POST'), cache:'no-store',
-      headers:{Authorization:'Bearer '+accessToken(),...(data === undefined ? {}:{'Content-Type':'application/json'})},
-      body:data === undefined ? undefined:JSON.stringify(data),
-    });
-    const value = await response.json();
-    if (!response.ok) throw new Error(value.error || 'İşlem tamamlanamadı.');
-    return value;
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),25000);
+    try {
+      const response = await fetch(endpoint()+path, {
+        method:method || (data === undefined ? 'GET':'POST'), cache:'no-store',signal:controller.signal,
+        headers:{Authorization:'Bearer '+accessToken(),...(data === undefined ? {}:{'Content-Type':'application/json'})},
+        body:data === undefined ? undefined:JSON.stringify(data),
+      });
+      const value = await response.json();
+      if (!response.ok) {const error=new Error(value.error || 'İşlem tamamlanamadı.');error.status=response.status;throw error;}
+      return value;
+    } catch(error) {
+      if(error.name==='AbortError')throw new Error('Durum sunucusu 25 saniyede yanıt vermedi.');
+      throw error;
+    } finally {clearTimeout(timeout);}
   }
+  function telemetry(job) {
+    const parts=[];
+    if(Number.isFinite(job.elapsed_seconds))parts.push('Geçen süre: '+seconds(job.elapsed_seconds));
+    if(Number.isFinite(job.downloaded_bytes))parts.push('Alınan: '+size(job.downloaded_bytes)+(job.total_bytes?' / '+(job.total_estimated?'yaklaşık ':'')+size(job.total_bytes):' · toplam boyut henüz bilinmiyor'));
+    if(job.status==='running' && (job.phase==='downloading' || job.phase==='retrying')) {
+      parts.push('Hız: '+(job.idle_seconds>=10?'veri bekleniyor':job.speed?size(job.speed)+'/sn':'hesaplanıyor'));
+      if(job.eta && job.idle_seconds<10)parts.push('Tahmini kalan: '+seconds(job.eta));
+    }
+    if(job.fragment_count)parts.push('Parça: '+(job.fragment_index||0)+' / '+job.fragment_count);
+    if(job.notice)parts.push(job.notice);
+    if(job.status==='running' && job.idle_seconds>=10)parts.push('Son ilerleme '+job.idle_seconds+' sn önce · kaynak yanıtı bekleniyor');
+    details.textContent=parts.join(' · ');
+  }
+
   function busy(value) {
     $('submit').disabled=value;
     $('scan').disabled=value;
@@ -34,7 +60,7 @@
     $('status').textContent=message;
   }
   async function clear({blank=false}={}) {
-    generation++;autoSave=false;
+    generation++;autoSave=false;pollFailures=0;details.textContent='';openedLink='';clearTimeout(linkTimer);
     const closing=closeBrowser();
     clearTimeout(timer);
     const existing=[...jobs];jobs.clear();current=null;
@@ -53,9 +79,10 @@
       const info=document.createElement('div');info.className='vkd-choice-info';
       const title=document.createElement('p');title.className='vkd-choice-title';title.textContent=video.title;
       const meta=document.createElement('p');meta.className='vkd-choice-meta';
-      meta.textContent=[video.provider,duration(video.duration),video.heights?.length ? Math.max(...video.heights)+'p':'',size(video.size)].filter(Boolean).join(' · ');
+      const mb=video.size ? (video.size/1048576).toFixed(1)+' MB' : 'Boyut henüz bilinmiyor';
+      meta.textContent=[video.kind==='file'?'Video':video.kind,video.duration ? 'Süre: '+duration(video.duration) : 'Süre henüz bilinmiyor',(video.size_estimated?'Tahmini: ':'')+mb,video.heights?.length ? Math.max(...video.heights)+'p':'',video.provider].filter(Boolean).join(' · ');
       info.append(title,meta);
-      const button=document.createElement('button');button.type='button';button.textContent='Hazırla ↙';
+      const button=document.createElement('button');button.type='button';button.textContent='Bunu indir ↙';
       button.addEventListener('click',()=>download(video.id,video.title));
       row.append(info,button);target.append(row);
     }
@@ -65,7 +92,7 @@
     try {
       const job=await api('/jobs/'+id);
       if(epoch!==generation)return;
-      current=id;
+      current=id;pollFailures=0;telemetry(job);
       status(job.title || 'Video',job.message || 'İşleniyor…',job.status==='error');
       const percent=Number.isFinite(job.progress) ? Math.max(0,Math.min(100,job.progress)):0;
       $('progress').firstElementChild.style.width=percent+'%';
@@ -80,7 +107,11 @@
         }
         choices(found);
       }
-      if(job.status==='error') {await openBrowser();return;}
+      if(job.status==='error') {
+        if(job.mode!=='download')await openBrowser(job.message || 'Video bulunamadı.');
+        else $('caption').textContent=browserFirst?'İndirme durdu. Ayrıntı yukarıda. Yeniden denemek için Tarayıcıda aç ile sayfayı açıp videoyu tekrar seç.':'İndirme durdu. Ayrıntı yukarıda. Yeniden denemek için Videoyu indir, sayfada oynatmak için Tarayıcıyı aç seçeneğini kullan.';
+        return;
+      }
       if(job.status==='ready') {
         $('save').hidden=false;
         $('caption').textContent=[size(job.bytes),'Aktarımdan sonra geçici dosya silinir. Kaydetmezsen 10 dakika içinde temizlenir.'].filter(Boolean).join(' · ');
@@ -88,7 +119,12 @@
       }
     } catch(error) {
       if(epoch!==generation)return;
-      busy(false);$('progress').hidden=true;status('İşlem tamamlanamadı',error.message,true);
+      if(!error.status || error.status>=500){
+        pollFailures++;status('Durum bağlantısı kesildi',error.message+' Sunucudaki işlem devam ediyor olabilir; durum tekrar sorgulanıyor.',true);
+        details.textContent='Durum bağlantısı denemesi: '+pollFailures+' · Temizle ile iptal etmeyi deneyebilirsin.';
+        timer=setTimeout(()=>poll(id,epoch),5000);return;
+      }
+      busy(false);$('progress').hidden=true;status('İşlem durumu alınamadı',error.message,true);
     }
   }
   async function analyze(mode) {
@@ -104,7 +140,7 @@
     }catch(error){if(epoch===generation){busy(false);$('progress').hidden=true;status('Video alınamadı',error.message,true);}}
   }
   async function download(source_id,title) {
-    const epoch=++generation;autoSave=true;clearTimeout(timer);busy(true);
+    const epoch=++generation;autoSave=true;pollFailures=0;details.textContent='';clearTimeout(timer);busy(true);
     $('choices').replaceChildren();$('save').hidden=true;$('progress').hidden=false;
     status(title,'Video indirilmeye hazırlanıyor…');
     try {
@@ -121,14 +157,14 @@
     $('browser-choices').replaceChildren();$('browser-text').value='';
     if(id){jobs.delete(id);await api('/jobs/'+id,undefined,'DELETE').catch(()=>{});}
   }
-  async function openBrowser() {
+  async function openBrowser(reason='') {
     if(browserId)return;
     const link=$('url').value.trim();
     try{const u=new URL(link);if(!['http:','https:'].includes(u.protocol))throw 0;}
     catch{status('Bağlantıyı kontrol et','Önce geçerli bir video bağlantısı yapıştır.',true);return;}
     await closeBrowser();
     const epoch=browserEpoch;
-    status('Videoyu burada oynat','Sayfa aşağıdaki geçici tarayıcıda açılıyor. Oynat düğmesine bas.');
+    status(reason?'Otomatik arama tamamlanamadı':'Videoyu burada oynat',reason ? reason+' Sayfayı aşağıdaki tarayıcıda oynatarak deneyebilirsin.' : 'Sayfa aşağıdaki geçici tarayıcıda açılıyor. Oynat düğmesine bas.',Boolean(reason));
     $('progress').hidden=true;
     $('browser').hidden=false;$('browser-loading').hidden=false;
     $('browser-loading').textContent='Tarayıcı açılıyor…';
@@ -144,6 +180,7 @@
   }
   async function controlBrowser(data) {
     if(!browserId)return;
+    if(data.action==='frame' && (document.hidden || $('browser').offsetParent===null)){clearTimeout(browserTimer);browserTimer=setTimeout(()=>controlBrowser(data),4000);return;}
     if(browserBusy){if(data.action!=='frame'&&browserPending.length<20)browserPending.push(data);return;}
     browserBusy=true;clearTimeout(browserTimer);
     const epoch=browserEpoch,id=browserId;
@@ -151,7 +188,9 @@
       const frame=await api('/browser/'+id+'/action',data);
       if(epoch!==browserEpoch)return;
       browserWidth=frame.width;browserHeight=frame.height;
-      $('screen').src='data:image/jpeg;base64,'+frame.image;$('screen').hidden=false;
+      const nextImage='data:image/jpeg;base64,'+frame.image;
+      if($('screen').getAttribute('src')!==nextImage)$('screen').src=nextImage;
+      $('screen').hidden=false;
       $('browser-loading').hidden=true;
       try{$('address').textContent=new URL(frame.url).hostname;}catch{$('address').textContent='Geçici tarayıcı';}
       const signature=JSON.stringify(frame.choices);
@@ -167,7 +206,10 @@
     }finally{if(epoch===browserEpoch)browserBusy=false;}
     if(epoch===browserEpoch){
       const next=browserPending.shift();
-      browserTimer=setTimeout(()=>controlBrowser(next||{action:'frame'}),next?0:800);
+      browserTimer=setTimeout(()=>{
+        if(document.hidden || $('browser').offsetParent===null){browserTimer=setTimeout(()=>controlBrowser({action:'frame'}),4000);return;}
+        controlBrowser(next||{action:'frame'});
+      },next?0:2200);
     }
   }
   $('screen').addEventListener('click',event=>{
@@ -189,11 +231,28 @@
   $('enter').addEventListener('click',()=>controlBrowser({action:'key',key:'Enter'}));
   $('type').addEventListener('click',()=>{const text=$('browser-text').value.slice(0,2000);controlBrowser({action:'text',text});$('browser-text').value='';});
   window.videoDownloader={clear,open:async(url='')=>{await clear();$('url').value=url;if(url)await analyze('analyze');else $('url').focus();}};
-  $('form').addEventListener('submit',event=>{event.preventDefault();analyze('analyze');});
+  async function browseLink() {
+    const link=$('url').value.trim();
+    try{const u=new URL(link);if(!['http:','https:'].includes(u.protocol)||!u.hostname.includes('.'))throw 0;}
+    catch{return;}
+    if(browserId && openedLink===link)return;
+    await clear();
+    if($('url').value.trim()!==link)return;
+    openedLink=link;
+    await openBrowser();
+  }
+  if(browserFirst){
+    $('submit').textContent='Tarayıcıda aç ↗';
+    const schedule=()=>{clearTimeout(linkTimer);linkTimer=setTimeout(browseLink,900);};
+    $('url').addEventListener('input',schedule);
+    $('url').addEventListener('change',schedule);
+    $('url').addEventListener('paste',schedule);
+  }
+  $('form').addEventListener('submit',event=>{event.preventDefault();browserFirst?browseLink():analyze('analyze');});
   $('scan').addEventListener('click',()=>openBrowser());
   $('cancel').addEventListener('click',()=>clear({blank:true}));
   $('paste').addEventListener('click',async()=>{
-    try{$('url').value=(await navigator.clipboard.readText()).trim();$('url').focus();}
+    try{$('url').value=(await navigator.clipboard.readText()).trim();$('url').focus();if(browserFirst)await browseLink();}
     catch{status('Bağlantını yapıştır','Panoya erişilemedi. Bağlantıyı alana elle yapıştırabilirsin.');$('url').focus();}
   });
   $('file').addEventListener('click',async()=>{

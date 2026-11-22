@@ -8,6 +8,7 @@ import time
 import uuid
 from urllib.parse import urlsplit
 import yt_dlp
+from progress import Progress
 
 AD_HOSTS=('doubleclick.net','googlesyndication.com','googleadservices.com','adnxs.com','adsrvr.org','spotxchange.com','springserve.com','imasdk.googleapis.com')
 AD_RE=re.compile(r'(^|[/_.?&=\-])(ads?|advertisement|preroll|midroll|postroll|vast|vpaid)([/_.?&=\-]|$)',re.I)
@@ -92,7 +93,10 @@ def error_message(exc):
     text=str(exc).lower()
     if 'drm' in text:return 'Video DRM korumalı; desteklenmiyor.'
     if 'confirm you' in text or 'not a bot' in text:return 'YouTube bu sunucudan gelen istekte doğrulama istiyor. Açılan tarayıcıda videoyu oynatmayı dene; erişim engeli sürerse bu sunucudan indirilemez.'
-    if '403' in text or 'sign in' in text or 'login' in text or 'cookies' in text:return 'Kaynak site erişimi reddetti veya oturum istiyor. Sunucunun bağlantısı bu kaynağa erişemiyor.'
+    if '403' in text or 'sign in' in text or 'login' in text or 'cookies' in text:return 'Kaynak site erişimi reddetti veya oturum istiyor (HTTP 401/403 olabilir). Tarayıcındaki VPN indirme sunucusuna aktarılmaz. Video bağlantısının süresi de dolmuş olabilir.'
+    if '429' in text:return 'Kaynak site çok fazla istek nedeniyle bekletiyor (HTTP 429). Bir süre sonra tekrar dene.'
+    if 'timed out' in text or 'timeout' in text:return 'Kaynak sunucu zamanında yanıt vermedi. Tarayıcındaki VPN bu sunucuya aktarılmaz; site sunucudan erişilemiyor olabilir.'
+    if '404' in text:return 'Video veya video parçası bulunamadı (HTTP 404). Bağlantı eskimiş olabilir; videoyu yeniden bul.'
     if 'format' in text:return 'Seçilen kalite bu kaynakta yok. En iyi kalite seçeneğini dene.'
     if 'size' in text or 'boyut' in text:return 'Dosya indirme boyutu sınırını aşıyor.'
     return 'Video alınamadı. Bağlantıyı kontrol et veya tarayıcıyla tespiti dene. Bazı siteler sunucudan erişimi engeller.'
@@ -112,7 +116,9 @@ def execute(queue,mode,payload,proxy,directory):
         if any(s in name for s in ('SECRET','TOKEN','PASSWORD','API_KEY','RAILWAY_')):
             os.environ.pop(name,None)
     try:
-        opts=options(proxy)
+        report=Progress(queue)
+        opts={**options(proxy),'logger':report}
+        report.emit(force=True,phase='connecting',message='Kaynak sunucuya bağlanılıyor…',activity=True)
         if mode in ('analyze','scan'):
             entries=[]
             if mode=='scan':
@@ -147,6 +153,7 @@ def execute(queue,mode,payload,proxy,directory):
                 choices.append({'public':public(info,ident),'info':info,'cookies':cookies})
             queue.put({'result':'choices','choices':choices})
             return
+        report.emit(force=True,phase='resolving',message='İndirme bağlantısı ve seçilen kalite hazırlanıyor…',activity=True)
         info=payload['info']
         if info.get('_browser_source'):
             with yt_dlp.YoutubeDL({**opts,'http_headers':info.get('http_headers',{})}) as ydl:
@@ -159,14 +166,9 @@ def execute(queue,mode,payload,proxy,directory):
         fmt='bestaudio/best' if quality=='audio' else 'bv*+ba/b' if quality=='best' else f'bv*[height<=?{int(quality)}]+ba/b[height<=?{int(quality)}]'
         paths=[]
         def progress(data):
-            if data['status']=='downloading':
-                total=data.get('total_bytes') or data.get('total_bytes_estimate')
-                if data.get('downloaded_bytes',0)>MAX_BYTES:raise ValueError('Dosya boyutu sınırı aşıldı.')
-
-                try:queue.put_nowait({'progress':min(98,int(data.get('downloaded_bytes',0)/total*100)) if total else 0,'message':'Video hazırlanıyor…'})
-                except __import__('queue').Full:pass
-            elif data['status']=='finished':queue.put({'progress':99,'message':'Ses ve görüntü birleştiriliyor…'})
-        opts.update(format=fmt,outtmpl=str(Path(directory)/'%(title).120B.%(ext)s'),merge_output_format='mp4/mkv',progress_hooks=[progress],post_hooks=[lambda p:paths.append(p)])
+            if data.get('downloaded_bytes',0)>MAX_BYTES:raise ValueError('Dosya boyutu sınırı aşıldı.')
+            report.hook(data)
+        opts.update(format=fmt,outtmpl=str(Path(directory)/'%(title).120B.%(ext)s'),merge_output_format='mp4/mkv',progress_hooks=[progress],postprocessor_hooks=[report.postprocess],post_hooks=[lambda p:paths.append(p)])
         if quality=='audio':opts['postprocessors']=[{'key':'FFmpegExtractAudio','preferredcodec':'mp3','preferredquality':'192'}]
         with yt_dlp.YoutubeDL(opts) as ydl:
             cookiejar(ydl,payload.get('cookies',[]))

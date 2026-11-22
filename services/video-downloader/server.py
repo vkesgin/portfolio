@@ -126,13 +126,21 @@ def monitor(ident,events,mode):
     while time.monotonic()<deadline:
         with LOCK:
             if ident not in JOBS:return
+        if mode=='download' and time.monotonic()-job['_activity']>180:
+            job.update(status='error',phase='error',message='180 saniyedir veri veya aşama ilerlemesi yok; işlem durduruldu. Kaynak bağlantısı takılmış olabilir. VPN yalnızca tarayıcında çalışıyorsa indirme sunucusunu kapsamaz.')
+            got_result=True;break
         try:
-            disk_bytes=sum(p.stat().st_size for p in Path(job['_dir']).rglob('*') if p.is_file())
+            disk_bytes=0
+            for p in Path(job['_dir']).rglob('*'):
+                try:
+                    if p.is_file():disk_bytes+=p.stat().st_size
+                except FileNotFoundError:pass  # A completed .part may be renamed while scanning.
         except OSError:
-            return
+            job.update(status='error',message='Geçici indirme dosyaları okunamadı; işlem durduruldu.')
+            got_result=True;break
         if disk_bytes>MAX_BYTES*2:
             job.update(status='error',message='Dosya boyutu sınırı aşıldı.')
-            break
+            got_result=True;break
         try:data=events.get(timeout=.5)
         except queue.Empty:
             if not job['_process'].is_alive():
@@ -156,10 +164,11 @@ def monitor(ident,events,mode):
             if result=='error':
                 job.update(status='error',message=data['message'],expires=time.monotonic()+RETENTION)
                 got_result=True;break
-            job.update({k:v for k,v in data.items() if k in ('message','progress')})
+            if data.get('activity'):job['_activity']=time.monotonic()
+            job.update({k:v for k,v in data.items() if k in ('message','progress','phase','downloaded_bytes','total_bytes','total_estimated','speed','eta','fragment_index','fragment_count','stream','notice')})
     job['_process'].join(timeout=1)
     if not got_result:
-        job.update(status='error',message='İşlem tamamlanamadı veya süre sınırına ulaştı.',expires=time.monotonic()+RETENTION)
+        job.update(status='error',message=('İndirme motoru beklenmedik biçimde durdu. Yeniden deneyebilirsin.' if time.monotonic()<deadline else 'İndirme 15 dakikalık işlem sınırında tamamlanamadı.' if mode=='download' else 'Video araması 100 saniyede tamamlanamadı. Kaynak sunucu yanıt vermiyor veya erişimi engelliyor olabilir.'),expires=time.monotonic()+RETENTION)
     if job['status']!='ready':terminate(job)
     events.close()
 
@@ -174,7 +183,7 @@ def start(mode,payload,title):
         events=CTX.Queue(maxsize=200)
         proxy=f'http://127.0.0.1:{PROXY.server_address[1]}'
         process=CTX.Process(target=execute,args=(events,mode,payload,proxy,str(directory)),daemon=False)
-        JOBS[ident]=dict(id=ident,status='running',title=title,progress=0,message='Hazırlanıyor…',expires=time.monotonic()+1200,_owner=OWNER.get(),_dir=str(directory),_process=process)
+        JOBS[ident]=dict(id=ident,status='running',mode=mode,phase='connecting',_started=time.monotonic(),_activity=time.monotonic(),title=title,progress=0,message='Hazırlanıyor…',expires=time.monotonic()+1200,_owner=OWNER.get(),_dir=str(directory),_process=process)
         process.start()
     threading.Thread(target=monitor,args=(ident,events,mode),daemon=True).start()
     return {'id':ident}
@@ -254,7 +263,11 @@ def state(ident:str):
     with LOCK:
         job=JOBS.get(ident)
         if not job or job.get('_owner','legacy-admin')!=OWNER.get():raise HTTPException(404,'İşlem bulunamadı veya temizlendi.')
-        return {k:v for k,v in job.items() if not k.startswith('_') and k!='expires'}
+        result={k:v for k,v in job.items() if not k.startswith('_') and k!='expires'}
+        if '_started' in job:
+            result['elapsed_seconds']=int(time.monotonic()-job['_started'])
+            result['idle_seconds']=int(time.monotonic()-job['_activity']) if job['status']=='running' else 0
+        return result
 
 @app.delete('/v1/jobs/{ident}')
 def cancel(ident:str):

@@ -219,6 +219,13 @@
   .srv-item-body { grid-template-columns: 1fr; }
   .srv-tags-col { align-items: flex-start; }
 }
+@media (max-width: 900px) {
+  /* Etiketler tek kolona düşünce alt alta değil yan yana dizilsin */
+  .srv-tags-col { flex-direction: row; flex-wrap: wrap; min-width: 0; }
+}
+@media (max-width: 480px) {
+  .process-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 600px) {
   #srv-hero, #srv-list, #srv-process, #srv-cta { padding-left: 24px; padding-right: 24px; }
   .srv-hero-scroll-hint { display: none; }

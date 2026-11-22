@@ -7,6 +7,7 @@ import time
 import uuid
 from urllib.parse import urlsplit
 from tasks import ad
+from media_metadata import describe, enrich
 
 WIDTH, HEIGHT = 1024, 640
 KEYS = {'Enter', 'Space', 'Tab', 'Shift+Tab', 'Escape', 'Backspace', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'}
@@ -23,19 +24,26 @@ def browser_process(commands, replies, url, proxy, directory):
             context=p.chromium.launch_persistent_context(directory,viewport={'width':WIDTH,'height':HEIGHT},accept_downloads=False,service_workers='block',headless=True,proxy={'server':proxy},args=['--proxy-bypass-list=<-loopback>','--disable-dev-shm-usage','--force-webrtc-ip-handling-policy=disable_non_proxied_udp'])
             page=context.new_page()
             found={}
-            def response(r):
+            def response(r,finished=False):
                 try:
                     ct=r.headers.get('content-type','').lower()
                     path=urlsplit(r.url).path.lower()
-                    if r.status not in (200,206) or r.url in found or len(found)>=20 or ad(r.url):return
+                    if r.status not in (200,206) or ad(r.url):return
+                    if r.url not in found and len(found)>=20:return
                     if path.endswith(('.ts','.m4s','.aac','.m4a')):return
-                    if not (path.endswith(('.mp4','.webm','.m3u8','.mpd','.mov')) or ct.startswith('video/') or 'mpegurl' in ct or 'dash+xml' in ct):return
-                    if path.endswith(('.m3u8','.mpd')) or 'mpegurl' in ct or 'dash+xml' in ct:
-                        if re.search(r'widevine|playready|ContentProtection|METHOD=SAMPLE-AES',r.text()[:1048576],re.I):return
+                    kind='HLS' if path.endswith('.m3u8') or 'mpegurl' in ct else 'DASH' if path.endswith('.mpd') or 'dash+xml' in ct else 'file'
+                    if not (path.endswith(('.mp4','.webm','.m3u8','.mpd','.mov')) or ct.startswith('video/') or kind!='file'):return
+                    # Reading a manifest on response headers used to block controls until its body arrived.
+                    # Only inspect completed manifests. Never read video bodies for metadata.
+                    if kind!='file' and not finished:return
+                    if r.url in found:return
+                    text=r.text()[:1048576] if kind!='file' else ''
+                    if re.search(r'widevine|playready|ContentProtection|METHOD=SAMPLE-AES',text,re.I):return
                     headers={k:v for k,v in r.request.all_headers().items() if k in ('referer','user-agent','origin','authorization')}
-                    found[r.url]={'id':uuid.uuid4().hex,'url':r.url,'headers':headers}
+                    found[r.url]={'id':uuid.uuid4().hex,'url':r.url,'headers':headers,'frame':r.request.frame,'meta':describe(r.headers,text,kind)}
                 except Exception:pass
             context.on('response',response)
+            context.on('requestfinished',lambda request:response(request.response(),True))
             # Keep popups visible in the same remote viewport, without changing the admin page.
             def popup(new):
                 nonlocal page
@@ -64,10 +72,21 @@ def browser_process(commands, replies, url, proxy, directory):
                             page.close();page=context.pages[-1]
                     elif action=='reload':page.reload(wait_until='commit',timeout=5000)
                     page.wait_for_timeout(80)
-                    screenshot=base64.b64encode(page.screenshot(type='jpeg',quality=55,timeout=5000)).decode()
+                    screenshot=base64.b64encode(page.screenshot(type='jpeg',quality=40,timeout=5000)).decode()
                     title=page.title()[:250] or 'Bulunan video'
                     cookies=context.cookies()
-                    choices=[{'public':{'id':c['id'],'title':title+' · '+str(i+1),'provider':urlsplit(c['url']).hostname or 'Tarayıcı','ad':False,'heights':[]},'info':{'_browser_source':True,'url':page.url if (urlsplit(page.url).hostname or '').endswith('.youtube.com') or urlsplit(page.url).hostname in ('youtube.com','youtu.be') else c['url'],'http_headers':c['headers'],'title':title},'cookies':cookies} for i,c in enumerate(found.values())]
+                    choices=[]
+                    frames={}
+                    for c in found.values():
+                        frame=c['frame']
+                        if frame not in frames:
+                            try:frames[frame]=frame.evaluate('() => [...document.querySelectorAll("video")].map(v=>({src:v.currentSrc,duration:Number.isFinite(v.duration)?v.duration:null,height:v.videoHeight}))')
+                            except Exception:frames[frame]=[]
+                    for i,c in enumerate(found.values()):
+                        count=sum(other['frame']==c['frame'] for other in found.values())
+                        metadata=enrich(c['meta'],frames.get(c['frame'],[]),c['url'],count)
+                        choices.append({'public':{'id':c['id'],'title':title+' · '+str(i+1),'provider':urlsplit(c['url']).hostname or 'Tarayıcı','ad':False,**metadata},
+                            'info':{'_browser_source':True,'url':page.url if (urlsplit(page.url).hostname or '').endswith('.youtube.com') or urlsplit(page.url).hostname in ('youtube.com','youtu.be') else c['url'],'http_headers':c['headers'],'title':title},'cookies':cookies})
                     replies.put({'image':screenshot,'url':page.url,'width':WIDTH,'height':HEIGHT,'choices':choices},timeout=2)
                 except Exception:
                     replies.put({'error':'Sayfa yanıt vermedi. Yenile düğmesini deneyebilirsin.'},timeout=2)

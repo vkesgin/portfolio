@@ -86,4 +86,18 @@ class AutomaticScanTests(unittest.TestCase):
         self.assertEqual(entries[0][0]['http_headers'],{'referer':'https://site.example/'})
 
 
+class YoutubeTests(unittest.TestCase):
+    def test_youtube_links_are_recognised_in_every_form(self):
+        for url in ('https://www.youtube.com/watch?v=x','https://youtu.be/x','https://m.youtube.com/shorts/x','https://music.youtube.com/watch?v=x','https://WWW.YouTube.com/shorts/x'):
+            self.assertTrue(tasks.youtube(url),url)
+        for url in ('https://vimeo.com/1','https://notyoutube.com/watch?v=x','https://youtube.com.evil.example/x'):
+            self.assertFalse(tasks.youtube(url),url)
+    def test_every_fallback_asks_different_players(self):
+        seen=[c for extra in tasks.YOUTUBE_FALLBACKS for c in extra['extractor_args']['youtube']['player_client']]
+        self.assertEqual(len(seen),len(set(seen)));self.assertGreaterEqual(len(tasks.YOUTUBE_FALLBACKS),3)
+    def test_verification_wall_is_explained_as_an_address_problem(self):
+        self.assertIn('IP',error_message(Exception("Sign in to confirm you’re not a bot")))
+        self.assertIn('IP',error_message(Exception("Sign in to confirm you're not a bot")))
+
+
 if __name__=='__main__':unittest.main()

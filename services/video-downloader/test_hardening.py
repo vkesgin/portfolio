@@ -100,4 +100,24 @@ class YoutubeTests(unittest.TestCase):
         self.assertIn('IP',error_message(Exception("Sign in to confirm you're not a bot")))
 
 
+class PortraitAndCodecTests(unittest.TestCase):
+    REEL={'formats':[{'width':360,'height':640,'vcodec':'vp09'},{'width':720,'height':1280,'vcodec':'vp09'},{'width':1080,'height':1920,'vcodec':'vp09'},{'vcodec':'none'}]}
+    def test_portrait_video_is_capped_on_its_width(self):
+        self.assertTrue(tasks.upright(self.REEL))
+        self.assertFalse(tasks.upright({'formats':[{'width':1920,'height':1080,'vcodec':'avc1'}]}))
+        self.assertFalse(tasks.upright({'formats':[{'vcodec':'avc1'}]}))
+        self.assertEqual(heights_that_fit(self.REEL,480,1000*MB,'width'),[360])
+        self.assertEqual(heights_that_fit(self.REEL,720,1000*MB,'width'),[720,360])
+        self.assertEqual(heights_that_fit(self.REEL,0,1000*MB,'width'),[1080,720,360])
+    def test_ceiling_below_everything_takes_the_smallest_not_the_largest(self):
+        self.assertEqual(heights_that_fit({'formats':[video(1080),video(720)]},480,1000*MB),[720])
+    def test_only_cheap_incompatible_files_are_reencoded(self):
+        self.assertTrue(tasks.needs_h264({'codec':'vp9','short':1080,'duration':60}))
+        self.assertTrue(tasks.needs_h264({'codec':'av1','short':360,'duration':900}))
+        self.assertFalse(tasks.needs_h264({'codec':'h264','short':1080,'duration':60}))
+        self.assertFalse(tasks.needs_h264({'codec':'vp9','short':2160,'duration':60}))
+        self.assertFalse(tasks.needs_h264({'codec':'vp9','short':1080,'duration':3600}))
+        self.assertFalse(tasks.needs_h264(None));self.assertFalse(tasks.needs_h264({'codec':None,'short':0,'duration':0}))
+
+
 if __name__=='__main__':unittest.main()

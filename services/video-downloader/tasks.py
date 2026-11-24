@@ -70,18 +70,67 @@ def estimate(fmt,duration):
     return None
 
 
-def heights_that_fit(info,ceiling,room):
-    """Heights to try, tallest first, starting at the tallest whose largest variant fits in `room` bytes.
+def upright(info):
+    """True for portrait video (reels, shorts): there "720p" means the width, the short side."""
+    sized=[f for f in info.get('formats',[]) if finite(f.get('width')) and finite(f.get('height')) and f.get('vcodec')!='none']
+    return bool(sized) and sum(f['width']<f['height'] for f in sized)*2>len(sized)
+
+
+def heights_that_fit(info,ceiling,room,side='height'):
+    """Sizes to try along `side` (height, or width for portrait video), largest first, starting at
+    the largest whose biggest variant fits in `room` bytes.
 
     Formats of unknown size count as fitting; the download itself still enforces the limit, and the
-    caller then moves on to the next height."""
-    video=[f for f in info.get('formats',[]) if finite(f.get('height')) and f.get('vcodec')!='none']
-    heights=sorted({int(f['height']) for f in video if not ceiling or f['height']<=ceiling},reverse=True)
+    caller then moves on to the next size. When nothing is at or below the ceiling the smallest
+    available size is used, not the largest."""
+    video=[f for f in info.get('formats',[]) if finite(f.get(side)) and f.get('vcodec')!='none']
+    every=sorted({int(f[side]) for f in video},reverse=True)
+    heights=[h for h in every if not ceiling or h<=ceiling] or every[-1:]
     audio=max((estimate(f,info.get('duration')) or 0 for f in info.get('formats',[]) if f.get('vcodec')=='none'),default=0)
     for index,height in enumerate(heights):
-        sizes=[estimate(f,info.get('duration')) for f in video if int(f['height'])==height]
+        sizes=[estimate(f,info.get('duration')) for f in video if int(f[side])==height]
         if all(s is None or s+audio<=room for s in sizes):return heights[index:]
     return heights[-1:]
+
+
+PHONE_CODECS={'h264','hevc','mpeg4'}
+
+
+def probe(path):
+    """Video codec, short side and duration of a finished file; None when it cannot be read."""
+    import json,subprocess
+    try:
+        out=subprocess.run(['ffprobe','-v','error','-select_streams','v:0','-show_entries','stream=codec_name,width,height:format=duration','-of','json',str(path)],capture_output=True,text=True,timeout=30).stdout
+        data=json.loads(out);stream=(data.get('streams') or [{}])[0]
+        return dict(codec=stream.get('codec_name'),short=min(int(stream.get('width') or 0),int(stream.get('height') or 0)),duration=float((data.get('format') or {}).get('duration') or 0))
+    except Exception:return None
+
+
+def needs_h264(found):
+    """VP9/AV1 in MP4 does not open in iPhone Photos or QuickTime. Re-encode what is cheap to
+    re-encode (up to 1080p, up to 15 minutes); larger sources keep their codec and their quality."""
+    return bool(found and found['codec'] and found['codec'] not in PHONE_CODECS and 0<found['short']<=1080 and 0<found['duration']<=900)
+
+
+def to_h264(path,found,report):
+    """Re-encode the picture to H.264 (sound is copied or, if it must be, converted to AAC)."""
+    import subprocess
+    target=path.with_name(path.stem+'.h264.mp4')
+    report.emit(force=True,phase='processing',message='Video, telefon ve QuickTime ile uyumlu H.264 biçimine dönüştürülüyor…',activity=True,progress=0,speed=None,eta=None)
+    command=['ffmpeg','-v','error','-nostdin','-y','-i',str(path),'-map','0:v:0','-map','0:a:0?','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-c:a','aac','-b:a','160k','-movflags','+faststart','-progress','pipe:1',str(target)]
+    try:
+        process=subprocess.Popen(command,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
+        for line in process.stdout:
+            if line.startswith('out_time_us=') or line.startswith('out_time_ms='):
+                try:done=int(line.split('=')[1])/1e6
+                except ValueError:continue
+                report.emit(phase='processing',message='Video, telefon ve QuickTime ile uyumlu H.264 biçimine dönüştürülüyor…',activity=True,progress=max(0,min(99,done/found['duration']*100)))
+        if process.wait()==0 and target.is_file() and target.stat().st_size>0:
+            path.unlink(missing_ok=True);target.rename(path);return True
+    except Exception:pass
+    target.unlink(missing_ok=True)
+    return False
+
 
 def public(info,ident):
     return dict(id=ident,title=str(info.get('title') or 'Video')[:250],
@@ -335,12 +384,14 @@ def execute(queue,mode,payload,proxy,directory):
         quality=payload['quality']
         # Take the best quality that fits under the size limit instead of failing on the largest one.
         ceiling=0 if quality in ('best','audio') else int(quality)
-        tallest=max((int(f['height']) for f in info.get('formats',[]) if finite(f.get('height')) and (not ceiling or f['height']<=ceiling)),default=0)
-        attempts=[None] if quality=='audio' else (heights_that_fit(info,ceiling,int(MAX_BYTES*.95)) or [None])
+        # "720p" caps the short side: the height of landscape video, the width of portrait video.
+        side='width' if upright(info) else 'height'
+        tallest=max((int(f[side]) for f in info.get('formats',[]) if finite(f.get(side)) and f.get('vcodec')!='none' and (not ceiling or f[side]<=ceiling)),default=0)
+        attempts=[None] if quality=='audio' else (heights_that_fit(info,ceiling,int(MAX_BYTES*.95),side) or [None])
         paths=[]
         def progress(data):
             if data.get('downloaded_bytes',0)>MAX_BYTES:raise Refused(TOO_LARGE)
-            height=(data.get('info_dict') or {}).get('height')
+            height=(data.get('info_dict') or {}).get(side)
             if quality!='audio' and finite(height) and height<tallest:
                 report.note=f'{MAX_BYTES//1048576} MB sınırına sığan en yüksek kalite indiriliyor: {int(height)}p (kaynakta {int(tallest)}p var).'
             report.hook(data)
@@ -357,7 +408,7 @@ def execute(queue,mode,payload,proxy,directory):
         # Audio alone is the case that most often needs a freshly resolved link; start there.
         fresh=quality=='audio' and refreshable(info)
         for index,height in enumerate(attempts[:4]):
-            limit=f'[height<=?{height}]' if height else ''
+            limit=f'[{side}<=?{height}]' if height else ''
             opts['format']='bestaudio/best' if quality=='audio' else f'bv*{limit}+ba/b{limit}'
             report.too_large=False;oversize=False
             while True:
@@ -393,6 +444,11 @@ def execute(queue,mode,payload,proxy,directory):
             # yt-dlp skips (without raising) a format that is larger than max_filesize.
             raise Refused(TOO_LARGE if report.too_large else 'İndirme tamamlanamadı; dosya oluşmadı. Başka bir kalite seçip tekrar dene.')
         if path.stat().st_size>MAX_BYTES:raise Refused(TOO_LARGE)
+        if quality!='audio' and path.suffix.lower()=='.mp4':
+            found=probe(path)
+            if needs_h264(found) and not to_h264(path,found,report):
+                report.note='Dosya VP9/AV1 kodekli kaldı; bazı telefonlar ve QuickTime açmayabilir (VLC ve Chrome açar).'
+            if path.stat().st_size>MAX_BYTES:raise Refused(TOO_LARGE)
         queue.put({'result':'file','path':str(path),'name':path.name,'bytes':path.stat().st_size})
     except Exception as exc:
         queue.put({'result':'error','message':error_message(exc)})

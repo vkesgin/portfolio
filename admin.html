@@ -57,14 +57,14 @@
     <section class="vkd" aria-labelledby="vkd-title">
       <p class="vkd-kicker">// KİŞİSEL ARAÇLAR</p>
       <h2 id="vkd-title">BAĞLANTIYI BIRAK.<br><span>VİDEOYU AL.</span></h2>
-      <p class="vkd-intro">Bağlantıyı yapıştır: video otomatik aranır, sayfa da hemen altında açılır. Otomatik bulunanı indir ya da sayfada oynattığın videoyu süre ve boyutuna bakarak seç.</p>
+      <p class="vkd-intro">Bağlantıyı yapıştır, gerisini sistem yapar: video otomatik bulunur, gerekirse sayfa arka planda taranır ve dosya cihazına iner. Ses için kaliteyi “Yalnızca ses · MP3” yap.</p>
       <form class="vkd-form" id="vkd-form">
         <label class="vkd-label" for="vkd-url">VİDEO BAĞLANTISI</label>
         <div class="vkd-url"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7 0l4-4a5 5 0 0 0-7-7l-2 2M14 11a5 5 0 0 0-7 0l-4 4a5 5 0 0 0 7 7l2-2"/></svg><input id="vkd-url" type="url" required autocomplete="off" spellcheck="false" placeholder="https://… video bağlantısı"><button type="button" class="vkd-paste" id="vkd-paste">Yapıştır</button></div>
-        <div class="vkd-controls"><select id="vkd-quality" aria-label="Video kalitesi"><option value="best">En iyi kalite</option><option value="2160">4K’ya kadar</option><option value="1080">1080p’ye kadar</option><option value="720">720p’ye kadar</option><option value="480">480p’ye kadar</option><option value="audio">Yalnızca ses · MP3</option></select><button class="btn btn-primary" id="vkd-submit" type="submit">Videoyu bul <span>↗</span></button></div>
+        <div class="vkd-controls"><select id="vkd-quality" aria-label="Video kalitesi"><option value="best">En iyi kalite</option><option value="2160">4K’ya kadar</option><option value="1080">1080p’ye kadar</option><option value="720">720p’ye kadar</option><option value="480">480p’ye kadar</option><option value="audio">Yalnızca ses · MP3</option></select><button class="btn btn-primary" id="vkd-submit" type="submit">Videoyu indir <span>↗</span></button></div>
       </form>
       <div class="vkd-meta"><span>MP4 / WEBM / HLS / DASH</span><span>KALICI GEÇMİŞ YOK · EK ÜYELİK YOK</span></div>
-      <details class="vkd-advanced"><summary>Video bulunamadığında</summary><div><p>Sayfayı burada aç, videoyu oynat ve bulunan akışı seç.</p><button type="button" class="vkd-outline" id="vkd-scan">Tarayıcıyı aç ↗</button></div></details>
+      <details class="vkd-advanced"><summary>Otomatik bulunamazsa</summary><div><p>Oturum ya da doğrulama isteyen sayfalar için: sayfayı burada elle aç, videoyu oynat ve bulunan akışı seç.</p><button type="button" class="vkd-outline" id="vkd-scan">Tarayıcıyı aç ↗</button></div></details>
       <section id="vkd-browser" class="vkd-browser" hidden aria-label="Geçici tarayıcı">
         <div class="vkd-browser-toolbar"><button type="button" class="vkd-outline" id="vkd-back" aria-label="Önceki sayfa">←</button><button type="button" class="vkd-outline" id="vkd-reload" aria-label="Sayfayı yenile">↻</button><span id="vkd-address">Sayfa açılıyor…</span><button type="button" class="vkd-outline" id="vkd-close-browser">Kapat</button></div>
         <p id="vkd-browser-help">Aşağıdaki sayfada videoyu oynat. Bulunan videolar hemen altında görünecek.</p>

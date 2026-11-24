@@ -1,4 +1,4 @@
-"""Verify visible progress and that download errors survive browser fallback."""
+"""Verify the automatic flow: best result downloads unasked, progress is visible, no browser opens by itself."""
 import http.server,threading
 from pathlib import Path
 from playwright.sync_api import sync_playwright,expect
@@ -13,12 +13,11 @@ with sync_playwright() as p:
  browser=p.chromium.launch();page=browser.new_page(viewport={'width':1100,'height':900})
  def api(route):
   path=route.request.url.split('/api/admin/video',1)[-1];calls.append(path)
-  # Admin is browser-first: the link opens the remote browser, which reports the found video.
-  if path=='/browser':data={'id':'a'*32}
-  # …and, in the background, asks the engine to find the page's own video.
-  elif path=='/analyze':data={'id':'e'*32}
-  elif path=='/jobs/'+'e'*32:data={'status':'choices','choices':[{'id':'f'*32,'provider':'Youtube','title':'Auto video','ad':False,'duration':95,'heights':[1080,720]}]}
-  elif path=='/browser/'+'a'*32+'/action':data={'image':'','url':'https://example.com/video','width':1024,'height':640,'choices':[{'id':'b'*32,'provider':'example.com','title':'Test video','ad':False,'kind':'file','duration':95,'size':7340032,'size_estimated':False,'heights':[720]}]}
+  # Fully automatic: the engine finds the video (page scan included) and marks its top result `best`.
+  if path=='/analyze':
+   state['analyze']=state.get('analyze',0)+1;data={'id':('e' if state['analyze']==1 else 'd')*32}
+  elif path=='/jobs/'+'e'*32:data={'status':'choices','choices':[{'id':'f'*32,'provider':'Generic','title':'Auto video','ad':False,'duration':95,'heights':[1080,720],'best':True},{'id':'9'*32,'provider':'Generic','title':'Short clip','ad':False,'duration':8,'heights':[360],'best':False}]}
+  elif path=='/jobs/'+'d'*32:data={'status':'error','mode':'analyze','phase':'error','message':'Bu sayfada indirilebilir video bulunamadı.'}
   elif route.request.method=='DELETE':data={'ok':True}
   elif path=='/download':data={'id':'c'*32}
   elif path=='/jobs/'+'c'*32:
@@ -32,17 +31,20 @@ with sync_playwright() as p:
  errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
  page.goto(f'http://127.0.0.1:{http.server_port}/admin.html')
  page.locator('[data-tab="video"]').click();page.locator('#vkd-url').fill('https://example.com/video');page.locator('#vkd-submit').click()
- expect(page.locator('#vkd-browser-choices')).to_contain_text('Süre: 1:35')
- expect(page.locator('#vkd-choices')).to_contain_text('Otomatik bulundu · Auto video')
- expect(page.locator('#vkd-choices')).to_contain_text('1080p')
- page.locator('#vkd-browser-choices button').click()
+ # No choice is asked for and no browser opens: the best result starts downloading by itself.
  expect(page.locator('#vkd-details')).to_contain_text('Parça: 47 / 100')
  expect(page.locator('#vkd-details')).to_contain_text('Hız: 1.0 MB/sn')
+ assert '/download' in calls and page.locator('#vkd-choices button').count()==0
  page.screenshot(path=str(ROOT/'tests/admin-video-progress.png'),full_page=True)
  expect(page.locator('#vkd-status')).to_contain_text('HTTP 403',timeout=10000)
- assert page.locator('#vkd-browser').is_hidden();assert calls.count('/browser')==1  # a failed download must not reopen the browser
+ assert page.locator('#vkd-browser').is_hidden();assert calls.count('/browser')==0  # nothing opens a browser on its own
  assert 'Hız:' not in page.locator('#vkd-details').inner_text()
+ # A search that finds nothing reports it and only offers the manual browser; it does not open it.
+ page.locator('#vkd-url').fill('https://example.com/nothing');page.locator('#vkd-submit').click()
+ expect(page.locator('#vkd-status')).to_contain_text('bulunamadı')
+ expect(page.locator('#vkd-caption')).to_contain_text('Tarayıcıyı aç')
+ assert page.locator('#vkd-scan').is_visible() and page.locator('#vkd-browser').is_hidden() and calls.count('/browser')==0
  assert not errors,errors
  browser.close()
 http.shutdown();http.server_close()
-print('Progress bytes/speed/fragments/elapsed and preserved download failure: passed')
+print('Automatic pick, progress bytes/speed/fragments, preserved failure, manual-only browser: passed')

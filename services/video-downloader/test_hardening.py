@@ -1,7 +1,8 @@
 import unittest
 from egress import allowed_port,connect_public
 from interactive import whole_file
-from tasks import estimate,heights_that_fit,error_message,Refused,TOO_LARGE,filtered,refreshable
+import tasks
+from tasks import rank,estimate,heights_that_fit,error_message,Refused,TOO_LARGE,filtered,refreshable
 
 MB=1048576
 def video(height,**extra):return {'height':height,'vcodec':'avc1',**extra}
@@ -33,7 +34,7 @@ class HardeningTests(unittest.TestCase):
         self.assertEqual(error_message(Exception('File is larger than max-filesize (2 > 1)')),TOO_LARGE)
         self.assertIn('bölge',error_message(Exception('The uploader has not made this video available in your country')))
         self.assertIn('özel',error_message(Exception('Private video. Sign in if you have been granted access')).lower())
-        self.assertIn('tarayıcıda',error_message(Exception('Unsupported URL: https://x.example/')))
+        self.assertIn('bulunamadı',error_message(Exception('Unsupported URL: https://x.example/')))
         self.assertIn('429',error_message(Exception('HTTP Error 429: Too Many Requests')))
     def test_live_and_drm_have_distinct_reasons(self):
         with self.assertRaises(Refused) as live:filtered({'protocol':'https','is_live':True})
@@ -55,5 +56,34 @@ class HardeningTests(unittest.TestCase):
         for port in (80,443,8080,8443,2053):self.assertTrue(allowed_port(port))
         for port in (22,25,110,993,0):self.assertFalse(allowed_port(port))
         with self.assertRaises(ValueError):connect_public('example.com',22)
+
+class AutomaticScanTests(unittest.TestCase):
+    def test_main_video_outranks_short_clips_and_previews(self):
+        film=({'duration':600,'formats':[video(720,tbr=2000)]},{'manifest':True})
+        teaser=({'duration':12,'formats':[video(1080,tbr=9000)]},{'manifest':False})
+        unknown=({'formats':[]},{'player':{'duration':45}})
+        ordered=sorted([teaser,unknown,film],key=lambda e:rank(*e),reverse=True)
+        self.assertEqual(ordered,[film,unknown,teaser])
+    def test_scan_results_are_ranked_and_replayable(self):
+        class Fake:
+            def __init__(self,opts):self.cookiejar=None
+            def __enter__(self):return self
+            def __exit__(self,*a):return False
+            def extract_info(self,url,download=False):
+                if 'broken' in url:raise RuntimeError('403')
+                return {'url':url,'protocol':'https','duration':{'https://cdn.example/ad.mp4':15,'https://cdn.example/film.mp4':900}[url]}
+            def sanitize_info(self,info):return dict(info)
+        found=[dict(url=u,headers={'referer':'https://site.example/'},title='Sayfa',manifest=False,player=None,cookies=[]) for u in ('https://cdn.example/ad.mp4','https://cdn.example/broken.mp4','https://cdn.example/film.mp4')]
+        saved=(tasks.scan_browser,tasks.yt_dlp.YoutubeDL,tasks.cookiejar)
+        tasks.scan_browser=lambda *a,**k:found;tasks.yt_dlp.YoutubeDL=Fake;tasks.cookiejar=lambda *a:None
+        try:
+            class Q:
+                def put(self,item):pass
+            entries=tasks.scan_entries('https://site.example/watch','http://127.0.0.1:1','/tmp',{},Q())
+        finally:tasks.scan_browser,tasks.yt_dlp.YoutubeDL,tasks.cookiejar=saved
+        self.assertEqual([info['url'] for info,_ in entries],['https://cdn.example/film.mp4','https://cdn.example/ad.mp4'])
+        self.assertTrue(entries[0][0]['_browser_source']);self.assertEqual(entries[0][0]['title'],'Sayfa')
+        self.assertEqual(entries[0][0]['http_headers'],{'referer':'https://site.example/'})
+
 
 if __name__=='__main__':unittest.main()

@@ -38,6 +38,9 @@ with sync_playwright() as p:
     page.locator('#loginPass').fill('test');page.locator('#loginBtn').click()
     page.locator('[data-tab="video"]').click()
     page.locator('#vkd-url').fill('https://fixture.example/player');page.locator('#vkd-submit').click()
+    # The automatic search found nothing: the manual browser is offered, never opened unasked.
+    page.locator('#vkd-scan').wait_for(state='visible');assert page.locator('#vkd-browser').is_hidden()
+    page.locator('#vkd-scan').click()
     page.locator('#vkd-screen').wait_for(state='visible')
     page.locator('#vkd-screen').click(position={'x':100,'y':80})
     page.locator('#vkd-browser-choices button').wait_for()

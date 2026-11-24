@@ -3292,7 +3292,7 @@
     /* Card actions that follow the post (dl hint, can_delete, a copy) and the server flags (config.video): "İndir",
        "Kopyayı kaldır", "Oynamıyor mu?"; the source link is hidden while the copy's credit line carries it. */
     // A YouTube / Vimeo post without its video file (dl.reason: the board itself never fetches the platform's video):
-    // "İndir" hands the link to the video tool (the download engine), which finds and saves the video on its own.
+    // "İndir" gives the link to the download engine (downloadViaEngine), which finds and saves the video on its own.
     function dlViaEngine(entry) {
       const dl = entry.post.dl;
       return !!dl && typeof dl === 'object' && dl.video === false && !!dl.reason &&
@@ -3722,7 +3722,7 @@
       if (action === 'tags-edit') { openTagModal(entry); return; }
       if (action === 'tags-more') { entry.tagsExpanded = true; renderCardTags(entry); return; }
       if (action === 'media-edit') { openMediaModal(entry); return; }
-      if (action === 'download') { if (dlViaEngine(entry)) openVideoTool(entry.post.url); else downloadPost(entry); return; }
+      if (action === 'download') { if (dlViaEngine(entry)) downloadViaEngine(entry); else downloadPost(entry); return; }
       if (action === 'ig-blocked') { igNotPlaying(entry); return; }
       if (action === 'ig-copy-del') { removeIgCopy(entry); return; }
       if (action === 'add-video') { pickFileFor(entry); return; }
@@ -6367,6 +6367,88 @@
         ? toast(msg, 'info', 15000, { label: 'Kapak görselini indir', run: () => { entry.dlToast = null; downloadPost(entry, 'image'); } })
         : toast(msg, 'error', 8000);
     }
+
+    /* "İndir" on a YouTube / Vimeo card (dlViaEngine): the download engine behind the video tool finds the video,
+       prepares the file and hands it to the browser, all behind the card's own button like an Instagram card. The
+       tool's window opens only when the engine needs a choice, or from the error toast. Jobs are temporary on the
+       server; the ones that did not end in a file are removed here, the rest when the page goes away. */
+    const ENGINE = '/api/inspire/video';
+    const engineJobs = new Set();
+    function engineDrop(id) {
+      engineJobs.delete(id);
+      api('DELETE', `${ENGINE}/jobs/${encodeURIComponent(id)}`).catch(() => {});
+    }
+    // The job once it stops running; "%42" on the button while the file is prepared (progress = true).
+    async function engineRun(path, body, btn, progress, mine) {
+      const made = await api('POST', ENGINE + path, body);
+      const id = made && typeof made.id === 'string' ? made.id : '';
+      if (!id) throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+      mine.push(id);
+      engineJobs.add(id);
+      const until = Date.now() + 20 * 60000;
+      for (let fails = 0; ;) {
+        let job = null;
+        try {
+          job = await api('GET', `${ENGINE}/jobs/${encodeURIComponent(id)}`);
+          fails = 0;
+        } catch (e) {
+          // a lost status request is not a lost job: ask again a few times
+          if ((e && e.status && e.status < 500) || ++fails > 5) throw e;
+        }
+        if (job && job.status !== 'running') return { ...job, id };
+        if (job && progress) setDlProgress(btn, Number.isFinite(job.progress) && job.progress > 0 ? job.progress / 100 : null);
+        if (Date.now() > until) throw new ApiError(0, 'timeout', 'İndirme çok uzun sürdü. Tekrar dene.');
+        await new Promise((r) => setTimeout(r, job ? 1200 : 4000));
+      }
+    }
+    // The engine's own pick: the top result of its page scan (best), or the only video it found.
+    function enginePick(job) {
+      const found = (Array.isArray(job.choices) ? job.choices : []).filter((v) => v && !v.ad && typeof v.id === 'string');
+      return found[0] && found[0].best ? found[0] : found.length === 1 ? found[0] : null;
+    }
+    async function downloadViaEngine(entry) {
+      const btn = entry.refs.dlBtn;
+      const url = entry.post.url;
+      if (!btn || btn.hidden || dlRunning.has(entry.id)) return;
+      dlRunning.add(entry.id);
+      setDlBusy(btn, true);
+      if (entry.dlToast) { entry.dlToast(); entry.dlToast = null; }
+      const mine = [];
+      let kept = '';
+      try {
+        const found = await engineRun('/analyze', { url, mode: 'analyze' }, btn, false, mine);
+        if (found.status !== 'choices') throw new ApiError(0, 'engine', found.message || 'Video bulunamadı.');
+        const pick = enginePick(found);
+        if (!pick) { openVideoTool(url); return; }   // several videos on the page: the tool lists them
+        const file = await engineRun('/download', { source_id: pick.id, quality: 'best' }, btn, true, mine);
+        if (file.status !== 'ready') throw new ApiError(0, 'engine', file.message || 'Video indirilemedi.');
+        const t = await api('POST', `${ENGINE}/ticket`, { job_id: file.id });
+        if (!t || typeof t.ticket !== 'string') throw new ApiError(500, 'bad_response', 'Beklenmeyen sunucu yanıtı.');
+        // a form post into the hidden frame: the answer is an attachment, so the board stays where it is
+        const form = h('form', { method: 'POST', action: API_BASE + ENGINE + '/file', target: 'vkd-transfer', hidden: true },
+          h('input', { type: 'hidden', name: 'ticket', value: t.ticket }));
+        document.body.append(form);
+        form.submit();
+        form.remove();
+        kept = file.id;   // the server deletes the file after the transfer (or in 10 minutes)
+        toast('İndirme başladı.', 'ok');
+      } catch (e) {
+        if (!e || e.name === 'AbortError' || e.status === 401) return;
+        entry.dlToast = toast(e.message || 'Video indirilemedi.', 'error', 12000,
+          { label: 'Video aracında aç', run: () => { entry.dlToast = null; openVideoTool(url); } });
+      } finally {
+        for (const id of mine) if (id !== kept) engineDrop(id);
+        dlRunning.delete(entry.id);
+        setDlBusy(btn, false);
+      }
+    }
+    window.addEventListener('pagehide', () => {
+      if (!session.token) return;
+      for (const id of engineJobs) {
+        fetch(`${API_BASE}${ENGINE}/jobs/${encodeURIComponent(id)}`,
+          { method: 'DELETE', headers: { Authorization: 'Bearer ' + session.token }, keepalive: true }).catch(() => {});
+      }
+    });
 
     // The download link of download-info (…/download?k=<ticket>) with part= / format=json. Only that post's download
     // path on the API is taken from it (with its query, the ticket); another shape: the plain link (no ticket).

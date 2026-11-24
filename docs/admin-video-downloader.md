@@ -63,7 +63,7 @@ Validation: install `httpx2` in the development environment, then run `python -m
 
 ## Fikir integration and privacy boundaries
 
-Fikir's header has a standalone Video indir dialog. Its card download buttons open the same engine for source videos and existing uploaded video files. A pasted URL does not create a post, media copy, download event, cache record or per-download database counter. Posting a link to the board is still an explicit persistent sharing action. Legacy image downloads retain their existing behavior.
+Fikir's header has a standalone Video indir dialog. The "İndir" button of a YouTube or Vimeo card (a post without its own video file) runs the same engine behind the button (`downloadViaEngine` in `fikir.html`: analyze → download at best quality → ticket → file), with the progress on the button and no dialog; the dialog opens only when the page holds several videos or from the error toast ("Video aracında aç"). Instagram cards and uploaded files keep the board's own download. A pasted URL does not create a post, media copy, download event, cache record or per-download database counter. Posting a link to the board is still an explicit persistent sharing action. Legacy image downloads retain their existing behavior.
 
 The Fikir gateway (`/api/inspire/video`) validates the existing board session. Admin and Fikir tickets have separate scopes. Job/source/browser/file access is isolated by a hash of the authenticated session plus scope, retained only in the engine's memory. Backend credentials never reach the client. Download error logging that previously contained post IDs/exception details was removed, and the third-party translator was removed from Fikir so it cannot inspect links pasted into this dialog.
 

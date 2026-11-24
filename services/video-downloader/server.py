@@ -119,7 +119,7 @@ def valid_url(value):
 
 
 def monitor(ident,events,mode):
-    limit=900 if mode=='download' else 100
+    limit=900 if mode=='download' else 150
     deadline=time.monotonic()+limit
     job=JOBS[ident]
     got_result=False
@@ -168,7 +168,7 @@ def monitor(ident,events,mode):
             job.update({k:v for k,v in data.items() if k in ('message','progress','phase','downloaded_bytes','total_bytes','total_estimated','speed','eta','fragment_index','fragment_count','stream','notice')})
     job['_process'].join(timeout=1)
     if not got_result:
-        job.update(status='error',phase='error',message=('İndirme motoru beklenmedik biçimde durdu. Yeniden deneyebilirsin.' if time.monotonic()<deadline else 'İndirme 15 dakikalık işlem sınırında tamamlanamadı.' if mode=='download' else 'Video araması 100 saniyede tamamlanamadı. Kaynak sunucu yanıt vermiyor veya erişimi engelliyor olabilir.'),expires=time.monotonic()+RETENTION)
+        job.update(status='error',phase='error',message=('İndirme motoru beklenmedik biçimde durdu. Yeniden deneyebilirsin.' if time.monotonic()<deadline else 'İndirme 15 dakikalık işlem sınırında tamamlanamadı.' if mode=='download' else 'Video araması 150 saniyede tamamlanamadı. Kaynak sunucu yanıt vermiyor veya erişimi engelliyor olabilir.'),expires=time.monotonic()+RETENTION)
     if job['status']!='ready':terminate(job)
     events.close()
 

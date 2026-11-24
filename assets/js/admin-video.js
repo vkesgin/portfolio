@@ -11,10 +11,6 @@
   let browserId=null, browserTimer=null, browserBusy=false, browserEpoch=0, browserChoices='';
   let browserWidth=1024, browserHeight=640, browserPending=[];
   const settings=window.videoDownloaderConfig;
-  const browserFirst=!settings;
-  let linkTimer=null,openedLink='';
-  // Browser-first pages also ask the engine to find the page's video on its own (yt-dlp), in the background.
-  let autoId=null,autoTimer=null,autoRunning=false;
   const endpoint = () => settings ? settings.endpoint() : API + '/api/admin/video';
   const accessToken = () => settings ? settings.token() : TOKEN;
   const size = n => n===0 ? '0 B' : n ? n<1048576 ? (n/1024).toFixed(1)+' KB' : (n/1048576).toFixed(1)+' MB' : '';
@@ -62,8 +58,7 @@
     $('status').textContent=message;
   }
   async function clear({blank=false}={}) {
-    generation++;autoSave=false;pollFailures=0;details.textContent='';openedLink='';clearTimeout(linkTimer);
-    clearTimeout(autoTimer);autoId=null;autoRunning=false;
+    generation++;autoSave=false;pollFailures=0;details.textContent='';
     const closing=closeBrowser();
     clearTimeout(timer);
     const existing=[...jobs];jobs.clear();current=null;
@@ -102,17 +97,21 @@
       if(job.status==='running') {timer=setTimeout(()=>poll(id,epoch),1200);return;}
       busy(false);$('progress').hidden=true;
       if(job.status==='choices') {
-        const found=job.choices || [];
-        const one=found.length===1 && !found[0].ad ? found[0]:null;
+        const found=(job.choices || []).filter(v=>!v.ad);
+        const one=found.length===1 ? found[0]:null;
         const direct=/\.(mp4|webm|mov|mkv|m3u8|mpd)(?:[?#]|$)/i.test($('url').value);
-        if(one && (direct || !/generic|^web$/i.test(one.provider || 'Web'))) {
-          await download(one.id,one.title);return;
-        }
-        choices(found);
+        // `best` marks the top result of the engine's own page scan: start it without asking.
+        const pick=found[0]?.best ? found[0] : one && (direct || !/generic|^web$/i.test(one.provider || 'Web')) ? one : null;
+        if(pick) {await download(pick.id,pick.title);return;}
+        choices(job.choices || []);
+        if(found.length)$('caption').textContent='Birden fazla video bulundu; indirmek istediğini seç.';
       }
       if(job.status==='error') {
-        if(job.mode!=='download')await openBrowser(job.message || 'Video bulunamadı.');
-        else $('caption').textContent=browserFirst?'İndirme durdu. Ayrıntı yukarıda. Yeniden denemek için Videoyu bul ile sayfayı açıp videoyu tekrar seç; başka bir kalite de deneyebilirsin.':'İndirme durdu. Ayrıntı yukarıda. Yeniden denemek için Videoyu indir, sayfada oynatmak için Tarayıcıyı aç seçeneğini kullan.';
+        // Nothing opens by itself: the remote browser stays an optional, manual last resort.
+        $('caption').textContent=job.mode==='download'
+          ?'İndirme durdu. Ayrıntı yukarıda. Başka bir kalite seçip Videoyu indir ile yeniden deneyebilirsin.'
+          :'Bağlantı ve sayfa otomatik olarak tarandı. İstersen aşağıdaki “Tarayıcıyı aç” ile sayfayı elle açıp videoyu oynatabilirsin.';
+        if(job.mode!=='download'){const manual=$('scan').closest('details');if(manual)manual.open=true;}
         return;
       }
       if(job.status==='ready') {
@@ -134,7 +133,7 @@
     const link=$('url').value.trim();
     try {const p=new URL(link);if(!['http:','https:'].includes(p.protocol))throw 0;}catch{status('Bağlantıyı kontrol et','http:// veya https:// ile başlayan video bağlantısını yapıştır.',true);return;}
     await clear();
-    const epoch=generation;autoSave=true;busy(true);status('Video aranıyor',mode==='scan'?'Sayfa geçici tarayıcıda inceleniyor…':'Video bağlantısı inceleniyor…');
+    const epoch=generation;autoSave=true;busy(true);status('Video aranıyor','Video bağlantısı inceleniyor…');
     try {
       const job=await api('/analyze',{url:link,mode});
       jobs.add(job.id);
@@ -147,45 +146,11 @@
     $('choices').replaceChildren();$('save').hidden=true;$('progress').hidden=false;
     status(title,'Video indirilmeye hazırlanıyor…');
     try {
-      await stopAuto();
       const job=await api('/download',{source_id,quality:$('quality').value});jobs.add(job.id);
       await closeBrowser();
       if(epoch!==generation){await api('/jobs/'+job.id,undefined,'DELETE');return;}
       current=job.id;await poll(job.id,epoch);
     }catch(error){if(epoch===generation){busy(false);$('progress').hidden=true;status('İndirme hazırlanamadı',error.message,true);}}
-  }
-  async function stopAuto() {
-    clearTimeout(autoTimer);
-    // A finished search owns the sources the user may be about to download; only cancel one still running.
-    if(autoId && autoRunning){const id=autoId;autoId=null;autoRunning=false;jobs.delete(id);await api('/jobs/'+id,undefined,'DELETE').catch(()=>{});}
-  }
-  async function autoFind(link) {
-    const epoch=generation;
-    try {
-      const job=await api('/analyze',{url:link,mode:'analyze'});
-      jobs.add(job.id);
-      if(epoch!==generation){await api('/jobs/'+job.id,undefined,'DELETE').catch(()=>{});return;}
-      autoId=job.id;autoRunning=true;pollAuto(job.id,epoch,0);
-    } catch {/* The remote browser below is already open; it is the fallback. */}
-  }
-  async function pollAuto(id,epoch,failures) {
-    if(epoch!==generation || autoId!==id)return;
-    try {
-      const job=await api('/jobs/'+id);
-      if(epoch!==generation || autoId!==id)return;
-      if(job.status==='running'){autoTimer=setTimeout(()=>pollAuto(id,epoch,0),1500);return;}
-      autoRunning=false;
-      const found=(job.choices||[]).filter(v=>!v.ad);
-      if(job.status==='choices' && found.length){
-        choices(found.map(v=>({...v,title:'Otomatik bulundu · '+v.title})));
-        status('Video bulundu','Sayfanın videosu otomatik bulundu; kaliteyi seçip aşağıdan indirebilirsin. Başka bir video istiyorsan tarayıcıda oynat.');
-        $('progress').hidden=true;
-      }
-    } catch(error) {
-      if(epoch!==generation || autoId!==id)return;
-      if((!error.status || error.status>=500) && failures<5)autoTimer=setTimeout(()=>pollAuto(id,epoch,failures+1),4000);
-      else autoRunning=false;
-    }
   }
   async function closeBrowser() {
     browserEpoch++;clearTimeout(browserTimer);browserBusy=false;browserPending=[];
@@ -201,7 +166,7 @@
     catch{status('Bağlantıyı kontrol et','Önce geçerli bir video bağlantısı yapıştır.',true);return;}
     await closeBrowser();
     const epoch=browserEpoch;
-    status(reason?'Otomatik arama tamamlanamadı':'Videoyu burada oynat',reason ? reason+' Sayfayı aşağıdaki tarayıcıda oynatarak deneyebilirsin.' : 'Sayfa aşağıdaki geçici tarayıcıda açılıyor. Oynat düğmesine bas.',Boolean(reason));
+    status('Videoyu burada oynat','Sayfa aşağıdaki geçici tarayıcıda açılıyor. Oynat düğmesine bas.');
     $('progress').hidden=true;
     $('browser').hidden=false;$('browser-loading').hidden=false;
     $('browser-loading').textContent='Tarayıcı açılıyor…';
@@ -268,31 +233,13 @@
   $('enter').addEventListener('click',()=>controlBrowser({action:'key',key:'Enter'}));
   $('type').addEventListener('click',()=>{const text=$('browser-text').value.slice(0,2000);controlBrowser({action:'text',text});$('browser-text').value='';});
   window.videoDownloader={clear,open:async(url='')=>{await clear();$('url').value=url;if(url)await analyze('analyze');else $('url').focus();}};
-  async function browseLink() {
-    const link=$('url').value.trim();
-    try{const u=new URL(link);if(!['http:','https:'].includes(u.protocol)||!u.hostname.includes('.'))throw 0;}
-    catch{return;}
-    if(browserId && openedLink===link)return;
-    await clear();
-    if($('url').value.trim()!==link)return;
-    openedLink=link;
-    await openBrowser();
-    if(openedLink===link)autoFind(link);
-  }
-  if(browserFirst){
-    $('submit').textContent='Videoyu bul ↗';
-    // Keep status and automatically found videos above the tall browser view.
-    $('browser').before($('result'));
-    const schedule=()=>{clearTimeout(linkTimer);linkTimer=setTimeout(browseLink,900);};
-    $('url').addEventListener('input',schedule);
-    $('url').addEventListener('change',schedule);
-    $('url').addEventListener('paste',schedule);
-  }
-  $('form').addEventListener('submit',event=>{event.preventDefault();browserFirst?browseLink():analyze('analyze');});
+  $('form').addEventListener('submit',event=>{event.preventDefault();analyze('analyze');});
+  // Pasting a link is enough: the search and the download start on their own.
+  $('url').addEventListener('paste',()=>setTimeout(()=>{if(!$('submit').disabled && /^https?:\/\/\S+\.\S+$/i.test($('url').value.trim()))analyze('analyze');},0));
   $('scan').addEventListener('click',()=>openBrowser());
   $('cancel').addEventListener('click',()=>clear({blank:true}));
   $('paste').addEventListener('click',async()=>{
-    try{$('url').value=(await navigator.clipboard.readText()).trim();$('url').focus();if(browserFirst)await browseLink();}
+    try{$('url').value=(await navigator.clipboard.readText()).trim();$('url').focus();if($('url').value)await analyze('analyze');}
     catch{status('Bağlantını yapıştır','Panoya erişilemedi. Bağlantıyı alana elle yapıştırabilirsin.');$('url').focus();}
   });
   $('file').addEventListener('click',async()=>{

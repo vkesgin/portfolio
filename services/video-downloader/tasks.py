@@ -209,7 +209,7 @@ def error_message(exc):
     if 'your country' in text or 'your region' in text or 'your location' in text or ('geo' in text and ('block' in text or 'restrict' in text)):return 'Video, indirme sunucusunun bulunduğu ülkede yayında değil (bölge kısıtı). Tarayıcındaki VPN sunucuya aktarılmaz.'
     if 'unavailable' in text or 'has been removed' in text or 'no longer available' in text or 'does not exist' in text:return 'Video kaldırılmış veya artık yayında değil.'
     if 'unsupported url' in text or 'no video formats found' in text or 'no media found' in text:return 'Bu sayfada indirilebilir video bulunamadı.'
-    if 'confirm you' in text or 'not a bot' in text:return 'YouTube bu sunucudan gelen istekte doğrulama istiyor; şu an bu sunucudan indirilemiyor. Bir süre sonra tekrar dene.'
+    if 'confirm you' in text or 'not a bot' in text:return 'YouTube, indirme sunucusunun adresinden gelen isteklerde “bot değilim” doğrulaması istiyor; bütün oynatıcılar denendi ve şu an bu sunucudan indirilemiyor. Bu, bağlantıyla değil sunucunun IP adresiyle ilgili.'
     if '403' in text or 'sign in' in text or 'login' in text or 'cookies' in text:return 'Kaynak site erişimi reddetti veya oturum istiyor (HTTP 401/403 olabilir). Tarayıcındaki VPN indirme sunucusuna aktarılmaz. Video bağlantısının süresi de dolmuş olabilir.'
     if '429' in text:return 'Kaynak site çok fazla istek nedeniyle bekletiyor (HTTP 429). Bir süre sonra tekrar dene.'
     if 'timed out' in text or 'timeout' in text:return 'Kaynak sunucu zamanında yanıt vermedi. Tarayıcındaki VPN bu sunucuya aktarılmaz; site sunucudan erişilemiyor olabilir.'
@@ -219,8 +219,15 @@ def error_message(exc):
     return GENERIC
 
 
-YOUTUBE_HOSTS=('youtu.be','youtube.com','www.youtube.com','m.youtube.com','music.youtube.com')
-YOUTUBE_FALLBACK={'extractor_args':{'youtube':{'player_client':['android_vr','web_embedded','web_safari']}}}
+YOUTUBE_HOSTS=('youtu.be','youtube.com','www.youtube.com','m.youtube.com','music.youtube.com','youtube-nocookie.com','www.youtube-nocookie.com')
+# yt-dlp's own player clients, tried in turn after its defaults. YouTube answers some clients and
+# refuses others depending on the server's address; none of this passes a verification, it only asks
+# through the other official players.
+YOUTUBE_FALLBACKS=[{'extractor_args':{'youtube':{'player_client':clients}}} for clients in
+                   (['web_embedded','android_vr'],['tv_downgraded','mweb'],['android'])]
+
+
+def youtube(url):return (urlsplit(url).hostname or '').lower() in YOUTUBE_HOSTS
 
 
 def refreshable(info):
@@ -236,7 +243,7 @@ def download_fresh(opts,info,cookies):
     Signed media URLs expire and some sites (YouTube audio, for one) answer 403 to a URL that was
     resolved by an earlier session, so the stored result of the search cannot always be replayed."""
     url=info['webpage_url']
-    variants=[{}]+([YOUTUBE_FALLBACK] if (urlsplit(url).hostname or '') in YOUTUBE_HOSTS else [])
+    variants=[{}]+(YOUTUBE_FALLBACKS if youtube(url) else [])
     failure=None
     for extra in variants:
         try:
@@ -280,12 +287,17 @@ def execute(queue,mode,payload,proxy,directory):
                 try:
                     with yt_dlp.YoutubeDL(opts) as ydl:
                         try:info=ydl.extract_info(payload['url'],download=False)
-                        except Exception:
-                            host=urlsplit(payload['url']).hostname or ''
-                            if host not in YOUTUBE_HOSTS:raise
-                            fallback={**opts,**YOUTUBE_FALLBACK}
-                            with yt_dlp.YoutubeDL(fallback) as alternate:
-                                info=alternate.extract_info(payload['url'],download=False)
+                        except Exception as first:
+                            if not youtube(payload['url']):raise
+                            info=None
+                            for number,extra in enumerate(YOUTUBE_FALLBACKS,2):
+                                queue.put({'message':f'YouTube başka bir oynatıcı üzerinden deneniyor ({number}/{len(YOUTUBE_FALLBACKS)+1})…','activity':True})
+                                try:
+                                    with yt_dlp.YoutubeDL({**opts,**extra}) as alternate:
+                                        info=alternate.extract_info(payload['url'],download=False)
+                                    break
+                                except Exception:pass
+                            if info is None:raise first
                         items=list(info.get('entries') or []) if info.get('_type') in ('playlist','multi_video') else [info]
                         for item in items[:12]:
                             if not item:continue
@@ -295,7 +307,8 @@ def execute(queue,mode,payload,proxy,directory):
                 except Exception as exc:
                     failure=exc
                 # DRM and live refusals are final; anything else gets the unattended page scan.
-                scanned=not entries and not isinstance(failure,Refused)
+                # Scanning YouTube's own page from a refused address finds nothing and only costs time.
+                scanned=not entries and not isinstance(failure,Refused) and not youtube(payload['url'])
             if scanned:
                 entries=scan_entries(payload['url'],proxy,directory,opts,queue)
             if not entries:

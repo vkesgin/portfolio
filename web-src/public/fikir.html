@@ -1333,7 +1333,7 @@
       if(!session.token)return;
       openModal($('video-modal'),$('vkd-url'));
       try {
-        downloaderModule ||= import('/assets/js/admin-video.js?v=20261023-fikir');
+        downloaderModule ||= import('/assets/js/admin-video.js?v=20261124-auto');
         await downloaderModule;
         if(!$('video-modal').hidden)await window.videoDownloader.open(url);
       } catch {toast('Video aracı yüklenemedi. Sayfayı yenileyip tekrar dene.','error');}
@@ -3291,12 +3291,18 @@
 
     /* Card actions that follow the post (dl hint, can_delete, a copy) and the server flags (config.video): "İndir",
        "Kopyayı kaldır", "Oynamıyor mu?"; the source link is hidden while the copy's credit line carries it. */
-    // A YouTube / Vimeo post without its video file (dl.reason: the platform's video is never fetched): no "İndir" (the
-    // post owner / admin gets "Video ekle" there instead)
+    // A YouTube / Vimeo post without its video file (dl.reason: the board itself never fetches the platform's video):
+    // "İndir" hands the link to the video tool (the download engine), which finds and saves the video on its own.
+    function dlViaEngine(entry) {
+      const dl = entry.post.dl;
+      return !!dl && typeof dl === 'object' && dl.video === false && !!dl.reason &&
+        (entry.post.type === 'youtube' || entry.post.type === 'vimeo') && /^https?:\/\//i.test(entry.post.url || '');
+    }
     function dlShown(entry) {
       const dl = entry.post.dl;
-      return config.video.download !== false && !!dl && typeof dl === 'object' && (dl.video !== false || dl.image === true) &&
-        !(dl.video === false && dl.reason);
+      if (config.video.download === false || !dl || typeof dl !== 'object') return false;
+      if (dlViaEngine(entry)) return true;
+      return (dl.video !== false || dl.image === true) && !(dl.video === false && dl.reason);
     }
     // "Oynamıyor mu?": not while the card is copied on view anyway (post.copy_view; the list refresh shows the button once
     // the server stops offering that copy)
@@ -3319,7 +3325,7 @@
       const b = entry.refs.dlBtn;
       if (b && !b.hidden && !b.dataset.busy) {
         const dl = entry.post.dl || {};
-        const label = dl.video === true ? 'Videoyu indir' : dl.video === false ? 'Görseli indir' : 'Videoyu ya da görseli indir';
+        const label = dl.video === true || dlViaEngine(entry) ? 'Videoyu indir' : dl.video === false ? 'Görseli indir' : 'Videoyu ya da görseli indir';
         if (b.title !== label) { b.title = label; b.setAttribute('aria-label', label); }
       }
     }
@@ -3716,7 +3722,7 @@
       if (action === 'tags-edit') { openTagModal(entry); return; }
       if (action === 'tags-more') { entry.tagsExpanded = true; renderCardTags(entry); return; }
       if (action === 'media-edit') { openMediaModal(entry); return; }
-      if (action === 'download') { downloadPost(entry); return; }
+      if (action === 'download') { if (dlViaEngine(entry)) openVideoTool(entry.post.url); else downloadPost(entry); return; }
       if (action === 'ig-blocked') { igNotPlaying(entry); return; }
       if (action === 'ig-copy-del') { removeIgCopy(entry); return; }
       if (action === 'add-video') { pickFileFor(entry); return; }

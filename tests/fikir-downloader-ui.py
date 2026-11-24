@@ -24,7 +24,15 @@ with sync_playwright() as p:
  page.route('**youtube.com/embed/**',lambda r:r.abort())
  errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
  page.goto(f'http://127.0.0.1:{server.server_port}/fikir.html')
- # Card "İndir" is the board's own one-click download again (9247539); the tool opens from the header.
+ # A YouTube card has no file on the board: its "İndir" hands the link to the video tool, which searches on its own.
+ card=page.locator('.dl-btn[data-action="download"]').first;card.wait_for(state='visible')
+ assert card.get_attribute('title')=='Videoyu indir'
+ card.click();page.locator('#vkd-choices button').wait_for()
+ assert page.locator('#vkd-url').input_value()=='https://www.youtube.com/watch?v=jNQXAC9IVRw'
+ assert sum(p=='inspire/video/analyze' for m,p,d in calls)==1
+ assert not any(p.startswith('inspire/video/') and 'download' in p and 'jobs' not in p and p!='inspire/video/download' for m,p,d in calls)
+ page.locator('#video-modal-close').click();assert page.locator('#video-modal').is_hidden()
+ # Instagram cards keep the board's own one-click download (9247539); the tool also opens from the header.
  page.locator('#btn-video-tool').click();page.wait_for_timeout(400)  # opening clears the field asynchronously
  page.locator('#vkd-url').fill('https://www.youtube.com/watch?v=jNQXAC9IVRw');page.locator('#vkd-submit').click()
  page.locator('#vkd-choices button').wait_for()

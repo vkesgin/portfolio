@@ -17,7 +17,7 @@ from urllib.parse import quote, urlsplit
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from egress import ProxyServer, Proxy, public_addresses
+from egress import ProxyServer, Proxy, public_addresses, allowed_port
 from tasks import execute, MAX_BYTES
 from interactive import browser_process, KEYS, WIDTH, HEIGHT
 
@@ -109,7 +109,7 @@ class Download(BaseModel):
 def valid_url(value):
     value=value.strip()
     p=urlsplit(value)
-    if p.scheme not in ('http','https') or not p.hostname or p.username or p.password or (p.port and p.port not in (80,443)):
+    if p.scheme not in ('http','https') or not p.hostname or p.username or p.password or (p.port and not allowed_port(p.port)):
         raise ValueError('Geçerli bir http(s) video bağlantısı gir.')
     try:
         public_addresses(p.hostname,p.port or (443 if p.scheme=='https' else 80))
@@ -156,19 +156,19 @@ def monitor(ident,events,mode):
                 for choice in data['choices']:
                     SOURCES[choice['public']['id']]={**choice,'owner':ident,'expires':time.monotonic()+RETENTION}
                     public.append(choice['public'])
-                job.update(status='choices',choices=public,message='İndirmek istediğin videoyu seç.',expires=time.monotonic()+RETENTION)
+                job.update(status='choices',phase='choices',choices=public,message='İndirmek istediğin videoyu seç.',expires=time.monotonic()+RETENTION)
                 got_result=True;break
             if result=='file':
-                job.update(status='ready',progress=100,message='Video hazır.',name=data['name'],bytes=data['bytes'],_path=data['path'],expires=time.monotonic()+RETENTION)
+                job.update(status='ready',phase='ready',progress=100,message='Video hazır.',name=data['name'],bytes=data['bytes'],_path=data['path'],expires=time.monotonic()+RETENTION)
                 got_result=True;break
             if result=='error':
-                job.update(status='error',message=data['message'],expires=time.monotonic()+RETENTION)
+                job.update(status='error',phase='error',message=data['message'],expires=time.monotonic()+RETENTION)
                 got_result=True;break
             if data.get('activity'):job['_activity']=time.monotonic()
             job.update({k:v for k,v in data.items() if k in ('message','progress','phase','downloaded_bytes','total_bytes','total_estimated','speed','eta','fragment_index','fragment_count','stream','notice')})
     job['_process'].join(timeout=1)
     if not got_result:
-        job.update(status='error',message=('İndirme motoru beklenmedik biçimde durdu. Yeniden deneyebilirsin.' if time.monotonic()<deadline else 'İndirme 15 dakikalık işlem sınırında tamamlanamadı.' if mode=='download' else 'Video araması 100 saniyede tamamlanamadı. Kaynak sunucu yanıt vermiyor veya erişimi engelliyor olabilir.'),expires=time.monotonic()+RETENTION)
+        job.update(status='error',phase='error',message=('İndirme motoru beklenmedik biçimde durdu. Yeniden deneyebilirsin.' if time.monotonic()<deadline else 'İndirme 15 dakikalık işlem sınırında tamamlanamadı.' if mode=='download' else 'Video araması 100 saniyede tamamlanamadı. Kaynak sunucu yanıt vermiyor veya erişimi engelliyor olabilir.'),expires=time.monotonic()+RETENTION)
     if job['status']!='ready':terminate(job)
     events.close()
 

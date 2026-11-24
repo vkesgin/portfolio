@@ -25,8 +25,10 @@ with sync_playwright() as p:
     assert page.evaluate('document.documentElement.scrollWidth')<=390
     page.set_viewport_size({'width':1440,'height':1100})
     page.locator('[data-tab="video"]').click()
+    # Browser-first: submit opens the remote page and searches in the background; pick the found video.
     with page.expect_download(timeout=120000) as pending:
         page.locator('#vkd-submit').click()
+        page.locator('#vkd-choices button').first.click(timeout=60000)
     page.screenshot(path=str(ROOT/'tests/admin-video-ready.png'),full_page=True)
     download=pending.value
     assert download.failure() is None,download.failure()

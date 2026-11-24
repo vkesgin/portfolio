@@ -15,6 +15,9 @@ with sync_playwright() as p:
   path=route.request.url.split('/api/admin/video',1)[-1];calls.append(path)
   # Admin is browser-first: the link opens the remote browser, which reports the found video.
   if path=='/browser':data={'id':'a'*32}
+  # …and, in the background, asks the engine to find the page's own video.
+  elif path=='/analyze':data={'id':'e'*32}
+  elif path=='/jobs/'+'e'*32:data={'status':'choices','choices':[{'id':'f'*32,'provider':'Youtube','title':'Auto video','ad':False,'duration':95,'heights':[1080,720]}]}
   elif path=='/browser/'+'a'*32+'/action':data={'image':'','url':'https://example.com/video','width':1024,'height':640,'choices':[{'id':'b'*32,'provider':'example.com','title':'Test video','ad':False,'kind':'file','duration':95,'size':7340032,'size_estimated':False,'heights':[720]}]}
   elif route.request.method=='DELETE':data={'ok':True}
   elif path=='/download':data={'id':'c'*32}
@@ -30,6 +33,8 @@ with sync_playwright() as p:
  page.goto(f'http://127.0.0.1:{http.server_port}/admin.html')
  page.locator('[data-tab="video"]').click();page.locator('#vkd-url').fill('https://example.com/video');page.locator('#vkd-submit').click()
  expect(page.locator('#vkd-browser-choices')).to_contain_text('Süre: 1:35')
+ expect(page.locator('#vkd-choices')).to_contain_text('Otomatik bulundu · Auto video')
+ expect(page.locator('#vkd-choices')).to_contain_text('1080p')
  page.locator('#vkd-browser-choices button').click()
  expect(page.locator('#vkd-details')).to_contain_text('Parça: 47 / 100')
  expect(page.locator('#vkd-details')).to_contain_text('Hız: 1.0 MB/sn')

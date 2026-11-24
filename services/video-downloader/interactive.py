@@ -7,9 +7,33 @@ import time
 import uuid
 from urllib.parse import urlsplit
 from tasks import ad
+from urllib.parse import parse_qsl, urlencode, urlunsplit
 from media_metadata import describe, enrich
 
 WIDTH, HEIGHT = 1024, 640
+MEDIA_EXT = ('.mp4', '.webm', '.m3u8', '.mpd', '.mov', '.m4v', '.mkv', '.flv', '.ogv')
+SEGMENT_EXT = ('.ts', '.m4s', '.aac', '.m4a', '.cmfv', '.cmfa')
+RANGE_PARAMS = {'bytestart', 'byteend', 'range', 'bytes'}
+
+
+def whole_file(url):
+    """Players fetch one file as many byte-range URLs; keep a single entry that addresses the whole file."""
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k.lower() not in RANGE_PARAMS]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ''))
+
+
+def user_agent(playwright):
+    """The bundled headless shell announces itself as HeadlessChrome, which many players refuse outright."""
+    try:
+        browser = playwright.chromium.launch(headless=True)
+        try:major = browser.version.split('.')[0]
+        finally:browser.close()
+        return f'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{major}.0.0.0 Safari/537.36'
+    except Exception:
+        return None
+
+
 KEYS = {'Enter', 'Space', 'Tab', 'Shift+Tab', 'Escape', 'Backspace', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'}
 
 
@@ -21,7 +45,8 @@ def browser_process(commands, replies, url, proxy, directory):
     from playwright.sync_api import sync_playwright
     try:
         with sync_playwright() as p:
-            context=p.chromium.launch_persistent_context(directory,viewport={'width':WIDTH,'height':HEIGHT},accept_downloads=False,service_workers='block',headless=True,proxy={'server':proxy},args=['--proxy-bypass-list=<-loopback>','--disable-dev-shm-usage','--force-webrtc-ip-handling-policy=disable_non_proxied_udp'])
+            agent=user_agent(p)
+            context=p.chromium.launch_persistent_context(directory,viewport={'width':WIDTH,'height':HEIGHT},locale='tr-TR',timezone_id='Europe/Istanbul',**({'user_agent':agent} if agent else {}),accept_downloads=False,service_workers='block',headless=True,proxy={'server':proxy},args=['--proxy-bypass-list=<-loopback>','--disable-dev-shm-usage','--force-webrtc-ip-handling-policy=disable_non_proxied_udp'])
             page=context.new_page()
             found={}
             def response(r,finished=False):
@@ -29,18 +54,19 @@ def browser_process(commands, replies, url, proxy, directory):
                     ct=r.headers.get('content-type','').lower()
                     path=urlsplit(r.url).path.lower()
                     if r.status not in (200,206) or ad(r.url):return
-                    if r.url not in found and len(found)>=20:return
-                    if path.endswith(('.ts','.m4s','.aac','.m4a')):return
+                    key=whole_file(r.url)
+                    if key not in found and len(found)>=20:return
+                    if path.endswith(SEGMENT_EXT):return
                     kind='HLS' if path.endswith('.m3u8') or 'mpegurl' in ct else 'DASH' if path.endswith('.mpd') or 'dash+xml' in ct else 'file'
-                    if not (path.endswith(('.mp4','.webm','.m3u8','.mpd','.mov')) or ct.startswith('video/') or kind!='file'):return
+                    if not (path.endswith(MEDIA_EXT) or ct.startswith('video/') or kind!='file'):return
                     # Reading a manifest on response headers used to block controls until its body arrived.
                     # Only inspect completed manifests. Never read video bodies for metadata.
                     if kind!='file' and not finished:return
-                    if r.url in found:return
+                    if key in found:return
                     text=r.text()[:1048576] if kind!='file' else ''
                     if re.search(r'widevine|playready|ContentProtection|METHOD=SAMPLE-AES',text,re.I):return
                     headers={k:v for k,v in r.request.all_headers().items() if k in ('referer','user-agent','origin','authorization')}
-                    found[r.url]={'id':uuid.uuid4().hex,'url':r.url,'headers':headers,'frame':r.request.frame,'meta':describe(r.headers,text,kind)}
+                    found[key]={'id':uuid.uuid4().hex,'url':key,'headers':headers,'frame':r.request.frame,'meta':describe(r.headers,text,kind)}
                 except Exception:pass
             context.on('response',response)
             context.on('requestfinished',lambda request:response(request.response(),True))

@@ -15,6 +15,8 @@ class Progress:
         self.last_emit=-math.inf  # the first event is never throttled
         self.last_transfer=None
         self.pending_activity=False
+        self.too_large=False
+        self.note=''  # standing remark shown with transfer stats (e.g. quality lowered to fit the limit)
 
     def emit(self, force=False, **data):
         now=time.monotonic()
@@ -28,6 +30,7 @@ class Progress:
     def debug(self,text):
         # Only classify known stage markers; arbitrary extractor output is discarded.
         text=str(text)
+        if 'larger than max-filesize' in text.lower():self.too_large=True;return
         if 'retrying' in text.lower() or 'timed out' in text.lower():self.warning(text);return
         if 'Downloading webpage' in text:self.emit(phase='connecting',message='Kaynak sayfa açılıyor…')
         elif 'Downloading m3u8' in text or 'Downloading MPD' in text:
@@ -36,6 +39,7 @@ class Progress:
 
     def warning(self,text):
         text=str(text).lower()
+        if 'larger than max-filesize' in text:self.too_large=True;return
         if 'retry' in text or 'retrying' in text or 'timed out' in text:
             code=re.search(r'\b(401|403|404|429|500|502|503|504)\b',text)
             self.emit(force=True,phase='retrying',message='Kaynak yanıt vermedi; bağlantı yeniden deneniyor.',notice=('HTTP '+code[1]) if code else 'Bağlantı zaman aşımı veya geçici ağ hatası')
@@ -56,7 +60,7 @@ class Progress:
                 downloaded_bytes=done,total_bytes=total,total_estimated=not bool(data.get('total_bytes')),
                 speed=number(data.get('speed')),eta=number(data.get('eta')),
                 fragment_index=number(data.get('fragment_index')),fragment_count=number(data.get('fragment_count')),
-                stream=stream,notice='')
+                stream=stream,notice=self.note)
         elif state=='finished':
             self.emit(force=True,phase='processing',message=stream+' akışı alındı; sonraki aşama hazırlanıyor…',activity=True,
                 downloaded_bytes=done,total_bytes=total,speed=None,eta=None,progress=99,notice='')
@@ -64,4 +68,6 @@ class Progress:
     def postprocess(self,data):
         if data.get('status')=='started':
             audio='ExtractAudio' in str(data.get('postprocessor',''))
+            if 'Remuxer' in str(data.get('postprocessor','')):
+                self.emit(force=True,phase='processing',message='Dosya MP4 olarak paketleniyor…',activity=True,speed=None,eta=None,notice='');return
             self.emit(force=True,phase='processing',message='Ses MP3 biçimine dönüştürülüyor…' if audio else 'Ses ve görüntü birleştiriliyor; dosya tamamlanıyor…',activity=True,speed=None,eta=None,notice='')

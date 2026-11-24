@@ -19,9 +19,14 @@ def public_addresses(host, port):
     return addresses
 
 
+def allowed_port(port):
+    # Web ports plus unprivileged ones. Low service ports (22, 25, 110…) stay closed.
+    return port in (80, 443) or 1024 <= port <= 65535
+
+
 def connect_public(host, port):
-    if port not in (80, 443):
-        raise ValueError('Yalnızca standart web bağlantıları destekleniyor.')
+    if not allowed_port(port):
+        raise ValueError('Bu bağlantı noktası desteklenmiyor.')
     addresses = public_addresses(host, port)
     for family, kind, proto, _, address in addresses:
         stream = socket.socket(family, kind, proto)
